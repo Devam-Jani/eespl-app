@@ -216,14 +216,25 @@ export type LibraryLine = {
   is_competitor: boolean;
 };
 
+export type ClauseVariant = { id: number; text: string; own_usage_count: number };
+
+export type HiddenReason = "not_a_clause" | "client_checklist" | "project_specific" | "manual";
+
 export type Clause = {
   id: number;
   text: string;
   category: string;
   usage_count: number;
+  own_usage_count: number;
   default_include: boolean;
   sort_order: number;
-  is_active: boolean;
+  status: "active" | "hidden";
+  hidden_reason: HiddenReason | null;
+  merged_into_id: number | null;
+  needs_review: boolean;
+  review_note: string | null;
+  variant_count: number;
+  variants: ClauseVariant[];
 };
 
 export type TemplateSummary = { id: number; name: string; is_default: boolean; clause_count: number };

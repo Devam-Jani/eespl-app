@@ -440,15 +440,21 @@ class ClauseIn(BaseModel):
     category: str = Field(min_length=1, max_length=50)
     default_include: bool = False
     sort_order: int | None = None
-    is_active: bool = True
 
 
 class ClauseUpdate(BaseModel):
+    """Saving a changed text also clears needs_review."""
+
     text: str | None = Field(default=None, min_length=1)
     category: str | None = Field(default=None, min_length=1, max_length=50)
     default_include: bool | None = None
     sort_order: int | None = None
-    is_active: bool | None = None
+
+
+class ClauseVariant(ORM):
+    id: int
+    text: str
+    own_usage_count: int
 
 
 class ClauseOut(ORM):
@@ -456,9 +462,27 @@ class ClauseOut(ORM):
     text: str
     category: str
     usage_count: int
+    own_usage_count: int
     default_include: bool
     sort_order: int
-    is_active: bool
+    status: str
+    hidden_reason: str | None
+    merged_into_id: int | None
+    needs_review: bool
+    review_note: str | None
+    variant_count: int = 0
+    variants: list[ClauseVariant] = []
+
+
+HiddenReason = Literal["not_a_clause", "client_checklist", "project_specific", "manual"]
+
+
+class HideIn(BaseModel):
+    reason: HiddenReason = "manual"
+
+
+class ClauseMergeIn(BaseModel):
+    into_id: int
 
 
 class OrderIn(BaseModel):

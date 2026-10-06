@@ -39,6 +39,7 @@ from sqlalchemy.orm import Session
 from app import audit
 from app.masters.library import exclusion_reason, is_competitor_note, recompute_stats, source_stats
 from app.masters.models import LibraryItem, LibraryLine, TcClause, TcTemplate, TcTemplateClause
+from app.masters.tc import recompute_usage
 from app.masters.units import load_aliases, normalise_unit
 
 RATE_LIBRARY_SHEET = "Rate library"
@@ -426,15 +427,24 @@ class TcImportResult:
 
 DEFAULT_TEMPLATE_NAME = "EESPL Standard"
 
+# A list marker at the start of a line: "1. ", "12) ", "(a) ", "b. ". Only these are stripped:
+# a number followed by "%" or "mm" ("5 % Retention", "20mm x 4.00mm") is part of the text.
+LIST_NUMBER = re.compile(r"^\s*(\d{1,2}[.)]|\([a-z0-9]\)|[a-z][.)])\s+", re.IGNORECASE)
+
+
+def strip_list_number(text: str) -> str:
+    """'1. Store with locking' -> 'Store with locking'; '5 % Retention' stays as it is."""
+    return LIST_NUMBER.sub("", text, count=1)
+
 
 def _clause_key(text: str) -> str:
     return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", text)).strip().lower()
 
 
 def import_tc(db: Session, path: str | Path) -> TcImportResult:
-    """Insert clauses that are new; for existing ones only refresh usage_count, so wording,
-    category and order edited in the app are kept. Creates the default "EESPL Standard"
-    template from the default_include clauses if it does not exist yet."""
+    """Insert clauses that are new; for existing ones only refresh their own usage count, so
+    wording, category, order, merges and hiding done in the app are kept. Creates the default
+    "EESPL Standard" template from the default_include clauses if it does not exist yet."""
     result = TcImportResult()
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(data, list):
@@ -444,6 +454,7 @@ def import_tc(db: Session, path: str | Path) -> TcImportResult:
     seen: set[str] = set()
     for number, raw in enumerate(data, start=1):
         text = _text(raw.get("text")) if isinstance(raw, dict) else None
+        text = _text(strip_list_number(text)) if text else None
         if text is None:
             result.skipped.append(Skipped("json", number, "missing text"))
             continue
@@ -456,13 +467,14 @@ def import_tc(db: Session, path: str | Path) -> TcImportResult:
         usage = int(raw.get("usage_count") or 0)
         clause = existing.get(key)
         if clause is not None:
-            clause.usage_count = usage
+            clause.own_usage_count = usage
             result.clauses_updated += 1
             continue
         clause = TcClause(
             text=text,
             category=_text(raw.get("category"), 50) or "general",
             usage_count=usage,
+            own_usage_count=usage,
             default_include=bool(raw.get("default_include")),
             sort_order=int(raw.get("sort_order") or 0),
         )
@@ -470,12 +482,18 @@ def import_tc(db: Session, path: str | Path) -> TcImportResult:
         existing[key] = clause
         result.clauses_inserted += 1
     db.flush()
+    # masters count their merged variants too
+    recompute_usage(db, [c.id for c in existing.values() if c.merged_into_id is None])
 
     template = db.scalar(select(TcTemplate).where(TcTemplate.name == DEFAULT_TEMPLATE_NAME))
     if template is None:
         has_default = db.scalar(select(func.count()).where(TcTemplate.is_default)) > 0
         defaults = sorted(
-            (c for c in existing.values() if c.default_include and c.is_active),
+            (
+                c
+                for c in existing.values()
+                if c.default_include and c.status == "active" and c.merged_into_id is None
+            ),
             key=lambda c: (c.sort_order, c.id),
         )
         template = TcTemplate(

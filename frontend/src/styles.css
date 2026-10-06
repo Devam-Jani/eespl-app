@@ -1081,3 +1081,94 @@ button.link {
 input.full {
   width: 100%;
 }
+
+/* ---------- T&C cleanup (M1 3c) ---------- */
+
+.badge-orange {
+  background: #ffedd5;
+  color: #b45309;
+}
+
+.badge-info {
+  background: #e8eef9;
+  color: #2c4a7a;
+}
+
+.as-button {
+  border: 0;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.clause-meta .badge {
+  margin-left: 0.4rem;
+}
+
+.chip-toggle {
+  font: inherit;
+  font-size: 0.85rem;
+  border: 1px solid #f0c48a;
+  background: #fff7ed;
+  color: #b45309;
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  cursor: pointer;
+}
+
+.chip-toggle.on {
+  background: #b45309;
+  border-color: #b45309;
+  color: #fff;
+}
+
+.variant-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.75rem;
+  background: #f6f8f7;
+  border-radius: 6px;
+}
+
+.variant-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.25rem 0;
+  border: 0;
+  font-size: 0.9rem;
+}
+
+.row-menu {
+  position: relative;
+}
+
+.row-menu-items {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  padding: 0.25rem 0;
+}
+
+.row-menu-items button {
+  font: inherit;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.row-menu-items button:hover {
+  background: var(--accent-soft);
+}

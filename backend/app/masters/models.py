@@ -276,14 +276,36 @@ class LibraryLine(Tracked, Base):
 
 class TcClause(Tracked, Base):
     __tablename__ = "tc_clauses"
+    __table_args__ = (
+        CheckConstraint("status IN ('active', 'hidden')", name="status_valid"),
+        CheckConstraint(
+            "(status = 'active' AND hidden_reason IS NULL) OR (status = 'hidden' AND hidden_reason "
+            "IN ('not_a_clause', 'client_checklist', 'project_specific', 'manual'))",
+            name="hidden_reason_valid",
+        ),
+        CheckConstraint(
+            "merged_into_id IS NULL OR merged_into_id <> id", name="not_merged_into_self"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Identity(), primary_key=True)
     text: Mapped[str] = mapped_column(Text)
     category: Mapped[str] = mapped_column(String(50), index=True)
+    # For a master: own_usage_count + the own_usage_count of its merged variants.
     usage_count: Mapped[int] = mapped_column(Integer, server_default="0")
+    own_usage_count: Mapped[int] = mapped_column(Integer, server_default="0")
     default_include: Mapped[bool] = mapped_column(server_default="false")
     sort_order: Mapped[int] = mapped_column(Integer, server_default="0")
-    is_active: Mapped[bool] = mapped_column(server_default=true())
+    status: Mapped[str] = mapped_column(String(10), server_default="active")  # active | hidden
+    hidden_reason: Mapped[str | None] = mapped_column(String(30))
+    # A near-duplicate points at its master; its text is kept to help match client BOQs.
+    merged_into_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tc_clauses.id", ondelete="SET NULL"), index=True
+    )
+    needs_review: Mapped[bool] = mapped_column(server_default="false")
+    review_note: Mapped[str | None] = mapped_column(Text)
+    # A person has made a decision about this clause; the cleanup command leaves it alone.
+    curated: Mapped[bool] = mapped_column(server_default="false")
 
 
 class TcTemplate(Tracked, Base):

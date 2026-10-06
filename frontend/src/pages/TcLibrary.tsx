@@ -4,7 +4,7 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import Modal from "../components/Modal";
 import { errorText } from "../format";
-import type { Clause, Page, Template, TemplateSummary } from "../types";
+import type { Clause, HiddenReason, Page, Template, TemplateSummary } from "../types";
 
 function move<T>(list: T[], index: number, delta: number): T[] {
   const target = index + delta;
@@ -14,14 +14,22 @@ function move<T>(list: T[], index: number, delta: number): T[] {
   return next;
 }
 
+const HIDDEN_LABELS: Record<HiddenReason, string> = {
+  not_a_clause: "Not a clause",
+  client_checklist: "Client checklist answer",
+  project_specific: "Project-specific",
+  manual: "Hidden by hand",
+};
+
 export default function TcLibrary() {
   const [tab, setTab] = useState<"clauses" | "templates">("clauses");
   const [clauses, setClauses] = useState<Clause[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  // Hidden clauses come too, so the page can count and toggle them without another request.
   const loadClauses = useCallback(async () => {
     try {
-      setClauses((await api<Page<Clause>>("/api/tc/clauses?limit=500")).items);
+      setClauses((await api<Page<Clause>>("/api/tc/clauses?limit=500&include_hidden=true")).items);
     } catch (err) {
       setError(errorText(err));
     }
@@ -48,7 +56,7 @@ export default function TcLibrary() {
       {tab === "clauses" ? (
         <Clauses clauses={clauses} reload={loadClauses} onError={setError} />
       ) : (
-        <Templates clauses={clauses} onError={setError} />
+        <Templates clauses={clauses.filter((c) => c.status === "active")} onError={setError} />
       )}
     </>
   );
@@ -66,21 +74,43 @@ function Clauses({
   const { can } = useAuth();
   const canEdit = can("library.edit");
   const [editing, setEditing] = useState<Clause | "new" | null>(null);
+  const [merging, setMerging] = useState<Clause | null>(null);
+  const [hiding, setHiding] = useState<Clause | null>(null);
   const [filter, setFilter] = useState("");
+  const [showHidden, setShowHidden] = useState(false);
+  const [reviewOnly, setReviewOnly] = useState(false);
+  const [openVariants, setOpenVariants] = useState<number | null>(null);
+
+  const hiddenCount = clauses.filter((c) => c.status === "hidden").length;
+  const reviewCount = clauses.filter((c) => c.needs_review && (showHidden || c.status === "active")).length;
 
   const groups = useMemo(() => {
     const q = filter.trim().toLowerCase();
     const map = new Map<string, Clause[]>();
     for (const c of clauses) {
-      if (q && !c.text.toLowerCase().includes(q)) continue;
+      if (c.status === "hidden" && !showHidden) continue;
+      if (reviewOnly && !c.needs_review) continue;
+      if (q && !c.text.toLowerCase().includes(q) && !c.variants.some((v) => v.text.toLowerCase().includes(q))) continue;
       map.set(c.category, [...(map.get(c.category) ?? []), c]);
     }
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [clauses, filter]);
+  }, [clauses, filter, showHidden, reviewOnly]);
+
+  async function act(path: string, json?: object) {
+    onError(null);
+    try {
+      await api(`/api/tc/clauses/${path}`, { method: "POST", json });
+      await reload();
+    } catch (err) {
+      onError(errorText(err));
+    }
+  }
 
   async function reorder(list: Clause[], index: number, delta: number) {
-    const next = move(list, index, delta);
-    if (next === list) return;
+    const active = list.filter((c) => c.status === "active");
+    const from = active.indexOf(list[index]);
+    const next = move(active, from, delta);
+    if (from < 0 || next === active) return;
     try {
       await api("/api/tc/clauses/order", { method: "PUT", json: { ids: next.map((c) => c.id) } });
       await reload();
@@ -92,7 +122,16 @@ function Clauses({
   return (
     <>
       <div className="toolbar">
-        <input className="search" placeholder="Filter clauses" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <div className="page-actions">
+          <input className="search" placeholder="Filter clauses" value={filter} onChange={(e) => setFilter(e.target.value)} />
+          <button className={`chip-toggle ${reviewOnly ? "on" : ""}`} onClick={() => setReviewOnly((v) => !v)}>
+            Needs review ({reviewCount})
+          </button>
+          <label className="check">
+            <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} />
+            Show hidden ({hiddenCount})
+          </label>
+        </div>
         {canEdit && (
           <button className="btn btn-primary" onClick={() => setEditing("new")}>
             Add clause
@@ -105,36 +144,84 @@ function Clauses({
             {category.replace(/_/g, " ")} <span className="muted small">({list.length})</span>
           </h2>
           <ol className="clause-list">
-            {list.map((c, i) => (
-              <li key={c.id} className={c.is_active ? "" : "row-muted"}>
-                <div className="clause-text">
-                  {c.text}
-                  <div className="muted small">
-                    used in {c.usage_count} BOQ{c.usage_count === 1 ? "" : "s"}
-                    {c.default_include && <span className="badge badge-ok">default</span>}
-                    {!c.is_active && <span className="badge badge-muted">inactive</span>}
+            {list.map((c, i) => {
+              const hidden = c.status === "hidden";
+              return (
+                <li key={c.id} className={hidden ? "row-muted" : ""}>
+                  <div className="clause-text">
+                    {c.text}
+                    <div className="muted small clause-meta">
+                      used in {c.usage_count} BOQ{c.usage_count === 1 ? "" : "s"}
+                      {c.default_include && <span className="badge badge-ok">default</span>}
+                      {c.variant_count > 0 && (
+                        <button
+                          className="badge badge-info as-button"
+                          onClick={() => setOpenVariants(openVariants === c.id ? null : c.id)}
+                          title="Other wordings of this clause, kept to match client BOQs"
+                        >
+                          {c.variant_count} variant{c.variant_count === 1 ? "" : "s"}
+                        </button>
+                      )}
+                      {hidden && c.hidden_reason && (
+                        <span className="badge badge-muted">{HIDDEN_LABELS[c.hidden_reason]}</span>
+                      )}
+                      {c.needs_review && (
+                        <span className="badge badge-orange" title={c.review_note ?? ""}>
+                          Needs review{c.review_note ? `: ${c.review_note}` : ""}
+                        </span>
+                      )}
+                    </div>
+                    {openVariants === c.id && (
+                      <ul className="variant-list">
+                        {c.variants.map((v) => (
+                          <li key={v.id}>
+                            <span>
+                              {v.text} <span className="muted small">({v.own_usage_count})</span>
+                            </span>
+                            {canEdit && (
+                              <button className="btn btn-small" onClick={() => void act(`${v.id}/unmerge`)}>
+                                Unmerge
+                              </button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
-                </div>
-                {canEdit && (
-                  <div className="clause-actions">
-                    <button className="btn btn-small" disabled={i === 0} onClick={() => void reorder(list, i, -1)} aria-label="Move up">
-                      ↑
-                    </button>
-                    <button
-                      className="btn btn-small"
-                      disabled={i === list.length - 1}
-                      onClick={() => void reorder(list, i, 1)}
-                      aria-label="Move down"
-                    >
-                      ↓
-                    </button>
-                    <button className="btn btn-small" onClick={() => setEditing(c)}>
-                      Edit
-                    </button>
-                  </div>
-                )}
-              </li>
-            ))}
+                  {canEdit && (
+                    <div className="clause-actions">
+                      {!hidden && (
+                        <>
+                          <button className="btn btn-small" disabled={i === 0} onClick={() => void reorder(list, i, -1)} aria-label="Move up">
+                            ↑
+                          </button>
+                          <button
+                            className="btn btn-small"
+                            disabled={i === list.length - 1}
+                            onClick={() => void reorder(list, i, 1)}
+                            aria-label="Move down"
+                          >
+                            ↓
+                          </button>
+                        </>
+                      )}
+                      <button className="btn btn-small" onClick={() => setEditing(c)}>
+                        Edit
+                      </button>
+                      <RowMenu
+                        items={[
+                          hidden
+                            ? { label: "Unhide", run: () => void act(`${c.id}/unhide`) }
+                            : { label: "Hide…", run: () => setHiding(c) },
+                          { label: "Merge into…", run: () => setMerging(c) },
+                          ...(c.needs_review ? [{ label: "Mark reviewed", run: () => void act(`${c.id}/reviewed`) }] : []),
+                        ]}
+                      />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ol>
         </div>
       ))}
@@ -150,7 +237,133 @@ function Clauses({
           }}
         />
       )}
+      {hiding && (
+        <HideDialog
+          clause={hiding}
+          onClose={() => setHiding(null)}
+          onHide={async (reason) => {
+            setHiding(null);
+            await act(`${hiding.id}/hide`, { reason });
+          }}
+        />
+      )}
+      {merging && (
+        <MergeDialog
+          clause={merging}
+          candidates={clauses.filter((c) => c.id !== merging.id && c.status === "active")}
+          onClose={() => setMerging(null)}
+          onMerge={async (target) => {
+            setMerging(null);
+            await act(`${merging.id}/merge`, { into_id: target.id });
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function RowMenu({ items }: { items: { label: string; run: () => void }[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="row-menu" onMouseLeave={() => setOpen(false)}>
+      <button className="btn btn-small" onClick={() => setOpen((o) => !o)} aria-label="More actions">
+        ⋯
+      </button>
+      {open && (
+        <div className="row-menu-items">
+          {items.map((item) => (
+            <button
+              key={item.label}
+              onClick={() => {
+                setOpen(false);
+                item.run();
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HideDialog({
+  clause,
+  onClose,
+  onHide,
+}: {
+  clause: Clause;
+  onClose: () => void;
+  onHide: (reason: HiddenReason) => Promise<void>;
+}) {
+  const [reason, setReason] = useState<HiddenReason>("manual");
+  return (
+    <Modal title="Hide clause" onClose={onClose}>
+      <p className="item-desc">{clause.text}</p>
+      <label className="field">
+        <span>Reason</span>
+        <select value={reason} onChange={(e) => setReason(e.target.value as HiddenReason)}>
+          {(Object.keys(HIDDEN_LABELS) as HiddenReason[]).map((r) => (
+            <option key={r} value={r}>
+              {HIDDEN_LABELS[r]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="muted small">Hidden clauses are also taken out of every template. You can unhide later.</p>
+      <div className="form-actions">
+        <button className="btn" onClick={onClose}>
+          Cancel
+        </button>
+        <button className="btn btn-primary" onClick={() => void onHide(reason)}>
+          Hide
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function MergeDialog({
+  clause,
+  candidates,
+  onClose,
+  onMerge,
+}: {
+  clause: Clause;
+  candidates: Clause[];
+  onClose: () => void;
+  onMerge: (target: Clause) => Promise<void>;
+}) {
+  const [q, setQ] = useState(clause.text.split(/\s+/).slice(0, 4).join(" "));
+  const shown = candidates.filter((c) => c.text.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 30);
+  return (
+    <Modal title="Merge into…" onClose={onClose} wide>
+      <p className="item-desc">{clause.text}</p>
+      <p className="muted small">
+        Choose the clause to keep (the master). This wording is kept as a variant, its usage count is added to the master, and
+        templates that hold it get the master instead. You can unmerge later.
+      </p>
+      <input className="full" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+      <ul className="pick-list top-gap">
+        {shown.map((c) => (
+          <li key={c.id}>
+            <button
+              className="pick"
+              onClick={() => {
+                if (confirm("Merge into this clause?")) void onMerge(c);
+              }}
+            >
+              <span>{c.text}</span>
+              <span className="muted small capitalize">
+                {c.category.replace(/_/g, " ")} · used in {c.usage_count}
+              </span>
+            </button>
+          </li>
+        ))}
+        {shown.length === 0 && <li className="muted">No matching clauses.</li>}
+      </ul>
+    </Modal>
   );
 }
 
@@ -168,12 +381,11 @@ function ClauseForm({
   const [text, setText] = useState(clause?.text ?? "");
   const [category, setCategory] = useState(clause?.category ?? categories[0] ?? "general");
   const [defaultInclude, setDefaultInclude] = useState(clause?.default_include ?? false);
-  const [active, setActive] = useState(clause?.is_active ?? true);
   const [error, setError] = useState<string | null>(null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    const body = { text, category, default_include: defaultInclude, is_active: active };
+    const body = { text, category, default_include: defaultInclude };
     try {
       if (clause) await api(`/api/tc/clauses/${clause.id}`, { method: "PATCH", json: body });
       else await api("/api/tc/clauses", { method: "POST", json: body });
@@ -197,6 +409,11 @@ function ClauseForm({
     <Modal title={clause ? "Edit clause" : "Add clause"} onClose={onClose}>
       <form className="form" onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
+        {clause?.needs_review && (
+          <div className="alert alert-warn">
+            {clause.review_note ?? "Needs review"}. Correct the text and save to clear this.
+          </div>
+        )}
         <label className="field">
           <span>Text</span>
           <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} required autoFocus />
@@ -213,10 +430,6 @@ function ClauseForm({
         <label className="check">
           <input type="checkbox" checked={defaultInclude} onChange={(e) => setDefaultInclude(e.target.checked)} />
           Include by default
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
-          Active
         </label>
         <div className="form-actions">
           {clause && (
@@ -302,7 +515,7 @@ function Templates({ clauses, onError }: { clauses: Clause[]; onError: (e: strin
   }
 
   const ids = selected?.clauses.map((c) => c.id) ?? [];
-  const available = clauses.filter((c) => c.is_active && !ids.includes(c.id));
+  const available = clauses.filter((c) => !ids.includes(c.id));
 
   return (
     <div className="split split-narrow">

@@ -88,23 +88,35 @@ def run_import_library(path: str) -> None:
             r = import_library(db, path)
         except (ImportFormatError, FileNotFoundError) as exc:
             sys.exit(f"Import failed: {exc}")
-    print(f"Library items: {r.items_in_file} in file "
-          f"({r.items_inserted} new, {r.items_updated} already present, {r.items_deleted} removed)")
-    print(f"Library lines: {r.lines_in_file} in file "
-          f"({r.lines_inserted} new, {r.lines_updated} already present, {r.lines_deleted} removed)")
-    print(f"  linked to an item: {r.lines_linked} "
-          f"({r.lines_linked_via_parent} via '<parent item> — <description>')")
+    print(
+        f"Library items: {r.items_in_file} in file "
+        f"({r.items_inserted} new, {r.items_updated} already present, {r.items_deleted} removed)"
+    )
+    print(
+        f"Library lines: {r.lines_in_file} in file "
+        f"({r.lines_inserted} new, {r.lines_updated} already present, {r.lines_deleted} removed)"
+    )
+    print(
+        f"  linked to an item: {r.lines_linked} "
+        f"({r.lines_linked_via_parent} via '<parent item> — <description>')"
+    )
     print(f"  not linked (no item with the same description and unit): {r.lines_unlinked}")
     if r.ambiguous_match_keys:
-        print(f"  items sharing a description+unit after unit normalisation: "
-              f"{r.ambiguous_match_keys} (lines link to the one in most BOQs)")
+        print(
+            f"  items sharing a description+unit after unit normalisation: "
+            f"{r.ambiguous_match_keys} (lines link to the one in most BOQs)"
+        )
     excluded = sum(r.items_excluded.values())
-    print(f"Items hidden from search by default: {excluded} excluded, "
-          f"{r.items_competitor} competitor")
+    print(
+        f"Items hidden from search by default: {excluded} excluded, "
+        f"{r.items_competitor} competitor"
+    )
     for reason, count in sorted(r.items_excluded.items(), key=lambda kv: -kv[1]):
         print(f"  {count:>6}  excluded: {reason}")
-    print(f"Lines flagged: {r.lines_excluded} excluded, {r.lines_competitor} competitor; "
-          f"{r.items_stats_from_lines} items have stats recomputed without them (or after merges)")
+    print(
+        f"Lines flagged: {r.lines_excluded} excluded, {r.lines_competitor} competitor; "
+        f"{r.items_stats_from_lines} items have stats recomputed without them (or after merges)"
+    )
     if r.unrecognised_units:
         top = ", ".join(f"{u!r} x{n}" for u, n in list(r.unrecognised_units.items())[:12])
         print(f"Units not recognised (stored as blank unit, raw text kept): {top}")
@@ -117,8 +129,10 @@ def run_import_tc(path: str) -> None:
             r = import_tc(db, path)
         except (ImportFormatError, FileNotFoundError, ValueError) as exc:
             sys.exit(f"Import failed: {exc}")
-    print(f"T&C clauses: {r.clauses_in_file} in file "
-          f"({r.clauses_inserted} new, {r.clauses_updated} already present)")
+    print(
+        f"T&C clauses: {r.clauses_in_file} in file "
+        f"({r.clauses_inserted} new, {r.clauses_updated} already present)"
+    )
     state = "created" if r.template_created else "already exists, left unchanged"
     print(f"Template 'EESPL Standard': {state} ({r.template_clauses} clauses)")
     _print_skipped(r.skipped)
@@ -151,7 +165,3 @@ def main(argv: list[str] | None = None) -> None:
         run_import_library(args.path)
     elif args.command == "import-tc":
         run_import_tc(args.path)
-
-
-if __name__ == "__main__":
-    main()

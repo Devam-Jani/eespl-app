@@ -84,6 +84,11 @@ which did not, and any skipped rows with the reason. The T&C import only adds ne
   other bidders' rates from comparative sheets as *competitor* (`backend/app/masters/library.py`).
   Both are hidden from search unless asked for, are never a suggested rate, and are left out of
   other items' min/median/max. Nothing is deleted.
+- **T&C cleanup**: `docker compose exec api python -m app.cli.clean_tc --dry-run` (summary only), then
+  without `--dry-run` to apply. It merges near-duplicate clauses (variants are kept), hides rows
+  that are not clauses, client checklist answers and project-specific text, flags clauses that lost
+  a leading number on import, and keeps templates free of hidden/merged clauses
+  (`backend/app/masters/tc.py`). Safe to re-run; decisions made in the app are never overridden.
 - **Library editing** (`library.edit`): hide an item from search, change its unit, or merge a
   duplicate into another item (reversible). These survive re-imports.
 

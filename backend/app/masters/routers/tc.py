@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, Request, status
+from collections import defaultdict
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
@@ -18,14 +21,26 @@ from app.masters.routers.common import (
 )
 from app.masters.schemas import (
     ClauseIn,
+    ClauseMergeIn,
     ClauseOut,
     ClauseUpdate,
+    ClauseVariant,
+    HideIn,
     OrderIn,
     Page,
     TemplateIn,
     TemplateOut,
     TemplateSummary,
     TemplateUpdate,
+)
+from app.masters.tc import (
+    TcRuleError,
+    hide_clause,
+    merge_clause,
+    recompute_usage,
+    set_template_clause_ids,
+    unhide_clause,
+    unmerge_clause,
 )
 
 router = APIRouter(prefix="/api/tc", tags=["terms and conditions"])
@@ -37,27 +52,51 @@ edit = [Depends(require_permission("library.edit"))]
 # --- clauses ---
 
 
+def _clause_out(db: Session, clauses: list[TcClause]) -> list[ClauseOut]:
+    """Clauses with the texts of the variants merged into them."""
+    variants: dict[int, list[TcClause]] = defaultdict(list)
+    ids = [c.id for c in clauses]
+    if ids:
+        for v in db.scalars(
+            select(TcClause)
+            .where(TcClause.merged_into_id.in_(ids))
+            .order_by(TcClause.own_usage_count.desc(), TcClause.id)
+        ):
+            variants[v.merged_into_id].append(v)
+    out = []
+    for c in clauses:
+        item = ClauseOut.model_validate(c)
+        item.variants = [ClauseVariant.model_validate(v) for v in variants[c.id]]
+        item.variant_count = len(item.variants)
+        out.append(item)
+    return out
+
+
 @router.get("/clauses", dependencies=view)
 def list_clauses(
     db: DbSession,
     q: Search = None,
     category: str | None = None,
-    active: bool | None = None,
+    include_hidden: Annotated[
+        bool, Query(description="Also return hidden clauses (with their reason)")
+    ] = False,
+    needs_review: bool | None = None,
     limit: Limit = 500,
     offset: Offset = 0,
 ) -> Page[ClauseOut]:
-    query = select(TcClause)
+    """Masters only: merged variants come back inside their master (`variants`)."""
+    query = select(TcClause).where(TcClause.merged_into_id.is_(None))
+    if not include_hidden:
+        query = query.where(TcClause.status == "active")
     if q:
         query = query.where(TcClause.text.ilike(like(q)))
     if category:
         query = query.where(TcClause.category == category)
-    if active is not None:
-        query = query.where(TcClause.is_active == active)
+    if needs_review is not None:
+        query = query.where(TcClause.needs_review == needs_review)
     query = query.order_by(TcClause.category, TcClause.sort_order, TcClause.id)
     rows, total = paginate(db, query, limit, offset)
-    return Page(
-        items=[ClauseOut.model_validate(c) for c in rows], total=total, limit=limit, offset=offset
-    )
+    return Page(items=_clause_out(db, rows), total=total, limit=limit, offset=offset)
 
 
 @router.post("/clauses", status_code=status.HTTP_201_CREATED, dependencies=edit)
@@ -67,13 +106,14 @@ def create_clause(
     fields = body.model_dump()
     if fields["sort_order"] is None:
         fields["sort_order"] = (db.scalar(select(func.max(TcClause.sort_order))) or 0) + 1
-    clause = TcClause(**fields, created_by=principal.user.id)
+    clause = TcClause(**fields, curated=True, created_by=principal.user.id)
     db.add(clause)
     db.flush()
     audit.record(db, "tc_clause.create", "tc_clause", clause.id, user_id=principal.user.id,
                  after=audit.model_snapshot(clause), ip=audit.client_ip(request))  # fmt: skip
     db.commit()
-    return ClauseOut.model_validate(clause)
+    db.refresh(clause)
+    return _clause_out(db, [clause])[0]
 
 
 @router.put("/clauses/order", dependencies=edit)
@@ -92,7 +132,26 @@ def reorder_clauses(
                  after={"sort_order": {i: clauses[i].sort_order for i in body.ids}},
                  ip=audit.client_ip(request))  # fmt: skip
     db.commit()
-    return [ClauseOut.model_validate(clauses[i]) for i in body.ids]
+    return _clause_out(db, [clauses[i] for i in body.ids])
+
+
+def _audited(db: Session, request: Request, principal, clause: TcClause, action: str, change):
+    """Run `change`, mark the clause as decided by a person, write audit, commit."""
+    before = audit.model_snapshot(clause)
+    try:
+        change()
+    except TcRuleError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    clause.curated = True
+    db.flush()
+    after = audit.model_snapshot(clause)
+    if after != before:
+        audit.record(db, action, "tc_clause", clause.id, user_id=principal.user.id,
+                     before=before, after=after, ip=audit.client_ip(request))  # fmt: skip
+    db.commit()
+    db.refresh(clause)
+    return _clause_out(db, [clause])[0]
 
 
 @router.patch("/clauses/{clause_id}", dependencies=edit)
@@ -104,17 +163,78 @@ def update_clause(
     principal: CurrentPrincipal,
 ) -> ClauseOut:
     clause = get_or_404(db, TcClause, clause_id, "Clause")
-    before = audit.model_snapshot(clause)
-    for field, value in body.model_dump(exclude_unset=True).items():
-        if value is not None:
+
+    def change():
+        changes = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
+        if "text" in changes:
+            changes["text"] = changes["text"].strip()
+            if changes["text"] != clause.text:
+                clause.needs_review = False  # the person has corrected it
+                clause.review_note = None
+        for field, value in changes.items():
             setattr(clause, field, value)
-    db.flush()
-    after = audit.model_snapshot(clause)
-    if after != before:
-        audit.record(db, "tc_clause.update", "tc_clause", clause.id, user_id=principal.user.id,
-                     before=before, after=after, ip=audit.client_ip(request))  # fmt: skip
-    db.commit()
-    return ClauseOut.model_validate(clause)
+
+    return _audited(db, request, principal, clause, "tc_clause.update", change)
+
+
+@router.post("/clauses/{clause_id}/hide", dependencies=edit)
+def hide(
+    clause_id: int, body: HideIn, request: Request, db: DbSession, principal: CurrentPrincipal
+) -> ClauseOut:
+    """Hide from the library; the clause also leaves every template."""
+    clause = get_or_404(db, TcClause, clause_id, "Clause")
+    return _audited(db, request, principal, clause, "tc_clause.hide",
+                    lambda: hide_clause(db, clause, body.reason))  # fmt: skip
+
+
+@router.post("/clauses/{clause_id}/unhide", dependencies=edit)
+def unhide(
+    clause_id: int, request: Request, db: DbSession, principal: CurrentPrincipal
+) -> ClauseOut:
+    clause = get_or_404(db, TcClause, clause_id, "Clause")
+    return _audited(db, request, principal, clause, "tc_clause.unhide",
+                    lambda: unhide_clause(clause))  # fmt: skip
+
+
+@router.post("/clauses/{clause_id}/merge", dependencies=edit)
+def merge(
+    clause_id: int,
+    body: ClauseMergeIn,
+    request: Request,
+    db: DbSession,
+    principal: CurrentPrincipal,
+) -> ClauseOut:
+    """Merge this clause into another (its master). Templates holding it get the master.
+    Returns the master with its variants."""
+    clause = get_or_404(db, TcClause, clause_id, "Clause")
+    master = get_or_404(db, TcClause, body.into_id, "Target clause")
+    _audited(db, request, principal, clause, "tc_clause.merge",
+             lambda: merge_clause(db, clause, master))  # fmt: skip
+    db.refresh(master)
+    return _clause_out(db, [master])[0]
+
+
+@router.post("/clauses/{clause_id}/unmerge", dependencies=edit)
+def unmerge(
+    clause_id: int, request: Request, db: DbSession, principal: CurrentPrincipal
+) -> ClauseOut:
+    clause = get_or_404(db, TcClause, clause_id, "Clause")
+    return _audited(db, request, principal, clause, "tc_clause.unmerge",
+                    lambda: unmerge_clause(db, clause))  # fmt: skip
+
+
+@router.post("/clauses/{clause_id}/reviewed", dependencies=edit)
+def mark_reviewed(
+    clause_id: int, request: Request, db: DbSession, principal: CurrentPrincipal
+) -> ClauseOut:
+    """Clear needs_review (saving a corrected text does this too)."""
+    clause = get_or_404(db, TcClause, clause_id, "Clause")
+
+    def change():
+        clause.needs_review = False
+        clause.review_note = None
+
+    return _audited(db, request, principal, clause, "tc_clause.reviewed", change)
 
 
 @router.delete("/clauses/{clause_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=edit)
@@ -122,21 +242,27 @@ def delete_clause(
     clause_id: int, request: Request, db: DbSession, principal: CurrentPrincipal
 ) -> None:
     clause = get_or_404(db, TcClause, clause_id, "Clause")
+    if db.scalar(select(func.count()).where(TcClause.merged_into_id == clause.id)):
+        raise conflict("This clause has merged variants; unmerge them first")
     audit.record(db, "tc_clause.delete", "tc_clause", clause.id, user_id=principal.user.id,
                  before=audit.model_snapshot(clause), ip=audit.client_ip(request))  # fmt: skip
+    master_id = clause.merged_into_id
     db.delete(clause)
+    db.flush()
+    if master_id:
+        recompute_usage(db, [master_id])
     db.commit()
 
 
 # --- templates ---
 
 
-def _template_out(template: TcTemplate) -> TemplateOut:
+def _template_out(db: Session, template: TcTemplate) -> TemplateOut:
     return TemplateOut(
         id=template.id,
         name=template.name,
         is_default=template.is_default,
-        clauses=[ClauseOut.model_validate(tc.clause) for tc in template.clauses],
+        clauses=_clause_out(db, [tc.clause for tc in template.clauses]),
     )
 
 
@@ -148,18 +274,13 @@ def _template_snapshot(template: TcTemplate) -> dict:
     }
 
 
-def _template_clauses(
-    db: Session, clause_ids: list[int], principal: CurrentPrincipal
-) -> list[TcTemplateClause]:
-    if len(set(clause_ids)) != len(clause_ids):
-        raise unprocessable("A clause can appear only once in a template")
-    found = set(db.scalars(select(TcClause.id).where(TcClause.id.in_(clause_ids))))
-    if found != set(clause_ids):
-        raise unprocessable(f"Unknown clause ids: {sorted(set(clause_ids) - found)}")
-    return [
-        TcTemplateClause(clause_id=cid, sort_order=i, created_by=principal.user.id)
-        for i, cid in enumerate(clause_ids, start=1)
-    ]
+def _set_clauses(
+    db: Session, template: TcTemplate, clause_ids: list[int], principal: CurrentPrincipal
+) -> None:
+    try:
+        set_template_clause_ids(db, template, clause_ids, created_by=principal.user.id)
+    except TcRuleError as exc:
+        raise unprocessable(str(exc)) from exc
 
 
 def _name_taken(db: Session, name: str, exclude: int | None = None) -> bool:
@@ -199,7 +320,7 @@ def list_templates(db: DbSession) -> list[TemplateSummary]:
 
 @router.get("/templates/{template_id}", dependencies=view)
 def get_template(template_id: int, db: DbSession) -> TemplateOut:
-    return _template_out(get_or_404(db, TcTemplate, template_id, "Template"))
+    return _template_out(db, get_or_404(db, TcTemplate, template_id, "Template"))
 
 
 @router.post("/templates", status_code=status.HTTP_201_CREATED, dependencies=edit)
@@ -211,19 +332,17 @@ def create_template(
     if body.is_default:
         _clear_default(db)
     template = TcTemplate(
-        name=body.name.strip(),
-        is_default=body.is_default,
-        created_by=principal.user.id,
-        clauses=_template_clauses(db, body.clause_ids, principal),
+        name=body.name.strip(), is_default=body.is_default, created_by=principal.user.id
     )
     db.add(template)
     db.flush()
+    _set_clauses(db, template, body.clause_ids, principal)
     audit.record(db, "tc_template.create", "tc_template", template.id,
                  user_id=principal.user.id, after=_template_snapshot(template),
                  ip=audit.client_ip(request))  # fmt: skip
     db.commit()
     db.refresh(template)
-    return _template_out(template)
+    return _template_out(db, template)
 
 
 @router.patch("/templates/{template_id}", dependencies=edit)
@@ -246,9 +365,7 @@ def update_template(
     elif body.is_default is False:
         template.is_default = False
     if body.clause_ids is not None:
-        template.clauses = []
-        db.flush()
-        template.clauses = _template_clauses(db, body.clause_ids, principal)
+        _set_clauses(db, template, body.clause_ids, principal)
     db.flush()
     after = _template_snapshot(template)
     if after != before:
@@ -257,7 +374,7 @@ def update_template(
                      ip=audit.client_ip(request))  # fmt: skip
     db.commit()
     db.refresh(template)
-    return _template_out(template)
+    return _template_out(db, template)
 
 
 @router.delete(
