@@ -45,6 +45,13 @@ DEFAULT_UNITS: dict[str, tuple[str, list[str]]] = {
 # fmt: on
 
 
+# "RO" in a BOQ's unit column means "rate only": a rate is quoted without a quantity. It is not
+# a unit; importers store the unit blank and the line's qty_note as "QRO".
+RATE_ONLY_ALIASES = ("ro", "r.o", "r/o", "rate only", "qro")
+RATE_ONLY_NOTE = "QRO"
+_RATE_ONLY_IN_BRACKETS = re.compile(r"\(\s*(r\s*[./]?\s*o\.?|rate\s*only)\s*\)", re.IGNORECASE)
+
+
 def unit_key(text: str) -> str:
     """Reduce a unit spelling to letters and digits: 'Sq. Mt.' -> 'sqmt', 'Per NO' -> 'no'."""
     t = text.replace("Ǫ", "Q").replace("ǫ", "q")  # 'SǪM' appears in real BOQs
@@ -66,6 +73,8 @@ def build_alias_map(units: Iterable[tuple[str, Iterable[str]]]) -> dict[str, str
     return result
 
 
+_RATE_ONLY_KEYS = frozenset(unit_key(a) for a in RATE_ONLY_ALIASES)
+
 DEFAULT_ALIASES = build_alias_map((code, aliases) for code, (_, aliases) in DEFAULT_UNITS.items())
 
 
@@ -77,6 +86,14 @@ def normalise_unit(text: object, aliases: Mapping[str, str] | None = None) -> st
     if not key:
         return None
     return (aliases if aliases is not None else DEFAULT_ALIASES).get(key)
+
+
+def is_rate_only(text: object) -> bool:
+    """'RO', 'R.O', 'Rate only' (the whole unit) or 'sqm (RO)' (a unit marked rate only)."""
+    if text is None:
+        return False
+    raw = str(text)
+    return unit_key(raw) in _RATE_ONLY_KEYS or bool(_RATE_ONLY_IN_BRACKETS.search(raw))
 
 
 def load_aliases(db: Session) -> dict[str, str]:

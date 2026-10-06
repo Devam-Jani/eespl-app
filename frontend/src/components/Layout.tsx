@@ -5,7 +5,7 @@ import { MENU } from "../menu";
 export default function Layout() {
   const { me, can, logout } = useAuth();
   const visible = MENU.filter((item) => can(...item.perms));
-  const sections = ["Modules", "Masters", "Administration"] as const;
+  const sections = ["Modules", "Masters", "Settings", "Administration"] as const;
 
   return (
     <div className="shell">

@@ -89,6 +89,18 @@ which did not, and any skipped rows with the reason. The T&C import only adds ne
   that are not clauses, client checklist answers and project-specific text, flags clauses that lost
   a leading number on import, and keeps templates free of hidden/merged clauses
   (`backend/app/masters/tc.py`). Safe to re-run; decisions made in the app are never overridden.
+- **Vendors** (`vendors.view` / `vendors.edit`) with contacts, bank accounts and products supplied.
+  Bank account numbers and IFSC are only returned with `settings.company` or `finance.view`.
+- **Settings**: company profile (logo stored in the `eespl_media` Docker volume, not in git),
+  GSTIN addresses, company bank accounts (`settings.company`); categories, tags, units and unit
+  conversions (`library.edit`). `convert(qty, from, to, product)` lives in
+  `backend/app/masters/conversions.py`.
+- **Excel export**: every list has an Export Excel button; the `/export` endpoints apply the same
+  permission and field hiding as the list.
+- **Powerplay imports** (only if the exports exist; put them in `data/powerplay/`):
+  `import-powerplay-materials`, `import-powerplay-vendors`, `import-powerplay-team`. Columns are
+  found by header name; re-runs only fill in missing fields. Team members become inactive users
+  without a password; nobody is emailed.
 - **Library editing** (`library.edit`): hide an item from search, change its unit, or merge a
   duplicate into another item (reversible). These survive re-imports.
 

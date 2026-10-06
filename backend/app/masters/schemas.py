@@ -5,12 +5,17 @@ from typing import Annotated, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
-from app.masters.models import CLIENT_TYPES, LABOUR_UNITS, PRODUCT_CATEGORIES
+from app.masters.models import (
+    CATEGORY_KINDS,
+    CLIENT_TYPES,
+    LABOUR_UNITS,
+    TAG_MODULES,
+    VENDOR_TYPES,
+)
 
 T = TypeVar("T")
 
 ClientType = Literal[CLIENT_TYPES]  # type: ignore[valid-type]
-ProductCategory = Literal[PRODUCT_CATEGORIES]  # type: ignore[valid-type]
 LabourUnit = Literal[LABOUR_UNITS]  # type: ignore[valid-type]
 NonNegative = Annotated[Decimal, Field(ge=0, max_digits=14, decimal_places=4)]
 Percent = Annotated[Decimal, Field(ge=0, lt=1000, max_digits=6, decimal_places=2)]
@@ -189,7 +194,9 @@ class ProductIn(BaseModel):
     code: str = Field(min_length=1, max_length=50)
     name: Name
     brand: str | None = Field(default=None, max_length=100)
-    category: ProductCategory = "other"
+    # a material category, by id or by name (case-insensitive)
+    category_id: int | None = None
+    category: str | None = Field(default=None, max_length=100)
     unit: str
     pack_size: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=3)
     gst_percent: Percent = Decimal(18)
@@ -200,7 +207,8 @@ class ProductUpdate(BaseModel):
     code: str | None = Field(default=None, min_length=1, max_length=50)
     name: Name | None = None
     brand: str | None = Field(default=None, max_length=100)
-    category: ProductCategory | None = None
+    category_id: int | None = None
+    category: str | None = Field(default=None, max_length=100)
     unit: str | None = None
     pack_size: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=3)
     gst_percent: Percent | None = None
@@ -218,12 +226,18 @@ class ProductOut(ORM):
     code: str
     name: str
     brand: str | None
-    category: str
+    category_id: int | None
+    category: str | None
     unit: str
     pack_size: Decimal | None
     gst_percent: Decimal
     is_active: bool
     cost: ProductCost | None = None
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def _category_name(cls, v):
+        return getattr(v, "name", v)
 
 
 # --- systems ---
@@ -513,3 +527,305 @@ class TemplateOut(BaseModel):
     name: str
     is_default: bool
     clauses: list[ClauseOut]
+
+
+# --- M1 part 2 --------------------------------------------------------------------------------
+
+IFSC_RE = re.compile(r"^[A-Z]{4}0[A-Z0-9]{6}$")
+ACCOUNT_RE = re.compile(r"^[0-9]{6,18}$")
+TAN_RE = re.compile(r"^[A-Z]{4}[0-9]{5}[A-Z]$")
+CIN_RE = re.compile(r"^[LU][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$")
+
+CategoryKind = Literal[CATEGORY_KINDS]  # type: ignore[valid-type]
+TagModule = Literal[TAG_MODULES]  # type: ignore[valid-type]
+VendorType = Literal[VENDOR_TYPES]  # type: ignore[valid-type]
+
+
+def validate_ifsc(value: str) -> str:
+    value = value.strip().upper().replace(" ", "")
+    if not IFSC_RE.match(value):
+        raise ValueError("IFSC must look like HDFC0001234 (4 letters, 0, then 6 letters/digits)")
+    return value
+
+
+def validate_account_number(value: str) -> str:
+    value = value.strip().replace(" ", "").replace("-", "")
+    if not ACCOUNT_RE.match(value):
+        raise ValueError("Account number must be 6 to 18 digits")
+    return value
+
+
+def _pattern(regex: re.Pattern, example: str):
+    def check(value: str | None) -> str | None:
+        value = _blank_to_none(value)
+        if value is None:
+            return None
+        value = value.upper().replace(" ", "")
+        if not regex.match(value):
+            raise ValueError(f"must look like {example}")
+        return value
+
+    return check
+
+
+class CategoryIn(BaseModel):
+    kind: CategoryKind
+    name: str = Field(min_length=1, max_length=100)
+    parent_id: int | None = None
+    sort_order: int = 0
+    is_active: bool = True
+
+
+class CategoryUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    parent_id: int | None = None
+    sort_order: int | None = None
+    is_active: bool | None = None
+
+
+class CategoryOut(ORM):
+    id: int
+    kind: str
+    name: str
+    parent_id: int | None
+    sort_order: int
+    is_active: bool
+    product_count: int = 0
+
+
+class TagIn(BaseModel):
+    module: TagModule
+    name: str = Field(min_length=1, max_length=100)
+    is_archived: bool = False
+
+
+class TagUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    is_archived: bool | None = None
+
+
+class TagOut(ORM):
+    id: int
+    module: str
+    name: str
+    is_archived: bool
+
+
+class UnitUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=50)
+    aliases: list[str] | None = None
+
+
+class ConversionIn(BaseModel):
+    from_unit: str
+    to_unit: str
+    factor: Decimal = Field(gt=0, max_digits=18, decimal_places=8)
+    product_id: int | None = None
+
+
+class ConversionUpdate(BaseModel):
+    factor: Decimal = Field(gt=0, max_digits=18, decimal_places=8)
+
+
+class ConversionOut(BaseModel):
+    id: int
+    from_unit: str
+    to_unit: str
+    factor: Decimal
+    product_id: int | None
+    product_name: str | None
+
+
+class ConvertOut(BaseModel):
+    qty: Decimal
+    from_unit: str
+    to_unit: str
+    product_id: int | None
+    result: Decimal
+
+
+# vendors
+
+
+class BankAccountIn(BaseModel):
+    account_name: Name
+    account_number: str
+    ifsc: str
+    bank: str | None = Field(default=None, max_length=100)
+    branch: str | None = Field(default=None, max_length=100)
+    is_primary: bool = False
+
+    _number = field_validator("account_number")(validate_account_number)
+    _ifsc = field_validator("ifsc")(validate_ifsc)
+
+
+class BankAccountOut(BaseModel):
+    """account_number and ifsc are None (and masked True) for callers without settings.company
+    or finance.view."""
+
+    id: int
+    account_name: str
+    bank: str | None
+    branch: str | None
+    is_primary: bool
+    account_number: str | None
+    ifsc: str | None
+    masked: bool
+
+
+class VendorProductIn(BaseModel):
+    product_id: int
+    last_rate: NonNegative | None = None
+    lead_time_days: int | None = Field(default=None, ge=0, le=3650)
+
+
+class VendorProductOut(BaseModel):
+    id: int
+    product_id: int
+    product_code: str
+    product_name: str
+    unit: str
+    last_rate: Decimal | None
+    lead_time_days: int | None
+
+
+class VendorIn(ClientFields):
+    name: Name
+    type: VendorType = "material_supplier"
+    payment_terms_days: int | None = Field(default=None, ge=0, le=365)
+    is_active: bool = True
+    contacts: list[ContactIn] = []
+
+    @model_validator(mode="after")
+    def _contacts(self):
+        _one_primary(self.contacts)
+        return self
+
+
+class VendorUpdate(ClientFields):
+    name: Name | None = None
+    type: VendorType | None = None
+    payment_terms_days: int | None = Field(default=None, ge=0, le=365)
+    is_active: bool | None = None
+    contacts: list[ContactIn] | None = None  # when given, replaces all contacts
+
+    @model_validator(mode="after")
+    def _contacts(self):
+        _one_primary(self.contacts)
+        return self
+
+
+class VendorOut(BaseModel):
+    id: int
+    name: str
+    type: str
+    gstin: str | None
+    pan: str | None
+    address: str | None
+    city: str | None
+    state: str | None
+    payment_terms_days: int | None
+    notes: str | None
+    is_active: bool
+    created_at: datetime
+    contacts: list[ContactOut]
+    bank_accounts: list[BankAccountOut]
+    products: list[VendorProductOut]
+
+
+# company settings
+
+
+class CompanyProfileIn(BaseModel):
+    legal_name: str | None = Field(default=None, max_length=200)
+    trade_name: str | None = Field(default=None, max_length=200)
+    pan: str | None = None
+    tan: str | None = None
+    tds_percent: Percent | None = None
+    cin: str | None = None
+    email: EmailStr | None = None
+    phone: str | None = Field(default=None, max_length=50)
+    website: str | None = Field(default=None, max_length=200)
+    default_gst_percent: Percent | None = None
+
+    _pan = field_validator("pan")(validate_pan)
+    _tan = field_validator("tan")(_pattern(TAN_RE, "AHMA12345B"))
+    _cin = field_validator("cin")(_pattern(CIN_RE, "U74999GJ2019PTC123456"))
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _email(cls, v):
+        return _blank_to_none(v) if isinstance(v, str) else v
+
+
+class CompanyProfileOut(ORM):
+    legal_name: str | None
+    trade_name: str | None
+    pan: str | None
+    tan: str | None
+    tds_percent: Decimal | None
+    cin: str | None
+    email: str | None
+    phone: str | None
+    website: str | None
+    default_gst_percent: Decimal
+    has_logo: bool = False
+    updated_at: datetime
+
+
+class GstinIn(BaseModel):
+    gstin: str
+    state: str = Field(min_length=1, max_length=100)
+    address: str = Field(min_length=1)
+    is_default: bool = False
+
+    @field_validator("gstin")
+    @classmethod
+    def _gstin(cls, v):
+        value = validate_gstin(v)
+        if value is None:
+            raise ValueError("GSTIN is required")
+        return value
+
+
+class GstinUpdate(BaseModel):
+    state: str | None = Field(default=None, min_length=1, max_length=100)
+    address: str | None = Field(default=None, min_length=1)
+    is_default: bool | None = None
+
+
+class GstinOut(ORM):
+    id: int
+    gstin: str
+    state: str
+    address: str
+    is_default: bool
+
+
+class CompanyBankIn(BaseModel):
+    account_name: Name
+    account_number: str
+    ifsc: str
+    bank: str | None = Field(default=None, max_length=100)
+    branch: str | None = Field(default=None, max_length=100)
+    is_default: bool = False
+
+    _number = field_validator("account_number")(validate_account_number)
+    _ifsc = field_validator("ifsc")(validate_ifsc)
+
+
+class CompanyBankUpdate(BaseModel):
+    account_name: Name | None = None
+    bank: str | None = Field(default=None, max_length=100)
+    branch: str | None = Field(default=None, max_length=100)
+    is_default: bool | None = None
+
+
+class CompanyBankOut(ORM):
+    id: int
+    account_name: str
+    account_number: str
+    ifsc: str
+    bank: str | None
+    branch: str | None
+    is_default: bool

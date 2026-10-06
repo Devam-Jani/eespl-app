@@ -29,6 +29,7 @@ services:
     volumes:
       - ./backend:/app
       - ./data:/data:ro
+      - eespl_media:/media
     depends_on:
       db:
         condition: service_healthy
@@ -52,3 +53,6 @@ services:
 volumes:
   eespl_pgdata:
     name: eespl_pgdata
+  # uploaded files (company logo, later documents); not in git
+  eespl_media:
+    name: eespl_media

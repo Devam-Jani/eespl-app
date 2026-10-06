@@ -1172,3 +1172,67 @@ input.full {
 .row-menu-items button:hover {
   background: var(--accent-soft);
 }
+
+/* ---------- M1 part 2 ---------- */
+
+.push-right {
+  margin-left: auto;
+}
+
+.pre-line {
+  white-space: pre-line;
+}
+
+.logo-preview {
+  display: block;
+  max-width: 100%;
+  max-height: 160px;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem;
+  background: #fff;
+}
+
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 0.25rem 0.4rem 0.25rem 0.75rem;
+}
+
+.tag-pill.archived {
+  background: #eceeed;
+  opacity: 0.7;
+}
+
+.tag-pill .link {
+  text-decoration: none;
+  color: var(--accent-dark);
+}
+
+.tag-action {
+  font: inherit;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 0 0.25rem;
+}
+
+.tag-action:hover {
+  color: var(--text);
+}
+
+.convert-result {
+  font-weight: 600;
+  color: var(--accent-dark);
+}

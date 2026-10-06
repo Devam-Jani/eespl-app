@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 from app import audit
 from app.auth.deps import CurrentPrincipal, require_permission
 from app.db import DbSession
-from app.masters.models import Product, ProductPrice, SystemComponent, Unit
+from app.export import EXPORT_ROW_LIMIT, xlsx_response
+from app.masters.models import Category, Product, ProductPrice, SystemComponent, Unit
 from app.masters.rate import current_prices
 from app.masters.routers.common import (
     Limit,
@@ -60,6 +61,49 @@ def _out(db: Session, products: list[Product], with_cost: bool) -> list[ProductO
     return result
 
 
+def _resolve_category(db: Session, category_id: int | None, name: str | None) -> int | None:
+    """A material category given by id or by name (case-insensitive)."""
+    if category_id is not None:
+        category = db.get(Category, category_id)
+        if category is None or category.kind != "material":
+            raise unprocessable(f"Unknown material category id: {category_id}")
+        return category.id
+    if name:
+        found = db.scalar(
+            select(Category.id).where(
+                Category.kind == "material", func.lower(Category.name) == name.strip().lower()
+            )
+        )
+        if found is None:
+            raise unprocessable(f"Unknown material category: {name}")
+        return found
+    return None
+
+
+def _query(q: str | None, category: str | None, category_id: int | None, active: bool | None):
+    query = select(Product)
+    if q:
+        pattern = like(q)
+        query = query.where(
+            or_(
+                Product.code.ilike(pattern),
+                Product.name.ilike(pattern),
+                Product.brand.ilike(pattern),
+            )
+        )
+    if category_id is not None:
+        query = query.where(Product.category_id == category_id)
+    elif category:
+        query = query.where(
+            Product.category_id.in_(
+                select(Category.id).where(func.lower(Category.name) == category.strip().lower())
+            )
+        )
+    if active is not None:
+        query = query.where(Product.is_active == active)
+    return query.order_by(Product.name, Product.id)
+
+
 def _check_unit(db: Session, unit: str) -> None:
     if db.get(Unit, unit) is None:
         raise unprocessable(f"Unknown unit: {unit}")
@@ -79,28 +123,45 @@ def list_products(
     principal: CurrentPrincipal,
     q: Search = None,
     category: str | None = None,
+    category_id: int | None = None,
     active: bool | None = None,
     limit: Limit = 50,
     offset: Offset = 0,
 ) -> Page[ProductOut]:
-    query = select(Product)
-    if q:
-        pattern = like(q)
-        query = query.where(
-            or_(
-                Product.code.ilike(pattern),
-                Product.name.ilike(pattern),
-                Product.brand.ilike(pattern),
-            )
-        )
-    if category:
-        query = query.where(Product.category == category)
-    if active is not None:
-        query = query.where(Product.is_active == active)
-    rows, total = paginate(db, query.order_by(Product.name, Product.id), limit, offset)
+    rows, total = paginate(db, _query(q, category, category_id, active), limit, offset)
     return Page(
         items=_out(db, rows, can_see_cost(principal)), total=total, limit=limit, offset=offset
     )
+
+
+@router.get("/export", dependencies=view)
+def export_products(
+    db: DbSession,
+    principal: CurrentPrincipal,
+    q: Search = None,
+    category: str | None = None,
+    category_id: int | None = None,
+    active: bool | None = None,
+):
+    """Same filters as the list. Purchase rate and freight only with tender.margin."""
+    with_cost = can_see_cost(principal)
+    query = _query(q, category, category_id, active).limit(EXPORT_ROW_LIMIT)
+    products = _out(db, list(db.scalars(query)), with_cost)
+    columns = ["Code", "Name", "Brand", "Category", "Unit", "Pack size", "GST %", "Active"]
+    if with_cost:
+        columns += ["Purchase rate", "Freight / unit", "Price effective from"]
+    rows = []
+    for p in products:
+        row = [p.code, p.name, p.brand, p.category, p.unit, p.pack_size, p.gst_percent,
+               p.is_active]  # fmt: skip
+        if with_cost:
+            price = p.cost.current_price if p.cost else None
+            if price:
+                row += [price.purchase_rate, price.freight_per_unit, price.effective_from]
+            else:
+                row += [None, None, None]
+        rows.append(row)
+    return xlsx_response("products", columns, rows)
 
 
 @router.get("/{product_id}", dependencies=view)
@@ -115,7 +176,9 @@ def create_product(
 ) -> ProductOut:
     _check_unit(db, body.unit)
     _check_code(db, body.code)
-    product = Product(**body.model_dump(), created_by=principal.user.id)
+    fields = body.model_dump(exclude={"category", "category_id"})
+    fields["category_id"] = _resolve_category(db, body.category_id, body.category)
+    product = Product(**fields, created_by=principal.user.id)
     db.add(product)
     db.flush()
     db.refresh(product)  # numeric columns come back at their stored scale
@@ -135,7 +198,11 @@ def update_product(
 ) -> ProductOut:
     product = get_or_404(db, Product, product_id, "Product")
     changes = {k: v for k, v in body.model_dump(exclude_unset=True).items()
-               if v is not None or k in ("brand", "pack_size")}  # fmt: skip
+               if v is not None or k in ("brand", "pack_size", "category_id")}  # fmt: skip
+    if "category" in changes or "category_id" in changes:
+        changes["category_id"] = _resolve_category(
+            db, changes.get("category_id"), changes.pop("category", None)
+        )
     if "unit" in changes:
         _check_unit(db, changes["unit"])
     if "code" in changes:

@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { api, ApiError, queryString } from "../api";
+import ExportButton from "../components/ExportButton";
 import type { AuditEntry } from "../types";
 
 const PAGE_SIZE = 50;
@@ -55,6 +56,7 @@ export default function Audit() {
     <>
       <div className="page-header">
         <h1>Audit log</h1>
+        <ExportButton path={`/api/audit/export${queryString({ ...filters })}`} />
       </div>
       <form className="card filters" onSubmit={apply}>
         <label className="field">

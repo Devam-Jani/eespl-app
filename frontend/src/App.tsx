@@ -15,6 +15,13 @@ import SystemDetail from "./pages/SystemDetail";
 import Systems from "./pages/Systems";
 import TcLibrary from "./pages/TcLibrary";
 import Users from "./pages/Users";
+import Vendors from "./pages/Vendors";
+import Categories from "./pages/settings/Categories";
+import CompanyBanks from "./pages/settings/CompanyBanks";
+import CompanyProfile from "./pages/settings/CompanyProfile";
+import GstinAddresses from "./pages/settings/GstinAddresses";
+import Tags from "./pages/settings/Tags";
+import UnitsConversions from "./pages/settings/UnitsConversions";
 
 const PAGES: Record<string, JSX.Element> = {
   "/clients": <Clients />,
@@ -22,6 +29,13 @@ const PAGES: Record<string, JSX.Element> = {
   "/systems": <Systems />,
   "/rate-library": <RateLibrary />,
   "/tc-library": <TcLibrary />,
+  "/vendors": <Vendors />,
+  "/settings/company": <CompanyProfile />,
+  "/settings/gstins": <GstinAddresses />,
+  "/settings/bank-accounts": <CompanyBanks />,
+  "/settings/categories": <Categories />,
+  "/settings/tags": <Tags />,
+  "/settings/units": <UnitsConversions />,
   "/admin/users": <Users />,
   "/admin/roles": <Roles />,
   "/admin/audit": <Audit />,

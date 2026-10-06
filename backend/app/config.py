@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     refresh_token_days: int = 7
     # Set to true when served over HTTPS so the refresh cookie is never sent in clear text.
     cookie_secure: bool = False
+    # Uploaded files (company logo, later documents). A Docker volume, never in git.
+    media_dir: str = "/media"
 
 
 settings = Settings()

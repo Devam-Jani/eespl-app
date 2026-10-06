@@ -20,6 +20,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    text,
     true,
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
@@ -105,17 +106,20 @@ class ClientContact(Tracked, Base):
 
 class Product(Tracked, Base):
     __tablename__ = "products"
-    __table_args__ = (CheckConstraint(_in("category", PRODUCT_CATEGORIES), name="category_valid"),)
 
     id: Mapped[int] = mapped_column(Identity(), primary_key=True)
     code: Mapped[str] = mapped_column(String(50), unique=True)
     name: Mapped[str] = mapped_column(String(200), index=True)
     brand: Mapped[str | None] = mapped_column(String(100))
-    category: Mapped[str] = mapped_column(String(20), server_default="other")
+    category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("categories.id", ondelete="SET NULL"), index=True
+    )
     unit: Mapped[str] = mapped_column(ForeignKey("units.code"))
     pack_size: Mapped[Decimal | None] = mapped_column(Numeric(12, 3))
     gst_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), server_default="18")
     is_active: Mapped[bool] = mapped_column(server_default=true())
+
+    category: Mapped["Category | None"] = relationship(lazy="joined")
 
 
 class ProductPrice(Tracked, Base):
@@ -344,3 +348,225 @@ class TcTemplateClause(Tracked, Base):
     sort_order: Mapped[int] = mapped_column(Integer, server_default="0")
 
     clause: Mapped[TcClause] = relationship(lazy="joined")
+
+
+# --- M1 part 2: categories, tags, unit conversions, vendors, company settings ---------------
+
+CATEGORY_KINDS = ("work", "material")
+TAG_MODULES = ("material", "petty_spend", "work_order", "issue")
+VENDOR_TYPES = ("material_supplier", "labour_contractor", "subcontractor", "transporter", "other")
+
+
+class Category(Tracked, Base):
+    """Work categories (where on site) and material categories (what kind of product)."""
+
+    __tablename__ = "categories"
+    __table_args__ = (
+        CheckConstraint(_in("kind", CATEGORY_KINDS), name="kind_valid"),
+        Index("uq_categories_kind_name", "kind", func.lower(text("name")), unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(10))
+    name: Mapped[str] = mapped_column(String(100))
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("categories.id", ondelete="SET NULL"), index=True
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, server_default="0")
+    is_active: Mapped[bool] = mapped_column(server_default=true())
+
+
+class Tag(Tracked, Base):
+    __tablename__ = "tags"
+    __table_args__ = (
+        CheckConstraint(_in("module", TAG_MODULES), name="module_valid"),
+        Index("uq_tags_module_name", "module", func.lower(text("name")), unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    module: Mapped[str] = mapped_column(String(20))
+    name: Mapped[str] = mapped_column(String(100))
+    is_archived: Mapped[bool] = mapped_column(server_default="false")
+
+
+class UnitConversion(Tracked, Base):
+    """qty_in_to = qty_in_from × factor. product_id set = only for that product
+    (1 bag of a product = 25 kg); otherwise generic (1 sqm = 10.7639 sqft)."""
+
+    __tablename__ = "unit_conversions"
+    __table_args__ = (
+        CheckConstraint("factor > 0", name="factor_positive"),
+        CheckConstraint("from_unit <> to_unit", name="different_units"),
+        Index(
+            "uq_unit_conversions_generic",
+            "from_unit",
+            "to_unit",
+            unique=True,
+            postgresql_where=text("product_id IS NULL"),
+        ),
+        Index(
+            "uq_unit_conversions_product",
+            "from_unit",
+            "to_unit",
+            "product_id",
+            unique=True,
+            postgresql_where=text("product_id IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    from_unit: Mapped[str] = mapped_column(ForeignKey("units.code"))
+    to_unit: Mapped[str] = mapped_column(ForeignKey("units.code"))
+    factor: Mapped[Decimal] = mapped_column(Numeric(18, 8))
+    product_id: Mapped[int | None] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), index=True
+    )
+
+    product: Mapped["Product | None"] = relationship(lazy="joined")
+
+
+class Vendor(Tracked, Base):
+    __tablename__ = "vendors"
+    __table_args__ = (
+        CheckConstraint(_in("type", VENDOR_TYPES), name="type_valid"),
+        CheckConstraint("payment_terms_days >= 0", name="payment_terms_nonnegative"),
+    )
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), index=True)
+    type: Mapped[str] = mapped_column(String(30), server_default="material_supplier")
+    gstin: Mapped[str | None] = mapped_column(String(15))
+    pan: Mapped[str | None] = mapped_column(String(10))
+    address: Mapped[str | None] = mapped_column(Text)
+    city: Mapped[str | None] = mapped_column(String(100))
+    state: Mapped[str | None] = mapped_column(String(100))
+    payment_terms_days: Mapped[int | None] = mapped_column(Integer)
+    notes: Mapped[str | None] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(server_default=true())
+
+    contacts: Mapped[list["VendorContact"]] = relationship(
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="(VendorContact.is_primary.desc(), VendorContact.id)",
+    )
+    bank_accounts: Mapped[list["VendorBankAccount"]] = relationship(
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="(VendorBankAccount.is_primary.desc(), VendorBankAccount.id)",
+    )
+    products: Mapped[list["VendorProduct"]] = relationship(
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="VendorProduct.id",
+    )
+
+
+class VendorContact(Tracked, Base):
+    __tablename__ = "vendor_contacts"
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    vendor_id: Mapped[int] = mapped_column(ForeignKey("vendors.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    designation: Mapped[str | None] = mapped_column(String(100))
+    phone: Mapped[str | None] = mapped_column(String(50))
+    email: Mapped[str | None] = mapped_column(String(255))
+    is_primary: Mapped[bool] = mapped_column(server_default="false")
+
+
+class VendorBankAccount(Tracked, Base):
+    """Account number and IFSC are finance data: only shown with settings.company or
+    finance.view."""
+
+    __tablename__ = "vendor_bank_accounts"
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    vendor_id: Mapped[int] = mapped_column(ForeignKey("vendors.id", ondelete="CASCADE"), index=True)
+    account_name: Mapped[str] = mapped_column(String(200))
+    account_number: Mapped[str] = mapped_column(String(34))
+    ifsc: Mapped[str] = mapped_column(String(11))
+    bank: Mapped[str | None] = mapped_column(String(100))
+    branch: Mapped[str | None] = mapped_column(String(100))
+    is_primary: Mapped[bool] = mapped_column(server_default="false")
+
+
+class VendorProduct(Tracked, Base):
+    """Who supplies what (optional link)."""
+
+    __tablename__ = "vendor_products"
+    __table_args__ = (
+        Index("uq_vendor_products_vendor_product", "vendor_id", "product_id", unique=True),
+        CheckConstraint("lead_time_days >= 0", name="lead_time_nonnegative"),
+    )
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    vendor_id: Mapped[int] = mapped_column(ForeignKey("vendors.id", ondelete="CASCADE"))
+    product_id: Mapped[int] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), index=True
+    )
+    last_rate: Mapped[Decimal | None] = mapped_column(Money)
+    lead_time_days: Mapped[int | None] = mapped_column(Integer)
+
+    product: Mapped["Product"] = relationship(lazy="joined")
+
+
+class CompanyProfile(Tracked, Base):
+    """EESPL's own details. A single row (id = 1)."""
+
+    __tablename__ = "company_profile"
+    __table_args__ = (CheckConstraint("id = 1", name="single_row"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, server_default="1")
+    legal_name: Mapped[str | None] = mapped_column(String(200))
+    trade_name: Mapped[str | None] = mapped_column(String(200))
+    logo_path: Mapped[str | None] = mapped_column(String(300))  # under the media volume
+    pan: Mapped[str | None] = mapped_column(String(10))
+    tan: Mapped[str | None] = mapped_column(String(10))
+    tds_percent: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    cin: Mapped[str | None] = mapped_column(String(21))
+    email: Mapped[str | None] = mapped_column(String(255))
+    phone: Mapped[str | None] = mapped_column(String(50))
+    website: Mapped[str | None] = mapped_column(String(200))
+    default_gst_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), server_default="18")
+
+
+class CompanyGstin(Tracked, Base):
+    """Address directory: one row per GST registration, used on bills and POs."""
+
+    __tablename__ = "company_gstins"
+    __table_args__ = (
+        Index(
+            "uq_company_gstins_single_default",
+            "is_default",
+            unique=True,
+            postgresql_where=text("is_default"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    gstin: Mapped[str] = mapped_column(String(15), unique=True)
+    state: Mapped[str] = mapped_column(String(100))
+    address: Mapped[str] = mapped_column(Text)
+    is_default: Mapped[bool] = mapped_column(server_default="false")
+
+
+class CompanyBankAccount(Tracked, Base):
+    __tablename__ = "company_bank_accounts"
+    __table_args__ = (
+        Index(
+            "uq_company_bank_accounts_single_default",
+            "is_default",
+            unique=True,
+            postgresql_where=text("is_default"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    account_name: Mapped[str] = mapped_column(String(200))
+    account_number: Mapped[str] = mapped_column(String(34))
+    ifsc: Mapped[str] = mapped_column(String(11))
+    bank: Mapped[str | None] = mapped_column(String(100))
+    branch: Mapped[str | None] = mapped_column(String(100))
+    is_default: Mapped[bool] = mapped_column(server_default="false")

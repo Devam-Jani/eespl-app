@@ -40,7 +40,7 @@ from app import audit
 from app.masters.library import exclusion_reason, is_competitor_note, recompute_stats, source_stats
 from app.masters.models import LibraryItem, LibraryLine, TcClause, TcTemplate, TcTemplateClause
 from app.masters.tc import recompute_usage
-from app.masters.units import load_aliases, normalise_unit
+from app.masters.units import RATE_ONLY_NOTE, is_rate_only, load_aliases, normalise_unit
 
 RATE_LIBRARY_SHEET = "Rate library"
 ALL_LINES_SHEET = "All lines"
@@ -208,7 +208,7 @@ def import_library(db: Session, path: str | Path) -> LibraryImportResult:
 
     def unit_of(raw: str | None) -> str | None:
         code = normalise_unit(raw, aliases)
-        if raw and code is None:
+        if raw and code is None and not is_rate_only(raw):
             unrecognised[raw] = unrecognised.get(raw, 0) + 1
         return code
 
@@ -337,6 +337,8 @@ def import_library(db: Session, path: str | Path) -> LibraryImportResult:
         qty_value = r["qty"]
         qty = _decimal(qty_value)
         qty_note = _text(r["qty_note"], 50)
+        if is_rate_only(r["unit"]) or is_rate_only(unit_raw):
+            qty_note = qty_note or RATE_ONLY_NOTE  # "RO" = rate only, not a unit
         if qty is None and qty_value is not None and qty_note is None:
             qty_note = _text(qty_value, 50)  # "QRO", "NQ" written in the qty column
         check = _text(r["check"], 200)

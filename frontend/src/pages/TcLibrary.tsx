@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth";
+import ExportButton from "../components/ExportButton";
 import Modal from "../components/Modal";
 import { errorText } from "../format";
 import type { Clause, HiddenReason, Page, Template, TemplateSummary } from "../types";
@@ -132,6 +133,9 @@ function Clauses({
             Show hidden ({hiddenCount})
           </label>
         </div>
+        <ExportButton
+          path={`/api/tc/clauses/export?include_hidden=${showHidden}${reviewOnly ? "&needs_review=true" : ""}`}
+        />
         {canEdit && (
           <button className="btn btn-primary" onClick={() => setEditing("new")}>
             Add clause

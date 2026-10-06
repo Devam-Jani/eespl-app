@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, queryString } from "../api";
 import { useAuth } from "../auth";
+import ExportButton from "../components/ExportButton";
 import Modal from "../components/Modal";
 import { errorText, inr } from "../format";
 import type { Page, System } from "../types";
@@ -47,6 +48,7 @@ export default function Systems() {
           >
             <input className="search" placeholder="Search code or name" value={q} onChange={(e) => setQ(e.target.value)} />
           </form>
+          <ExportButton path={`/api/systems/export${queryString({ q: search })}`} />
           {canEdit && (
             <button className="btn btn-primary" onClick={() => setCreating(true)}>
               New system

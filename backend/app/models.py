@@ -38,10 +38,14 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
     )
-    email: Mapped[str] = mapped_column(String(255), unique=True)
+    # Nullable: people imported from Powerplay may have no email yet; they cannot be activated
+    # until an admin adds one.
+    email: Mapped[str | None] = mapped_column(String(255), unique=True)
     full_name: Mapped[str] = mapped_column(String(200))
     phone: Mapped[str | None] = mapped_column(String(50))
-    password_hash: Mapped[str] = mapped_column(String(255))
+    # NULL = no password set yet (cannot log in).
+    password_hash: Mapped[str | None] = mapped_column(String(255))
+    job_title: Mapped[str | None] = mapped_column(String(100))
     is_active: Mapped[bool] = mapped_column(server_default=true())
     failed_logins: Mapped[int] = mapped_column(server_default="0")
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -54,6 +58,10 @@ class User(Base):
     roles: Mapped[list["Role"]] = relationship(
         secondary="user_roles", lazy="selectin", order_by="Role.id"
     )
+
+    @property
+    def has_password(self) -> bool:
+        return self.password_hash is not None
 
 
 class Role(Base):

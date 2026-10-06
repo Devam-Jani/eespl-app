@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { api, queryString } from "../api";
 import { useAuth } from "../auth";
+import ExportButton from "../components/ExportButton";
 import Modal from "../components/Modal";
 import { errorText } from "../format";
 import type { Client, Contact, Page } from "../types";
@@ -60,6 +61,7 @@ export default function Clients() {
           >
             <input className="search" placeholder="Search name, city or GSTIN" value={q} onChange={(e) => setQ(e.target.value)} />
           </form>
+          <ExportButton path={`/api/clients/export${queryString({ q: search })}`} />
           {editScope && (
             <button className="btn btn-primary" onClick={() => setEditing("new")}>
               Add client

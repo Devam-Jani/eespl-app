@@ -40,7 +40,7 @@ class MeUser(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    email: str
+    email: str | None
     full_name: str
     phone: str | None
 
@@ -58,9 +58,11 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    email: str
+    email: str | None
     full_name: str
     phone: str | None
+    job_title: str | None = None
+    has_password: bool = False
     is_active: bool
     locked_until: datetime | None
     last_login_at: datetime | None
@@ -82,6 +84,7 @@ class UserUpdate(BaseModel):
     email: EmailStr | None = None
     full_name: str | None = Field(default=None, min_length=1, max_length=200)
     phone: str | None = Field(default=None, max_length=50)
+    job_title: str | None = Field(default=None, max_length=100)
     is_active: bool | None = None
 
     _email = field_validator("email")(_lower)
