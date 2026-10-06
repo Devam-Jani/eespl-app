@@ -22,7 +22,7 @@ from sqlalchemy import (
     func,
     true,
 )
-from sqlalchemy.dialects.postgresql import TSVECTOR
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
 
 from app.models import Base
@@ -182,6 +182,13 @@ class LibraryItem(Tracked, Base):
 
     __tablename__ = "library_items"
     __table_args__ = (
+        CheckConstraint(
+            "exclusion_source IS NULL OR exclusion_source IN ('rule', 'manual')",
+            name="exclusion_source_valid",
+        ),
+        CheckConstraint(
+            "merged_into_id IS NULL OR merged_into_id <> id", name="not_merged_into_self"
+        ),
         Index("ix_library_items_search_vector", "search_vector", postgresql_using="gin"),
         Index(
             "ix_library_items_description_trgm",
@@ -211,6 +218,23 @@ class LibraryItem(Tracked, Base):
     from_eespl_file: Mapped[bool] = mapped_column(server_default="false")
     needs_check: Mapped[bool] = mapped_column(server_default="false")
     check_note: Mapped[str | None] = mapped_column(String(200))
+    # Hidden from search by default: working/margin rows, rates below ₹1, or by hand.
+    is_excluded: Mapped[bool] = mapped_column(server_default="false")
+    excluded_reason: Mapped[str | None] = mapped_column(String(200))
+    exclusion_source: Mapped[str | None] = mapped_column(String(10))  # 'rule' | 'manual'
+    # Rates from other bidders' comparative sheets, not EESPL's.
+    is_competitor: Mapped[bool] = mapped_column(server_default="false")
+    # A person changed the unit; re-imports keep it.
+    unit_manual: Mapped[bool] = mapped_column(server_default="false")
+    # Merged duplicates point at the item they were merged into; their lines count there.
+    merged_into_id: Mapped[int | None] = mapped_column(
+        ForeignKey("library_items.id", ondelete="SET NULL"), index=True
+    )
+    merged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Statistics as the source sheet gave them; the rate columns above may be recomputed from
+    # lines (stats_from_lines) when flagged lines are left out or items are merged.
+    source_stats: Mapped[dict | None] = mapped_column(JSONB)
+    stats_from_lines: Mapped[bool] = mapped_column(server_default="false")
     search_vector: Mapped[str] = mapped_column(
         TSVECTOR,
         Computed("to_tsvector('english', coalesce(description, ''))", persisted=True),
@@ -245,6 +269,9 @@ class LibraryLine(Tracked, Base):
     from_eespl_file: Mapped[bool] = mapped_column(server_default="false")
     needs_check: Mapped[bool] = mapped_column(server_default="false")
     check_note: Mapped[str | None] = mapped_column(String(200))
+    is_excluded: Mapped[bool] = mapped_column(server_default="false")
+    excluded_reason: Mapped[str | None] = mapped_column(String(200))
+    is_competitor: Mapped[bool] = mapped_column(server_default="false")
 
 
 class TcClause(Tracked, Base):

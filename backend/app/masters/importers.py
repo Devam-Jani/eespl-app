@@ -10,6 +10,15 @@ Rate library keys
 - Lines link to items by match_key = sha1(normalised description | normalised unit), trying the
   line's own description first and then "<parent item> — <description>", which is how the
   "Rate library" sheet names sub-items. Lines with no matching item keep library_item_id NULL.
+
+Rules (app.masters.library)
+- Items and lines whose text starts with Margin / Working / Total / Sub total, or whose rate is
+  below ₹1, are marked is_excluded with a reason (not deleted).
+- Items and lines whose check note mentions "comparative" or "other bidders" are marked
+  is_competitor.
+- Decisions made by a person win over the rules: a re-import keeps a manually changed unit and
+  a manual hide/unhide, and never touches merges.
+- Item statistics are then recomputed where flagged lines or merges change them.
 """
 
 import hashlib
@@ -23,11 +32,12 @@ from pathlib import Path
 from typing import Any
 
 from openpyxl import load_workbook
-from sqlalchemy import delete, func, select
+from sqlalchemy import case, delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app import audit
+from app.masters.library import exclusion_reason, is_competitor_note, recompute_stats, source_stats
 from app.masters.models import LibraryItem, LibraryLine, TcClause, TcTemplate, TcTemplateClause
 from app.masters.units import load_aliases, normalise_unit
 
@@ -96,6 +106,11 @@ class LibraryImportResult:
     lines_linked_via_parent: int = 0
     lines_unlinked: int = 0
     ambiguous_match_keys: int = 0
+    items_excluded: dict[str, int] = field(default_factory=dict)  # reason -> count
+    items_competitor: int = 0
+    items_stats_from_lines: int = 0
+    lines_excluded: int = 0
+    lines_competitor: int = 0
     unrecognised_units: dict[str, int] = field(default_factory=dict)
     skipped: list[Skipped] = field(default_factory=list)
 
@@ -155,11 +170,21 @@ def _rows(ws, columns: dict[str, str], sheet: str) -> Iterator[tuple[int, dict[s
         yield number, {key: values[i] if i < len(values) else None for key, i in index.items()}
 
 
-def _upsert(db: Session, model, rows: list[dict[str, Any]]) -> None:
+def _upsert(db: Session, model, rows: list[dict[str, Any]], keep: dict | None = None) -> None:
+    """Insert or update on source_key. `keep` maps column -> condition on the existing row
+    under which its current value is kept (manual edits that a re-import must not undo)."""
+    keep = keep or {}
+    table = model.__table__
     for start in range(0, len(rows), BATCH):
         batch = rows[start : start + BATCH]
         stmt = insert(model)
-        update_cols = {col: stmt.excluded[col] for col in batch[0] if col not in ("source_key",)}
+        update_cols = {
+            col: case((keep[col], table.c[col]), else_=stmt.excluded[col])
+            if col in keep
+            else stmt.excluded[col]
+            for col in batch[0]
+            if col != "source_key"
+        }
         update_cols["updated_at"] = func.now()
         db.execute(
             stmt.on_conflict_do_update(index_elements=["source_key"], set_=update_cols), batch
@@ -210,6 +235,8 @@ def import_library(db: Session, path: str | Path) -> LibraryImportResult:
             continue
         check = _text(r["check"], 200)
         boq_count = _decimal(r["boq_count"])
+        latest_rate = _decimal(r["latest_rate"])
+        reason = exclusion_reason(description, rate=latest_rate)
         items[source_key] = {
             "source_key": source_key,
             "match_key": _sha1(key, unit or ""),
@@ -228,7 +255,12 @@ def import_library(db: Session, path: str | Path) -> LibraryImportResult:
             "from_eespl_file": _yes(r["from_eespl_file"]),
             "needs_check": check is not None,
             "check_note": check,
+            "is_excluded": reason is not None,
+            "excluded_reason": reason,
+            "exclusion_source": "rule" if reason else None,
+            "is_competitor": is_competitor_note(check),
         }
+        items[source_key]["source_stats"] = source_stats(items[source_key])
         item_rows[source_key] = number
 
     existing = set(db.scalars(select(LibraryItem.source_key)))
@@ -237,7 +269,18 @@ def import_library(db: Session, path: str | Path) -> LibraryImportResult:
     result.items_updated = len(items.keys() & existing)
     result.items_deleted = len(existing - items.keys())
     if items:
-        _upsert(db, LibraryItem, list(items.values()))
+        manual = LibraryItem.__table__.c.exclusion_source == "manual"
+        _upsert(
+            db,
+            LibraryItem,
+            list(items.values()),
+            keep={
+                "unit": LibraryItem.__table__.c.unit_manual,
+                "is_excluded": manual,
+                "excluded_reason": manual,
+                "exclusion_source": manual,
+            },
+        )
 
     # match_key -> item id; when several items share a key, the one in most BOQs wins.
     by_match: dict[str, tuple[int, int]] = {}
@@ -296,6 +339,8 @@ def import_library(db: Session, path: str | Path) -> LibraryImportResult:
         if qty is None and qty_value is not None and qty_note is None:
             qty_note = _text(qty_value, 50)  # "QRO", "NQ" written in the qty column
         check = _text(r["check"], 200)
+        rate = _decimal(r["rate"])
+        reason = exclusion_reason(description, parent, rate=rate)
         lines[source_key] = {
             "source_key": source_key,
             "library_item_id": item_id,
@@ -310,12 +355,15 @@ def import_library(db: Session, path: str | Path) -> LibraryImportResult:
             "unit": unit,
             "qty": qty,
             "qty_note": qty_note,
-            "rate": _decimal(r["rate"]),
+            "rate": rate,
             "product_make": _text(r["product_make"]),
             "remarks": _text(r["remarks"]),
             "from_eespl_file": _yes(r["from_eespl_file"]),
             "needs_check": check is not None,
             "check_note": check,
+            "is_excluded": reason is not None,
+            "excluded_reason": reason,
+            "is_competitor": is_competitor_note(check),
         }
         line_rows[source_key] = number
     wb.close()
@@ -332,6 +380,18 @@ def import_library(db: Session, path: str | Path) -> LibraryImportResult:
     _delete_stale(db, LibraryItem, set(db.scalars(select(LibraryItem.source_key))) - items.keys())
     result.unrecognised_units = dict(sorted(unrecognised.items(), key=lambda kv: -kv[1]))
 
+    result.items_stats_from_lines = recompute_stats(db)
+    result.items_excluded = dict(
+        db.execute(
+            select(LibraryItem.excluded_reason, func.count())
+            .where(LibraryItem.is_excluded)
+            .group_by(LibraryItem.excluded_reason)
+        ).all()
+    )
+    result.items_competitor = db.scalar(select(func.count()).where(LibraryItem.is_competitor))
+    result.lines_excluded = sum(1 for ln in lines.values() if ln["is_excluded"])
+    result.lines_competitor = sum(1 for ln in lines.values() if ln["is_competitor"])
+
     audit.record(
         db,
         "library.import",
@@ -342,6 +402,8 @@ def import_library(db: Session, path: str | Path) -> LibraryImportResult:
             "items": result.items_in_file,
             "lines": result.lines_in_file,
             "lines_unlinked": result.lines_unlinked,
+            "items_excluded": sum(result.items_excluded.values()),
+            "items_competitor": result.items_competitor,
             "skipped": len(result.skipped),
         },
     )

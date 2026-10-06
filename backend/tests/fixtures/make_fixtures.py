@@ -8,6 +8,10 @@ What it exercises:
 - a non-numeric quantity ("NQ") that must land in qty_note
 - a line with no matching item (stays unlinked)
 - a duplicate source position and a blank description (both skipped, with reasons)
+- a "Margin — ..." working row and a below-₹1 item (both excluded, not deleted)
+- an item that only has other bidders' rates (competitor), and an extra competitor line on a
+  normal item (left out of its stats)
+- the same pipe outlet item quoted per nos and per sqm (for merge / unmerge)
 """
 
 from pathlib import Path
@@ -24,6 +28,11 @@ PIPE = f"{PIPE_PARENT} — 110mm dia pipe"
 CRYSTAL = "Integral crystalline admixture for RCC raft and retaining walls"
 TOILET = "Toilet sunken slab waterproofing with two coat acrylic polymer cementitious coating"
 MOBILISE = "Mobilisation and demobilisation of men and machinery"
+MARGIN = "Margin — Pipe sleeve 110 mm"
+HACKING = "Hacking and cleaning of old plaster surface"
+COMPETITOR = "Crystalline coating to water tank walls with two coats"
+OUTLET = "Treatment around pipe outlet with polymer modified mortar"
+COMPARATIVE = "comparative sheet (may be other bidders)"
 
 ITEMS_HEADER = [
     "Description", "Unit", "No. of BOQs", "Latest rate (₹)", "Min", "Median", "Max",
@@ -38,6 +47,14 @@ ITEMS = [
     [TOILET, "Sq.Mt", 3, 260, 240, 255, 260, "CLIENT C", "c.xlsx", None, None, "No", None],
     [MOBILISE, "(blank)", 1, 15000, 15000, 15000, 15000, "CLIENT D", "d.xlsx", None, None,
      "Yes", None],
+    [MARGIN, "(blank)", 1, 0.3, 0.3, 0.3, 0.3, "CLIENT D", "d.xlsx", None, None, "Yes",
+     "below ₹1"],
+    [HACKING, "Sqm", 2, 0.5, 0.5, 0.5, 0.5, "CLIENT D", "d.xlsx", None, None, "Yes",
+     "below ₹1"],
+    [COMPETITOR, "Sqm", 1, 150, 150, 150, 150, "CLIENT E", "e.xlsx", None, None, "No",
+     COMPARATIVE],
+    [OUTLET, "Nos", 2, 300, 250, 275, 300, "CLIENT F", "f.xlsx", None, None, "Yes", None],
+    [OUTLET, "Sqm", 1, 1087, 1087, 1087, 1087, "CLIENT H", "h.xlsx", None, None, "Yes", None],
 ]  # fmt: skip
 
 LINES_HEADER = [
@@ -63,6 +80,18 @@ LINES = [
      260, None, None, "No", None],
     ["CLIENT C", "CLIENT C/c.xlsx", "Sheet1", 12, None, None, None, "Nos", "Nos", 1, None, 5,
      None, None, "No", None],  # blank description: skipped
+    ["CLIENT D", "CLIENT D/d.xlsx", "Working", 20, None, "Margin", "Pipe sleeve 110 mm", None,
+     None, None, None, 0.3, None, None, "Yes", "below ₹1"],
+    ["CLIENT E", "CLIENT E/e.xlsx", "Comparative", 4, "1", None, COMPETITOR, "SQM", "Sqm", 500,
+     None, 150, None, None, "No", COMPARATIVE],
+    ["CLIENT E", "CLIENT E/e.xlsx", "Comparative", 5, "2", None, APP, "SQM", "Sqm", 900, None,
+     999, None, None, "No", COMPARATIVE],  # other bidder's rate on a normal item
+    ["CLIENT F", "CLIENT F/f.xlsx", "BOQ", 1, "5", None, OUTLET, "Nos", "Nos", 40, None, 300,
+     None, None, "Yes", None],
+    ["CLIENT G", "CLIENT G/g.xlsx", "BOQ", 2, "6", None, OUTLET, "No.", "Nos", 25, None, 250,
+     None, None, "Yes", None],
+    ["CLIENT H", "CLIENT H/h.xlsx", "BOQ", 3, "7", None, OUTLET, "Sqm", "Sqm", 12, None, 1087,
+     None, None, "Yes", None],
 ]  # fmt: skip
 
 

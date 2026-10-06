@@ -78,7 +78,14 @@ which did not, and any skipped rows with the reason. The T&C import only adds ne
   returned to users with `tender.margin`; others with `library.view` see products and the final rate.
 - **Rate library search** (`GET /api/library/search?q=&unit=`) combines full-text rank, coverage
   of the query words, trigram similarity and how many BOQs an item appeared in
-  (`backend/app/masters/search.py`).
+  (`backend/app/masters/search.py`). The first page is cut to results scoring at least 35% of
+  the best one (minimum 10); "Show more" pages on without the cut.
+- **Flags**: the importer marks working/margin/total rows and rates below ₹1 as *excluded*, and
+  other bidders' rates from comparative sheets as *competitor* (`backend/app/masters/library.py`).
+  Both are hidden from search unless asked for, are never a suggested rate, and are left out of
+  other items' min/median/max. Nothing is deleted.
+- **Library editing** (`library.edit`): hide an item from search, change its unit, or merge a
+  duplicate into another item (reversible). These survive re-imports.
 
 ## Common commands
 

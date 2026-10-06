@@ -24,10 +24,10 @@ def _counts(db):
 
 def test_library_import_is_idempotent(db):
     first = import_library(db, WORKBOOK)
-    assert (first.items_in_file, first.lines_in_file) == (5, 6)
-    assert (first.items_inserted, first.lines_inserted) == (5, 6)
-    assert first.lines_linked == 5
-    assert first.lines_linked_via_parent == 1
+    assert (first.items_in_file, first.lines_in_file) == (10, 12)
+    assert (first.items_inserted, first.lines_inserted) == (10, 12)
+    assert first.lines_linked == 11
+    assert first.lines_linked_via_parent == 2
     assert first.lines_unlinked == 1
     assert sorted(s.reason for s in first.skipped) == ["blank description", "duplicate of row 2"]
     counts = _counts(db)
@@ -35,9 +35,9 @@ def test_library_import_is_idempotent(db):
     line_links = dict(db.execute(select(LibraryLine.source_key, LibraryLine.library_item_id)).all())
 
     second = import_library(db, WORKBOOK)
-    assert (second.items_inserted, second.items_updated, second.items_deleted) == (0, 5, 0)
-    assert (second.lines_inserted, second.lines_updated, second.lines_deleted) == (0, 6, 0)
-    assert _counts(db) == counts == (5, 6, 1)
+    assert (second.items_inserted, second.items_updated, second.items_deleted) == (0, 10, 0)
+    assert (second.lines_inserted, second.lines_updated, second.lines_deleted) == (0, 12, 0)
+    assert _counts(db) == counts == (10, 12, 1)
     assert sorted(db.scalars(select(LibraryItem.id))) == ids
     assert dict(db.execute(select(LibraryLine.source_key, LibraryLine.library_item_id)).all()) == (
         line_links
@@ -83,19 +83,23 @@ def test_search_ranks_the_expected_item_first(login_as, db):
 
     hit = client.get("/api/library/search", params={"q": "app membrane"}, headers=headers).json()
     first = hit["items"][0]
-    assert first["boq_count"] == 6
+    # The APP item has another bidder's ₹999 line, so its stats are recomputed without it
+    # from its two EESPL lines (the sheet said 6 BOQs, 380-480).
+    assert first["boq_count"] == 2
     assert (first["latest_rate"], first["min_rate"], first["median_rate"], first["max_rate"]) == (
         "450.0000",
         "380.0000",
-        "420.0000",
-        "480.0000",
+        "415.0000",
+        "450.0000",
     )
+    assert first["suggested_rate"] == "450.0000"
     assert hit["took_ms"] >= 0
 
     lines = client.get(f"/api/library/items/{first['id']}/lines", headers=headers).json()
-    assert {(ln["client_folder"], ln["rate"]) for ln in lines} == {
-        ("CLIENT A", "450.0000"),
-        ("CLIENT C", "380.0000"),
+    assert {(ln["client_folder"], ln["rate"], ln["is_competitor"]) for ln in lines} == {
+        ("CLIENT A", "450.0000", False),
+        ("CLIENT C", "380.0000", False),
+        ("CLIENT E", "999.0000", True),
     }
 
 

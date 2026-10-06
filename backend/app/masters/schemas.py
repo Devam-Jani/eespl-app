@@ -345,6 +345,36 @@ class LibraryItemOut(BaseModel):
     product_make: str | None
     needs_check: bool
     check_note: str | None
+    is_excluded: bool
+    excluded_reason: str | None
+    is_competitor: bool
+    # The rate to offer when pricing: EESPL's latest (or median) rate. Never set for
+    # competitor or excluded items.
+    suggested_rate: Decimal | None = None
+
+    @model_validator(mode="after")
+    def _suggested(self):
+        if self.is_competitor or self.is_excluded:
+            self.suggested_rate = None
+        elif self.latest_rate is not None:
+            self.suggested_rate = self.latest_rate
+        else:
+            self.suggested_rate = self.median_rate
+        return self
+
+
+class MergedItemRef(BaseModel):
+    id: int
+    description: str
+    unit: str | None
+
+
+class LibraryItemDetail(LibraryItemOut):
+    exclusion_source: str | None
+    unit_manual: bool
+    stats_from_lines: bool
+    merged_into: MergedItemRef | None
+    merged_items: list[MergedItemRef]
 
 
 class LibraryHit(LibraryItemOut):
@@ -354,10 +384,14 @@ class LibraryHit(LibraryItemOut):
 class LibrarySearchOut(BaseModel):
     items: list[LibraryHit]
     took_ms: float
+    has_more: bool
+    next_offset: int
+    cut_applied: bool
 
 
 class LibraryLineOut(ORM):
     id: int
+    library_item_id: int | None
     client_folder: str | None
     file: str
     sheet: str | None
@@ -375,6 +409,27 @@ class LibraryLineOut(ORM):
     from_eespl_file: bool
     needs_check: bool
     check_note: str | None
+    is_excluded: bool
+    excluded_reason: str | None
+    is_competitor: bool
+
+
+class LibraryItemUpdate(BaseModel):
+    """Hide/unhide (is_excluded + excluded_reason) and/or change the unit."""
+
+    is_excluded: bool | None = None
+    excluded_reason: str | None = Field(default=None, max_length=200)
+    unit: str | None = Field(default=None, max_length=50)
+
+    @model_validator(mode="after")
+    def _reason(self):
+        if self.is_excluded and not (self.excluded_reason or "").strip():
+            raise ValueError("Give a reason for hiding this item")
+        return self
+
+
+class MergeIn(BaseModel):
+    into_id: int
 
 
 # --- T&C ---

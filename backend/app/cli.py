@@ -98,6 +98,13 @@ def run_import_library(path: str) -> None:
     if r.ambiguous_match_keys:
         print(f"  items sharing a description+unit after unit normalisation: "
               f"{r.ambiguous_match_keys} (lines link to the one in most BOQs)")
+    excluded = sum(r.items_excluded.values())
+    print(f"Items hidden from search by default: {excluded} excluded, "
+          f"{r.items_competitor} competitor")
+    for reason, count in sorted(r.items_excluded.items(), key=lambda kv: -kv[1]):
+        print(f"  {count:>6}  excluded: {reason}")
+    print(f"Lines flagged: {r.lines_excluded} excluded, {r.lines_competitor} competitor; "
+          f"{r.items_stats_from_lines} items have stats recomputed without them (or after merges)")
     if r.unrecognised_units:
         top = ", ".join(f"{u!r} x{n}" for u, n in list(r.unrecognised_units.items())[:12])
         print(f"Units not recognised (stored as blank unit, raw text kept): {top}")

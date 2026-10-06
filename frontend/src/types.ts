@@ -166,11 +166,34 @@ export type LibraryHit = {
   product_make: string | null;
   needs_check: boolean;
   check_note: string | null;
+  is_excluded: boolean;
+  excluded_reason: string | null;
+  is_competitor: boolean;
+  suggested_rate: string | null;
   score: number;
+};
+
+export type LibrarySearch = {
+  items: LibraryHit[];
+  took_ms: number;
+  has_more: boolean;
+  next_offset: number;
+  cut_applied: boolean;
+};
+
+export type ItemRef = { id: number; description: string; unit: string | null };
+
+export type LibraryItemDetail = Omit<LibraryHit, "score"> & {
+  exclusion_source: string | null;
+  unit_manual: boolean;
+  stats_from_lines: boolean;
+  merged_into: ItemRef | null;
+  merged_items: ItemRef[];
 };
 
 export type LibraryLine = {
   id: number;
+  library_item_id: number | null;
   client_folder: string | null;
   file: string;
   sheet: string | null;
@@ -188,6 +211,9 @@ export type LibraryLine = {
   from_eespl_file: boolean;
   needs_check: boolean;
   check_note: string | null;
+  is_excluded: boolean;
+  excluded_reason: string | null;
+  is_competitor: boolean;
 };
 
 export type Clause = {
