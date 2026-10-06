@@ -22,7 +22,9 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      # Tests create and migrate their own eespl_test database next to this one.
       DATABASE_URL: postgresql+psycopg://eespl:eespl@localhost:5432/eespl
+      JWT_SECRET: ci-only-secret-not-used-anywhere-else-0123456789
     defaults:
       run:
         working-directory: backend
@@ -36,6 +38,7 @@ jobs:
       - run: pip install -r requirements.txt
       - run: ruff check .
       - run: alembic upgrade head
+      - run: alembic check
       - run: pytest -q
 
   frontend:
@@ -51,4 +54,5 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      - run: npm run lint
       - run: npm run build
