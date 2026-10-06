@@ -61,6 +61,10 @@ def _issue_tokens(db: Session, user: User, response: Response) -> TokenOut:
     )
 
 
+def _token_query(token: str):
+    return select(RefreshToken).where(RefreshToken.token_hash == hash_refresh_token(token))
+
+
 def _clear_cookie(response: Response) -> None:
     response.delete_cookie(
         REFRESH_COOKIE,
@@ -135,12 +139,10 @@ def login(body: LoginIn, request: Request, response: Response, db: DbSession) ->
 
 @router.post("/refresh", response_model=TokenOut)
 def refresh(response: Response, db: DbSession, token: RefreshCookie = None):
+    # FOR UPDATE: a second refresh with the same token waits here until the first commits,
+    # then sees the token as revoked, so one token can never be rotated twice.
+    stored = db.scalar(_token_query(token).with_for_update()) if token else None
     now = utcnow()
-    stored = (
-        db.scalar(select(RefreshToken).where(RefreshToken.token_hash == hash_refresh_token(token)))
-        if token
-        else None
-    )
     if (
         stored is None
         or stored.revoked_at is not None
@@ -160,9 +162,7 @@ def refresh(response: Response, db: DbSession, token: RefreshCookie = None):
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(request: Request, response: Response, db: DbSession, token: RefreshCookie = None):
     if token:
-        stored = db.scalar(
-            select(RefreshToken).where(RefreshToken.token_hash == hash_refresh_token(token))
-        )
+        stored = db.scalar(_token_query(token).with_for_update())
         if stored is not None and stored.revoked_at is None:
             stored.revoked_at = utcnow()
             audit.record(
