@@ -1,0 +1,7 @@
+[
+  {"text": "GST shall be charged extra as applicable.", "category": "taxes", "usage_count": 40, "default_include": true, "sort_order": 2},
+  {"text": "Rates are valid for 30 days from the date of this offer.", "category": "validity", "usage_count": 25, "default_include": true, "sort_order": 1},
+  {"text": "Water and electricity shall be provided by the client free of cost.", "category": "client_scope", "usage_count": 12, "default_include": false, "sort_order": 3},
+  {"text": "  GST shall be charged   extra as applicable. ", "category": "taxes", "usage_count": 1, "default_include": false, "sort_order": 9},
+  {"category": "general", "usage_count": 1, "default_include": false, "sort_order": 10}
+]

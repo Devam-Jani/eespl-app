@@ -10,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.auth.router import router as auth_router
 from app.config import settings
 from app.db import get_engine
+from app.masters.routers import clients, library, products, systems, tc
 from app.routers import audit, permissions, roles, users
 
 app = FastAPI(title="EESPL App")
@@ -27,6 +28,12 @@ app.include_router(users.router)
 app.include_router(roles.router)
 app.include_router(permissions.router)
 app.include_router(audit.router)
+app.include_router(clients.router)
+app.include_router(products.router)
+app.include_router(systems.router)
+app.include_router(library.router)
+app.include_router(library.units_router)
+app.include_router(tc.router)
 
 
 @app.get("/api/health")

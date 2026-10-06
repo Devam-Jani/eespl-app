@@ -103,9 +103,12 @@ def test_refresh_rotates_and_old_token_is_rejected(client, make_user):
     assert r.status_code == 200
     new = client.cookies.get(REFRESH_COOKIE)
     assert new and new != old
-    assert client.get(
-        "/api/auth/me", headers={"Authorization": f"Bearer {r.json()['access_token']}"}
-    ).status_code == 200
+    assert (
+        client.get(
+            "/api/auth/me", headers={"Authorization": f"Bearer {r.json()['access_token']}"}
+        ).status_code
+        == 200
+    )
 
     client.cookies.set(REFRESH_COOKIE, old, path="/api/auth")
     reused = client.post("/api/auth/refresh")
@@ -139,3 +142,42 @@ def test_me_merges_roles_to_the_widest_scope(login_as):
     assert perms["tender.view"] == "all"
     assert perms["site.view"] == "all"
     assert perms["indent.raise"] == "assigned"  # only sales has it
+
+
+def test_concurrent_refreshes_rotate_a_token_only_once(make_user, monkeypatch):
+    """Two refreshes racing with the same cookie: the row lock lets exactly one win."""
+    import threading
+    import time
+
+    from fastapi.testclient import TestClient
+
+    import app.auth.router as auth_router
+    from app.main import app
+
+    make_user("ana@example.com", "estimator")
+    first = TestClient(app)
+    login(first, "ana@example.com")
+    token = first.cookies.get(REFRESH_COOKIE)
+
+    # Widen the race window: pause after the token row is read, before the commit.
+    original = auth_router.create_access_token
+
+    def slow_create_access_token(user_id):
+        time.sleep(0.5)
+        return original(user_id)
+
+    monkeypatch.setattr(auth_router, "create_access_token", slow_create_access_token)
+
+    statuses: list[int] = []
+
+    def refresh_once():
+        c = TestClient(app)
+        c.cookies.set(REFRESH_COOKIE, token, path="/api/auth")
+        statuses.append(c.post("/api/auth/refresh").status_code)
+
+    threads = [threading.Thread(target=refresh_once) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert sorted(statuses) == [200, 401]

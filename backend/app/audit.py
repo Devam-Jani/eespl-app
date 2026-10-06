@@ -3,9 +3,12 @@ from typing import Any
 
 from fastapi import Request
 from fastapi.encoders import jsonable_encoder
+from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
 from app.models import AuditLog, Role, User
+
+_NOT_AUDITED = {"created_at", "updated_at", "search_vector", "password_hash"}
 
 
 def client_ip(request: Request) -> str | None:
@@ -56,3 +59,17 @@ def role_snapshot(role: Role) -> dict[str, Any]:
         "is_system": role.is_system,
         "permissions": {rp.permission_code: rp.scope for rp in role.permissions},
     }
+
+
+def model_snapshot(obj: Any, *relations: str) -> dict[str, Any]:
+    """Audit view of any mapped object: its column values, plus the named one-to-many
+    relations as lists of their column values."""
+    mapper = inspect(obj).mapper
+    data = {
+        attr.key: getattr(obj, attr.key)
+        for attr in mapper.column_attrs
+        if attr.key not in _NOT_AUDITED
+    }
+    for name in relations:
+        data[name] = [model_snapshot(child) for child in getattr(obj, name)]
+    return data

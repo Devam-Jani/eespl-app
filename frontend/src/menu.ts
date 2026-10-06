@@ -3,12 +3,16 @@ export type MenuItem = {
   label: string;
   /** Shown when the user holds any of these permissions. */
   perms: string[];
-  section: "Modules" | "Administration";
+  section: "Modules" | "Masters" | "Administration";
 };
 
 export const MENU: MenuItem[] = [
   { to: "/dashboard", label: "Dashboard", perms: ["dashboard.view"], section: "Modules" },
-  { to: "/library", label: "Library", perms: ["library.view", "library.edit"], section: "Modules" },
+  { to: "/clients", label: "Clients", perms: ["clients.view"], section: "Masters" },
+  { to: "/products", label: "Products", perms: ["library.view"], section: "Masters" },
+  { to: "/systems", label: "Systems (rate calculator)", perms: ["library.view"], section: "Masters" },
+  { to: "/rate-library", label: "Rate library", perms: ["library.view"], section: "Masters" },
+  { to: "/tc-library", label: "T&C library", perms: ["library.view"], section: "Masters" },
   { to: "/tenders", label: "Tenders", perms: ["tender.view", "tender.edit"], section: "Modules" },
   { to: "/sites", label: "Sites", perms: ["site.view", "site.edit", "site.update"], section: "Modules" },
   {
