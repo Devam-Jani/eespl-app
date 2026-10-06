@@ -10,6 +10,7 @@ from app.auth.rbac import CLIENT_ROLE_CODE, client_forbidden, effective_permissi
 from app.auth.router import revoke_all_refresh_tokens
 from app.auth.security import hash_password
 from app.db import DbSession
+from app.export import xlsx_response
 from app.models import Role, User
 from app.schemas import PasswordResetIn, RoleIdsIn, UserCreate, UserOut, UserUpdate
 
@@ -79,6 +80,17 @@ def list_users(db: DbSession) -> list[UserOut]:
     return [UserOut.model_validate(u) for u in users]
 
 
+@router.get("/export")
+def export_users(db: DbSession):
+    users = db.scalars(select(User).order_by(User.full_name, User.email))
+    return xlsx_response(
+        "users",
+        ["Name", "Email", "Phone", "Job title", "Roles", "Active", "Has password", "Last login"],
+        [[u.full_name, u.email, u.phone, u.job_title, [r.name for r in u.roles], u.is_active,
+          u.has_password, u.last_login_at] for u in users],
+    )  # fmt: skip
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_user(
     body: UserCreate, request: Request, db: DbSession, principal: CurrentPrincipal
@@ -120,6 +132,13 @@ def update_user(
     user = _get_user(db, user_id)
     _check_can_manage(principal, user)
     changes = body.model_dump(exclude_unset=True)
+    if changes.get("is_active") is True and not user.is_active:
+        email = changes.get("email", user.email)
+        if not email or user.password_hash is None:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "Set an email and a password before activating this user",
+            )
     if changes.get("is_active") is False and user.id == principal.user.id:
         raise HTTPException(status.HTTP_409_CONFLICT, "You cannot deactivate yourself")
     if "email" in changes and _email_taken(db, changes["email"], exclude=user.id):

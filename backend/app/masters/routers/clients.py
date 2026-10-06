@@ -7,6 +7,7 @@ from app import audit
 from app.auth.deps import CurrentPrincipal, require_permission
 from app.auth.scope import check_scope, scope_filter
 from app.db import DbSession
+from app.export import EXPORT_ROW_LIMIT, xlsx_response
 from app.masters.models import Client, ClientContact
 from app.masters.routers.common import Limit, Offset, Search, get_or_404, like, paginate
 from app.masters.schemas import ClientIn, ClientOut, ClientUpdate, ContactIn, Page
@@ -43,6 +44,34 @@ def list_clients(
     return Page(
         items=[ClientOut.model_validate(c) for c in rows], total=total, limit=limit, offset=offset
     )
+
+
+@router.get("/export")
+def export_clients(
+    db: DbSession,
+    principal: CurrentPrincipal,
+    scope: ViewScope,
+    q: Search = None,
+    active: bool | None = None,
+):
+    query = select(Client).where(scope_filter(scope, principal, Client.created_by))
+    if q:
+        pattern = like(q)
+        query = query.where(
+            or_(Client.name.ilike(pattern), Client.city.ilike(pattern), Client.gstin.ilike(pattern))
+        )
+    if active is not None:
+        query = query.where(Client.is_active == active)
+    rows = []
+    for c in db.scalars(query.order_by(Client.name, Client.id).limit(EXPORT_ROW_LIMIT)):
+        fallback = c.contacts[0] if c.contacts else None
+        contact = next((x for x in c.contacts if x.is_primary), fallback)
+        rows.append([c.name, c.type, c.gstin, c.pan, c.city, c.state, c.address,
+                     contact.name if contact else None, contact.phone if contact else None,
+                     contact.email if contact else None, c.is_active])  # fmt: skip
+    columns = ["Name", "Type", "GSTIN", "PAN", "City", "State", "Address", "Primary contact",
+               "Phone", "Email", "Active"]  # fmt: skip
+    return xlsx_response("clients", columns, rows)
 
 
 @router.get("/{client_id}")

@@ -4,10 +4,21 @@ import { api, queryString } from "../api";
 import { useAuth } from "../auth";
 import Modal from "../components/Modal";
 import { errorText, inr, num } from "../format";
-import type { Page, Price, Product, Unit } from "../types";
+import ExportButton from "../components/ExportButton";
+import type { Category, Page, Price, Product, Unit } from "../types";
 import { Pager } from "./Clients";
 
-export const CATEGORIES = ["membrane", "coating", "chemical", "admixture", "sealant", "waterstop", "accessory", "other"];
+/** Categories of one kind (work or material), active first. */
+export function useCategories(kind: "work" | "material"): Category[] {
+  const [categories, setCategories] = useState<Category[]>([]);
+  useEffect(() => {
+    api<Page<Category>>(`/api/categories?kind=${kind}&limit=500`).then(
+      (p) => setCategories(p.items),
+      () => setCategories([]),
+    );
+  }, [kind]);
+  return categories;
+}
 const PAGE_SIZE = 25;
 
 export function useUnits(): Unit[] {
@@ -23,7 +34,8 @@ export default function Products() {
   const seesCost = can("tender.margin");
   const canEdit = can("library.edit");
   const [q, setQ] = useState("");
-  const [filters, setFilters] = useState({ q: "", category: "" });
+  const categories = useCategories("material");
+  const [filters, setFilters] = useState({ q: "", category_id: "" });
   const [offset, setOffset] = useState(0);
   const [page, setPage] = useState<Page<Product> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,19 +69,20 @@ export default function Products() {
             <input className="search" placeholder="Search code, name or brand" value={q} onChange={(e) => setQ(e.target.value)} />
           </form>
           <select
-            value={filters.category}
+            value={filters.category_id}
             onChange={(e) => {
               setOffset(0);
-              setFilters((f) => ({ ...f, category: e.target.value }));
+              setFilters((f) => ({ ...f, category_id: e.target.value }));
             }}
           >
             <option value="">All categories</option>
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
               </option>
             ))}
           </select>
+          <ExportButton path={`/api/products/export${queryString(filters)}`} />
           {canEdit && (
             <button className="btn btn-primary" onClick={() => setEditing("new")}>
               Add product
@@ -105,7 +118,7 @@ export default function Products() {
                   </td>
                   <td>{p.name}</td>
                   <td>{p.brand ?? "—"}</td>
-                  <td className="capitalize">{p.category}</td>
+                  <td>{p.category ?? "—"}</td>
                   <td>{p.unit}</td>
                   <td className="num">{num(p.pack_size, 3)}</td>
                   <td className="num">{num(p.gst_percent, 2)}</td>
@@ -172,11 +185,12 @@ function ProductForm({
   onSaved: () => Promise<void>;
 }) {
   const units = useUnits();
+  const categories = useCategories("material");
   const [form, setForm] = useState({
     code: product?.code ?? "",
     name: product?.name ?? "",
     brand: product?.brand ?? "",
-    category: product?.category ?? "coating",
+    category_id: product?.category_id ? String(product.category_id) : "",
     unit: product?.unit ?? "kg",
     pack_size: product?.pack_size ?? "",
     gst_percent: product?.gst_percent ?? "18",
@@ -189,7 +203,12 @@ function ProductForm({
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    const body = { ...form, brand: form.brand || null, pack_size: form.pack_size || null };
+    const body = {
+      ...form,
+      brand: form.brand || null,
+      pack_size: form.pack_size || null,
+      category_id: form.category_id ? Number(form.category_id) : null,
+    };
     try {
       if (product) await api(`/api/products/${product.id}`, { method: "PATCH", json: body });
       else await api("/api/products", { method: "POST", json: body });
@@ -230,10 +249,11 @@ function ProductForm({
         <div className="grid-2">
           <label className="field">
             <span>Category</span>
-            <select value={form.category} onChange={set("category")}>
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
+            <select value={form.category_id} onChange={set("category_id")}>
+              <option value="">—</option>
+              {categories.filter((c) => c.is_active || String(c.id) === form.category_id).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
                 </option>
               ))}
             </select>

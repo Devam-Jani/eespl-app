@@ -105,6 +105,10 @@ def login(body: LoginIn, request: Request, response: Response, db: DbSession) ->
     if user.locked_until is not None and user.locked_until > now:
         raise fail("locked")
 
+    if user.password_hash is None:  # imported or invited, no password set yet
+        verify_password(body.password, DUMMY_PASSWORD_HASH)
+        raise fail("no_password")
+
     valid, new_hash = verify_password(body.password, user.password_hash)
     if not valid:
         record_failure("bad_password")

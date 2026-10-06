@@ -62,10 +62,10 @@ async function errorMessage(res: Response): Promise<string> {
   return res.statusText || `HTTP ${res.status}`;
 }
 
-type Options = Omit<RequestInit, "body"> & { json?: unknown };
+type Options = Omit<RequestInit, "body"> & { json?: unknown; form?: FormData };
 
 export async function api<T>(path: string, options: Options = {}, retry = true): Promise<T> {
-  const { json, ...init } = options;
+  const { json, form, ...init } = options;
   const headers = new Headers(init.headers);
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
   if (json !== undefined) headers.set("Content-Type", "application/json");
@@ -73,7 +73,7 @@ export async function api<T>(path: string, options: Options = {}, retry = true):
   const res = await fetch(path, {
     ...init,
     headers,
-    body: json !== undefined ? JSON.stringify(json) : undefined,
+    body: json !== undefined ? JSON.stringify(json) : form,
     credentials: "same-origin",
   });
 
@@ -94,4 +94,37 @@ export function queryString(params: Record<string, string | number | undefined>)
   }
   const s = q.toString();
   return s ? `?${s}` : "";
+}
+
+/** Download a file from the API (with the same silent refresh) and save it in the browser. */
+export async function downloadFile(path: string, retry = true): Promise<void> {
+  const headers = new Headers();
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+  const res = await fetch(path, { headers, credentials: "same-origin" });
+  if (res.status === 401 && retry) {
+    if (await refreshAccessToken()) return downloadFile(path, false);
+    onSessionLost();
+    throw new ApiError(401, "Your session has expired. Please sign in again.");
+  }
+  if (!res.ok) throw new ApiError(res.status, await errorMessage(res));
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const name = /filename="?([^";]+)"?/.exec(disposition)?.[1] ?? "export.xlsx";
+  const url = URL.createObjectURL(await res.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** An object URL for a protected image (an <img src> cannot send the Bearer token). */
+export async function fetchObjectUrl(path: string, retry = true): Promise<string | null> {
+  const headers = new Headers();
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+  const res = await fetch(path, { headers, credentials: "same-origin" });
+  if (res.status === 401 && retry && (await refreshAccessToken())) return fetchObjectUrl(path, false);
+  if (!res.ok) return null;
+  return URL.createObjectURL(await res.blob());
 }

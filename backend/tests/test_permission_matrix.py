@@ -21,6 +21,7 @@ from tests.conftest import login, role_id
 ALL = [
     "admin.users", "admin.roles", "admin.settings", "audit.view",
     "clients.view", "clients.edit",
+    "vendors.view", "vendors.edit", "settings.company",
     "library.view", "library.edit",
     "tender.view", "tender.edit", "tender.margin",
     "site.view", "site.edit", "site.update",
@@ -42,6 +43,9 @@ EXPECTED: dict[str, dict[str, str]] = {
         "audit.view",
         "clients.view",
         "clients.edit",
+        "vendors.view",
+        "vendors.edit",
+        "settings.company",
         "library.view",
         "library.edit",
         "tender.view",
@@ -60,6 +64,7 @@ EXPECTED: dict[str, dict[str, str]] = {
     "estimator": _all(
         "clients.view",
         "clients.edit",
+        "vendors.view",
         "library.view",
         "library.edit",
         "tender.view",
@@ -87,9 +92,14 @@ EXPECTED: dict[str, dict[str, str]] = {
         "attendance.manage": "assigned",
         "pettycash.manage": "assigned",
     },
-    "store_purchase": _all("library.view", "site.view", "indent.dispatch", "indent.approve"),
+    "store_purchase": _all(
+        "vendors.view", "vendors.edit",
+        "library.view", "site.view", "indent.dispatch", "indent.approve",
+    ),  # fmt: skip
     "accounts": _all(
         "clients.view",
+        "vendors.view",
+        "settings.company",
         "library.view",
         "tender.view",
         "tender.margin",
@@ -104,7 +114,10 @@ EXPECTED: dict[str, dict[str, str]] = {
     "client": {"site.view": "assigned"},
 }
 
-REAL_ENDPOINTS = {"admin.users", "admin.roles", "audit.view", "clients.view", "library.view"}
+REAL_ENDPOINTS = {
+    "admin.users", "admin.roles", "audit.view", "clients.view", "library.view",
+    "vendors.view", "settings.company",
+}  # fmt: skip
 
 probe_app = FastAPI()
 probe_app.include_router(app.router)
@@ -127,6 +140,10 @@ def _call(client: TestClient, code: str, headers, db):
         return client.get("/api/audit", headers=headers)
     if code == "clients.view":
         return client.get("/api/clients", headers=headers)
+    if code == "vendors.view":
+        return client.get("/api/vendors", headers=headers)
+    if code == "settings.company":
+        return client.get("/api/settings/company", headers=headers)
     if code == "library.view":
         return client.get("/api/products", headers=headers)
     return client.get(f"/_probe/{code}", headers=headers)

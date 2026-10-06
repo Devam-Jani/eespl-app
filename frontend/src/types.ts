@@ -3,16 +3,18 @@ import type { Scope } from "./api";
 export type RoleRef = { id: number; code: string; name: string };
 
 export type Me = {
-  user: { id: string; email: string; full_name: string; phone: string | null };
+  user: { id: string; email: string | null; full_name: string; phone: string | null };
   roles: RoleRef[];
   permissions: Record<string, Scope>;
 };
 
 export type User = {
   id: string;
-  email: string;
+  email: string | null;
   full_name: string;
   phone: string | null;
+  job_title: string | null;
+  has_password: boolean;
   is_active: boolean;
   locked_until: string | null;
   last_login_at: string | null;
@@ -87,7 +89,8 @@ export type Product = {
   code: string;
   name: string;
   brand: string | null;
-  category: string;
+  category_id: number | null;
+  category: string | null;
   unit: string;
   pack_size: string | null;
   gst_percent: string;
@@ -239,3 +242,91 @@ export type Clause = {
 
 export type TemplateSummary = { id: number; name: string; is_default: boolean; clause_count: number };
 export type Template = { id: number; name: string; is_default: boolean; clauses: Clause[] };
+
+export type Category = {
+  id: number;
+  kind: "work" | "material";
+  name: string;
+  parent_id: number | null;
+  sort_order: number;
+  is_active: boolean;
+  product_count: number;
+};
+
+export type TagModule = "material" | "petty_spend" | "work_order" | "issue";
+export type Tag = { id: number; module: TagModule; name: string; is_archived: boolean };
+
+export type Conversion = {
+  id: number;
+  from_unit: string;
+  to_unit: string;
+  factor: string;
+  product_id: number | null;
+  product_name: string | null;
+};
+
+export type BankAccount = {
+  id: number;
+  account_name: string;
+  bank: string | null;
+  branch: string | null;
+  is_primary: boolean;
+  account_number: string | null;
+  ifsc: string | null;
+  masked: boolean;
+};
+
+export type VendorProduct = {
+  id: number;
+  product_id: number;
+  product_code: string;
+  product_name: string;
+  unit: string;
+  last_rate: string | null;
+  lead_time_days: number | null;
+};
+
+export type Vendor = {
+  id: number;
+  name: string;
+  type: string;
+  gstin: string | null;
+  pan: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  payment_terms_days: number | null;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+  contacts: Contact[];
+  bank_accounts: BankAccount[];
+  products: VendorProduct[];
+};
+
+export type CompanyProfile = {
+  legal_name: string | null;
+  trade_name: string | null;
+  pan: string | null;
+  tan: string | null;
+  tds_percent: string | null;
+  cin: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  default_gst_percent: string;
+  has_logo: boolean;
+  updated_at: string;
+};
+
+export type Gstin = { id: number; gstin: string; state: string; address: string; is_default: boolean };
+
+export type CompanyBank = {
+  id: number;
+  account_name: string;
+  account_number: string;
+  ifsc: string;
+  bank: string | null;
+  branch: string | null;
+  is_default: boolean;
+};

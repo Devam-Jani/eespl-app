@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app import audit
 from app.auth.deps import CurrentPrincipal, require_permission
 from app.db import DbSession
+from app.export import EXPORT_ROW_LIMIT, xlsx_response
 from app.masters.models import TcClause, TcTemplate, TcTemplateClause
 from app.masters.routers.common import (
     Limit,
@@ -97,6 +98,34 @@ def list_clauses(
     query = query.order_by(TcClause.category, TcClause.sort_order, TcClause.id)
     rows, total = paginate(db, query, limit, offset)
     return Page(items=_clause_out(db, rows), total=total, limit=limit, offset=offset)
+
+
+@router.get("/clauses/export", dependencies=view)
+def export_clauses(
+    db: DbSession,
+    q: Search = None,
+    category: str | None = None,
+    include_hidden: bool = False,
+    needs_review: bool | None = None,
+):
+    query = select(TcClause).where(TcClause.merged_into_id.is_(None))
+    if not include_hidden:
+        query = query.where(TcClause.status == "active")
+    if q:
+        query = query.where(TcClause.text.ilike(like(q)))
+    if category:
+        query = query.where(TcClause.category == category)
+    if needs_review is not None:
+        query = query.where(TcClause.needs_review == needs_review)
+    query = query.order_by(TcClause.category, TcClause.sort_order, TcClause.id)
+    clauses = _clause_out(db, list(db.scalars(query.limit(EXPORT_ROW_LIMIT))))
+    return xlsx_response(
+        "tc-clauses",
+        ["Category", "Clause", "Used in BOQs", "Default", "Status", "Hidden reason",
+         "Needs review", "Variants"],
+        [[c.category, c.text, c.usage_count, c.default_include, c.status, c.hidden_reason,
+          c.needs_review, " | ".join(v.text for v in c.variants)] for c in clauses],
+    )  # fmt: skip
 
 
 @router.post("/clauses", status_code=status.HTTP_201_CREATED, dependencies=edit)

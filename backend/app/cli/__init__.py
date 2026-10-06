@@ -4,6 +4,9 @@
     docker compose exec api python -m app.cli set-password --email you@example.com
     docker compose exec api python -m app.cli import-library /data/<rate library>.xlsx
     docker compose exec api python -m app.cli import-tc /data/tc_clauses.json
+    docker compose exec api python -m app.cli import-powerplay-materials /data/powerplay/<file>.xlsx
+    docker compose exec api python -m app.cli import-powerplay-vendors /data/powerplay/<file>.xlsx
+    docker compose exec api python -m app.cli import-powerplay-team /data/powerplay/<file>.xlsx
 
 The password is prompted for (twice) when run in a terminal. When stdin is not a terminal,
 one line is read from stdin instead, so scripts can pipe it in without it appearing in argv.
@@ -21,6 +24,12 @@ from app.auth.rbac import SUPER_ADMIN_ROLE_CODE
 from app.auth.security import MIN_PASSWORD_LENGTH, hash_password
 from app.db import SessionLocal
 from app.masters.importers import ImportFormatError, Skipped, import_library, import_tc
+from app.masters.powerplay import (
+    PowerplayFormatError,
+    import_materials,
+    import_team,
+    import_vendors,
+)
 from app.models import Role, User
 
 
@@ -138,6 +147,33 @@ def run_import_tc(path: str) -> None:
     _print_skipped(r.skipped)
 
 
+POWERPLAY = {
+    "import-powerplay-materials": (import_materials, "materials -> products"),
+    "import-powerplay-vendors": (import_vendors, "vendors"),
+    "import-powerplay-team": (import_team, "team members -> inactive users, no password"),
+}
+
+
+def run_import_powerplay(command: str, path: str) -> None:
+    importer, label = POWERPLAY[command]
+    with SessionLocal() as db:
+        try:
+            r = importer(db, path)
+        except (PowerplayFormatError, FileNotFoundError) as exc:
+            sys.exit(f"Import failed: {exc}")
+    print(f"Powerplay {label}: sheet {r.sheet!r}")
+    print(f"  header row: {r.header}")
+    print("  columns used: " + ", ".join(f"{k} <- {v!r}" for k, v in r.mapping.items()))
+    print(f"  rows: {r.rows_in_file}; created {r.created}; already present {r.already_present}; "
+          f"duplicates merged {r.duplicates_merged}; skipped {len(r.skipped)}")
+    if r.categories_created:
+        print(f"  material categories created: {', '.join(r.categories_created)}")
+    for number, reason in r.skipped[:30]:
+        print(f"  skipped row {number}: {reason}")
+    for number, warning in r.warnings[:30]:
+        print(f"  warning row {number}: {warning}")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -156,6 +192,10 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("import-tc", help="Import T&C clauses and the default template")
     p.add_argument("path")
 
+    for command, (_, label) in POWERPLAY.items():
+        p = sub.add_parser(command, help=f"Import a Powerplay Excel export: {label}")
+        p.add_argument("path")
+
     args = parser.parse_args(argv)
     if args.command == "create-admin":
         create_admin(args.email, args.name, args.phone)
@@ -165,3 +205,5 @@ def main(argv: list[str] | None = None) -> None:
         run_import_library(args.path)
     elif args.command == "import-tc":
         run_import_tc(args.path)
+    elif args.command in POWERPLAY:
+        run_import_powerplay(args.command, args.path)

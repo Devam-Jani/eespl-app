@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { api, ApiError } from "../api";
 import { useAuth } from "../auth";
+import ExportButton from "../components/ExportButton";
 import Modal from "../components/Modal";
 import { canGrant } from "../scopes";
 import type { Role, User } from "../types";
@@ -58,7 +59,7 @@ export default function Users() {
 
   const q = filter.trim().toLowerCase();
   const shown = q
-    ? users.filter((u) => u.full_name.toLowerCase().includes(q) || u.email.includes(q))
+    ? users.filter((u) => u.full_name.toLowerCase().includes(q) || (u.email ?? "").includes(q))
     : users;
 
   return (
@@ -72,6 +73,7 @@ export default function Users() {
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
+          <ExportButton path="/api/users/export" />
           <button className="btn btn-primary" onClick={() => setDialog({ kind: "create" })}>
             Add user
           </button>
@@ -99,7 +101,10 @@ export default function Users() {
               return (
                 <tr key={u.id} className={u.is_active ? "" : "row-muted"}>
                   <td>{u.full_name}</td>
-                  <td>{u.email}</td>
+                  <td>
+                    {u.email ?? <span className="muted">no email</span>}
+                    {u.job_title && <div className="muted small">{u.job_title}</div>}
+                  </td>
                   <td>{u.phone || "—"}</td>
                   <td>
                     {u.roles.map((r) => (
@@ -109,7 +114,11 @@ export default function Users() {
                     ))}
                   </td>
                   <td>
-                    {!u.is_active ? (
+                    {!u.is_active && !u.has_password ? (
+                      <span className="badge badge-warn" title="Imported or invited: add an email and a password, then activate">
+                        Not set up
+                      </span>
+                    ) : !u.is_active ? (
                       <span className="badge badge-muted">Inactive</span>
                     ) : locked ? (
                       <span className="badge badge-warn">Locked</span>

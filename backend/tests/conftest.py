@@ -31,9 +31,23 @@ from app.models import Role, User  # noqa: E402
 
 PER_TEST_TABLES = [
     "refresh_tokens", "audit_log", "user_roles",
-    "client_contacts", "clients", "product_prices", "system_components", "systems", "products",
-    "library_lines", "library_items", "tc_template_clauses", "tc_templates", "tc_clauses",
+    "client_contacts", "clients", "library_lines", "library_items",
+    "tc_template_clauses", "tc_templates", "tc_clauses",
+    "tags", "company_gstins", "company_bank_accounts",
+    "vendor_contacts", "vendor_bank_accounts", "vendor_products", "vendors",
 ]  # fmt: skip
+# Tables that also hold seeded rows (unit conversions, categories), or are referenced by them
+# (products), are cleaned with DELETE so the seed survives.
+PER_TEST_DELETES = [
+    "DELETE FROM unit_conversions WHERE product_id IS NOT NULL OR created_by IS NOT NULL",
+    "DELETE FROM product_prices",
+    "DELETE FROM system_components",
+    "DELETE FROM systems",
+    "DELETE FROM products",
+    "DELETE FROM categories WHERE id > :seeded_max_category",
+    "DELETE FROM company_profile",
+    "INSERT INTO company_profile (id) VALUES (1)",
+]
 
 PASSWORD = "correct-horse-battery"
 _PASSWORD_HASH = hash_password(PASSWORD)  # hashed once; argon2 is deliberately slow
@@ -66,13 +80,21 @@ def seeded_role_permissions(test_database) -> list[tuple]:
         ).all()
 
 
+@pytest.fixture(scope="session")
+def seeded_max_category(test_database) -> int:
+    with engine.connect() as conn:
+        return conn.execute(text("SELECT coalesce(max(id), 0) FROM categories")).scalar_one()
+
+
 @pytest.fixture(autouse=True)
-def clean_state(seeded_role_permissions) -> Iterator[None]:
+def clean_state(seeded_role_permissions, seeded_max_category) -> Iterator[None]:
     yield
     with engine.begin() as conn:
         # Not TRUNCATE users CASCADE: every master table references users (created_by), and
         # that would also wipe the seeded units table.
         conn.execute(text(f"TRUNCATE {', '.join(PER_TEST_TABLES)}"))
+        for statement in PER_TEST_DELETES:
+            conn.execute(text(statement), {"seeded_max_category": seeded_max_category})
         conn.execute(text("DELETE FROM users"))
         conn.execute(text("DELETE FROM roles WHERE NOT is_system"))
         conn.execute(text("DELETE FROM role_permissions"))

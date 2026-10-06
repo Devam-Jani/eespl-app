@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app import audit
 from app.auth.deps import CurrentPrincipal, require_permission
 from app.db import DbSession
+from app.export import xlsx_response
 from app.masters.library import MergeError, merge, unmerge
 from app.masters.models import LibraryItem, LibraryLine, Unit
 from app.masters.routers.common import get_or_404, unprocessable
@@ -113,6 +114,31 @@ def search(
         next_offset=offset + len(result.items),
         cut_applied=result.cut_applied,
     )
+
+
+@router.get("/search/export", dependencies=view)
+def export_search(
+    db: DbSession,
+    q: Annotated[str, Query(max_length=300)] = "",
+    unit: Annotated[str | None, Query(max_length=50)] = None,
+    include_flagged: bool = False,
+    include_competitor: bool = False,
+):
+    """The ranked results for a search (up to 500, without the relevance cut)."""
+    unit_code = normalise_unit(unit, load_aliases(db)) if unit else None
+    items = []
+    if not (unit and unit_code is None):
+        items = search_library(db, q, unit=unit_code, limit=500, include_flagged=include_flagged,
+                               include_competitor=include_competitor, cut=False).items  # fmt: skip
+    hits = [LibraryHit(**r) for r in items]
+    return xlsx_response(
+        "rate-library",
+        ["Description", "Unit", "Suggested rate", "Latest", "Min", "Median", "Max", "BOQs",
+         "Latest client", "Other bidder", "Hidden", "Check note"],
+        [[h.description, h.unit, h.suggested_rate, h.latest_rate, h.min_rate, h.median_rate,
+          h.max_rate, h.boq_count, h.latest_client, h.is_competitor, h.is_excluded, h.check_note]
+         for h in hits],
+    )  # fmt: skip
 
 
 @router.get("/items/{item_id}", dependencies=view)

@@ -46,6 +46,7 @@ def user_snapshot(user: User) -> dict[str, Any]:
         "email": user.email,
         "full_name": user.full_name,
         "phone": user.phone,
+        "job_title": user.job_title,
         "is_active": user.is_active,
         "roles": [r.code for r in user.roles],
     }

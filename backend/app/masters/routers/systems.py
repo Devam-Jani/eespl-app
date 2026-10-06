@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app import audit
 from app.auth.deps import CurrentPrincipal, require_permission
 from app.db import DbSession
+from app.export import EXPORT_ROW_LIMIT, xlsx_response
 from app.masters.models import Product, System, SystemComponent, Unit
 from app.masters.rate import MissingPriceError, system_rate
 from app.masters.routers.common import (
@@ -135,6 +136,32 @@ def list_systems(
     return Page(
         items=[_out(db, s, with_cost) for s in rows], total=total, limit=limit, offset=offset
     )
+
+
+@router.get("/export", dependencies=view)
+def export_systems(
+    db: DbSession, principal: CurrentPrincipal, q: Search = None, active: bool | None = None
+):
+    query = select(System)
+    if q:
+        pattern = like(q)
+        query = query.where(or_(System.code.ilike(pattern), System.name.ilike(pattern)))
+    if active is not None:
+        query = query.where(System.is_active == active)
+    with_cost = "tender.margin" in principal.permissions
+    columns = ["Code", "Name", "Unit", "Rate", "Products", "Active"]
+    if with_cost:
+        columns += ["Surface prep / unit", "Labour rate", "Labour per", "Default margin %"]
+    rows = []
+    for s in db.scalars(query.order_by(System.name, System.id).limit(EXPORT_ROW_LIMIT)):
+        out = _out(db, s, with_cost)
+        row = [out.code, out.name, out.unit, out.rate,
+               ", ".join(c.product_name for c in out.components), out.is_active]  # fmt: skip
+        if with_cost and out.cost:
+            row += [out.cost.surface_prep_per_unit, out.cost.labour_rate, out.cost.labour_unit,
+                    out.cost.default_margin_percent]  # fmt: skip
+        rows.append(row)
+    return xlsx_response("systems", columns, rows)
 
 
 @router.get("/{system_id}", dependencies=view)

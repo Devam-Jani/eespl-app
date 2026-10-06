@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, queryString } from "../api";
 import { useAuth } from "../auth";
+import ExportButton from "../components/ExportButton";
 import Modal from "../components/Modal";
 import { errorText, inr, num } from "../format";
 import type { LibraryHit, LibraryItemDetail, LibraryLine, LibrarySearch } from "../types";
@@ -85,6 +86,15 @@ export default function RateLibrary() {
     <>
       <div className="page-header">
         <h1>Rate library</h1>
+        <ExportButton
+          label="Export results"
+          path={`/api/library/search/export${queryString({
+            q: filters.q,
+            unit: filters.unit,
+            include_flagged: filters.includeFlagged ? "true" : undefined,
+            include_competitor: filters.includeCompetitor ? "true" : undefined,
+          })}`}
+        />
       </div>
       <div className="card filters">
         <label className="field grow">
