@@ -2,7 +2,8 @@
 against the role table in the M0 spec. EXPECTED is written out independently of the seed
 migration so a drift in either shows up here.
 
-admin.users, admin.roles and audit.view have real endpoints. The other permissions guard
+admin.users, admin.roles, audit.view, clients.view and library.view are checked on real
+endpoints. The other permissions guard
 modules that do not exist yet, so they are probed through test-only routes that use the same
 require_permission() dependency the real endpoints will use.
 """
@@ -19,6 +20,7 @@ from tests.conftest import login, role_id
 
 ALL = [
     "admin.users", "admin.roles", "admin.settings", "audit.view",
+    "clients.view", "clients.edit",
     "library.view", "library.edit",
     "tender.view", "tender.edit", "tender.margin",
     "site.view", "site.edit", "site.update",
@@ -36,20 +38,39 @@ def _all(*codes):
 EXPECTED: dict[str, dict[str, str]] = {
     "super_admin": _all(*ALL),
     "office_admin": _all(
-        "admin.users", "audit.view",
-        "library.view", "library.edit",
-        "tender.view", "tender.edit", "tender.margin",
-        "site.view", "site.edit", "site.update",
-        "indent.raise", "indent.approve",
-        "attendance.manage", "pettycash.manage",
-        "finance.view", "dashboard.view",
+        "admin.users",
+        "audit.view",
+        "clients.view",
+        "clients.edit",
+        "library.view",
+        "library.edit",
+        "tender.view",
+        "tender.edit",
+        "tender.margin",
+        "site.view",
+        "site.edit",
+        "site.update",
+        "indent.raise",
+        "indent.approve",
+        "attendance.manage",
+        "pettycash.manage",
+        "finance.view",
+        "dashboard.view",
     ),  # fmt: skip
     "estimator": _all(
-        "library.view", "library.edit",
-        "tender.view", "tender.edit", "tender.margin",
-        "site.view", "dashboard.view",
+        "clients.view",
+        "clients.edit",
+        "library.view",
+        "library.edit",
+        "tender.view",
+        "tender.edit",
+        "tender.margin",
+        "site.view",
+        "dashboard.view",
     ),  # fmt: skip
     "sales": {
+        "clients.view": "all",
+        "clients.edit": "own",
         "library.view": "all",
         "tender.view": "own",
         "tender.edit": "own",
@@ -68,14 +89,22 @@ EXPECTED: dict[str, dict[str, str]] = {
     },
     "store_purchase": _all("library.view", "site.view", "indent.dispatch", "indent.approve"),
     "accounts": _all(
-        "library.view", "tender.view", "tender.margin", "site.view",
-        "indent.raise", "attendance.manage", "pettycash.manage",
-        "finance.view", "finance.edit", "dashboard.view",
+        "clients.view",
+        "library.view",
+        "tender.view",
+        "tender.margin",
+        "site.view",
+        "indent.raise",
+        "attendance.manage",
+        "pettycash.manage",
+        "finance.view",
+        "finance.edit",
+        "dashboard.view",
     ),  # fmt: skip
     "client": {"site.view": "assigned"},
 }
 
-REAL_ENDPOINTS = {"admin.users", "admin.roles", "audit.view"}
+REAL_ENDPOINTS = {"admin.users", "admin.roles", "audit.view", "clients.view", "library.view"}
 
 probe_app = FastAPI()
 probe_app.include_router(app.router)
@@ -96,6 +125,10 @@ def _call(client: TestClient, code: str, headers, db):
         return client.patch(f"/api/roles/{role_id(db, 'client')}", json={}, headers=headers)
     if code == "audit.view":
         return client.get("/api/audit", headers=headers)
+    if code == "clients.view":
+        return client.get("/api/clients", headers=headers)
+    if code == "library.view":
+        return client.get("/api/products", headers=headers)
     return client.get(f"/_probe/{code}", headers=headers)
 
 

@@ -29,6 +29,12 @@ from app.db import SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Role, User  # noqa: E402
 
+PER_TEST_TABLES = [
+    "refresh_tokens", "audit_log", "user_roles",
+    "client_contacts", "clients", "product_prices", "system_components", "systems", "products",
+    "library_lines", "library_items", "tc_template_clauses", "tc_templates", "tc_clauses",
+]  # fmt: skip
+
 PASSWORD = "correct-horse-battery"
 _PASSWORD_HASH = hash_password(PASSWORD)  # hashed once; argon2 is deliberately slow
 
@@ -64,7 +70,10 @@ def seeded_role_permissions(test_database) -> list[tuple]:
 def clean_state(seeded_role_permissions) -> Iterator[None]:
     yield
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE users, refresh_tokens, audit_log, user_roles CASCADE"))
+        # Not TRUNCATE users CASCADE: every master table references users (created_by), and
+        # that would also wipe the seeded units table.
+        conn.execute(text(f"TRUNCATE {', '.join(PER_TEST_TABLES)}"))
+        conn.execute(text("DELETE FROM users"))
         conn.execute(text("DELETE FROM roles WHERE NOT is_system"))
         conn.execute(text("DELETE FROM role_permissions"))
         conn.execute(
@@ -86,9 +95,7 @@ def client() -> TestClient:
 
 @pytest.fixture
 def make_user(db: Session) -> Callable[..., User]:
-    def _make(
-        email: str, *roles: str, is_active: bool = True, name: str | None = None
-    ) -> User:
+    def _make(email: str, *roles: str, is_active: bool = True, name: str | None = None) -> User:
         role_rows = list(db.scalars(select(Role).where(Role.code.in_(roles)))) if roles else []
         assert len(role_rows) == len(roles), f"unknown role in {roles}"
         user = User(

@@ -2,6 +2,8 @@
 
     docker compose exec api python -m app.cli create-admin --email you@example.com --name "Name"
     docker compose exec api python -m app.cli set-password --email you@example.com
+    docker compose exec api python -m app.cli import-library /data/<rate library>.xlsx
+    docker compose exec api python -m app.cli import-tc /data/tc_clauses.json
 
 The password is prompted for (twice) when run in a terminal. When stdin is not a terminal,
 one line is read from stdin instead, so scripts can pipe it in without it appearing in argv.
@@ -10,6 +12,7 @@ one line is read from stdin instead, so scripts can pipe it in without it appear
 import argparse
 import getpass
 import sys
+from collections import Counter
 
 from sqlalchemy import select
 
@@ -17,6 +20,7 @@ from app import audit
 from app.auth.rbac import SUPER_ADMIN_ROLE_CODE
 from app.auth.security import MIN_PASSWORD_LENGTH, hash_password
 from app.db import SessionLocal
+from app.masters.importers import ImportFormatError, Skipped, import_library, import_tc
 from app.models import Role, User
 
 
@@ -70,6 +74,49 @@ def set_password(email: str) -> None:
         print(f"Password updated for {email}.")
 
 
+def _print_skipped(skipped: list[Skipped], show: int = 20) -> None:
+    print(f"Skipped rows: {len(skipped)}")
+    for reason, count in Counter(s.reason.split(" of row")[0] for s in skipped).most_common():
+        print(f"  {count:>6}  {reason}")
+    for s in skipped[:show]:
+        print(f"         {s.sheet} row {s.row}: {s.reason}")
+
+
+def run_import_library(path: str) -> None:
+    with SessionLocal() as db:
+        try:
+            r = import_library(db, path)
+        except (ImportFormatError, FileNotFoundError) as exc:
+            sys.exit(f"Import failed: {exc}")
+    print(f"Library items: {r.items_in_file} in file "
+          f"({r.items_inserted} new, {r.items_updated} already present, {r.items_deleted} removed)")
+    print(f"Library lines: {r.lines_in_file} in file "
+          f"({r.lines_inserted} new, {r.lines_updated} already present, {r.lines_deleted} removed)")
+    print(f"  linked to an item: {r.lines_linked} "
+          f"({r.lines_linked_via_parent} via '<parent item> — <description>')")
+    print(f"  not linked (no item with the same description and unit): {r.lines_unlinked}")
+    if r.ambiguous_match_keys:
+        print(f"  items sharing a description+unit after unit normalisation: "
+              f"{r.ambiguous_match_keys} (lines link to the one in most BOQs)")
+    if r.unrecognised_units:
+        top = ", ".join(f"{u!r} x{n}" for u, n in list(r.unrecognised_units.items())[:12])
+        print(f"Units not recognised (stored as blank unit, raw text kept): {top}")
+    _print_skipped(r.skipped)
+
+
+def run_import_tc(path: str) -> None:
+    with SessionLocal() as db:
+        try:
+            r = import_tc(db, path)
+        except (ImportFormatError, FileNotFoundError, ValueError) as exc:
+            sys.exit(f"Import failed: {exc}")
+    print(f"T&C clauses: {r.clauses_in_file} in file "
+          f"({r.clauses_inserted} new, {r.clauses_updated} already present)")
+    state = "created" if r.template_created else "already exists, left unchanged"
+    print(f"Template 'EESPL Standard': {state} ({r.template_clauses} clauses)")
+    _print_skipped(r.skipped)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -82,11 +129,21 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("set-password", help="Set a user's password and clear any lockout")
     p.add_argument("--email", required=True)
 
+    p = sub.add_parser("import-library", help="Import the historical rate library workbook")
+    p.add_argument("path")
+
+    p = sub.add_parser("import-tc", help="Import T&C clauses and the default template")
+    p.add_argument("path")
+
     args = parser.parse_args(argv)
     if args.command == "create-admin":
         create_admin(args.email, args.name, args.phone)
     elif args.command == "set-password":
         set_password(args.email)
+    elif args.command == "import-library":
+        run_import_library(args.path)
+    elif args.command == "import-tc":
+        run_import_tc(args.path)
 
 
 if __name__ == "__main__":

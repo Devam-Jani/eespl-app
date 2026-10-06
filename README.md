@@ -1,7 +1,8 @@
 # EESPL App
 
 FastAPI + PostgreSQL 16 backend, React + TypeScript (Vite) frontend, all run with Docker Compose.
-Includes logins, users, roles and permissions (RBAC) and an audit log.
+Includes logins, users, roles and permissions (RBAC), an audit log, and the M1 masters: clients,
+products and prices, rate build-up systems, the historical rate library and the T&C library.
 
 | Service | Container   | Host port | Container port |
 |---------|-------------|-----------|----------------|
@@ -47,6 +48,37 @@ docker compose exec api python -m app.cli set-password --email admin@ethiosenvir
 - Nobody can grant permissions, or manage a user who holds permissions, beyond their own. Client users can never hold `tender.margin`, `finance.edit` or any `admin.*` permission.
 - The permission catalogue and the 8 system roles are seeded by migration `0003`. System roles cannot be deleted, and `super_admin` always has every permission.
 - Logins, failed logins, lockouts and every change to users and roles are written to `audit_log` (see **Administration → Audit log**).
+
+## Masters and company data
+
+Company data files are **never committed**: put them in `data/` (gitignored), which is mounted
+read-only at `/data` in the api container. Then load them:
+
+```sh
+docker compose exec api python -m app.cli import-library /data/EESPL_Rate_Library_v2_all_BOQs.xlsx
+docker compose exec api python -m app.cli import-tc /data/tc_clauses.json
+```
+
+Both imports are idempotent: run them again (for example with a newer workbook) and rows are
+updated in place, keeping their ids. The library import prints how many lines linked to an item,
+which did not, and any skipped rows with the reason. The T&C import only adds new clauses
+(and refreshes usage counts), so edits made in the app are kept, and creates the default
+"EESPL Standard" template if it does not exist.
+
+> In Git Bash on Windows, prefix with `MSYS_NO_PATHCONV=1` (or write `//data/...`), otherwise
+> Git Bash rewrites `/data/...` into a Windows path. PowerShell and cmd are not affected.
+
+- **Units**: every import normalises units through `normalise_unit()` (`backend/app/masters/units.py`)
+  using the aliases in the `units` table ("Sq.m", "SQMT", "Smt" → sqm and so on). Unknown or
+  ambiguous spellings ("RO", "Nos OR Sq Ft") become a blank unit; the original text is kept.
+- **Rate build-up**: `rate = (Σ consumption × (1 + wastage%) × (purchase rate + freight) + surface
+  prep + labour per sqm) × (1 + margin%)`, in Decimal, rounded once at the end
+  (`backend/app/masters/rate.py`). Labour entered per sqft is × 10.7639 per sqm.
+- **Cost data** (purchase prices, freight, consumption, labour, margin and the build-up) is only
+  returned to users with `tender.margin`; others with `library.view` see products and the final rate.
+- **Rate library search** (`GET /api/library/search?q=&unit=`) combines full-text rank, coverage
+  of the query words, trigram similarity and how many BOQs an item appeared in
+  (`backend/app/masters/search.py`).
 
 ## Common commands
 
