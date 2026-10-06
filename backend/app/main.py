@@ -7,8 +7,10 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.auth.router import router as auth_router
 from app.config import settings
 from app.db import get_engine
+from app.routers import audit, permissions, roles, users
 
 app = FastAPI(title="EESPL App")
 
@@ -19,6 +21,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
+app.include_router(users.router)
+app.include_router(roles.router)
+app.include_router(permissions.router)
+app.include_router(audit.router)
 
 
 @app.get("/api/health")
