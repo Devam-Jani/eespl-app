@@ -312,26 +312,62 @@ def run_kylas_discover() -> None:
         return body if isinstance(body, list) else []
 
     def name_of(item):
-        for key in ("name", "displayName", "value"):
+        for key in ("displayName", "name", "value"):
             if item.get(key):
                 return str(item[key])
         first, last = item.get("firstName") or "", item.get("lastName") or ""
         return f"{first} {last}".strip() or "?"
 
-    for title, path in (("Sources", "/sources"), ("Users", "/users"), ("Pipelines", "/pipelines")):
-        result = kylas.get(path)
-        print(f"{title}:")
-        if not result.ok:
-            print(f"  (no answer: HTTP {result.status_code})")
-            continue
-        for item in items(result.body):
-            if not isinstance(item, dict):
-                continue
-            print(f"  {item.get('id')}  {name_of(item)}")
-            if title == "Pipelines":
-                for stage in item.get("stages") or []:
-                    if isinstance(stage, dict):
-                        print(f"      stage {stage.get('id')}  {name_of(stage)}")
+    def pages(path):
+        """Every item of a paged list (page size 100), or None when Kylas does not answer."""
+        out, page = [], 0
+        sep = "&" if "?" in path else "?"
+        while page < 50:
+            result = kylas.get(f"{path}{sep}page={page}&size=100")
+            if not result.ok:
+                print(f"  (no answer: HTTP {result.status_code})")
+                return None
+            out.extend(i for i in items(result.body) if isinstance(i, dict))
+            body = result.body if isinstance(result.body, dict) else {}
+            if body.get("last", True) or not items(result.body):
+                return out
+            page += 1
+        return out
+
+    # Lead sources are the values of the lead's "source" picklist field.
+    print("Sources (lead source picklist):")
+    fields = kylas.get("/entities/lead/fields")
+    if not fields.ok:
+        print(f"  (no answer: HTTP {fields.status_code})")
+    else:
+        source = next(
+            (
+                x
+                for x in fields.body or []
+                if isinstance(x, dict) and str(x.get("name", "")).lower() == "source"
+            ),
+            None,
+        )
+        picklist = (source or {}).get("picklist") or {}
+        for value in picklist.get("values") or []:
+            if isinstance(value, dict) and not value.get("deleted"):
+                print(f"  {value.get('id')}  {name_of(value)}")
+
+    print("Users:")
+    for user in pages("/users") or []:
+        print(
+            f"  {user.get('id')}  {name_of(user)}"
+            + ("" if user.get("active", True) else "  (inactive)")
+        )
+
+    print("Deal pipelines and stages:")
+    for pipeline in pages("/pipelines?entityType=DEAL") or []:
+        print(f"  {pipeline.get('id')}  {name_of(pipeline)}")
+        for stage in sorted(
+            (x for x in pipeline.get("stages") or [] if isinstance(x, dict)),
+            key=lambda x: x.get("position") or 0,
+        ):
+            print(f"      stage {stage.get('id')}  {name_of(stage)}")
 
 
 def main(argv: list[str] | None = None) -> None:
