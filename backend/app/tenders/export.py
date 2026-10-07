@@ -214,7 +214,7 @@ def xlsx(doc: Document) -> bytes:
     site = ", ".join(p for p in (t["site_name"], t["site_city"], t["site_state"]) if p)
     rows = [
         f"Tender: {t['code']}  ·  Revision {doc.revision}  ·  Date: {doc.on:%d-%m-%Y}",
-        f"Client: {t['client_name']}",
+        f"Client: {t['client_name'] or '—'}",
         f"Site: {site or '—'}",
         f"Subject: {SUBJECT}",
     ]
@@ -406,7 +406,7 @@ def html_document(doc: Document) -> str:
 <div class="meta">
 <div><b>Tender:</b> {_e(t["code"])} · Revision {_e(doc.revision)}</div>
 <div><b>Date:</b> {doc.on:%d-%m-%Y}</div>
-<div><b>Client:</b> {_e(t["client_name"])}</div><div><b>Site:</b> {_e(site)}</div>
+<div><b>Client:</b> {_e(t["client_name"] or "—")}</div><div><b>Site:</b> {_e(site)}</div>
 </div>
 <div class="subject">Subject: {_e(SUBJECT)}</div>
 <table><thead><tr><th>Sr no</th><th>Description</th><th>Unit</th><th class="num">Qty</th>
@@ -442,6 +442,12 @@ def client_format(db: Session, tender: Tender, doc: Document) -> tuple[bytes, st
     if imp is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "This tender has no imported client BOQ")
     path = Path(settings.media_dir) / imp.stored_path
+    if path.suffix.lower() == ".pdf":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This BOQ was imported from a PDF, so there is no client spreadsheet to write our "
+            "rates into. Use the EESPL Excel or PDF export, or import the client's Excel file.",
+        )
     if path.suffix.lower() not in (".xlsx", ".xlsm"):
         raise HTTPException(
             status.HTTP_409_CONFLICT,

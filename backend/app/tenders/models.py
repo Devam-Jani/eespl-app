@@ -23,7 +23,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.masters.models import Client, Tracked
+from app.masters.models import Channel, Client, Tracked
 from app.models import Base, User
 
 TENDER_STATUSES = ("draft", "submitted", "won", "lost", "dropped")
@@ -56,8 +56,12 @@ class Tender(Tracked, Base):
     id: Mapped[int] = mapped_column(Identity(), primary_key=True)
     code: Mapped[str] = mapped_column(String(20), unique=True)  # T-2026-0001
     name: Mapped[str] = mapped_column(String(300))
-    client_id: Mapped[int] = mapped_column(
+    # the end client (e.g. Adani Realty) and who brought the tender; at least one is set
+    client_id: Mapped[int | None] = mapped_column(
         ForeignKey("clients.id", ondelete="RESTRICT"), index=True
+    )
+    channel_id: Mapped[int | None] = mapped_column(
+        ForeignKey("channels.id", ondelete="RESTRICT"), index=True
     )
     site_name: Mapped[str | None] = mapped_column(String(200))
     site_city: Mapped[str | None] = mapped_column(String(100))
@@ -79,7 +83,8 @@ class Tender(Tracked, Base):
     # next edit after that starts revision + 1.
     revision: Mapped[int] = mapped_column(Integer, server_default="0")
 
-    client: Mapped[Client] = relationship(lazy="joined")
+    client: Mapped[Client | None] = relationship(lazy="joined")
+    channel: Mapped[Channel | None] = relationship(lazy="joined")
     owner: Mapped[User | None] = relationship(lazy="joined", foreign_keys=[owner_id])
     members: Mapped[list["TenderMember"]] = relationship(
         lazy="selectin", cascade="all, delete-orphan", passive_deletes=True
@@ -152,6 +157,12 @@ class BoqLine(Tracked, Base):
     # Row (1-based) of the client's sheet that holds this item's quantity: where "client format"
     # export writes our rate. None for lines added by hand.
     source_row: Mapped[int | None] = mapped_column(Integer)
+    # PDF imports: the page(s) the item was read from
+    source_page: Mapped[int | None] = mapped_column(Integer)
+    source_page_to: Mapped[int | None] = mapped_column(Integer)
+    # split rates in the client's file (material + application = the total, client_file_rate)
+    client_material_rate: Mapped[Decimal | None] = mapped_column(Rate)
+    client_application_rate: Mapped[Decimal | None] = mapped_column(Rate)
 
     candidates: Mapped[list["BoqLineCandidate"]] = relationship(
         lazy="selectin",

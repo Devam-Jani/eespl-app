@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.orm import Session
 
 from app.masters.models import LibraryItem, LibraryLine
@@ -39,7 +39,7 @@ STAT_FIELDS = (
     "min_rate",
     "median_rate",
     "max_rate",
-    "latest_client",
+    "latest_channel",
     "latest_source_file",
 )
 
@@ -81,7 +81,7 @@ def _from_source(stats: dict[str, Any] | None) -> dict[str, Any]:
 class _Line:
     rate: Decimal | None
     file: str
-    client_folder: str | None
+    channel: str | None
     valid: bool
     flagged: bool
 
@@ -101,7 +101,7 @@ def _stats_from_lines(lines: list[_Line], latest_source_file: str | None) -> dic
         "median_rate": q(statistics.median(rates)) if rates else None,
         "max_rate": q(rates[-1]) if rates else None,
         "latest_rate": q(latest.rate) if latest else None,
-        "latest_client": latest.client_folder if latest else None,
+        "latest_channel": latest.channel if latest else None,
         "latest_source_file": latest_source_file if latest else None,
     }
 
@@ -139,12 +139,12 @@ def recompute_stats(db: Session, item_ids: list[int] | None = None) -> int:
 
     lines: dict[int, list[_Line]] = defaultdict(list)
     if owner:
-        for item_id, rate, file, client, excluded, competitor in db.execute(
+        for item_id, rate, file, channel, excluded, competitor in db.execute(
             select(
                 LibraryLine.library_item_id,
                 LibraryLine.rate,
                 LibraryLine.file,
-                LibraryLine.client_folder,
+                LibraryLine.channel,
                 LibraryLine.is_excluded,
                 LibraryLine.is_competitor,
             ).where(LibraryLine.library_item_id.in_(owner.keys()))
@@ -153,7 +153,7 @@ def recompute_stats(db: Session, item_ids: list[int] | None = None) -> int:
                 _Line(
                     rate,
                     file,
-                    client,
+                    channel,
                     valid=not (excluded or competitor) and rate is not None,
                     flagged=excluded or competitor,
                 )  # fmt: skip
@@ -167,8 +167,7 @@ def recompute_stats(db: Session, item_ids: list[int] | None = None) -> int:
         use_lines = item.merged_into_id is None and (
             item.id in children
             or (
-                not (item.is_excluded or item.is_competitor)
-                and any(ln.flagged for ln in own_lines)
+                not (item.is_excluded or item.is_competitor) and any(ln.flagged for ln in own_lines)
             )
         )
         stats = _stats_from_lines(own_lines, sheet["latest_source_file"]) if use_lines else sheet
@@ -214,3 +213,20 @@ def unmerge(db: Session, item: LibraryItem) -> int:
     db.flush()
     recompute_stats(db, [item.id, target_id])
     return target_id
+
+
+def link_channels(db: Session) -> int:
+    """Every library folder (a channel: salesperson, partner, manufacturer) gets a channels row,
+    and library lines point at it. Returns how many lines were linked."""
+    db.execute(
+        text(
+            "INSERT INTO channels (name) SELECT DISTINCT channel FROM library_lines "
+            "WHERE channel IS NOT NULL AND btrim(channel) <> '' ON CONFLICT (name) DO NOTHING"
+        )
+    )
+    return db.execute(
+        text(
+            "UPDATE library_lines l SET channel_id = c.id FROM channels c "
+            "WHERE c.name = l.channel AND l.channel_id IS DISTINCT FROM c.id"
+        )
+    ).rowcount

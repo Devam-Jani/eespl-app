@@ -165,7 +165,7 @@ export type LibraryHit = {
   min_rate: string | null;
   median_rate: string | null;
   max_rate: string | null;
-  latest_client: string | null;
+  latest_channel: string | null;
   product_make: string | null;
   needs_check: boolean;
   check_note: string | null;
@@ -197,7 +197,7 @@ export type LibraryItemDetail = Omit<LibraryHit, "score"> & {
 export type LibraryLine = {
   id: number;
   library_item_id: number | null;
-  client_folder: string | null;
+  channel: string | null;
   file: string;
   sheet: string | null;
   row: number | null;
@@ -341,8 +341,10 @@ export type Tender = {
   id: number;
   code: string;
   name: string;
-  client_id: number;
-  client_name: string;
+  client_id: number | null;
+  client_name: string | null;
+  channel_id: number | null;
+  channel_name: string | null;
   site_name: string | null;
   site_city: string | null;
   site_state: string | null;
@@ -367,8 +369,21 @@ export type Tender = {
   margin_amount?: string | null;
 };
 
+export type ChannelType = "salesperson" | "partner" | "manufacturer" | "other";
+
+export type Channel = {
+  id: number;
+  name: string;
+  type: ChannelType;
+  is_active: boolean;
+  notes: string | null;
+  library_lines: number;
+  tenders: number;
+};
+
 export type TenderLookups = {
   clients: { id: number; name: string }[];
+  channels: { id: number; name: string; type: ChannelType }[];
   users: { id: string; full_name: string }[];
   tc_templates: { id: number; name: string; is_default: boolean }[];
 };
@@ -388,6 +403,10 @@ export type BoqLine = {
   client_product: string | null;
   client_remarks: string | null;
   client_file_rate: string | null;
+  client_material_rate: string | null;
+  client_application_rate: string | null;
+  source_page: number | null;
+  source_page_to: number | null;
   rate: string | null;
   amount: string | null;
   our_remarks: string | null;
@@ -422,8 +441,8 @@ export type RateHistory = {
   latest_rate: string | null;
   median_rate: string | null;
   n_boqs: number;
-  client_last_rate: string | null;
-  sources: { client: string | null; file: string; date: string | null; rate: string }[];
+  channel_last_rate: string | null;
+  sources: { channel: string | null; file: string; date: string | null; rate: string }[];
   sources_total: number;
   above_median_percent: string | null;
   warning: boolean;
@@ -454,7 +473,7 @@ export type LibraryStat = {
   min_rate: string | null;
   median_rate: string | null;
   max_rate: string | null;
-  latest_client: string | null;
+  latest_channel: string | null;
 };
 
 export type SystemBreakdown = {
@@ -500,6 +519,7 @@ export type ImportPreview = {
     unrecognised_units: Record<string, number>;
   };
   existing_lines: number;
+  page_count: number | null;
 };
 
 export type ImportReport = {
@@ -565,9 +585,9 @@ export type RevisionCompare = {
 };
 
 export const RATE_POLICIES: Record<string, string> = {
-  client_median: "Same client's median, else the median",
+  channel_median: "Same channel's median, else the median",
   median: "Median of all BOQs",
-  client_last: "Same client's last rate, else the median",
+  channel_last: "Same channel's last rate, else the median",
   lower_latest_median: "Lower of latest and median",
   latest: "Latest rate",
   trimmed_mean: "Trimmed mean (top and bottom 10% dropped)",

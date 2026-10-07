@@ -31,7 +31,7 @@ from app.auth.deps import CurrentPrincipal, Principal, require_permission
 from app.config import settings
 from app.db import DbSession
 from app.export import EXPORT_ROW_LIMIT, xlsx_response
-from app.masters.models import Client, LibraryItem, System, TcClause, TcTemplate
+from app.masters.models import Channel, Client, LibraryItem, System, TcClause, TcTemplate
 from app.masters.rate import MissingPriceError, system_rate
 from app.masters.routers.common import Limit, Offset, Search, like, paginate, unprocessable
 from app.masters.schemas import Page
@@ -48,6 +48,7 @@ from app.tenders.models import (
     TenderRevision,
     TenderTc,
 )
+from app.tenders.pdf_import import ScannedPdfError
 from app.tenders.schemas import (
     AcceptIn,
     BoqOut,
@@ -102,7 +103,7 @@ ViewScope = Annotated[str, Depends(require_permission("tender.view"))]
 EditScope = Annotated[str, Depends(require_permission("tender.edit"))]
 
 UPLOAD_MAX_BYTES = 20 * 1024 * 1024
-UPLOAD_TYPES = (".xlsx", ".xlsm", ".xls", ".csv")
+UPLOAD_TYPES = (".xlsx", ".xlsm", ".xls", ".csv", ".pdf")
 SORT_STEP = 10
 
 
@@ -152,7 +153,9 @@ def _tender_out(db: Session, tender: Tender, with_cost: bool) -> TenderOut:
         code=tender.code,
         name=tender.name,
         client_id=tender.client_id,
-        client_name=tender.client.name,
+        client_name=tender.client.name if tender.client else None,
+        channel_id=tender.channel_id,
+        channel_name=tender.channel.name if tender.channel else None,
         site_name=tender.site_name,
         site_city=tender.site_city,
         site_state=tender.site_state,
@@ -253,16 +256,21 @@ def _snapshot(tender: Tender) -> dict:
 # --- register ------------------------------------------------------------------------------------
 
 
-def _list_query(scope, principal, q, status_, owner_id, client_id):
+def _list_query(scope, principal, q, status_, owner_id, client_id, channel_id=None):
     query = select(Tender).where(scope_condition(scope, principal))
     if q:
         pattern = like(q)
-        query = query.join(Client, Client.id == Tender.client_id).where(
-            or_(
-                Tender.name.ilike(pattern),
-                Tender.code.ilike(pattern),
-                Client.name.ilike(pattern),
-                Tender.site_name.ilike(pattern),
+        query = (
+            query.outerjoin(Client, Client.id == Tender.client_id)
+            .outerjoin(Channel, Channel.id == Tender.channel_id)
+            .where(
+                or_(
+                    Tender.name.ilike(pattern),
+                    Tender.code.ilike(pattern),
+                    Client.name.ilike(pattern),
+                    Channel.name.ilike(pattern),
+                    Tender.site_name.ilike(pattern),
+                )
             )
         )
     if status_:
@@ -271,6 +279,8 @@ def _list_query(scope, principal, q, status_, owner_id, client_id):
         query = query.where(Tender.owner_id == owner_id)
     if client_id:
         query = query.where(Tender.client_id == client_id)
+    if channel_id:
+        query = query.where(Tender.channel_id == channel_id)
     return query.order_by(Tender.created_at.desc(), Tender.id.desc())
 
 
@@ -283,11 +293,15 @@ def list_tenders(
     status: str | None = None,
     owner_id: uuid.UUID | None = None,
     client_id: int | None = None,
+    channel_id: int | None = None,
     limit: Limit = 50,
     offset: Offset = 0,
 ) -> Page[TenderOut | TenderCostOut]:
     rows, total = paginate(
-        db, _list_query(scope, principal, q, status, owner_id, client_id), limit, offset
+        db,
+        _list_query(scope, principal, q, status, owner_id, client_id, channel_id),
+        limit,
+        offset,
     )
     with_cost = can_cost(principal)
     return Page(
@@ -304,14 +318,18 @@ def export_tenders(
     status: str | None = None,
     owner_id: uuid.UUID | None = None,
     client_id: int | None = None,
+    channel_id: int | None = None,
 ):
     with_cost = can_cost(principal)
-    query = _list_query(scope, principal, q, status, owner_id, client_id).limit(EXPORT_ROW_LIMIT)
+    query = _list_query(scope, principal, q, status, owner_id, client_id, channel_id).limit(
+        EXPORT_ROW_LIMIT
+    )
     tenders = [_tender_out(db, t, with_cost) for t in db.scalars(query)]
     columns = [
         "Code",
         "Name",
         "Client",
+        "Channel",
         "Site",
         "City",
         "Received",
@@ -330,6 +348,7 @@ def export_tenders(
             t.code,
             t.name,
             t.client_name,
+            t.channel_name,
             t.site_name,
             t.site_city,
             t.received_on,
@@ -354,10 +373,15 @@ def _check_users(db: Session, ids: list[uuid.UUID]) -> None:
 
 @router.get("/lookups")
 def lookups(db: DbSession, _: EditScope) -> dict[str, list[dict[str, Any]]]:
-    """Choices for the tender form (clients, people, T&C templates) for anyone who may create
-    tenders, without needing the client or user admin permissions."""
+    """Choices for the tender form (clients, channels, people, T&C templates) for anyone who
+    may create tenders, without needing the client or user admin permissions."""
     clients = db.execute(
         select(Client.id, Client.name).where(Client.is_active).order_by(Client.name)
+    ).all()
+    channels = db.execute(
+        select(Channel.id, Channel.name, Channel.type)
+        .where(Channel.is_active)
+        .order_by(Channel.name)
     ).all()
     users = db.execute(
         select(User.id, User.full_name).where(User.is_active).order_by(User.full_name)
@@ -367,6 +391,7 @@ def lookups(db: DbSession, _: EditScope) -> dict[str, list[dict[str, Any]]]:
     ).all()
     return {
         "clients": [{"id": c.id, "name": c.name} for c in clients],
+        "channels": [{"id": c.id, "name": c.name, "type": c.type} for c in channels],
         "users": [{"id": str(u.id), "full_name": u.full_name} for u in users],
         "tc_templates": [
             {"id": t.id, "name": t.name, "is_default": t.is_default} for t in templates
@@ -378,8 +403,10 @@ def lookups(db: DbSession, _: EditScope) -> dict[str, list[dict[str, Any]]]:
 def create_tender(
     body: TenderIn, request: Request, db: DbSession, principal: CurrentPrincipal, _: EditScope
 ) -> TenderOut | TenderCostOut:
-    if db.get(Client, body.client_id) is None:
+    if body.client_id is not None and db.get(Client, body.client_id) is None:
         raise unprocessable("Unknown client")
+    if body.channel_id is not None and db.get(Channel, body.channel_id) is None:
+        raise unprocessable("Unknown channel")
     owner = body.owner_id or principal.user.id
     _check_users(db, [owner, *body.member_ids])
     tender = Tender(
@@ -422,10 +449,14 @@ def update_tender(
     tender = _editable(db, tender_id, view, edit, principal)
     before = _snapshot(tender)
     changes = body.model_dump(exclude_unset=True, exclude={"member_ids"})
-    if "client_id" in changes and (
-        changes["client_id"] is None or db.get(Client, changes["client_id"]) is None
-    ):
+    if changes.get("client_id") is not None and db.get(Client, changes["client_id"]) is None:
         raise unprocessable("Unknown client")
+    if changes.get("channel_id") is not None and db.get(Channel, changes["channel_id"]) is None:
+        raise unprocessable("Unknown channel")
+    client_after = changes.get("client_id", tender.client_id)
+    channel_after = changes.get("channel_id", tender.channel_id)
+    if client_after is None and channel_after is None:
+        raise unprocessable("A tender needs a client, a channel, or both")
     if changes.get("owner_id"):
         _check_users(db, [changes["owner_id"]])
     submitting = body.status == "submitted" and tender.status != "submitted"
@@ -820,7 +851,7 @@ def line_detail(
                 "min_rate": i.min_rate,
                 "median_rate": i.median_rate,
                 "max_rate": i.max_rate,
-                "latest_client": i.latest_client,
+                "latest_channel": i.latest_channel,
             }
             for i in db.scalars(select(LibraryItem).where(LibraryItem.id.in_(library_ids)))
         ]
@@ -999,6 +1030,10 @@ def _original_name(path: Path) -> str:
     return path.name.split("__", 1)[1]
 
 
+def _pages(grid: dict, sheet: str) -> list[tuple[int, int]] | None:
+    return getattr(grid, "pages", {}).get(sheet)
+
+
 def _preview(
     db: Session,
     tender: Tender,
@@ -1009,9 +1044,9 @@ def _preview(
 ) -> ImportPreviewOut:
     try:
         grid = boq_import.read_grid(path)
-    except boq_import.BoqFormatError as exc:
+    except (boq_import.BoqFormatError, ScannedPdfError) as exc:
         raise unprocessable(str(exc)) from exc
-    except Exception as exc:  # a corrupt or unreadable spreadsheet
+    except Exception as exc:  # a corrupt or unreadable spreadsheet or PDF
         raise unprocessable(f"Could not read the file: {exc}") from exc
     sheets = boq_import.choose_sheet(grid)
     if not sheets:
@@ -1024,7 +1059,7 @@ def _preview(
     if header_row > len(rows):
         raise unprocessable("The header row is past the end of the sheet")
     header_values = rows[header_row - 1]
-    guesses = boq_import.guess_columns(header_values)
+    guesses = boq_import.header_guess(rows, header_row - 1)
     if column_map is not None:
         cols = {f: c for f, c in column_map.items() if c is not None and f in boq_import.FIELDS}
         guesses = {
@@ -1059,8 +1094,9 @@ def _preview(
             if v not in (None, "")
         ],
         column_map={f: ColumnGuess(**g) for f, g in guesses.items()},
-        rows=boq_import.preview_rows(parsed),
+        rows=boq_import.preview_rows(parsed, pages=_pages(grid, chosen["name"])),
         counts=parsed.counts(),
+        page_count=getattr(grid, "page_count", None),
         existing_lines=existing,
     )
 
@@ -1072,14 +1108,16 @@ async def upload_boq(
     principal: CurrentPrincipal,
     view: ViewScope,
     edit: EditScope,
-    file: Annotated[UploadFile, File(description=".xlsx, .xls or .csv, up to 20 MB")],
+    file: Annotated[
+        UploadFile, File(description=".xlsx, .xls, .csv or a text PDF (60 pages), up to 20 MB")
+    ],
 ) -> ImportPreviewOut:
     """Upload a client BOQ and get a preview with guessed settings. Nothing is saved to the BOQ
     until /boq/import/confirm."""
     tender = _editable(db, tender_id, view, edit, principal)
     name = Path(file.filename or "boq.xlsx").name
     if Path(name).suffix.lower() not in UPLOAD_TYPES:
-        raise unprocessable("Upload an .xlsx, .xls or .csv file")
+        raise unprocessable("Upload an .xlsx, .xls, .csv or .pdf file")
     data = await file.read(UPLOAD_MAX_BYTES + 1)
     if len(data) > UPLOAD_MAX_BYTES:
         raise unprocessable("The file is larger than 20 MB")
@@ -1150,7 +1188,10 @@ def confirm_boq(
             status.HTTP_409_CONFLICT,
             f"This tender already has {len(existing)} BOQ lines; import again with replace",
         )
-    grid = boq_import.read_grid(path)
+    try:
+        grid = boq_import.read_grid(path)
+    except (boq_import.BoqFormatError, ScannedPdfError) as exc:
+        raise unprocessable(str(exc)) from exc
     if body.sheet not in grid:
         raise unprocessable(f"No sheet named {body.sheet!r}")
     cols = {f: c for f, c in body.column_map.items() if c is not None and f in boq_import.FIELDS}
@@ -1158,6 +1199,7 @@ def confirm_boq(
         parsed = boq_import.parse(grid[body.sheet], body.header_row, cols, load_aliases(db))
     except boq_import.BoqFormatError as exc:
         raise unprocessable(str(exc)) from exc
+    pages = _pages(grid, body.sheet)
 
     kept: dict[tuple[str, str], dict[str, Any]] = {
         _key(ln.client_item_no, ln.description): {f: getattr(ln, f) for f in _KEPT}
@@ -1204,6 +1246,10 @@ def confirm_boq(
             our_remarks=p.our_remarks,
             status=p.status,
             source_row=p.source_row,
+            client_material_rate=p.client_material_rate,
+            client_application_rate=p.client_application_rate,
+            source_page=min(pages[r - 1][0] for r in p.rows) if pages else None,
+            source_page_to=max(pages[r - 1][1] for r in p.rows) if pages else None,
             created_by=principal.user.id,
         )
         previous = kept.get(_key(p.item_no, p.description))

@@ -27,8 +27,10 @@ class TenderOut(BaseModel):
     id: int
     code: str
     name: str
-    client_id: int
-    client_name: str
+    client_id: int | None
+    client_name: str | None
+    channel_id: int | None
+    channel_name: str | None
     site_name: str | None
     site_city: str | None
     site_state: str | None
@@ -57,7 +59,8 @@ class TenderCostOut(TenderOut):
 
 class TenderIn(BaseModel):
     name: str = Field(min_length=1, max_length=300)
-    client_id: int
+    client_id: int | None = None  # the end client (e.g. Adani Realty)
+    channel_id: int | None = None  # who brought it: salesperson, partner, manufacturer
     site_name: str | None = Field(default=None, max_length=200)
     site_city: str | None = Field(default=None, max_length=100)
     site_state: str | None = Field(default=None, max_length=100)
@@ -68,10 +71,17 @@ class TenderIn(BaseModel):
     tc_template_id: int | None = None  # default: the default T&C template
     notes: str | None = None
 
+    @model_validator(mode="after")
+    def _client_or_channel(self):
+        if self.client_id is None and self.channel_id is None:
+            raise ValueError("Choose the client, the channel, or both")
+        return self
+
 
 class TenderUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=300)
     client_id: int | None = None
+    channel_id: int | None = None
     site_name: str | None = Field(default=None, max_length=200)
     site_city: str | None = Field(default=None, max_length=100)
     site_state: str | None = Field(default=None, max_length=100)
@@ -115,6 +125,10 @@ class LineOut(BaseModel):
     client_product: str | None
     client_remarks: str | None
     client_file_rate: Decimal | None
+    client_material_rate: Decimal | None
+    client_application_rate: Decimal | None
+    source_page: int | None
+    source_page_to: int | None
     rate: Decimal | None
     amount: Decimal | None
     our_remarks: str | None
@@ -151,7 +165,7 @@ class BoqOut(BaseModel):
 
 
 class RateSource(BaseModel):
-    client: str | None
+    channel: str | None  # the library folder: a salesperson, partner or manufacturer route
     file: str
     date: date | None  # the library has no BOQ dates yet
     rate: Decimal
@@ -165,7 +179,7 @@ class RateHistoryOut(BaseModel):
     latest_rate: Decimal | None
     median_rate: Decimal | None
     n_boqs: int
-    client_last_rate: Decimal | None
+    channel_last_rate: Decimal | None
     sources: list[RateSource]
     sources_total: int
     above_median_percent: Decimal | None
@@ -306,6 +320,7 @@ class ImportPreviewOut(BaseModel):
     rows: list[dict[str, Any]]
     counts: dict[str, Any]
     existing_lines: int
+    page_count: int | None = None  # PDF imports
 
 
 class ImportPreviewIn(BaseModel):

@@ -63,9 +63,9 @@ def test_policies_on_a_known_pool():
         "100.00"
     )  # item's own latest
     assert choose("median", pool).rate == Decimal("105.00")
-    assert choose("client_last", pool, "Y").rate == Decimal("110.00")
-    assert choose("client_last", pool, "Z").policy == "median"  # no same-client rate: fallback
-    assert choose("client_median", pool, "x").rate == Decimal("100.00")  # case-insensitive client
+    assert choose("channel_last", pool, "Y").rate == Decimal("110.00")
+    assert choose("channel_last", pool, "Z").policy == "median"  # no same-channel rate: fallback
+    assert choose("channel_median", pool, "x").rate == Decimal("100.00")  # case-insensitive channel
     rates = [Obs(Decimal(v), f"f{v}", None, 0) for v in (1, 50, 51, 52, 53, 54, 55, 56, 57, 1000)]
     assert choose("trimmed_mean", rates).rate == Decimal("53.50")  # 1 and 1000 dropped
     assert choose("median", []) is None
@@ -81,7 +81,7 @@ def test_leave_one_boq_out_backtest():
     median = rows["median"]  # 120 (+20%), 115 (+4.5%), 105 (-19.2%)
     assert (median["within_5"], median["within_10"], median["within_20"]) == (33.3, 33.3, 100.0)
     assert (median["above_by_10"], median["median_abs_error"]) == (33.3, 19.2)
-    client = rows["client_median"]  # X: 130 (+30%), Y: none -> 115 (+4.5%), X: 100 (-23.1%)
+    client = rows["channel_median"]  # X: 130 (+30%), Y: none -> 115 (+4.5%), X: 100 (-23.1%)
     assert (client["within_10"], client["median_abs_error"]) == (33.3, 23.1)
     assert winner(list(rows.values())) == "median"
 
@@ -116,7 +116,7 @@ def crystal_history(db):
             LibraryLine(
                 source_key=f"t-crystal-{i}",
                 library_item_id=item.id,
-                client_folder=folder,
+                channel=folder,
                 file=f"{folder}/{'abc'[i]}.xlsx",
                 row=5,
                 description=item.description,
@@ -138,7 +138,13 @@ def _suggested(client, headers, tid):
 
 def test_rate_policy_setting_changes_the_suggestion(boss, crystal_history):
     client, headers = boss
-    tid = imported_tender(client, headers)["id"]  # client "Example Developers"
+    tid = imported_tender(client, headers)["id"]
+    # the tender came through the channel the library calls "EXAMPLE DEVELOPERS"
+    r = client.post("/api/channels", json={"name": "Example Developers", "type": "partner"},
+                    headers=headers)  # fmt: skip
+    assert r.status_code == 201, r.text
+    r = client.patch(f"/api/tenders/{tid}", json={"channel_id": r.json()["id"]}, headers=headers)
+    assert r.status_code == 200, r.text
 
     def policy(name):
         r = client.patch("/api/settings/company", json={"rate_policy": name}, headers=headers)
@@ -154,15 +160,15 @@ def test_rate_policy_setting_changes_the_suggestion(boss, crystal_history):
         "500.00",
         3,
     )
-    assert (h["min_rate"], h["max_rate"], h["client_last_rate"]) == ("400.00", "600.00", "400.00")
+    assert (h["min_rate"], h["max_rate"], h["channel_last_rate"]) == ("400.00", "600.00", "400.00")
     assert h["warning"] is True and h["above_median_percent"] == "20.0"  # > 15% above median
     assert [s["rate"] for s in h["sources"]] == ["600.00"]
 
-    policy("client_median")  # the backtest default
+    policy("channel_median")  # the backtest default
     crystal, cand = _suggested(client, headers, tid)
-    assert crystal["rate"] == "400.00" and cand["details"]["used"] == "client_median"
+    assert crystal["rate"] == "400.00" and cand["details"]["used"] == "channel_median"
     assert cand["details"]["warning"] is False
-    assert cand["details"]["sources"][0]["client"] == "EXAMPLE DEVELOPERS"
+    assert cand["details"]["sources"][0]["channel"] == "EXAMPLE DEVELOPERS"
 
     policy("median")
     crystal, _ = _suggested(client, headers, tid)

@@ -722,6 +722,23 @@ function LinePanel({
         </dd>
         <dt>Rate in the client's file</dt>
         <dd>{inr(line.client_file_rate)}</dd>
+        {(line.client_material_rate || line.client_application_rate) && (
+          <>
+            <dt>Material / application</dt>
+            <dd>
+              {inr(line.client_material_rate)} / {inr(line.client_application_rate)}
+            </dd>
+          </>
+        )}
+        {line.source_page && (
+          <>
+            <dt>In the PDF</dt>
+            <dd>
+              page {line.source_page}
+              {line.source_page_to && line.source_page_to !== line.source_page ? `–${line.source_page_to}` : ""}
+            </dd>
+          </>
+        )}
         {line.client_product && (
           <>
             <dt>Client's make</dt>
@@ -786,7 +803,7 @@ function LinePanel({
                       {s.description}
                     </span>
                     <span className="muted small">
-                      {s.unit ?? "—"} · {s.boq_count} BOQs{s.latest_client ? ` · last ${s.latest_client}` : ""}
+                      {s.unit ?? "—"} · {s.boq_count} BOQs{s.latest_channel ? ` · last via ${s.latest_channel}` : ""}
                     </span>
                   </td>
                   <td className="num">{inr(s.min_rate)}</td>
@@ -895,7 +912,7 @@ function WhyThisRate({ rate, history: h }: { rate: string; history: RateHistory 
       </summary>
       <p className="small">
         Policy: <strong>{RATE_POLICIES[h.policy] ?? h.policy}</strong>
-        {h.used !== h.policy && <> — used {RATE_POLICIES[h.used]?.toLowerCase() ?? h.used} (no same-client rate)</>}
+        {h.used !== h.policy && <> — used {RATE_POLICIES[h.used]?.toLowerCase() ?? h.used} (no same-channel rate)</>}
       </p>
       <dl className="totals small">
         <dt>Latest</dt>
@@ -910,8 +927,8 @@ function WhyThisRate({ rate, history: h }: { rate: string; history: RateHistory 
             </dd>
           </>
         )}
-        <dt>Same client's last rate</dt>
-        <dd>{inr(h.client_last_rate)}</dd>
+        <dt>Same channel's last rate</dt>
+        <dd>{inr(h.channel_last_rate)}</dd>
         <dt>BOQs</dt>
         <dd>{h.n_boqs}</dd>
       </dl>
@@ -919,7 +936,7 @@ function WhyThisRate({ rate, history: h }: { rate: string; history: RateHistory 
         <table className="table compact small">
           <thead>
             <tr>
-              <th>Client</th>
+              <th>Channel</th>
               <th>BOQ</th>
               <th>Date</th>
               <th className="num">Rate</th>
@@ -928,7 +945,7 @@ function WhyThisRate({ rate, history: h }: { rate: string; history: RateHistory 
           <tbody>
             {h.sources.map((s, i) => (
               <tr key={i} className={s.rate === rate ? "row-current" : ""}>
-                <td>{s.client ?? "—"}</td>
+                <td>{s.channel ?? "—"}</td>
                 <td>
                   <span className="clamp" title={s.file}>
                     {s.file}

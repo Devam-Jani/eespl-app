@@ -96,7 +96,7 @@ def test_search_ranks_the_expected_item_first(login_as, db):
     assert hit["took_ms"] >= 0
 
     lines = client.get(f"/api/library/items/{first['id']}/lines", headers=headers).json()
-    assert {(ln["client_folder"], ln["rate"], ln["is_competitor"]) for ln in lines} == {
+    assert {(ln["channel"], ln["rate"], ln["is_competitor"]) for ln in lines} == {
         ("CLIENT A", "450.0000", False),
         ("CLIENT C", "380.0000", False),
         ("CLIENT E", "999.0000", True),

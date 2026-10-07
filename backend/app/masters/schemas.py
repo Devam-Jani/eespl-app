@@ -355,7 +355,7 @@ class LibraryItemOut(BaseModel):
     min_rate: Decimal | None
     median_rate: Decimal | None
     max_rate: Decimal | None
-    latest_client: str | None
+    latest_channel: str | None
     product_make: str | None
     needs_check: bool
     check_note: str | None
@@ -406,7 +406,7 @@ class LibrarySearchOut(BaseModel):
 class LibraryLineOut(ORM):
     id: int
     library_item_id: int | None
-    client_folder: str | None
+    channel: str | None
     file: str
     sheet: str | None
     row: int | None
@@ -843,3 +843,32 @@ class CompanyBankOut(ORM):
     bank: str | None
     branch: str | None
     is_default: bool
+
+
+# --- channels ---
+
+ChannelType = Literal["salesperson", "partner", "manufacturer", "other"]
+
+
+class ChannelIn(BaseModel):
+    name: Name
+    type: ChannelType = "other"
+    is_active: bool = True
+    notes: str | None = None
+
+
+class ChannelUpdate(BaseModel):
+    name: Name | None = None
+    type: ChannelType | None = None
+    is_active: bool | None = None
+    notes: str | None = None
+
+
+class ChannelOut(ORM):
+    id: int
+    name: str
+    type: str
+    is_active: bool
+    notes: str | None
+    library_lines: int = 0
+    tenders: int = 0

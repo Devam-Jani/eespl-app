@@ -153,7 +153,7 @@ export default function RateLibrary() {
               <th className="num">Max</th>
               <th />
               <th className="num">BOQs</th>
-              <th>Latest client</th>
+              <th>Latest channel</th>
             </tr>
           </thead>
           <tbody>
@@ -173,7 +173,7 @@ export default function RateLibrary() {
                     <RateBadges item={h} />
                   </td>
                   <td className="num">{h.boq_count}</td>
-                  <td>{h.latest_client ?? "—"}</td>
+                  <td>{h.latest_channel ?? "—"}</td>
                 </tr>
               );
             })}
@@ -372,7 +372,7 @@ function ItemPanel({
             {lines?.map((l) => (
               <tr key={l.id} className={l.is_competitor || l.is_excluded ? "row-flagged" : ""}>
                 <td>
-                  {l.client_folder ?? "—"}
+                  {l.channel ?? "—"}
                   {!l.from_eespl_file && (
                     <span className="badge badge-muted" title="Not an EESPL-priced file">
                       other file
