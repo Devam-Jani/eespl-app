@@ -138,6 +138,7 @@ class Product(Tracked, Base):
     unit: Mapped[str] = mapped_column(ForeignKey("units.code"))
     pack_size: Mapped[Decimal | None] = mapped_column(Numeric(12, 3))
     gst_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), server_default="18")
+    hsn_code: Mapped[str | None] = mapped_column(String(8))  # HSN (goods) / SAC (services)
     is_active: Mapped[bool] = mapped_column(server_default=true())
 
     category: Mapped["Category | None"] = relationship(lazy="joined")
@@ -578,6 +579,7 @@ class CompanyProfile(Tracked, Base):
     allow_negative_stock: Mapped[bool] = mapped_column(server_default="false")
     grn_approval_levels: Mapped[int] = mapped_column(Integer, server_default="1")
     asset_overdue_days: Mapped[int] = mapped_column(Integer, server_default="30")
+    freight_sac: Mapped[str] = mapped_column(String(8), server_default="9965")  # on PO freight
     po_tc_template_id: Mapped[int | None] = mapped_column(
         ForeignKey("tc_templates.id", ondelete="SET NULL")
     )

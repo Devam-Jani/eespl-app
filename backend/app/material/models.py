@@ -504,6 +504,10 @@ class SiteIssue(Tracked, Base):
         ForeignKey("area_scopes.id", ondelete="SET NULL")
     )
     task_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id", ondelete="SET NULL"))
+    # material handed to a subcontractor (recovered on their RA bill when the WO says so)
+    subcontractor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vendors.id", ondelete="SET NULL"), index=True
+    )
     issued_on: Mapped[date] = mapped_column(Date)
     remark: Mapped[str | None] = mapped_column(Text)
 

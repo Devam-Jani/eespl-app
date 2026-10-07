@@ -704,3 +704,89 @@ def test_accounts_view_only_and_client_forbidden(boss, login_as, masters):
         "settings",
     ):
         assert cl.get(f"/api/material/{path}", headers=ch).status_code == 403, path
+
+
+# --- PO PDF carry-over fixes ---------------------------------------------------------------------
+
+
+def test_unregistered_vendor_hsn_column_and_gstin_warning(boss, db):
+    from app.material import po_pdf
+    from app.material.models import PurchaseOrder
+
+    client, h = boss
+    p = Product(code="T-HSN", name="Test membrane", unit="sqm", gst_percent=18, hsn_code="6807")
+    local = Vendor(name="Invented local hardware", state="Gujarat")  # no GSTIN
+    db.add_all([p, local])
+    db.commit()
+    gd = godown(client, h)["id"]
+
+    # no company GSTIN yet: the PO says so and cannot be sent
+    po = approved_po(
+        client,
+        h,
+        local.id,
+        gd,
+        [{"product_id": p.id, "qty": "10", "rate": "100"}],
+        [{"kind": "freight", "amount": "200"}],
+    )
+    assert not po["vendor_registered"] and po["gstin_missing"]
+    assert [D(ln["gst_percent"]) for ln in po["lines"]] == [0]  # unregistered: 0 % by default
+    assert D(po["charges"][0]["gst_percent"]) == 0 and D(po["grand_total"]) == 1200
+    assert client.post(f"/api/material/pos/{po['id']}/send", headers=h).status_code == 422
+    html = po_pdf.html_document(db, db.get(PurchaseOrder, po["id"]))
+    assert "GSTIN not set" in html and "Supplier unregistered, no input tax credit" in html
+    assert "HSN/SAC" in html and "6807" in html and "9965" in html  # the freight SAC
+    assert "GST summary" in html
+
+    # GST typed in anyway: kept, but warned
+    po2 = make_po(
+        client,
+        h,
+        local.id,
+        gd,
+        [{"product_id": p.id, "qty": "1", "rate": "100", "gst_percent": "18"}],
+    )
+    assert D(po2["lines"][0]["gst_percent"]) == 18
+    assert any("unregistered" in w for w in po2["warnings"])
+
+    # with the company GSTIN set the PO can be sent
+    db.add(
+        CompanyGstin(
+            gstin="24AAACE1234A1Z1", state="Gujarat", address="Test address", is_default=True
+        )
+    )
+    db.commit()
+    po = client.get(f"/api/material/pos/{po['id']}", headers=h).json()
+    assert not po["gstin_missing"]
+    assert client.post(f"/api/material/pos/{po['id']}/send", headers=h).json()["status"] == "sent"
+
+
+def test_po_shows_the_indented_unit(boss, masters):
+    client, h = boss
+    products, (v_guj, _) = masters
+    s = site(client, h)
+    ind = client.post(
+        "/api/material/indents",
+        json={
+            "site_id": s["id"],
+            "submit": True,
+            "lines": [{"product_id": products["T-CRYS"], "qty": "20", "unit": "nos"}],
+        },
+        headers=h,
+    ).json()
+    client.post(f"/api/material/indents/{ind['id']}/approve", headers=h)
+    po = make_po(
+        client,
+        h,
+        v_guj,
+        godown(client, h)["id"],
+        [
+            {
+                "indent_line_id": ind["lines"][0]["id"],
+                "product_id": products["T-CRYS"],
+                "qty": "500",
+                "rate": "46",
+            }
+        ],
+    )
+    assert po["lines"][0]["indent_qty"] == "20 nos"  # 500 kg = 20 bags of 25 kg

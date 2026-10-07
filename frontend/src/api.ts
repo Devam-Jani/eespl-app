@@ -97,12 +97,12 @@ export function queryString(params: Record<string, string | number | undefined>)
 }
 
 /** Download a file from the API (with the same silent refresh) and save it in the browser. */
-export async function downloadFile(path: string, retry = true): Promise<void> {
+export async function downloadFile(path: string, retry = true, method: "GET" | "POST" = "GET"): Promise<void> {
   const headers = new Headers();
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
-  const res = await fetch(path, { headers, credentials: "same-origin" });
+  const res = await fetch(path, { method, headers, credentials: "same-origin" });
   if (res.status === 401 && retry) {
-    if (await refreshAccessToken()) return downloadFile(path, false);
+    if (await refreshAccessToken()) return downloadFile(path, false, method);
     onSessionLost();
     throw new ApiError(401, "Your session has expired. Please sign in again.");
   }

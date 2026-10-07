@@ -95,6 +95,7 @@ export type Product = {
   unit: string;
   pack_size: string | null;
   gst_percent: string;
+  hsn_code: string | null;
   is_active: boolean;
   cost: { current_price: Price | null } | null;
 };

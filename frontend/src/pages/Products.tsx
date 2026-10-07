@@ -194,6 +194,7 @@ function ProductForm({
     unit: product?.unit ?? "kg",
     pack_size: product?.pack_size ?? "",
     gst_percent: product?.gst_percent ?? "18",
+    hsn_code: product?.hsn_code ?? "",
     is_active: product?.is_active ?? true,
   });
   const [error, setError] = useState<string | null>(null);
@@ -207,6 +208,7 @@ function ProductForm({
       ...form,
       brand: form.brand || null,
       pack_size: form.pack_size || null,
+      hsn_code: form.hsn_code || null,
       category_id: form.category_id ? Number(form.category_id) : null,
     };
     try {
@@ -275,6 +277,10 @@ function ProductForm({
           <label className="field">
             <span>GST %</span>
             <input type="number" step="0.01" min="0" value={form.gst_percent} onChange={set("gst_percent")} required />
+          </label>
+          <label className="field">
+            <span>HSN / SAC code</span>
+            <input inputMode="numeric" pattern="[0-9]{4,8}" value={form.hsn_code} onChange={set("hsn_code")} placeholder="e.g. 3824" />
           </label>
         </div>
         <label className="check">

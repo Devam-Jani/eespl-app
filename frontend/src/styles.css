@@ -2065,3 +2065,21 @@ input.full {
   flex-wrap: wrap;
   max-width: 100%;
 }
+
+/* the sticky Save bar never hides the last worker */
+.mark-list.with-sticky-bar {
+  padding-bottom: 140px;
+}
+
+.ot-field {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.7rem;
+  color: var(--muted);
+  line-height: 1;
+}
+
+.ot-field input {
+  margin-top: 2px;
+}

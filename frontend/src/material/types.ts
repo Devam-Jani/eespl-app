@@ -152,6 +152,8 @@ export type PoLine = {
   gst_percent: string;
   amount: string;
   received_qty: string;
+  hsn_code: string | null;
+  indent_qty: string | null;
 };
 
 export type ChargeKind = "freight" | "loading" | "unloading" | "packing" | "other";
@@ -200,6 +202,9 @@ export type Po = {
   lines: PoLine[];
   charges: PoCharge[];
   approval_limit: string;
+  vendor_registered: boolean;
+  gstin_missing: boolean;
+  warnings: string[];
   needs_approver: boolean;
   can_edit: boolean;
   can_approve: boolean;

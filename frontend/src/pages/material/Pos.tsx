@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile, queryString } from "../../api";
@@ -157,6 +157,17 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
   }, [params, po, lookups]);
 
   const vendor = lookups.vendors.find((v) => v.id === form.vendor_id);
+  const unregistered = !!vendor && !vendor.gstin;
+  const taxedUnregistered = unregistered && (lines.some((l) => Number(l.gst_percent) > 0) || charges.some((c) => Number(c.gst_percent) > 0));
+  // an unregistered supplier cannot charge GST: picking one sets every rate to 0 (it can still be typed, with a warning)
+  const shownVendor = useRef(form.vendor_id);
+  useEffect(() => {
+    if (shownVendor.current === form.vendor_id) return;
+    shownVendor.current = form.vendor_id;
+    if (!unregistered) return;
+    setLines((ls) => ls.map((l) => ({ ...l, gst_percent: "0" })));
+    setCharges((cs) => cs.map((c) => ({ ...c, gst_percent: "0" })));
+  }, [form.vendor_id, unregistered]);
   const gstin = lookups.gstins.find((g) => g.id === form.from_gstin_id);
   const interstate = isInterstate(vendor, gstin);
   const totals = useMemo(() => poTotals(lines, charges, interstate), [lines, charges, interstate]);
@@ -243,10 +254,17 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
           </label>
         </div>
         <p className="small muted">
-          {vendor ? (interstate ? "Inter-state supply: IGST" : "Intra-state supply: CGST + SGST") : "Pick the vendor to see the GST split."}
+          {vendor
+            ? unregistered
+              ? "Supplier unregistered: no GST, no input tax credit"
+              : interstate
+                ? "Inter-state supply: IGST"
+                : "Intra-state supply: CGST + SGST"
+            : "Pick the vendor to see the GST split."}
           {indentIds.length > 0 && ` · for ${indentIds.length} indent(s)`}
         </p>
       </div>
+      {taxedUnregistered && <div className="alert alert-warn top-gap">This supplier has no GSTIN and cannot charge GST: the GST entered will not be input tax credit.</div>}
       <div className="card top-gap table-wrap">
         <table className="table compact">
           <thead>
@@ -269,7 +287,7 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
                     required
                     products={lookups.products}
                     value={l.product_id}
-                    onChange={(p) => setLine(i, { product_id: p?.id ?? "", unit: p?.unit ?? "", gst_percent: p?.gst_percent ?? "18", indent_line_id: null })}
+                    onChange={(p) => setLine(i, { product_id: p?.id ?? "", unit: p?.unit ?? "", gst_percent: unregistered ? "0" : (p?.gst_percent ?? "18"), indent_line_id: null })}
                   />
                 </td>
                 <td>
@@ -555,7 +573,7 @@ export function PoDetail() {
             </>
           )}
           {po.status === "approved" && editable && (
-            <button className="btn btn-primary" onClick={() => void act("send")}>
+            <button className="btn btn-primary" disabled={po.gstin_missing} title={po.gstin_missing ? "Set the company GSTIN first" : undefined} onClick={() => void act("send")}>
               Mark sent
             </button>
           )}
@@ -589,6 +607,14 @@ export function PoDetail() {
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
+      {po.gstin_missing && <div className="alert alert-error">GSTIN not set: add the company GSTIN in Settings › GSTIN addresses before this PO is sent.</div>}
+      {po.warnings
+        .filter((w) => !w.startsWith("GSTIN not set"))
+        .map((w) => (
+          <div key={w} className="alert alert-warn">
+            {w}
+          </div>
+        ))}
       {po.status === "pending_approval" && (
         <div className="alert alert-warn">
           {inr(po.grand_total)} is above the approval limit of {inr(po.approval_limit)}: a PO approver must approve it.
@@ -614,9 +640,11 @@ export function PoDetail() {
                 <td>{i + 1}</td>
                 <td>
                   {l.product_name} <span className="muted small">{l.product_code}</span>
+                  {l.hsn_code && <div className="small muted">HSN {l.hsn_code}</div>}
                 </td>
                 <td className="num nowrap">
                   {num(l.qty)} {l.unit}
+                  {l.indent_qty && <div className="small muted">({l.indent_qty})</div>}
                 </td>
                 <td className="num">{inr(l.rate)}</td>
                 <td className="num">{num(l.discount_percent)}%</td>

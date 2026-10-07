@@ -113,7 +113,7 @@ export function QuickMark({ site, onSaved }: { site: Site; onSaved?: () => void 
           ✓ Mark all present
         </button>
       )}
-      <ul className="mark-list">
+      <ul className="mark-list with-sticky-bar">
         {rows.map((r) => {
           const d = draft[r.labour_id] ?? { status: null, ot_hours: "" };
           return (
@@ -141,15 +141,18 @@ export function QuickMark({ site, onSaved }: { site: Site; onSaved?: () => void 
                   </button>
                 ))}
                 {d.status && d.status !== "absent" && (
-                  <input
-                    className="tap-input ot"
-                    inputMode="decimal"
-                    placeholder="OT h"
-                    aria-label={`${r.name}: overtime hours`}
-                    disabled={!canEdit}
-                    value={d.ot_hours}
-                    onChange={(e) => set(r.labour_id, { ot_hours: e.target.value })}
-                  />
+                  <label className="ot-field">
+                    <span>OT hrs</span>
+                    <input
+                      className="tap-input ot"
+                      inputMode="decimal"
+                      placeholder="OT h"
+                      aria-label={`${r.name}: overtime hours`}
+                      disabled={!canEdit}
+                      value={d.ot_hours}
+                      onChange={(e) => set(r.labour_id, { ot_hours: e.target.value })}
+                    />
+                  </label>
                 )}
               </div>
             </li>
