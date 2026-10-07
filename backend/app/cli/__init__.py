@@ -7,6 +7,7 @@
     docker compose exec api python -m app.cli import-powerplay-materials /data/powerplay/<file>.xlsx
     docker compose exec api python -m app.cli import-powerplay-vendors /data/powerplay/<file>.xlsx
     docker compose exec api python -m app.cli import-powerplay-team /data/powerplay/<file>.xlsx
+    docker compose exec api python -m app.cli backtest-rates [--set-default]
 
 The password is prompted for (twice) when run in a terminal. When stdin is not a terminal,
 one line is read from stdin instead, so scripts can pipe it in without it appearing in argv.
@@ -164,14 +165,80 @@ def run_import_powerplay(command: str, path: str) -> None:
     print(f"Powerplay {label}: sheet {r.sheet!r}")
     print(f"  header row: {r.header}")
     print("  columns used: " + ", ".join(f"{k} <- {v!r}" for k, v in r.mapping.items()))
-    print(f"  rows: {r.rows_in_file}; created {r.created}; already present {r.already_present}; "
-          f"duplicates merged {r.duplicates_merged}; skipped {len(r.skipped)}")
+    print(
+        f"  rows: {r.rows_in_file}; created {r.created}; already present {r.already_present}; "
+        f"duplicates merged {r.duplicates_merged}; skipped {len(r.skipped)}"
+    )
     if r.categories_created:
         print(f"  material categories created: {', '.join(r.categories_created)}")
     for number, reason in r.skipped[:30]:
         print(f"  skipped row {number}: {reason}")
     for number, warning in r.warnings[:30]:
         print(f"  warning row {number}: {warning}")
+
+
+def run_backtest(set_default: bool) -> None:
+    """Leave-one-BOQ-out comparison of the rate policies on the imported library."""
+    from sqlalchemy import func
+
+    from app.masters.models import CompanyProfile, LibraryLine
+    from app.masters.rate_policy import POLICIES, UNAVAILABLE, backtest, load_histories, winner
+
+    with SessionLocal() as db:
+        total = db.scalar(select(func.count()).where(LibraryLine.rate.is_not(None)))
+        unlinked = db.scalar(
+            select(func.count()).where(
+                LibraryLine.rate.is_not(None),
+                LibraryLine.library_item_id.is_(None),
+                ~LibraryLine.is_competitor,
+                ~LibraryLine.is_excluded,
+            )
+        )
+        flagged = db.scalar(
+            select(func.count()).where(
+                LibraryLine.rate.is_not(None), LibraryLine.is_competitor | LibraryLine.is_excluded
+            )
+        )
+        histories = load_histories(db)
+        files = {o.file for h in histories.values() for o in h.lines}
+        print(
+            f"Library lines with a rate: {total}; left out: {flagged} competitor/excluded; "
+            f"{unlinked} without a library item (count as not suggested)"
+        )
+        print(f"Items: {len(histories)}; BOQ files: {len(files)}")
+        for reason in UNAVAILABLE.values():
+            print(f"Skipped: {reason}")
+        rows = backtest(histories, unlinked=unlinked)
+        print()
+        print("| Policy | ±5% | ±10% | ±20% | Median abs error % | Above quote >10% | Coverage % |")
+        print("|---|---:|---:|---:|---:|---:|---:|")
+        for r in rows:
+            print(
+                f"| {POLICIES[r['policy']]} ({r['policy']}) | {r['within_5']} | "
+                f"{r['within_10']} | {r['within_20']} | {r['median_abs_error']} | "
+                f"{r['above_by_10']} | {r['coverage']} |"
+            )
+        best = winner(rows)
+        print()
+        print(
+            f"Lines scored: {rows[0]['lines']}. "
+            f"Winner (most within ±10%, then fewest over-quotes): {best}"
+        )
+        if set_default:
+            profile = db.get(CompanyProfile, 1)
+            if profile is not None:
+                before = profile.rate_policy
+                profile.rate_policy = best
+                audit.record(
+                    db,
+                    "company.update",
+                    "company",
+                    1,
+                    before={"rate_policy": before},
+                    after={"rate_policy": best},
+                )
+                db.commit()
+                print(f"Company default rate policy: {before} -> {best}")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -192,6 +259,11 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("import-tc", help="Import T&C clauses and the default template")
     p.add_argument("path")
 
+    p = sub.add_parser(
+        "backtest-rates", help="Compare rate policies on the library (leave-one-BOQ-out)"
+    )
+    p.add_argument("--set-default", action="store_true", help="Make the winner the company default")
+
     for command, (_, label) in POWERPLAY.items():
         p = sub.add_parser(command, help=f"Import a Powerplay Excel export: {label}")
         p.add_argument("path")
@@ -205,5 +277,7 @@ def main(argv: list[str] | None = None) -> None:
         run_import_library(args.path)
     elif args.command == "import-tc":
         run_import_tc(args.path)
+    elif args.command == "backtest-rates":
+        run_backtest(args.set_default)
     elif args.command in POWERPLAY:
         run_import_powerplay(args.command, args.path)

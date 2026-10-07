@@ -1378,3 +1378,40 @@ input.full {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.cell-muted {
+  color: var(--muted);
+  background: #fafafa;
+}
+
+.section-note summary,
+.why-rate summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.section-note p {
+  margin: 0.25rem 0 0;
+  font-weight: normal;
+}
+
+.why-rate {
+  margin-top: 0.35rem;
+}
+
+.why-rate summary .badge {
+  margin-left: 0.4rem;
+}
+
+.revision-list .row-current td {
+  font-weight: 600;
+}
+
+.delta-up {
+  color: #b42318;
+}
+
+.delta-down {
+  color: #067647;
+}

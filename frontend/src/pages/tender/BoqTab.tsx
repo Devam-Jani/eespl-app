@@ -3,7 +3,8 @@ import type { KeyboardEvent } from "react";
 import { api } from "../../api";
 import { useAuth } from "../../auth";
 import { errorText, inr, num } from "../../format";
-import type { Boq, BoqLine, LineDetail, SuggestResult, Tender } from "../../types";
+import { RATE_POLICIES } from "../../types";
+import type { Boq, BoqLine, LineDetail, RateHistory, SuggestResult, Tender } from "../../types";
 import ImportWizard from "./ImportWizard";
 
 type Col = {
@@ -12,6 +13,7 @@ type Col = {
   editable: (line: BoqLine) => boolean;
   num?: boolean;
   cost?: boolean;
+  muted?: boolean;
   width?: string;
 };
 
@@ -28,7 +30,7 @@ const STATUS_BADGE: Record<string, string> = {
   not_quoted: "badge-danger",
 };
 
-type Row = { kind: "section"; id: number; title: string; total: string } | { kind: "line"; line: BoqLine };
+type Row = { kind: "section"; id: number; title: string; note: string | null; total: string } | { kind: "line"; line: BoqLine };
 
 /** Text shown (and edited) in a cell. */
 function cellText(line: BoqLine, key: string): string {
@@ -47,6 +49,8 @@ function cellText(line: BoqLine, key: string): string {
       return line.amount ?? "";
     case "our_remarks":
       return line.our_remarks ?? "";
+    case "client_remarks":
+      return line.client_remarks ?? "";
     case "cost_rate":
       return line.cost_rate ?? "";
     case "margin_percent":
@@ -130,7 +134,8 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
       );
     }
     cols.push(
-      { key: "our_remarks", label: "Remarks", editable, width: "12rem" },
+      { key: "client_remarks", label: "Client remarks", editable: () => false, width: "10rem", muted: true },
+      { key: "our_remarks", label: "Our remarks", editable, width: "11rem" },
       { key: "status", label: "Status", editable: () => false, width: "7rem" },
     );
     return cols;
@@ -159,7 +164,7 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
     }
     for (const line of bySection.get(null) ?? []) out.push({ kind: "line", line });
     for (const s of boq.sections) {
-      out.push({ kind: "section", id: s.id, title: s.title, total: s.total });
+      out.push({ kind: "section", id: s.id, title: s.title, note: s.note, total: s.total });
       for (const line of bySection.get(s.id) ?? []) out.push({ kind: "line", line });
     }
     return out;
@@ -447,7 +452,7 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
                     r.kind === "section" ? (
                       <tr key={`s${r.id}`} className="boq-section" data-cell={`${ri}-0`}>
                         <td colSpan={columns.length - 1}>
-                          <SectionTitle tenderId={tender.id} id={r.id} title={r.title} canEdit={canEdit} onSaved={applyBoq} onError={setError} />
+                          <SectionTitle tenderId={tender.id} id={r.id} title={r.title} note={r.note} canEdit={canEdit} onSaved={applyBoq} onError={setError} />
                         </td>
                         <td className="num nowrap">{inr(r.total)}</td>
                       </tr>
@@ -463,7 +468,7 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
                             <td
                               key={c.key}
                               data-cell={`${ri}-${ci}`}
-                              className={`boq-cell ${c.num ? "num" : ""} ${c.cost ? "cost-col" : ""} ${active ? "cell-active" : ""} ${
+                              className={`boq-cell ${c.num ? "num" : ""} ${c.cost ? "cost-col" : ""} ${c.muted ? "cell-muted" : ""} ${active ? "cell-active" : ""} ${
                                 c.editable(r.line) ? "cell-editable" : ""
                               }`}
                               onMouseDown={() => {
@@ -564,6 +569,14 @@ function CellView({ line, col }: { line: BoqLine; col: string }) {
           {line.description}
         </span>
       );
+    case "client_remarks":
+      return line.client_remarks ? (
+        <span className="clamp" title={line.client_remarks}>
+          {line.client_remarks}
+        </span>
+      ) : (
+        <>—</>
+      );
     case "unit":
       return (
         <span title={line.unit_raw && line.unit_raw !== line.unit ? `In the client's file: ${line.unit_raw}` : undefined}>
@@ -598,6 +611,7 @@ function SectionTitle({
   tenderId,
   id,
   title,
+  note,
   canEdit,
   onSaved,
   onError,
@@ -605,6 +619,7 @@ function SectionTitle({
   tenderId: number;
   id: number;
   title: string;
+  note: string | null;
   canEdit: boolean;
   onSaved: (b: Boq) => void;
   onError: (e: string) => void;
@@ -618,6 +633,15 @@ function SectionTitle({
       onError(errorText(err));
     }
   }
+  async function editNote() {
+    const next = prompt("Section note (printed under the heading in the export)", note ?? "");
+    if (next === null || next === (note ?? "")) return;
+    try {
+      onSaved(await api<Boq>(`/api/tenders/${tenderId}/sections/${id}`, { method: "PATCH", json: { note: next } }));
+    } catch (err) {
+      onError(errorText(err));
+    }
+  }
   async function remove() {
     if (!confirm(`Remove the heading "${title}"? Its lines stay in the BOQ.`)) return;
     try {
@@ -627,19 +651,30 @@ function SectionTitle({
     }
   }
   return (
-    <span className="section-head">
-      <strong>{title}</strong>
-      {canEdit && (
-        <>
-          <button className="btn btn-small btn-ghost" onClick={() => void rename()}>
-            Rename
-          </button>
-          <button className="btn btn-small btn-ghost" onClick={() => void remove()}>
-            Remove heading
-          </button>
-        </>
+    <div>
+      <span className="section-head">
+        <strong>{title}</strong>
+        {canEdit && (
+          <>
+            <button className="btn btn-small btn-ghost" onClick={() => void rename()}>
+              Rename
+            </button>
+            <button className="btn btn-small btn-ghost" onClick={() => void editNote()}>
+              {note ? "Edit note" : "Add note"}
+            </button>
+            <button className="btn btn-small btn-ghost" onClick={() => void remove()}>
+              Remove heading
+            </button>
+          </>
+        )}
+      </span>
+      {note && (
+        <details className="section-note">
+          <summary>Section note</summary>
+          <p className="pre-line small">{note}</p>
+        </details>
       )}
-    </span>
+    </div>
   );
 }
 
@@ -715,6 +750,7 @@ function LinePanel({
                   cost {inr(c.cost_rate)} · margin {num(c.margin_percent, 2)}%
                 </div>
               )}
+              {c.details && <WhyThisRate rate={c.rate} history={c.details} />}
             </div>
             {canEdit && line.status !== "not_quoted" && (
               <button
@@ -843,5 +879,73 @@ function LinePanel({
         </div>
       )}
     </aside>
+  );
+}
+
+function WhyThisRate({ rate, history: h }: { rate: string; history: RateHistory }) {
+  return (
+    <details className="why-rate" open={h.warning}>
+      <summary>
+        Why this rate
+        {h.warning && (
+          <span className="badge badge-danger" title="More than 15% above the median of past BOQs">
+            {num(h.above_median_percent, 1)}% above median
+          </span>
+        )}
+      </summary>
+      <p className="small">
+        Policy: <strong>{RATE_POLICIES[h.policy] ?? h.policy}</strong>
+        {h.used !== h.policy && <> — used {RATE_POLICIES[h.used]?.toLowerCase() ?? h.used} (no same-client rate)</>}
+      </p>
+      <dl className="totals small">
+        <dt>Latest</dt>
+        <dd>{inr(h.latest_rate)}</dd>
+        <dt>Median</dt>
+        <dd>{inr(h.median_rate)}</dd>
+        {h.min_rate !== undefined && (
+          <>
+            <dt>Min / max</dt>
+            <dd>
+              {inr(h.min_rate)} / {inr(h.max_rate)}
+            </dd>
+          </>
+        )}
+        <dt>Same client's last rate</dt>
+        <dd>{inr(h.client_last_rate)}</dd>
+        <dt>BOQs</dt>
+        <dd>{h.n_boqs}</dd>
+      </dl>
+      {h.sources.length > 0 && (
+        <table className="table compact small">
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>BOQ</th>
+              <th>Date</th>
+              <th className="num">Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            {h.sources.map((s, i) => (
+              <tr key={i} className={s.rate === rate ? "row-current" : ""}>
+                <td>{s.client ?? "—"}</td>
+                <td>
+                  <span className="clamp" title={s.file}>
+                    {s.file}
+                  </span>
+                </td>
+                <td className="muted">{s.date ?? "—"}</td>
+                <td className="num">{inr(s.rate)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {h.sources_total > h.sources.length && (
+        <p className="muted small">
+          and {h.sources_total - h.sources.length} more. The library has no BOQ dates yet.
+        </p>
+      )}
+    </details>
   );
 }
