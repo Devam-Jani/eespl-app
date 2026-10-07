@@ -14,6 +14,8 @@ import Roles from "./pages/Roles";
 import SystemDetail from "./pages/SystemDetail";
 import Systems from "./pages/Systems";
 import TcLibrary from "./pages/TcLibrary";
+import TenderDetail from "./pages/TenderDetail";
+import Tenders from "./pages/Tenders";
 import Users from "./pages/Users";
 import Vendors from "./pages/Vendors";
 import Categories from "./pages/settings/Categories";
@@ -30,6 +32,7 @@ const PAGES: Record<string, JSX.Element> = {
   "/rate-library": <RateLibrary />,
   "/tc-library": <TcLibrary />,
   "/vendors": <Vendors />,
+  "/tenders": <Tenders />,
   "/settings/company": <CompanyProfile />,
   "/settings/gstins": <GstinAddresses />,
   "/settings/bank-accounts": <CompanyBanks />,
@@ -71,6 +74,14 @@ export default function App() {
               element={
                 <RequirePermission perms={["library.view"]}>
                   <SystemDetail />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/tenders/:id"
+              element={
+                <RequirePermission perms={["tender.view"]}>
+                  <TenderDetail />
                 </RequirePermission>
               }
             />

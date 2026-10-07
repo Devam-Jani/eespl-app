@@ -315,6 +315,7 @@ export type CompanyProfile = {
   phone: string | null;
   website: string | null;
   default_gst_percent: string;
+  pricing_threshold: string;
   has_logo: boolean;
   updated_at: string;
 };
@@ -329,4 +330,182 @@ export type CompanyBank = {
   bank: string | null;
   branch: string | null;
   is_default: boolean;
+};
+
+// --- tenders ---
+
+export type TenderStatus = "draft" | "submitted" | "won" | "lost" | "dropped";
+
+export type Tender = {
+  id: number;
+  code: string;
+  name: string;
+  client_id: number;
+  client_name: string;
+  site_name: string | null;
+  site_city: string | null;
+  site_state: string | null;
+  received_on: string | null;
+  due_on: string | null;
+  overdue: boolean;
+  owner_id: string | null;
+  owner_name: string | null;
+  members: { user_id: string; full_name: string }[];
+  status: TenderStatus;
+  lost_reason: string | null;
+  lost_to: string | null;
+  quoted_total: string;
+  tc_template_id: number | null;
+  notes: string | null;
+  created_at: string;
+  // only with tender.margin
+  cost_total?: string;
+  margin_amount?: string;
+};
+
+export type TenderLookups = {
+  clients: { id: number; name: string }[];
+  users: { id: string; full_name: string }[];
+  tc_templates: { id: number; name: string; is_default: boolean }[];
+};
+
+export type LineStatus = "unpriced" | "suggested" | "priced" | "not_quoted";
+
+export type BoqLine = {
+  id: number;
+  section_id: number | null;
+  sort_order: number;
+  client_item_no: string | null;
+  description: string;
+  unit: string | null;
+  unit_raw: string | null;
+  qty: string | null;
+  qty_note: "QRO" | "NQ" | null;
+  client_product: string | null;
+  client_remarks: string | null;
+  client_file_rate: string | null;
+  rate: string | null;
+  amount: string | null;
+  our_remarks: string | null;
+  our_product: string | null;
+  status: LineStatus;
+  suggestion_score: string | null;
+  // only with tender.margin
+  source?: "system" | "library" | "manual" | null;
+  system_id?: number | null;
+  library_item_id?: number | null;
+  cost_rate?: string | null;
+  margin_percent?: string | null;
+};
+
+export type BoqSection = { id: number; title: string; sort_order: number; total: string };
+
+export type BoqTotals = {
+  subtotal: string;
+  gst_percent: string;
+  gst: string;
+  grand_total: string;
+  counts: Record<string, number>;
+  cost_total?: string;
+  margin_amount?: string;
+};
+
+export type Boq = { sections: BoqSection[]; lines: BoqLine[]; totals: BoqTotals };
+
+export type Candidate = {
+  id: number;
+  rank: number;
+  rate: string;
+  score: string;
+  reason: string;
+  source?: "system" | "library";
+  ref_id?: number;
+  cost_rate?: string | null;
+  margin_percent?: string | null;
+};
+
+export type LibraryStat = {
+  library_item_id: number;
+  description: string;
+  unit: string | null;
+  boq_count: number;
+  latest_rate: string | null;
+  min_rate: string | null;
+  median_rate: string | null;
+  max_rate: string | null;
+  latest_client: string | null;
+};
+
+export type SystemBreakdown = {
+  system_id: number;
+  code?: string;
+  name: string;
+  unit?: string;
+  components?: { product: string; qty: string; landed_rate: string; cost: string }[];
+  material_cost?: string;
+  surface_prep?: string;
+  labour_per_unit?: string;
+  base_cost?: string;
+  margin_percent?: string;
+  rate?: string;
+  error?: string;
+};
+
+export type LineDetail = {
+  line: BoqLine;
+  candidates: Candidate[];
+  library_stats?: LibraryStat[];
+  system_breakdown?: SystemBreakdown | null;
+};
+
+export type ColumnGuess = { column: number; letter: string; header: string; confidence: number; alternatives: string[] };
+
+export type ImportPreview = {
+  upload_id: string;
+  filename: string;
+  sheets: { name: string; header_row: number; score: number }[];
+  sheet: string;
+  header_row: number;
+  header: { column: number; letter: string; text: string }[];
+  column_map: Record<string, ColumnGuess>;
+  rows: Record<string, unknown>[];
+  counts: {
+    lines: number;
+    sections: number;
+    qro: number;
+    nq: number;
+    skipped: number;
+    skipped_by_reason: Record<string, number>;
+    unrecognised_units: Record<string, number>;
+  };
+  existing_lines: number;
+};
+
+export type ImportReport = {
+  import_id: number;
+  lines: number;
+  sections: number;
+  qro: number;
+  nq: number;
+  skipped: number;
+  skipped_by_reason: Record<string, number>;
+  unrecognised_units: Record<string, number>;
+  kept_prices: number;
+};
+
+export type SuggestResult = {
+  lines_considered: number;
+  suggested: number;
+  left_unpriced: number;
+  skipped_priced: number;
+  threshold: string;
+};
+
+export type TenderTc = {
+  id: number;
+  clause_id: number | null;
+  category: string | null;
+  text: string;
+  text_override: string | null;
+  sort_order: number;
 };

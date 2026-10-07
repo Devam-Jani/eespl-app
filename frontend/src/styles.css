@@ -1236,3 +1236,145 @@ input.full {
   font-weight: 600;
   color: var(--accent-dark);
 }
+
+/* --- tenders --- */
+
+.text-danger {
+  color: #b42318;
+  font-weight: 600;
+}
+
+.text-warn {
+  color: #b54708;
+}
+
+.detail-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem 1.5rem;
+  margin: 0;
+}
+
+.detail-list dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.detail-list dd {
+  margin: 0.15rem 0 0;
+}
+
+.tabs-inline {
+  display: inline-flex;
+}
+
+.boq-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.boq-layout.with-panel {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+}
+
+.boq-grid {
+  overflow: auto;
+  max-height: 70vh;
+  outline: none;
+}
+
+.boq-grid:focus-visible {
+  box-shadow: 0 0 0 2px var(--primary, #2f6f4f) inset;
+}
+
+.boq-grid table {
+  table-layout: fixed;
+  min-width: 900px;
+}
+
+.boq-grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+
+.boq-cell {
+  cursor: cell;
+  vertical-align: top;
+}
+
+.boq-cell.cell-active {
+  outline: 2px solid var(--primary, #2f6f4f);
+  outline-offset: -2px;
+}
+
+.cell-editor {
+  width: 100%;
+  font: inherit;
+  padding: 0.15rem 0.25rem;
+  box-sizing: border-box;
+}
+
+.cost-col {
+  background: #f6f8f7;
+}
+
+.boq-section td {
+  background: #eef3f0;
+}
+
+.section-head {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.boq-panel {
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+}
+
+.candidate-list .candidate {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: flex-start;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.boq-totals {
+  max-width: 420px;
+  margin-left: auto;
+}
+
+.preview-table {
+  max-height: 40vh;
+  overflow: auto;
+}
+
+.column-map .field {
+  margin-bottom: 0.4rem;
+}
+
+.clause-list li.dragging {
+  opacity: 0.4;
+}
+
+.drag-handle {
+  cursor: grab;
+  color: var(--muted);
+  margin-right: 0.4rem;
+  user-select: none;
+}
+
+@media (max-width: 900px) {
+  .boq-layout.with-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

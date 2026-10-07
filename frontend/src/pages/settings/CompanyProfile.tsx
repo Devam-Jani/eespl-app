@@ -12,6 +12,12 @@ const FIELDS: { key: keyof Profile; label: string; hint?: string; type?: string 
   { key: "cin", label: "CIN", hint: "U74999GJ2019PTC123456" },
   { key: "tds_percent", label: "TDS %", type: "number" },
   { key: "default_gst_percent", label: "Default GST %", type: "number" },
+  {
+    key: "pricing_threshold",
+    label: "Auto-pricing threshold (0–1)",
+    hint: "0.55",
+    type: "number",
+  },
   { key: "email", label: "Email", type: "email" },
   { key: "phone", label: "Phone" },
   { key: "website", label: "Website" },
