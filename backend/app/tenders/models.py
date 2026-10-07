@@ -17,6 +17,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -74,6 +75,9 @@ class Tender(Tracked, Base):
         ForeignKey("tc_templates.id", ondelete="SET NULL")
     )
     notes: Mapped[str | None] = mapped_column(Text)
+    # The revision being worked on (R0, R1 ...). Submitting freezes it in tender_revisions; the
+    # next edit after that starts revision + 1.
+    revision: Mapped[int] = mapped_column(Integer, server_default="0")
 
     client: Mapped[Client] = relationship(lazy="joined")
     owner: Mapped[User | None] = relationship(lazy="joined", foreign_keys=[owner_id])
@@ -101,6 +105,7 @@ class BoqSection(Tracked, Base):
     id: Mapped[int] = mapped_column(Identity(), primary_key=True)
     tender_id: Mapped[int] = mapped_column(ForeignKey("tenders.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(Text)
+    note: Mapped[str | None] = mapped_column(Text)  # a general note that came with the heading
     sort_order: Mapped[int] = mapped_column(Integer, server_default="0")
 
 
@@ -144,6 +149,9 @@ class BoqLine(Tracked, Base):
     our_remarks: Mapped[str | None] = mapped_column(Text)
     our_product: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(12), server_default="unpriced")
+    # Row (1-based) of the client's sheet that holds this item's quantity: where "client format"
+    # export writes our rate. None for lines added by hand.
+    source_row: Mapped[int | None] = mapped_column(Integer)
 
     candidates: Mapped[list["BoqLineCandidate"]] = relationship(
         lazy="selectin",
@@ -169,6 +177,9 @@ class BoqLineCandidate(Tracked, Base):
     margin_percent: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
     score: Mapped[Decimal] = mapped_column(Numeric(5, 4))
     reason: Mapped[str] = mapped_column(Text)
+    # Library candidates: the policy and the history behind the rate (latest, median, min, max,
+    # n_boqs, client_last, sources). min / max are only shown with tender.margin.
+    details: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class BoqImport(Tracked, Base):
@@ -201,3 +212,25 @@ class TenderTc(Tracked, Base):
     clause_id: Mapped[int | None] = mapped_column(ForeignKey("tc_clauses.id", ondelete="SET NULL"))
     sort_order: Mapped[int] = mapped_column(Integer, server_default="0")
     text_override: Mapped[str | None] = mapped_column(Text)
+
+
+class TenderRevision(Base):
+    """A submitted revision, frozen: lines, sections, T&C and totals as they were sent (selling
+    data only; no cost, margin, source or scores)."""
+
+    __tablename__ = "tender_revisions"
+    __table_args__ = (UniqueConstraint("tender_id", "rev_no"),)
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    tender_id: Mapped[int] = mapped_column(ForeignKey("tenders.id", ondelete="CASCADE"), index=True)
+    rev_no: Mapped[int] = mapped_column(Integer)
+    snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    submitted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    submitted_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    note: Mapped[str | None] = mapped_column(Text)
+
+    submitter: Mapped[User | None] = relationship(lazy="joined", foreign_keys=[submitted_by])

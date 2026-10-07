@@ -532,6 +532,9 @@ class CompanyProfile(Tracked, Base):
     default_gst_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), server_default="18")
     # Auto-pricing: a suggestion is stored only when its score (0..1) reaches this.
     pricing_threshold: Mapped[Decimal] = mapped_column(Numeric(4, 3), server_default="0.55")
+    # Which past rate a library suggestion uses (app.masters.rate_policy.POLICIES); the default
+    # is the winner of "python -m app.cli backtest-rates".
+    rate_policy: Mapped[str] = mapped_column(String(30), server_default="client_median")
 
 
 class CompanyGstin(Tracked, Base):

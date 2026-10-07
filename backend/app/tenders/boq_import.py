@@ -400,6 +400,7 @@ class Row:
 class ParsedSection:
     title: str
     rows: list[int]
+    note: str | None = None  # a long general note that came with the heading
 
 
 @dataclass
@@ -416,6 +417,7 @@ class ParsedLine:
     our_remarks: str | None
     section: int | None  # index into sections
     rows: list[int]
+    source_row: int | None = None  # the row with the quantity (client format export writes here)
 
     @property
     def status(self) -> str:
@@ -447,6 +449,26 @@ class ParsedBoq:
 
 def _join(*parts: str | None) -> str:
     return " — ".join(p for p in parts if p)
+
+
+HEADING_MAX = 100
+
+
+def split_heading(text: str) -> tuple[str, str | None]:
+    """A heading that carries a general note ("600 WATER PROOFING — Unless otherwise specified,
+    the Contractor shall ...") -> ("600 WATER PROOFING", "Unless otherwise specified, ...")."""
+    text = text.strip()
+    if len(text) <= HEADING_MAX:
+        return text, None
+    if " — " in text:
+        head, rest = text.split(" — ", 1)
+        if len(head) <= HEADING_MAX:
+            return head.strip(), rest.strip()
+    m = re.match(r"(.{8,100}?)(?::\s|\.\s|\s[-–]\s)\s*(.+)", text, re.S)
+    if m:
+        return m.group(1).strip(), m.group(2).strip()
+    cut = text[:HEADING_MAX].rsplit(" ", 1)[0]
+    return f"{cut}…", text
 
 
 def _extract(row: list[Any], number: int, cols: dict[str, int]) -> tuple[Row | None, str | None]:
@@ -508,11 +530,12 @@ def parse(
     state = {"section": None, "parent": None, "last": None}  # last: "line" | "heading" | None
 
     def add_section(r: Row) -> None:
-        title = f"{r.item_no} {r.description}" if r.item_no else r.description
-        result.sections.append(ParsedSection(title=title[:500], rows=[r.number]))
+        short, note = split_heading(r.description)
+        title = f"{r.item_no} {short}" if r.item_no else short
+        result.sections.append(ParsedSection(title=title[:500], rows=[r.number], note=note))
         result.order.append(("section", len(result.sections) - 1))
         state["section"] = len(result.sections) - 1
-        state["parent"] = r.description
+        state["parent"] = short
         state["last"] = "heading"
 
     def continue_last_line(r: Row) -> None:
@@ -554,6 +577,7 @@ def parse(
                 our_remarks=_join(*(r.our_remarks for r in extra_rows), x.our_remarks) or None,
                 section=state["section"],
                 rows=rows_,
+                source_row=x.number,
             )
         )
         result.order.append(("line", len(result.lines) - 1))
@@ -593,7 +617,7 @@ def parse(
         else:
             # "1 Surface preparation ..." then "a) For the terrace floor": a heading and sub-items
             add_section(title)
-            state["parent"] = _join(title.description, *(r.description for r in after))
+            state["parent"] = _join(state["parent"], *(r.description for r in after))
             add_line(x.item_no, _join(state["parent"], x.description), x, [])
 
     for index, values in enumerate(rows[header_row:], start=header_row + 1):
@@ -646,7 +670,7 @@ def preview_rows(result: ParsedBoq, limit: int = PREVIEW_ROWS) -> list[dict[str,
     for kind, i in result.order[:limit]:
         if kind == "section":
             s = result.sections[i]
-            out.append({"type": "section", "title": s.title, "rows": s.rows})
+            out.append({"type": "section", "title": s.title, "note": s.note, "rows": s.rows})
         else:
             ln = result.lines[i]
             out.append(

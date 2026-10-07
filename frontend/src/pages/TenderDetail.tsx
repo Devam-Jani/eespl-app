@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, queryString } from "../api";
+import { api, downloadFile, queryString } from "../api";
 import { useAuth } from "../auth";
 import Modal from "../components/Modal";
 import { errorText, inr } from "../format";
-import type { Clause, Page, Tender, TenderLookups, TenderStatus, TenderTc } from "../types";
+import type { Clause, Page, Revision, Tender, TenderLookups, TenderStatus, TenderTc } from "../types";
 import BoqTab from "./tender/BoqTab";
+import RevisionsTab from "./tender/RevisionsTab";
 import { shortDate, StatusBadge, TenderForm } from "./Tenders";
 
-type Tab = "details" | "boq" | "terms";
+type Tab = "details" | "boq" | "terms" | "revisions";
 
 export default function TenderDetail() {
   const { id } = useParams();
@@ -18,6 +19,8 @@ export default function TenderDetail() {
   const [tender, setTender] = useState<Tender | null>(null);
   const [tab, setTab] = useState<Tab>("boq");
   const [error, setError] = useState<string | null>(null);
+  const [revs, setRevs] = useState<Revision[]>([]);
+  const [exportRev, setExportRev] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -31,17 +34,47 @@ export default function TenderDetail() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    api<Revision[]>(`/api/tenders/${id}/revisions`).then(setRevs, () => setRevs([]));
+  }, [id, tender?.submitted_revisions]);
+
   if (!tender) return error ? <div className="alert alert-error">{error}</div> : <p className="muted">Loading…</p>;
+
+  const current = tender.revision_label.split(" ")[0];
+  const draft = tender.revision_label.includes("draft");
+
+  async function submit() {
+    if (!tender) return;
+    const note = prompt(`Submit ${current} to the client? This freezes the BOQ as it is now. Note (optional):`, "");
+    if (note === null) return;
+    setError(null);
+    try {
+      setTender(await api<Tender>(`/api/tenders/${tender.id}/submit`, { method: "POST", json: { note } }));
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }
+
+  async function download(kind: "xlsx" | "pdf" | "client") {
+    if (!tender) return;
+    setError(null);
+    const path = kind === "client" ? `/api/tenders/${tender.id}/export/client` : `/api/tenders/${tender.id}/export.${kind}`;
+    try {
+      await downloadFile(`${path}${queryString({ rev: exportRev })}`);
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }
 
   return (
     <>
       <p className="breadcrumb">
-        <Link to="/tenders">Tenders</Link> / <code>{tender.code}</code>
+        <Link to="/tenders">Tenders</Link> / <code>{tender.code}</code> · {tender.revision_label}
       </p>
       <div className="page-header">
         <div>
           <h1>
-            {tender.name} <StatusBadge status={tender.status} />
+            {tender.name} <StatusBadge status={tender.status} /> <span className="badge badge-muted">{tender.revision_label}</span>
           </h1>
           <p className="muted">
             {tender.client_name}
@@ -49,18 +82,50 @@ export default function TenderDetail() {
             <span className={tender.overdue ? "text-danger" : ""}>{shortDate(tender.due_on)}</span>
           </p>
         </div>
-        <div className="rate-badge">
-          <span className="muted small">Quoted total (excl. GST)</span>
-          <strong>{inr(tender.quoted_total)}</strong>
+        <div className="page-actions">
+          <span className="inline-form">
+            <select value={exportRev} onChange={(e) => setExportRev(e.target.value)} aria-label="Revision to export">
+              <option value="">Current ({tender.revision_label})</option>
+              {revs.map((r) => (
+                <option key={r.rev_no} value={r.rev_no}>
+                  {r.label} as submitted
+                </option>
+              ))}
+            </select>
+            <button className="btn" onClick={() => void download("xlsx")}>
+              ⤓ Excel
+            </button>
+            <button className="btn" onClick={() => void download("pdf")}>
+              ⤓ PDF
+            </button>
+            <button className="btn" title="Our rates written into the client's own file" onClick={() => void download("client")}>
+              ⤓ Client format
+            </button>
+          </span>
+          {canEdit && draft && (
+            <button className="btn btn-primary" onClick={() => void submit()}>
+              Submit {current}
+            </button>
+          )}
+          <div className="rate-badge">
+            <span className="muted small">Quoted total (excl. GST)</span>
+            <strong>{inr(tender.quoted_total)}</strong>
+          </div>
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
+      {!draft && canEdit && (
+        <div className="alert alert-warn">
+          {current} was submitted. Any change to the BOQ or the terms starts R{tender.revision + 1} as a draft.
+        </div>
+      )}
       <div className="tabs tabs-inline">
         {(
           [
             ["details", "Details"],
             ["boq", "BOQ"],
             ["terms", "Terms"],
+            ["revisions", `Revisions (${revs.length})`],
           ] as [Tab, string][]
         ).map(([key, label]) => (
           <button key={key} className={`tab ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>
@@ -71,7 +136,8 @@ export default function TenderDetail() {
       <div className="top-gap">
         {tab === "details" && <DetailsTab tender={tender} canEdit={canEdit} onChange={setTender} />}
         {tab === "boq" && <BoqTab tender={tender} canEdit={canEdit} onTotalChange={load} />}
-        {tab === "terms" && <TermsTab tender={tender} canEdit={canEdit} />}
+        {tab === "terms" && <TermsTab tender={tender} canEdit={canEdit} onSaved={load} />}
+        {tab === "revisions" && <RevisionsTab tender={tender} revisions={revs} />}
       </div>
     </>
   );
@@ -244,7 +310,7 @@ function toRows(items: TenderTc[]): TermRow[] {
   }));
 }
 
-function TermsTab({ tender, canEdit }: { tender: Tender; canEdit: boolean }) {
+function TermsTab({ tender, canEdit, onSaved }: { tender: Tender; canEdit: boolean; onSaved: () => void }) {
   const [rows, setRows] = useState<TermRow[]>([]);
   const [saved, setSaved] = useState<string>("[]");
   const [dragging, setDragging] = useState<number | null>(null);
@@ -288,6 +354,7 @@ function TermsTab({ tender, canEdit }: { tender: Tender; canEdit: boolean }) {
       setRows(r);
       setSaved(JSON.stringify(r.map((x) => [x.clause_id, x.text])));
       setNotice("Terms saved for this tender. The T&C library is unchanged.");
+      onSaved();
     } catch (err) {
       setError(errorText(err));
     }

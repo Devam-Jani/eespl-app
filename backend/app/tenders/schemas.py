@@ -45,11 +45,14 @@ class TenderOut(BaseModel):
     tc_template_id: int | None
     notes: str | None
     created_at: datetime
+    revision: int
+    revision_label: str  # "R1", or "R1 (draft)" while it is being edited
+    submitted_revisions: int
 
 
 class TenderCostOut(TenderOut):
-    cost_total: Decimal
-    margin_amount: Decimal
+    cost_total: Decimal | None  # None: no system-priced lines
+    margin_amount: Decimal | None
 
 
 class TenderIn(BaseModel):
@@ -94,6 +97,7 @@ class TenderUpdate(BaseModel):
 class SectionOut(BaseModel):
     id: int
     title: str
+    note: str | None
     sort_order: int
     total: Decimal
 
@@ -136,8 +140,8 @@ class TotalsOut(BaseModel):
 
 
 class TotalsCostOut(TotalsOut):
-    cost_total: Decimal
-    margin_amount: Decimal
+    cost_total: Decimal | None  # None: no system-priced lines
+    margin_amount: Decimal | None
 
 
 class BoqOut(BaseModel):
@@ -146,12 +150,40 @@ class BoqOut(BaseModel):
     totals: TotalsOut | TotalsCostOut
 
 
+class RateSource(BaseModel):
+    client: str | None
+    file: str
+    date: date | None  # the library has no BOQ dates yet
+    rate: Decimal
+
+
+class RateHistoryOut(BaseModel):
+    """Why a library candidate has its rate: selling-rate history, for anyone with tender.view."""
+
+    policy: str
+    used: str
+    latest_rate: Decimal | None
+    median_rate: Decimal | None
+    n_boqs: int
+    client_last_rate: Decimal | None
+    sources: list[RateSource]
+    sources_total: int
+    above_median_percent: Decimal | None
+    warning: bool  # more than 15% above the median
+
+
+class RateHistoryCostOut(RateHistoryOut):
+    min_rate: Decimal | None
+    max_rate: Decimal | None
+
+
 class CandidateOut(BaseModel):
     id: int
     rank: int
     rate: Decimal
     score: Decimal
     reason: str
+    details: RateHistoryOut | None
 
 
 class CandidateCostOut(CandidateOut):
@@ -159,6 +191,7 @@ class CandidateCostOut(CandidateOut):
     ref_id: int
     cost_rate: Decimal | None
     margin_percent: Decimal | None
+    details: RateHistoryCostOut | None
 
 
 class LineDetailOut(BaseModel):
@@ -227,11 +260,13 @@ class MarginIn(BaseModel):
 
 class SectionIn(BaseModel):
     title: str = Field(min_length=1, max_length=500)
+    note: str | None = None
     sort_order: int | None = None
 
 
 class SectionUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=500)
+    note: str | None = None
     sort_order: int | None = None
 
 
@@ -322,3 +357,45 @@ class TenderTcItem(BaseModel):
 
 class TenderTcIn(BaseModel):
     items: list[TenderTcItem]
+
+
+# --- revisions ---
+
+
+class SubmitIn(BaseModel):
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class RevisionOut(BaseModel):
+    rev_no: int
+    label: str
+    submitted_at: datetime
+    submitted_by_name: str | None
+    note: str | None
+    subtotal: Decimal
+    grand_total: Decimal
+    lines: int
+
+
+class CompareLine(BaseModel):
+    item_no: str | None
+    description: str
+    change: Literal["added", "removed", "changed", "same"]
+    rate_a: Decimal | None
+    rate_b: Decimal | None
+    rate_delta: Decimal | None
+    amount_a: Decimal | None
+    amount_b: Decimal | None
+    amount_delta: Decimal | None
+
+
+class CompareOut(BaseModel):
+    a: str
+    b: str
+    lines: list[CompareLine]
+    subtotal_a: Decimal
+    subtotal_b: Decimal
+    subtotal_delta: Decimal
+    grand_total_a: Decimal
+    grand_total_b: Decimal
+    grand_total_delta: Decimal

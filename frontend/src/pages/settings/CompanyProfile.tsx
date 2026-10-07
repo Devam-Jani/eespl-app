@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { api, fetchObjectUrl } from "../../api";
 import { errorText } from "../../format";
+import { RATE_POLICIES } from "../../types";
 import type { CompanyProfile as Profile } from "../../types";
 
 const FIELDS: { key: keyof Profile; label: string; hint?: string; type?: string }[] = [
@@ -32,7 +33,10 @@ export default function CompanyProfile() {
 
   const apply = useCallback(async (p: Profile) => {
     setProfile(p);
-    setForm(Object.fromEntries(FIELDS.map((f) => [f.key, (p[f.key] as string | null) ?? ""])));
+    setForm({
+      ...Object.fromEntries(FIELDS.map((f) => [f.key, (p[f.key] as string | null) ?? ""])),
+      rate_policy: p.rate_policy,
+    });
     setLogo(p.has_logo ? await fetchObjectUrl(`/api/settings/company/logo?v=${encodeURIComponent(p.updated_at)}`) : null);
   }, []);
 
@@ -97,6 +101,17 @@ export default function CompanyProfile() {
                 />
               </label>
             ))}
+            <label className="field">
+              <span>Suggested rate from the library</span>
+              <select value={form.rate_policy ?? ""} onChange={(e) => setForm((s) => ({ ...s, rate_policy: e.target.value }))}>
+                {Object.entries(RATE_POLICIES).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <span className="muted small">Default from the backtest on past BOQs (python -m app.cli backtest-rates).</span>
+            </label>
           </div>
           <div className="form-actions">
             <button className="btn btn-primary" disabled={!profile}>

@@ -749,6 +749,16 @@ class CompanyProfileIn(BaseModel):
     default_gst_percent: Percent | None = None
     # auto-pricing: suggestions scoring below this stay unpriced
     pricing_threshold: Decimal | None = Field(default=None, ge=0, le=1, decimal_places=3)
+    rate_policy: str | None = None  # app.masters.rate_policy.POLICIES
+
+    @field_validator("rate_policy")
+    @classmethod
+    def _policy(cls, v):
+        from app.masters.rate_policy import POLICIES
+
+        if v is not None and v not in POLICIES:
+            raise ValueError(f"Choose one of: {', '.join(POLICIES)}")
+        return v
 
     _pan = field_validator("pan")(validate_pan)
     _tan = field_validator("tan")(_pattern(TAN_RE, "AHMA12345B"))
@@ -772,6 +782,7 @@ class CompanyProfileOut(ORM):
     website: str | None
     default_gst_percent: Decimal
     pricing_threshold: Decimal
+    rate_policy: str
     has_logo: bool = False
     updated_at: datetime
 

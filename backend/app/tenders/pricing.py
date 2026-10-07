@@ -14,7 +14,8 @@ touched), candidates from two places, each scored 0..1:
   with a short query made from the line (its title, or its first 14 significant words); each hit
   is re-scored against the whole description:
   score = 0.5 × search score + 0.5 × similarity(line description, item description).
-  Rate = the item's suggested rate (EESPL's latest, else median).
+  Rate = the company's rate policy (app.masters.rate_policy, chosen by backtest) applied to the
+  item's past lines; each library candidate carries that history in `details`.
 
 Both need the line's unit: the same unit, or one convert() can reach (the rate is converted).
 The top three candidates are kept per line; the best becomes the suggestion only if its score
@@ -23,8 +24,9 @@ reaches the threshold (company setting, default 0.55).
 
 import re
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -32,6 +34,7 @@ from sqlalchemy.orm import Session
 from app.masters.conversions import ConversionError, Rule, convert_with
 from app.masters.models import CompanyProfile, System, UnitConversion
 from app.masters.rate import MissingPriceError, system_rate
+from app.masters.rate_policy import POLICIES, History, Obs, choose, load_histories, same_client
 from app.masters.search import STOPWORDS, SYNONYMS, search_library
 from app.tenders.models import BoqLine, BoqLineCandidate, BoqSection, Tender
 
@@ -83,8 +86,10 @@ class Totals:
     gst_percent: Decimal
     gst: Decimal
     grand_total: Decimal
-    cost_total: Decimal  # cost of lines that have one (system-priced): tender.margin only
-    margin_total: Decimal  # their amount minus their cost
+    # cost of the lines that have one (system-priced) and their amount minus that cost;
+    # None when no line is system-priced. tender.margin only.
+    cost_total: Decimal | None
+    margin_total: Decimal | None
     counts: dict[str, int]
 
 
@@ -96,6 +101,7 @@ def tender_totals(db: Session, tender: Tender) -> Totals:
     subtotal = Decimal(0)
     cost_total = Decimal(0)
     margin_total = Decimal(0)
+    costed = 0
     counts = {s: 0 for s in ("unpriced", "suggested", "priced", "not_quoted")}
     counts.update(qro=0, nq=0)
     for ln in lines:
@@ -109,6 +115,7 @@ def tender_totals(db: Session, tender: Tender) -> Totals:
             subtotal += ln.amount
             if ln.cost_rate is not None and ln.qty is not None:
                 cost = ln.qty * ln.cost_rate
+                costed += 1
                 cost_total += cost
                 margin_total += ln.amount - cost
     gst = money(subtotal * gst_percent / HUNDRED)
@@ -118,8 +125,8 @@ def tender_totals(db: Session, tender: Tender) -> Totals:
         gst_percent,
         gst,
         subtotal + gst,
-        money(cost_total),
-        money(margin_total),
+        money(cost_total) if costed else None,
+        money(margin_total) if costed else None,
         counts,
     )
 
@@ -143,6 +150,7 @@ class Candidate:
     margin_percent: Decimal | None
     score: float
     reason: str
+    details: dict[str, Any] | None = None
 
 
 @dataclass
@@ -152,6 +160,88 @@ class SuggestResult:
     left_unpriced: int = 0
     skipped_priced: int = 0
     threshold: Decimal = DEFAULT_THRESHOLD
+
+
+@dataclass
+class PolicyContext:
+    """What a library rate needs: the policy, the tender's client and the item histories."""
+
+    policy: str
+    client: str | None
+    histories: dict[int, History] = field(default_factory=dict)
+
+
+WARN_ABOVE_MEDIAN = Decimal("0.15")
+MAX_SOURCES = 12
+
+
+def rate_policy(db: Session) -> str:
+    profile = db.get(CompanyProfile, 1)
+    policy = profile.rate_policy if profile else None
+    return policy if policy in POLICIES else "median"
+
+
+def _s(value: Decimal | None) -> str | None:
+    return str(money(Decimal(value))) if value is not None else None
+
+
+def library_rate(hit: dict[str, Any], ctx: PolicyContext) -> tuple[Decimal, dict[str, Any]] | None:
+    """The rate for a library item under the policy, and the history behind it. Items whose
+    lines are not in the library (only summary statistics) fall back to those statistics."""
+    history = ctx.histories.get(hit["id"])
+    pool = history.lines if history else []
+    if pool:
+        choice = choose(ctx.policy, pool, ctx.client, history.latest_file)
+        rates = sorted(o.rate for o in pool)
+        latest = choose("latest", pool, None, history.latest_file)
+        median = choose("median", pool)
+        own = [o for o in pool if ctx.client and same_client(o.client, ctx.client)]
+        client_last = choose("latest", own, None, history.latest_file) if own else None
+        rate = choice.rate
+        sources: list[Obs] = sorted(choice.sources, key=lambda o: -o.order)
+        details = {
+            "policy": ctx.policy,
+            "used": choice.policy,
+            "latest_rate": _s(latest.rate),
+            "median_rate": _s(median.rate),
+            "min_rate": _s(rates[0]),
+            "max_rate": _s(rates[-1]),
+            "n_boqs": len({o.file for o in pool}),
+            "client_last_rate": _s(client_last.rate) if client_last else None,
+            "sources": [
+                {
+                    "client": o.client,
+                    "file": o.file.rsplit("/", 1)[-1],
+                    "date": None,
+                    "rate": _s(o.rate),
+                }
+                for o in sources[:MAX_SOURCES]
+            ],
+            "sources_total": len(sources),
+        }
+    else:
+        base = hit["median_rate"] if ctx.policy != "latest" else hit["latest_rate"]
+        base = base if base is not None else (hit["latest_rate"] or hit["median_rate"])
+        if base is None:
+            return None
+        rate = money(Decimal(base))
+        details = {
+            "policy": ctx.policy,
+            "used": "median" if base == hit["median_rate"] else "latest",
+            "latest_rate": _s(hit["latest_rate"]),
+            "median_rate": _s(hit["median_rate"]),
+            "min_rate": _s(hit.get("min_rate")),
+            "max_rate": _s(hit.get("max_rate")),
+            "n_boqs": hit["boq_count"],
+            "client_last_rate": None,
+            "sources": [],
+            "sources_total": 0,
+        }
+    median = Decimal(details["median_rate"]) if details["median_rate"] else None
+    above = (rate - median) / median if median else None
+    details["above_median_percent"] = str(round(above * 100, 1)) if above is not None else None
+    details["warning"] = bool(above is not None and above > WARN_ABOVE_MEDIAN)
+    return rate, details
 
 
 def threshold(db: Session) -> Decimal:
@@ -270,7 +360,9 @@ class _SystemMatcher:
         return out
 
 
-def _library_candidates(db: Session, line: BoqLine, rules: list[Rule]) -> list[Candidate]:
+def _library_candidates(
+    db: Session, line: BoqLine, rules: list[Rule], ctx: PolicyContext
+) -> list[Candidate]:
     found: dict[int, dict] = {}
     for query in search_queries(line.description):
         for h in search_library(db, query, unit=None, limit=LIBRARY_POOL, cut=False).items:
@@ -293,14 +385,16 @@ def _library_candidates(db: Session, line: BoqLine, rules: list[Rule]) -> list[C
     for h in hits:
         if h["is_competitor"] or h["is_excluded"]:
             continue
-        base = h["latest_rate"] if h["latest_rate"] is not None else h["median_rate"]
-        if base is None:
-            continue
         factor = _unit_factor(rules, line.unit, h["unit"])
         if factor is None:
             continue  # different unit and no conversion: never offered
+        priced = library_rate(h, ctx)
+        if priced is None:
+            continue
+        base, details = priced
+        if factor != 1:
+            details = {**details, "unit_factor": str(factor)}
         score = 0.5 * float(h["score"]) + 0.5 * float(sims.get(h["id"], 0))
-        where = f", last for {h['latest_client']}" if h["latest_client"] else ""
         out.append(
             Candidate(
                 source="library",
@@ -309,7 +403,9 @@ def _library_candidates(db: Session, line: BoqLine, rules: list[Rule]) -> list[C
                 cost_rate=None,
                 margin_percent=None,
                 score=round(score, 4),
-                reason=f"Rate library: priced in {h['boq_count']} BOQs{where}",
+                reason=f"Rate library: {POLICIES[details['used']].lower()}, "
+                f"{details['n_boqs']} BOQs",
+                details=details,
             )
         )
     return out
@@ -326,6 +422,8 @@ def suggest(
     ]
     systems = list(db.scalars(select(System).where(System.is_active)))
     matcher = _SystemMatcher(db, systems, rules)
+    ctx = PolicyContext(rate_policy(db), tender.client.name if tender.client else None)
+    ctx.histories = load_histories(db)
     lines = (
         list(lines)
         if lines is not None
@@ -340,7 +438,7 @@ def suggest(
     lexemes = _lexemes(db, [ln.description for ln in todo]) if todo else []
     for line, line_lexemes in zip(todo, lexemes, strict=True):
         result.lines_considered += 1
-        found = matcher.candidates(line, line_lexemes) + _library_candidates(db, line, rules)
+        found = matcher.candidates(line, line_lexemes) + _library_candidates(db, line, rules, ctx)
         found.sort(key=lambda c: (-c.score, c.source != "system", c.ref_id))
         best = found[:MAX_CANDIDATES]
         line.candidates = [
@@ -353,6 +451,7 @@ def suggest(
                 margin_percent=c.margin_percent,
                 score=Decimal(str(c.score)),
                 reason=c.reason,
+                details=c.details,
                 created_by=user_id,
             )
             for i, c in enumerate(best, start=1)

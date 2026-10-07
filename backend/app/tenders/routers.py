@@ -12,7 +12,17 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -27,7 +37,7 @@ from app.masters.routers.common import Limit, Offset, Search, like, paginate, un
 from app.masters.schemas import Page
 from app.masters.units import load_aliases, normalise_unit
 from app.models import User
-from app.tenders import boq_import, pricing
+from app.tenders import boq_import, export, pricing, revisions
 from app.tenders.models import (
     BoqImport,
     BoqLine,
@@ -35,6 +45,7 @@ from app.tenders.models import (
     BoqSection,
     Tender,
     TenderMember,
+    TenderRevision,
     TenderTc,
 )
 from app.tenders.schemas import (
@@ -43,6 +54,7 @@ from app.tenders.schemas import (
     CandidateCostOut,
     CandidateOut,
     ColumnGuess,
+    CompareOut,
     ImportConfirmIn,
     ImportPreviewIn,
     ImportPreviewOut,
@@ -56,10 +68,14 @@ from app.tenders.schemas import (
     LinesUpdate,
     MarginIn,
     MemberOut,
+    RateHistoryCostOut,
+    RateHistoryOut,
+    RevisionOut,
     SectionIn,
     SectionOut,
     SectionUpdate,
     SheetOut,
+    SubmitIn,
     SuggestOut,
     TenderCostOut,
     TenderIn,
@@ -107,9 +123,23 @@ def _record(db, request, principal, action, tender, before=None, after=None):
     )
 
 
-def _editable(db, tender_id, view, edit, principal) -> Tender:
+def _editable(db, tender_id, view, edit, principal, request: Request | None = None) -> Tender:
+    """The tender, if the caller may change it. Pass the request when the call changes the BOQ
+    or the T&C: if the current revision was submitted, the change starts the next revision."""
     tender = get_visible(db, tender_id, view, principal)
     check_edit(tender, edit, principal)
+    if request is not None:
+        started = revisions.start_next_if_frozen(db, tender)
+        if started:
+            _record(
+                db,
+                request,
+                principal,
+                "tender.revision.start",
+                tender,
+                before={"revision": revisions.label(started[0]), "status": "submitted"},
+                after={"revision": revisions.label(started[1]), "status": tender.status},
+            )
     return tender
 
 
@@ -139,6 +169,9 @@ def _tender_out(db: Session, tender: Tender, with_cost: bool) -> TenderOut:
         tc_template_id=tender.tc_template_id,
         notes=tender.notes,
         created_at=tender.created_at,
+        revision=tender.revision,
+        revision_label=revisions.revision_label(db, tender),
+        submitted_revisions=revisions.submitted_count(db, tender),
     )
     if not with_cost:
         return TenderOut(**data)
@@ -158,6 +191,7 @@ def _line_out(line: BoqLine, with_cost: bool) -> LineOut:
 
 def _candidate_out(c: BoqLineCandidate, with_cost: bool) -> CandidateOut:
     base = dict(id=c.id, rank=c.rank, rate=c.rate, score=c.score, reason=c.reason)
+    history = c.details or None
     if with_cost:
         return CandidateCostOut(
             **base,
@@ -165,8 +199,12 @@ def _candidate_out(c: BoqLineCandidate, with_cost: bool) -> CandidateOut:
             ref_id=c.ref_id,
             cost_rate=c.cost_rate,
             margin_percent=c.margin_percent,
+            details=RateHistoryCostOut(**history) if history else None,
         )
-    return CandidateOut(**base)
+    public = (
+        {k: v for k, v in history.items() if k in RateHistoryOut.model_fields} if history else None
+    )
+    return CandidateOut(**base, details=RateHistoryOut(**public) if public else None)
 
 
 def _boq(db: Session, tender: Tender, with_cost: bool) -> BoqOut:
@@ -191,6 +229,7 @@ def _boq(db: Session, tender: Tender, with_cost: bool) -> BoqOut:
             SectionOut(
                 id=s.id,
                 title=s.title,
+                note=s.note,
                 sort_order=s.sort_order,
                 total=totals.sections.get(s.id, Decimal(0)),
             )
@@ -389,9 +428,12 @@ def update_tender(
         raise unprocessable("Unknown client")
     if changes.get("owner_id"):
         _check_users(db, [changes["owner_id"]])
+    submitting = body.status == "submitted" and tender.status != "submitted"
     for field, value in changes.items():
         if field in ("name", "status") and value is None:
             continue
+        if field == "status" and submitting:
+            continue  # below, through revisions.submit
         setattr(tender, field, value)
     if body.status in ("draft", "submitted"):
         tender.lost_reason = tender.lost_to = None
@@ -404,6 +446,16 @@ def update_tender(
             for uid in dict.fromkeys(body.member_ids)
         ]
     db.flush()
+    if submitting:
+        revision = revisions.submit(db, tender, principal.user.id, None)
+        _record(
+            db,
+            request,
+            principal,
+            "tender.submit",
+            tender,
+            after={"revision": revisions.label(revision.rev_no)},
+        )
     after = _snapshot(tender)
     if after != before:
         action = "tender.status" if before["status"] != after["status"] else "tender.update"
@@ -436,7 +488,7 @@ def add_section(
     view: ViewScope,
     edit: EditScope,
 ) -> BoqOut:
-    tender = _editable(db, tender_id, view, edit, principal)
+    tender = _editable(db, tender_id, view, edit, principal, request)
     if body.sort_order is None:
         current = db.scalar(
             select(func.max(BoqSection.sort_order)).where(BoqSection.tender_id == tender.id)
@@ -445,6 +497,7 @@ def add_section(
     section = BoqSection(
         tender_id=tender.id,
         title=body.title.strip(),
+        note=(body.note or "").strip() or None,
         sort_order=body.sort_order,
         created_by=principal.user.id,
     )
@@ -480,11 +533,13 @@ def update_section(
     view: ViewScope,
     edit: EditScope,
 ) -> BoqOut:
-    tender = _editable(db, tender_id, view, edit, principal)
+    tender = _editable(db, tender_id, view, edit, principal, request)
     section = _section(db, tender, section_id)
-    before = {"title": section.title, "sort_order": section.sort_order}
+    before = {"title": section.title, "note": section.note, "sort_order": section.sort_order}
     if body.title is not None:
         section.title = body.title.strip()
+    if "note" in body.model_fields_set:
+        section.note = (body.note or "").strip() or None
     if body.sort_order is not None:
         section.sort_order = body.sort_order
     _record(
@@ -494,7 +549,7 @@ def update_section(
         "tender.section.update",
         tender,
         before,
-        {"title": section.title, "sort_order": section.sort_order},
+        {"title": section.title, "note": section.note, "sort_order": section.sort_order},
     )
     db.commit()
     return _boq(db, tender, can_cost(principal))
@@ -511,7 +566,7 @@ def delete_section(
     edit: EditScope,
 ) -> BoqOut:
     """Removes the heading; its lines stay, without a section."""
-    tender = _editable(db, tender_id, view, edit, principal)
+    tender = _editable(db, tender_id, view, edit, principal, request)
     section = _section(db, tender, section_id)
     _record(
         db,
@@ -536,7 +591,7 @@ def add_line(
     view: ViewScope,
     edit: EditScope,
 ) -> BoqOut:
-    tender = _editable(db, tender_id, view, edit, principal)
+    tender = _editable(db, tender_id, view, edit, principal, request)
     if body.section_id is not None:
         _section(db, tender, body.section_id)
     if body.after_line_id is not None:
@@ -624,7 +679,7 @@ def update_lines(
     rate: typed rate -> manual price, status priced; rate null -> unpriced.
     margin_percent: only for system-priced lines (rate recalculated from cost).
     status not_quoted / unpriced: mark a line NQ, or bring it back."""
-    tender = _editable(db, tender_id, view, edit, principal)
+    tender = _editable(db, tender_id, view, edit, principal, request)
     if "margin_percent" in str(body.model_fields_set) or any(
         "margin_percent" in u.model_fields_set for u in body.lines
     ):
@@ -709,7 +764,7 @@ def delete_lines(
     view: ViewScope,
     edit: EditScope,
 ) -> BoqOut:
-    tender = _editable(db, tender_id, view, edit, principal)
+    tender = _editable(db, tender_id, view, edit, principal, request)
     lines = [_line(db, tender, i) for i in dict.fromkeys(body.line_ids)]
     _record(
         db,
@@ -816,7 +871,7 @@ def use_candidate(
     view: ViewScope,
     edit: EditScope,
 ) -> BoqOut:
-    tender = _editable(db, tender_id, view, edit, principal)
+    tender = _editable(db, tender_id, view, edit, principal, request)
     line = _line(db, tender, line_id)
     candidate = next((c for c in line.candidates if c.id == body.candidate_id), None)
     if candidate is None:
@@ -855,7 +910,7 @@ def suggest(
     view: ViewScope,
     edit: EditScope,
 ) -> SuggestOut:
-    tender = _editable(db, tender_id, view, edit, principal)
+    tender = _editable(db, tender_id, view, edit, principal, request)
     result = pricing.suggest(db, tender, user_id=principal.user.id)
     _record(db, request, principal, "tender.boq.suggest", tender, after=vars(result))
     db.commit()
@@ -873,7 +928,7 @@ def accept(
     edit: EditScope,
 ) -> BoqOut:
     """Accept suggestions: the given lines, or every suggestion scoring at least min_score."""
-    tender = _editable(db, tender_id, view, edit, principal)
+    tender = _editable(db, tender_id, view, edit, principal, request)
     query = select(BoqLine).where(BoqLine.tender_id == tender.id, BoqLine.status == "suggested")
     if body.line_ids:
         query = query.where(BoqLine.id.in_(body.line_ids))
@@ -908,7 +963,7 @@ def apply_margin(
 ) -> BoqOut:
     """Set one margin on every system-priced line (or the given lines). Library and manual lines
     have no cost and are left alone."""
-    tender = _editable(db, tender_id, view, edit, principal)
+    tender = _editable(db, tender_id, view, edit, principal, request)
     query = select(BoqLine).where(BoqLine.tender_id == tender.id, BoqLine.source == "system")
     if body.line_ids:
         query = query.where(BoqLine.id.in_(body.line_ids))
@@ -1087,7 +1142,7 @@ def confirm_boq(
 ) -> ImportReportOut:
     """Write the parsed sections and lines. A tender that already has lines needs replace=true;
     priced rates are then kept for lines whose (item no, description) match."""
-    tender = _editable(db, tender_id, view, edit, principal)
+    tender = _editable(db, tender_id, view, edit, principal, request)
     path = _find_upload(tender, body.upload_id)
     existing = list(db.scalars(select(BoqLine).where(BoqLine.tender_id == tender.id)))
     if existing and not body.replace:
@@ -1124,6 +1179,7 @@ def confirm_boq(
             s = BoqSection(
                 tender_id=tender.id,
                 title=parsed.sections[index].title,
+                note=parsed.sections[index].note,
                 sort_order=order,
                 created_by=principal.user.id,
             )
@@ -1147,6 +1203,7 @@ def confirm_boq(
             client_file_rate=p.client_file_rate,
             our_remarks=p.our_remarks,
             status=p.status,
+            source_row=p.source_row,
             created_by=principal.user.id,
         )
         previous = kept.get(_key(p.item_no, p.description))
@@ -1244,7 +1301,7 @@ def set_tc(
 ) -> list[TenderTcOut]:
     """Replace the tender's T&C list (order as sent). Text edits stay on this tender only; the
     library clause is never changed."""
-    tender = _editable(db, tender_id, view, edit, principal)
+    tender = _editable(db, tender_id, view, edit, principal, request)
     ids = [i.clause_id for i in body.items if i.clause_id is not None]
     clauses = (
         {c.id: c for c in db.scalars(select(TcClause).where(TcClause.id.in_(ids)))} if ids else {}
@@ -1278,3 +1335,154 @@ def set_tc(
         )
     db.commit()
     return _tc_out(db, tender)
+
+
+# --- revisions -----------------------------------------------------------------------------------
+
+
+@router.post("/{tender_id}/submit")
+def submit_tender(
+    tender_id: int,
+    body: SubmitIn,
+    request: Request,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    view: ViewScope,
+    edit: EditScope,
+) -> TenderOut | TenderCostOut:
+    """Freeze the current revision (R0, R1 ...) and mark the tender submitted."""
+    tender = _editable(db, tender_id, view, edit, principal)
+    before = tender.status
+    revision = revisions.submit(db, tender, principal.user.id, body.note)
+    _record(
+        db,
+        request,
+        principal,
+        "tender.submit",
+        tender,
+        before={"status": before},
+        after={
+            "status": tender.status,
+            "revision": revisions.label(revision.rev_no),
+            "note": revision.note,
+        },
+    )
+    db.commit()
+    db.refresh(tender)
+    return _tender_out(db, tender, can_cost(principal))
+
+
+def _revision_out(rev: TenderRevision) -> RevisionOut:
+    totals = rev.snapshot["totals"]
+    return RevisionOut(
+        rev_no=rev.rev_no,
+        label=revisions.label(rev.rev_no),
+        submitted_at=rev.submitted_at,
+        submitted_by_name=rev.submitter.full_name if rev.submitter else None,
+        note=rev.note,
+        subtotal=Decimal(totals["subtotal"]),
+        grand_total=Decimal(totals["grand_total"]),
+        lines=len(rev.snapshot["lines"]),
+    )
+
+
+@router.get("/{tender_id}/revisions")
+def list_revisions(
+    tender_id: int, db: DbSession, principal: CurrentPrincipal, scope: ViewScope
+) -> list[RevisionOut]:
+    tender = get_visible(db, tender_id, scope, principal)
+    rows = db.scalars(
+        select(TenderRevision)
+        .where(TenderRevision.tender_id == tender.id)
+        .order_by(TenderRevision.rev_no)
+    )
+    return [_revision_out(r) for r in rows]
+
+
+def _side(db: Session, tender: Tender, which: str) -> dict:
+    if which == "current":
+        snap = revisions.build_snapshot(db, tender)
+        snap["label"] = revisions.revision_label(db, tender)
+        return snap
+    try:
+        rev_no = int(which.upper().lstrip("R"))
+    except ValueError as exc:
+        raise unprocessable("Choose a revision number (0, 1 ...) or 'current'") from exc
+    return revisions.get_revision(db, tender, rev_no).snapshot
+
+
+@router.get("/{tender_id}/revisions/compare")
+def compare_revisions(
+    tender_id: int,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    scope: ViewScope,
+    a: str = "0",
+    b: str = "current",
+) -> CompareOut:
+    """Rate and amount per line between two revisions (a number, or 'current' for the draft)."""
+    tender = get_visible(db, tender_id, scope, principal)
+    return CompareOut(**revisions.compare(_side(db, tender, a), _side(db, tender, b)))
+
+
+# --- exports -------------------------------------------------------------------------------------
+
+
+def _download(content: bytes, media_type: str, filename: str) -> Response:
+    safe = re.sub(r"[^A-Za-z0-9._ ()-]+", "_", filename)
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{safe}"'},
+    )
+
+
+@router.get("/{tender_id}/export.xlsx")
+def export_xlsx(
+    tender_id: int,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    scope: ViewScope,
+    rev: Annotated[
+        int | None, Query(ge=0, description="A submitted revision; default: current")
+    ] = None,
+) -> Response:
+    """EESPL's BOQ as Excel (selling rates only, never cost or margin)."""
+    doc = export.document(db, get_visible(db, tender_id, scope, principal), rev)
+    return _download(export.xlsx(doc), export.XLSX_TYPE, f"{export.file_stem(doc)}.xlsx")
+
+
+@router.get("/{tender_id}/export.pdf")
+def export_pdf(
+    tender_id: int,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    scope: ViewScope,
+    rev: Annotated[
+        int | None, Query(ge=0, description="A submitted revision; default: current")
+    ] = None,
+) -> Response:
+    """EESPL's BOQ as PDF, A4 landscape (selling rates only)."""
+    doc = export.document(db, get_visible(db, tender_id, scope, principal), rev)
+    return _download(export.pdf(doc), "application/pdf", f"{export.file_stem(doc)}.pdf")
+
+
+@router.get("/{tender_id}/export/client")
+def export_client_format(
+    tender_id: int,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    scope: ViewScope,
+    rev: Annotated[
+        int | None, Query(ge=0, description="A submitted revision; default: current")
+    ] = None,
+) -> Response:
+    """Our rates written into the client's own uploaded sheet (saved as a new file). 409 when
+    the original was not .xlsx or had no rate column mapped."""
+    tender = get_visible(db, tender_id, scope, principal)
+    doc = export.document(db, tender, rev)
+    data, name, counts = export.client_format(db, tender, doc)
+    response = _download(data, export.XLSX_TYPE, name)
+    response.headers["X-Rates-Written"] = str(counts["rates"])
+    response.headers["X-Lines-Skipped"] = str(counts["skipped"])
+    return response

@@ -316,6 +316,7 @@ export type CompanyProfile = {
   website: string | null;
   default_gst_percent: string;
   pricing_threshold: string;
+  rate_policy: string;
   has_logo: boolean;
   updated_at: string;
 };
@@ -358,9 +359,12 @@ export type Tender = {
   tc_template_id: number | null;
   notes: string | null;
   created_at: string;
-  // only with tender.margin
-  cost_total?: string;
-  margin_amount?: string;
+  revision: number;
+  revision_label: string;
+  submitted_revisions: number;
+  // only with tender.margin; null when no line is system-priced
+  cost_total?: string | null;
+  margin_amount?: string | null;
 };
 
 export type TenderLookups = {
@@ -398,7 +402,7 @@ export type BoqLine = {
   margin_percent?: string | null;
 };
 
-export type BoqSection = { id: number; title: string; sort_order: number; total: string };
+export type BoqSection = { id: number; title: string; note: string | null; sort_order: number; total: string };
 
 export type BoqTotals = {
   subtotal: string;
@@ -406,11 +410,27 @@ export type BoqTotals = {
   gst: string;
   grand_total: string;
   counts: Record<string, number>;
-  cost_total?: string;
-  margin_amount?: string;
+  cost_total?: string | null;
+  margin_amount?: string | null;
 };
 
 export type Boq = { sections: BoqSection[]; lines: BoqLine[]; totals: BoqTotals };
+
+export type RateHistory = {
+  policy: string;
+  used: string;
+  latest_rate: string | null;
+  median_rate: string | null;
+  n_boqs: number;
+  client_last_rate: string | null;
+  sources: { client: string | null; file: string; date: string | null; rate: string }[];
+  sources_total: number;
+  above_median_percent: string | null;
+  warning: boolean;
+  // only with tender.margin
+  min_rate?: string | null;
+  max_rate?: string | null;
+};
 
 export type Candidate = {
   id: number;
@@ -418,6 +438,7 @@ export type Candidate = {
   rate: string;
   score: string;
   reason: string;
+  details: RateHistory | null;
   source?: "system" | "library";
   ref_id?: number;
   cost_rate?: string | null;
@@ -508,4 +529,46 @@ export type TenderTc = {
   text: string;
   text_override: string | null;
   sort_order: number;
+};
+
+export type Revision = {
+  rev_no: number;
+  label: string;
+  submitted_at: string;
+  submitted_by_name: string | null;
+  note: string | null;
+  subtotal: string;
+  grand_total: string;
+  lines: number;
+};
+
+export type RevisionCompare = {
+  a: string;
+  b: string;
+  lines: {
+    item_no: string | null;
+    description: string;
+    change: "added" | "removed" | "changed" | "same";
+    rate_a: string | null;
+    rate_b: string | null;
+    rate_delta: string | null;
+    amount_a: string | null;
+    amount_b: string | null;
+    amount_delta: string | null;
+  }[];
+  subtotal_a: string;
+  subtotal_b: string;
+  subtotal_delta: string;
+  grand_total_a: string;
+  grand_total_b: string;
+  grand_total_delta: string;
+};
+
+export const RATE_POLICIES: Record<string, string> = {
+  client_median: "Same client's median, else the median",
+  median: "Median of all BOQs",
+  client_last: "Same client's last rate, else the median",
+  lower_latest_median: "Lower of latest and median",
+  latest: "Latest rate",
+  trimmed_mean: "Trimmed mean (top and bottom 10% dropped)",
 };
