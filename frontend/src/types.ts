@@ -658,6 +658,7 @@ export type TemplateStep = {
   needs_inspection: boolean;
   hold_point: boolean;
   typical_days: number;
+  checklist_template_id?: number | null;
 };
 
 export type StageTemplate = {
@@ -709,6 +710,7 @@ export type SiteTask = {
   node_path: string | null;
   area_scope_id: number | null;
   step_id: number | null;
+  checklist_template_id?: number | null;
   name: string;
   sort_order: number;
   planned_start: string | null;

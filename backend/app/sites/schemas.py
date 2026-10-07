@@ -152,6 +152,7 @@ class StepIn(BaseModel):
     needs_inspection: bool = False
     hold_point: bool = False
     typical_days: int = Field(default=1, ge=1, le=365)
+    checklist_template_id: int | None = None  # a hold point then needs a passed inspection
 
 
 class StepOut(StepIn):
@@ -276,6 +277,7 @@ class TaskOut(BaseModel):
     needs_photo: bool
     needs_inspection: bool
     hold_point: bool
+    checklist_template_id: int | None = None
     remark: str | None
     inspection: list[InspectionItem] | None
     certified_at: datetime | None

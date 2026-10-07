@@ -976,6 +976,7 @@ def _task_out(t: Task, paths: dict[int, str]) -> TaskOut:
         needs_photo=bool(step and step.needs_photo),
         needs_inspection=bool(step and step.needs_inspection),
         hold_point=bool(step and step.hold_point),
+        checklist_template_id=step.checklist_template_id if step else None,
         remark=t.remark,
         inspection=t.inspection,
         certified_at=t.certified_at,
@@ -1164,6 +1165,12 @@ def certify_task(
         raise unprocessable("Only hold-point steps are certified")
     if task.status != "done":
         raise HTTPException(status.HTTP_409_CONFLICT, "The step must be done first")
+    from app.execution.inspections import passed_inspection
+
+    if not passed_inspection(db, task):
+        raise unprocessable(
+            "This hold point needs a passed inspection with its checklist first (Inspections tab)"
+        )
     task.status = "certified"
     task.certified_by = principal.user.id
     task.certified_at = datetime.now(UTC)
@@ -1563,6 +1570,7 @@ def _template_out(db: Session, t: StageTemplate) -> TemplateOut:
                 needs_inspection=s.needs_inspection,
                 hold_point=s.hold_point,
                 typical_days=s.typical_days,
+                checklist_template_id=s.checklist_template_id,
             )
             for s in t.steps
         ],
@@ -1620,6 +1628,7 @@ def _save_template(db: Session, t: StageTemplate, body: TemplateIn, user_id) -> 
             "needs_inspection",
             "hold_point",
             "typical_days",
+            "checklist_template_id",
         ):
             setattr(step, field, getattr(s, field))
     db.flush()

@@ -4,6 +4,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 import app.crm.models  # noqa: F401  (registers the CRM tables)
+import app.execution.models  # noqa: F401  (registers the execution tables)
 import app.masters.models  # noqa: F401  (registers the master tables)
 import app.material.models  # noqa: F401  (registers the material tables)
 import app.sites.models  # noqa: F401  (registers the site tables)
