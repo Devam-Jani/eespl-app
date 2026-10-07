@@ -37,6 +37,7 @@ from app.export import EXPORT_ROW_LIMIT, xlsx_response
 from app.masters.models import Category, Channel, Client, System
 from app.masters.routers.common import Limit, Offset, Search, like, paginate, unprocessable
 from app.masters.schemas import Page
+from app.material import service as material
 from app.models import User
 from app.sites import builder, model3d, service, work
 from app.sites.models import (
@@ -323,6 +324,7 @@ def create_site(
     )
     db.add(site)
     db.flush()
+    material.site_store(db, site, principal.user.id)
     _record(db, request, principal, "site.create", site, after=audit.model_snapshot(site))
     db.commit()
     db.refresh(site)
@@ -366,6 +368,7 @@ def create_from_tender(
     )
     db.add(site)
     db.flush()
+    material.site_store(db, site, principal.user.id)
     _record(
         db,
         request,

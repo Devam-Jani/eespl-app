@@ -3,6 +3,7 @@ import { categoryOf, legendCounts, rollupColor, STATUS_COLORS, workColor } from 
 import type { NodeStatus } from "./colors";
 import { FLOOR_H, layout, overlaps } from "./layout";
 import type { Box, LayoutNode } from "./layout";
+import { headerLines, legendText, wrapRows } from "./snapshot";
 
 let next = 1;
 function node(kind: string, name: string, parent: number | null, extra: Partial<LayoutNode> = {}): LayoutNode {
@@ -55,7 +56,9 @@ describe("layout", () => {
   });
 
   it("stacks floors without overlap, basements below the ground", () => {
-    const floors = layout(tower("T1")).filter((b) => b.role === "floor").sort((a, b) => a.level! - b.level!);
+    const floors = layout(tower("T1"))
+      .filter((b) => b.role === "floor")
+      .sort((a, b) => a.level! - b.level!);
     for (let i = 1; i < floors.length; i++) {
       expect(overlaps(floors[i - 1], floors[i])).toBe(false);
       expect(floors[i].y - floors[i - 1].y).toBeCloseTo(FLOOR_H);
@@ -69,13 +72,11 @@ describe("layout", () => {
 
   it("keeps rooms inside their flat and flats inside their floor", () => {
     const boxes = layout(tower("T1"));
-    const inside = (a: Box, b: Box) =>
-      Math.abs(a.x - b.x) + a.w / 2 <= b.w / 2 + 1e-6 && Math.abs(a.z - b.z) + a.d / 2 <= b.d / 2 + 1e-6;
+    const inside = (a: Box, b: Box) => Math.abs(a.x - b.x) + a.w / 2 <= b.w / 2 + 1e-6 && Math.abs(a.z - b.z) + a.d / 2 <= b.d / 2 + 1e-6;
     const byFloor = new Map(boxes.filter((b) => b.role === "floor").map((b) => [b.node_id, b]));
     const flats = boxes.filter((b) => b.role === "flat");
     for (const f of flats) expect(inside(f, byFloor.get(f.floor_id!)!)).toBe(true);
-    for (let i = 0; i < flats.length; i++)
-      for (let j = i + 1; j < flats.length; j++) expect(overlaps(flats[i], flats[j])).toBe(false);
+    for (let i = 0; i < flats.length; i++) for (let j = i + 1; j < flats.length; j++) expect(overlaps(flats[i], flats[j])).toBe(false);
     const rooms = boxes.filter((b) => b.role === "room");
     for (const r of rooms) expect(flats.some((f) => f.floor_id === r.floor_id && inside(r, f))).toBe(true);
   });
@@ -95,13 +96,7 @@ describe("layout", () => {
     const nodes = tower("T1");
     const t = nodes[0].id;
     const terrace = nodes.find((n) => n.kind === "terrace")!;
-    nodes.push(
-      node("oh_tank", "OHT 1", terrace.id),
-      node("lift_pit", "Lift pit 1", t),
-      node("ug_tank", "UG tank", t),
-      node("raft", "Raft", t),
-      node("retaining_wall", "RW", t),
-    );
+    nodes.push(node("oh_tank", "OHT 1", terrace.id), node("lift_pit", "Lift pit 1", t), node("ug_tank", "UG tank", t), node("raft", "Raft", t), node("retaining_wall", "RW", t));
     const boxes = layout(nodes);
     const get = (kind: string) => boxes.filter((b) => b.kind === kind);
     const slab = get("terrace")[0];
@@ -155,5 +150,26 @@ describe("colours", () => {
       { status: status({ has_scope: false }), countable: false },
     ]);
     expect(counts).toMatchObject({ done: 1, blocked: 1, none: 1, progress: 0 });
+  });
+});
+
+describe("Save image layout", () => {
+  it("puts the site, code, date and overall % in the header", () => {
+    const [title, sub] = headerLines({ siteName: "Shela", siteCode: "S-2026-0001", percent: 41.6, date: new Date(2026, 9, 7) });
+    expect(title).toBe("Shela (S-2026-0001)");
+    expect(sub).toContain("2026");
+    expect(sub).toContain("Oct");
+    expect(sub).toContain("overall 42% done");
+  });
+
+  it("wraps the legend into rows that fit", () => {
+    expect(wrapRows([100, 100, 100], 1000, 10)).toEqual([[0, 1, 2]]);
+    expect(wrapRows([100, 100, 100], 215, 10)).toEqual([[0, 1], [2]]);
+    expect(wrapRows([300, 50], 200, 10)).toEqual([[0], [1]]); // a too-wide item still gets its own row
+    expect(wrapRows([], 200, 10)).toEqual([]);
+  });
+
+  it("shows each legend count", () => {
+    expect(legendText({ label: "Done / certified", color: STATUS_COLORS.done, count: 12 })).toBe("Done / certified (12)");
   });
 });

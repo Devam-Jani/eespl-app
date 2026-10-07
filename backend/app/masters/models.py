@@ -572,6 +572,14 @@ class CompanyProfile(Tracked, Base):
     kylas_category_field: Mapped[str] = mapped_column(
         String(60), server_default="cfCustomerCategrory"
     )
+    # material (Settings > Purchase): POs above the limit need po.approve; below it the creator
+    # with po.edit approves; stock may go negative only when allowed; GRNs need 1 or 2 approvals
+    po_approval_limit: Mapped[Decimal] = mapped_column(Numeric(14, 2), server_default="50000")
+    allow_negative_stock: Mapped[bool] = mapped_column(server_default="false")
+    grn_approval_levels: Mapped[int] = mapped_column(Integer, server_default="1")
+    po_tc_template_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tc_templates.id", ondelete="SET NULL")
+    )
     kylas_junk_reasons: Mapped[list[str]] = mapped_column(
         JSONB, server_default='["Wrong number", "False enquiry", "Duplicate"]'
     )

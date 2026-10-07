@@ -141,7 +141,7 @@ def test_me_merges_roles_to_the_widest_scope(login_as):
     perms = c.get("/api/auth/me", headers=headers).json()["permissions"]
     assert perms["tender.view"] == "all"
     assert perms["site.view"] == "all"
-    assert perms["indent.raise"] == "assigned"  # only sales has it
+    assert perms["indent.view"] == "assigned"  # only sales has it
 
 
 def test_concurrent_refreshes_rotate_a_token_only_once(make_user, monkeypatch):

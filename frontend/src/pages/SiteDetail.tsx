@@ -11,13 +11,15 @@ import TasksTab from "./site/TasksTab";
 
 // three.js is only downloaded when the 3D tab is opened
 const Site3DTab = lazy(() => import("./site/Site3DTab"));
+const MaterialTab = lazy(() => import("./site/MaterialTab"));
 import { ProgressBar, SiteForm, SiteStatusBadge } from "./Sites";
 import { shortDate } from "./Tenders";
 
-type Tab = "overview" | "structure" | "scope" | "tasks" | "drawings" | "3d";
+type Tab = "overview" | "structure" | "scope" | "tasks" | "drawings" | "material" | "3d";
 
 export default function SiteDetail() {
   const { id } = useParams();
+  const { can } = useAuth();
   const [site, setSite] = useState<Site | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +75,7 @@ export default function SiteDetail() {
             ["scope", "Scope"],
             ["tasks", "Tasks"],
             ["drawings", "Drawings"],
+            ...(can("indent.view", "indent.create", "store.view", "grn.view", "po.view") ? [["material", "Material"]] : []),
             ["3d", "3D"],
           ] as [Tab, string][]
         ).map(([key, label]) => (
@@ -87,9 +90,14 @@ export default function SiteDetail() {
         {tab === "scope" && <ScopeTab site={site} onChange={load} />}
         {tab === "tasks" && <TasksTab site={site} onChange={load} />}
         {tab === "drawings" && <DrawingsTab site={site} />}
+        {tab === "material" && (
+          <Suspense fallback={<p className="muted">Loading…</p>}>
+            <MaterialTab site={site} />
+          </Suspense>
+        )}
         {tab === "3d" && (
           <Suspense fallback={<p className="muted">Loading the 3D view…</p>}>
-            <Site3DTab site={site} onChange={load} />
+            <Site3DTab site={site} onChange={load} onOpenStructure={() => setTab("structure")} />
           </Suspense>
         )}
       </div>
@@ -105,7 +113,12 @@ function Overview({ site, onChange }: { site: Site; onChange: (s: Site) => void 
   const [editing, setEditing] = useState(false);
   const [lookups, setLookups] = useState<SiteLookups | null>(null);
   const [late, setLate] = useState<SiteTask[]>([]);
-  const [members, setMembers] = useState(site.members.map((m) => ({ user_id: m.user_id, role_on_site: m.role_on_site })));
+  const [members, setMembers] = useState(
+    site.members.map((m) => ({
+      user_id: m.user_id,
+      role_on_site: m.role_on_site,
+    })),
+  );
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -116,7 +129,12 @@ function Overview({ site, onChange }: { site: Site; onChange: (s: Site) => void 
   async function saveMembers() {
     setError(null);
     try {
-      onChange(await api<Site>(`/api/sites/${site.id}/members`, { method: "PUT", json: { members } }));
+      onChange(
+        await api<Site>(`/api/sites/${site.id}/members`, {
+          method: "PUT",
+          json: { members },
+        }),
+      );
     } catch (err) {
       setError(errorText(err));
     }
@@ -215,7 +233,18 @@ function Overview({ site, onChange }: { site: Site; onChange: (s: Site) => void 
         </table>
         {canEdit && lookups && (
           <div className="form-actions">
-            <button className="btn" onClick={() => setMembers((ms) => [...ms, { user_id: lookups.users[0]?.id ?? "", role_on_site: "supervisor" }])}>
+            <button
+              className="btn"
+              onClick={() =>
+                setMembers((ms) => [
+                  ...ms,
+                  {
+                    user_id: lookups.users[0]?.id ?? "",
+                    role_on_site: "supervisor",
+                  },
+                ])
+              }
+            >
               Add person
             </button>
             <button className="btn btn-primary" onClick={() => void saveMembers()}>
