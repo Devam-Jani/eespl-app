@@ -7,6 +7,8 @@ import Audit from "./pages/Audit";
 import Channels from "./pages/Channels";
 import Clients from "./pages/Clients";
 import Home from "./pages/Home";
+import LeadDetail from "./pages/LeadDetail";
+import Leads from "./pages/Leads";
 import Login from "./pages/Login";
 import Placeholder from "./pages/Placeholder";
 import Products from "./pages/Products";
@@ -25,6 +27,7 @@ import Categories from "./pages/settings/Categories";
 import CompanyBanks from "./pages/settings/CompanyBanks";
 import CompanyProfile from "./pages/settings/CompanyProfile";
 import GstinAddresses from "./pages/settings/GstinAddresses";
+import KylasSettingsPage from "./pages/settings/KylasSettings";
 import StageTemplates from "./pages/settings/StageTemplates";
 import Tags from "./pages/settings/Tags";
 import UnitsConversions from "./pages/settings/UnitsConversions";
@@ -38,6 +41,8 @@ const PAGES: Record<string, JSX.Element> = {
   "/tc-library": <TcLibrary />,
   "/vendors": <Vendors />,
   "/tenders": <Tenders />,
+  "/leads": <Leads />,
+  "/settings/kylas": <KylasSettingsPage />,
   "/sites": <Sites />,
   "/settings/stage-templates": <StageTemplates />,
   "/settings/company": <CompanyProfile />,
@@ -97,6 +102,14 @@ export default function App() {
               element={
                 <RequirePermission perms={["site.view"]}>
                   <SiteDetail />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/leads/:id"
+              element={
+                <RequirePermission perms={["leads.view"]}>
+                  <LeadDetail />
                 </RequirePermission>
               }
             />

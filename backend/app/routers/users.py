@@ -132,6 +132,10 @@ def update_user(
     user = _get_user(db, user_id)
     _check_can_manage(principal, user)
     changes = body.model_dump(exclude_unset=True)
+    if "kylas_user_id" in changes and "admin.settings" not in principal.permissions:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Missing permission: admin.settings (Kylas user id)"
+        )
     if changes.get("is_active") is True and not user.is_active:
         email = changes.get("email", user.email)
         if not email or user.password_hash is None:

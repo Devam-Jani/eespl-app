@@ -51,6 +51,7 @@ class TenderOut(BaseModel):
     revision_label: str  # "R1", or "R1 (draft)" while it is being edited
     submitted_revisions: int
     site_id: int | None = None  # the site made from this tender once won
+    kylas_won_lead: str | None = None  # a lead of this tender won in Kylas: confirm and mark won
 
 
 class TenderCostOut(TenderOut):

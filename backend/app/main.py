@@ -9,6 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.auth.router import router as auth_router
 from app.config import settings
+from app.crm import routers as crm
 from app.db import get_engine
 from app.masters.routers import (
     admin_settings,
@@ -51,6 +52,8 @@ app.include_router(admin_settings.router)
 app.include_router(tenders.router)
 app.include_router(sites.router)
 app.include_router(sites.templates_router)
+app.include_router(crm.router)
+app.include_router(crm.settings_router)
 
 
 @app.get("/api/health")

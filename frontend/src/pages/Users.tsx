@@ -199,6 +199,8 @@ function UserForm({
   const [email, setEmail] = useState(user?.email ?? "");
   const [fullName, setFullName] = useState(user?.full_name ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
+  const [kylasUserId, setKylasUserId] = useState(user?.kylas_user_id?.toString() ?? "");
+  const canKylas = !!me && "admin.settings" in me.permissions;
   const [password, setPassword] = useState("");
   const [roleIds, setRoleIds] = useState<number[]>(user?.roles.map((r) => r.id) ?? []);
   const [error, setError] = useState<string | null>(null);
@@ -216,7 +218,12 @@ function UserForm({
       if (user) {
         await api(`/api/users/${user.id}`, {
           method: "PATCH",
-          json: { email, full_name: fullName, phone: phone || null },
+          json: {
+            email,
+            full_name: fullName,
+            phone: phone || null,
+            ...(canKylas ? { kylas_user_id: kylasUserId ? Number(kylasUserId) : null } : {}),
+          },
         });
         const before = [...user.roles.map((r) => r.id)].sort().join();
         if ([...roleIds].sort().join() !== before) {
@@ -253,6 +260,12 @@ function UserForm({
           <span>Phone</span>
           <input value={phone} onChange={(e) => setPhone(e.target.value)} />
         </label>
+        {user && canKylas && (
+          <label className="field">
+            <span>Kylas user id (owner of the Kylas leads this person enters)</span>
+            <input value={kylasUserId} inputMode="numeric" onChange={(e) => setKylasUserId(e.target.value.replace(/\D/g, ""))} placeholder="see python -m app.cli kylas-discover" />
+          </label>
+        )}
         {!user && (
           <label className="field">
             <span>Password (at least 10 characters)</span>

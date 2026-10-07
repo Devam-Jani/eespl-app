@@ -213,6 +213,16 @@ function DetailsTab({ tender, canEdit, onChange }: { tender: Tender; canEdit: bo
   return (
     <div className="card">
       {error && <div className="alert alert-error">{error}</div>}
+      {tender.kylas_won_lead && (
+        <div className="alert alert-warn">
+          Won in Kylas (lead {tender.kylas_won_lead}): confirm and mark won.{" "}
+          {canEdit && (
+            <button className="btn btn-small btn-primary" onClick={() => setClosing("won")}>
+              Mark won
+            </button>
+          )}
+        </div>
+      )}
       <div className="toolbar">
         <h2 className="section-title">Tender details</h2>
         {canEdit && (

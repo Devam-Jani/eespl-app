@@ -176,6 +176,15 @@ def _tender_out(db: Session, tender: Tender, with_cost: bool) -> TenderOut:
         revision_label=revisions.revision_label(db, tender),
         submitted_revisions=revisions.submitted_count(db, tender),
         site_id=db.scalar(text("SELECT id FROM sites WHERE tender_id = :t"), {"t": tender.id}),
+        kylas_won_lead=None
+        if tender.status == "won"
+        else db.scalar(
+            text(
+                "SELECT code FROM leads WHERE tender_id = :t AND status = 'won' "
+                "AND kylas_won_at IS NOT NULL ORDER BY kylas_won_at DESC LIMIT 1"
+            ),
+            {"t": tender.id},
+        ),
     )
     if not with_cost:
         return TenderOut(**data)

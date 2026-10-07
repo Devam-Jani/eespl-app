@@ -29,6 +29,7 @@ ALL = [
     "attendance.manage", "pettycash.manage",
     "finance.view", "finance.edit",
     "dashboard.view",
+    "leads.view", "leads.edit",
 ]  # fmt: skip
 
 
@@ -61,6 +62,8 @@ EXPECTED: dict[str, dict[str, str]] = {
         "pettycash.manage",
         "finance.view",
         "dashboard.view",
+        "leads.view",
+        "leads.edit",
     ),  # fmt: skip
     "estimator": _all(
         "clients.view",
@@ -84,6 +87,8 @@ EXPECTED: dict[str, dict[str, str]] = {
         "site.update": "assigned",
         "indent.raise": "assigned",
         "dashboard.view": "own",
+        "leads.view": "own",
+        "leads.edit": "own",
     },
     "site_supervisor": {
         "site.view": "assigned",
@@ -94,8 +99,12 @@ EXPECTED: dict[str, dict[str, str]] = {
         "pettycash.manage": "assigned",
     },
     "store_purchase": _all(
-        "vendors.view", "vendors.edit",
-        "library.view", "site.view", "indent.dispatch", "indent.approve",
+        "vendors.view",
+        "vendors.edit",
+        "library.view",
+        "site.view",
+        "indent.dispatch",
+        "indent.approve",
     ),  # fmt: skip
     "accounts": _all(
         "clients.view",
@@ -118,7 +127,7 @@ EXPECTED: dict[str, dict[str, str]] = {
 
 REAL_ENDPOINTS = {
     "admin.users", "admin.roles", "audit.view", "clients.view", "library.view",
-    "vendors.view", "settings.company", "site.view",
+    "vendors.view", "settings.company", "site.view", "leads.view",
 }  # fmt: skip
 
 probe_app = FastAPI()
@@ -146,6 +155,8 @@ def _call(client: TestClient, code: str, headers, db):
         return client.get("/api/vendors", headers=headers)
     if code == "settings.company":
         return client.get("/api/settings/company", headers=headers)
+    if code == "leads.view":
+        return client.get("/api/leads", headers=headers)
     if code == "site.view":
         return client.get("/api/sites", headers=headers)
     if code == "library.view":

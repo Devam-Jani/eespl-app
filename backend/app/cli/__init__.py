@@ -8,6 +8,7 @@
     docker compose exec api python -m app.cli import-powerplay-vendors /data/powerplay/<file>.xlsx
     docker compose exec api python -m app.cli import-powerplay-team /data/powerplay/<file>.xlsx
     docker compose exec api python -m app.cli backtest-rates [--set-default]
+    docker compose exec api python -m app.cli kylas-discover
     docker compose exec api python -m app.cli import-powerplay-projects /data/powerplay/<file>.xlsx
 
 The password is prompted for (twice) when run in a terminal. When stdin is not a terminal,
@@ -295,6 +296,44 @@ def run_import_projects(paths: list[str]) -> None:
                 print(f"    - {a!r} / {b!r}")
 
 
+def run_kylas_discover() -> None:
+    """Ids and names of Kylas sources, users, pipelines and their stages: nothing else (no
+    emails, phones or keys), for Settings > Integrations > Kylas. Read-only GETs."""
+    from app.crm.kylas_client import client
+
+    kylas = client()
+    if not kylas.is_configured:
+        print("KYLAS_API_KEY is not set in .env: nothing to discover")
+        return
+
+    def items(body):
+        if isinstance(body, dict):
+            body = body.get("content", body.get("data", []))
+        return body if isinstance(body, list) else []
+
+    def name_of(item):
+        for key in ("name", "displayName", "value"):
+            if item.get(key):
+                return str(item[key])
+        first, last = item.get("firstName") or "", item.get("lastName") or ""
+        return f"{first} {last}".strip() or "?"
+
+    for title, path in (("Sources", "/sources"), ("Users", "/users"), ("Pipelines", "/pipelines")):
+        result = kylas.get(path)
+        print(f"{title}:")
+        if not result.ok:
+            print(f"  (no answer: HTTP {result.status_code})")
+            continue
+        for item in items(result.body):
+            if not isinstance(item, dict):
+                continue
+            print(f"  {item.get('id')}  {name_of(item)}")
+            if title == "Pipelines":
+                for stage in item.get("stages") or []:
+                    if isinstance(stage, dict):
+                        print(f"      stage {stage.get('id')}  {name_of(stage)}")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -312,6 +351,8 @@ def main(argv: list[str] | None = None) -> None:
 
     p = sub.add_parser("import-tc", help="Import T&C clauses and the default template")
     p.add_argument("path")
+
+    sub.add_parser("kylas-discover", help="Print Kylas source / user / pipeline / stage ids")
 
     p = sub.add_parser(
         "import-powerplay-projects", help="Import past Powerplay projects as closed sites"
@@ -336,6 +377,8 @@ def main(argv: list[str] | None = None) -> None:
         run_import_library(args.path)
     elif args.command == "import-tc":
         run_import_tc(args.path)
+    elif args.command == "kylas-discover":
+        run_kylas_discover()
     elif args.command == "import-powerplay-projects":
         run_import_projects(args.paths)
     elif args.command == "backtest-rates":

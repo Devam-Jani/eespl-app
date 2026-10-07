@@ -14,6 +14,7 @@ export type User = {
   full_name: string;
   phone: string | null;
   job_title: string | null;
+  kylas_user_id: number | null;
   has_password: boolean;
   is_active: boolean;
   locked_until: string | null;
@@ -364,6 +365,7 @@ export type Tender = {
   revision: number;
   revision_label: string;
   site_id: number | null;
+  kylas_won_lead: string | null;
   submitted_revisions: number;
   // only with tender.margin; null when no line is system-priced
   cost_total?: string | null;
@@ -752,4 +754,78 @@ export type Drawing = {
   latest_approved: DrawingRevision | null;
   latest: DrawingRevision | null;
   revisions: DrawingRevision[];
+};
+
+// --- CRM leads ---
+
+export type LeadStatus = "new" | "contacted" | "site_visit" | "quoted" | "won" | "lost" | "junk";
+export type KylasSync = "disabled" | "pending" | "synced" | "failed";
+
+export type LeadDuplicate = { id: number; code: string; contact_name: string; status: string };
+
+export type Lead = {
+  id: number;
+  code: string;
+  contact_name: string;
+  phone: string | null;
+  email: string | null;
+  company: string | null;
+  city: string | null;
+  state: string | null;
+  lead_source: string;
+  channel_id: number | null;
+  channel_name: string | null;
+  client_id: number | null;
+  client_name: string | null;
+  requirement: string | null;
+  system_id: number | null;
+  work_category_id: number | null;
+  est_area_sqm: string | null;
+  est_value: string | null;
+  status: LeadStatus;
+  owner_id: string | null;
+  owner_name: string | null;
+  created_by_name: string | null;
+  next_follow_up: string | null;
+  follow_up_due: boolean;
+  tender_id: number | null;
+  tender_code: string | null;
+  kylas_lead_id: number | null;
+  kylas_sync_status: KylasSync;
+  kylas_last_error: string | null;
+  kylas_synced_at: string | null;
+  kylas_forecasting: string | null;
+  kylas_converted_at: string | null;
+  kylas_won_at: string | null;
+  created_at: string;
+  duplicates: LeadDuplicate[];
+};
+
+export type LeadDetail = Lead & {
+  activities: { id: number; type: string; text: string; at: string; by_name: string | null }[];
+};
+
+export type LeadLookups = {
+  channels: { id: number; name: string }[];
+  clients: { id: number; name: string }[];
+  users: { id: string; full_name: string }[];
+  systems: { id: number; name: string }[];
+  work_categories: { id: number; name: string }[];
+};
+
+export type KylasSettings = {
+  enabled_in_env: boolean;
+  api_key: string;
+  base_url: string;
+  active: boolean;
+  inactive_reason: string | null;
+  source_id: number | null;
+  owner_rule: string;
+  default_owner_id: number | null;
+  deal_pipeline_id: number | null;
+  won_stage_id: number | null;
+  lead_code_field: string;
+  category_field: string;
+  junk_reasons: string[];
+  queue: Record<string, number>;
 };

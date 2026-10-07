@@ -1,4 +1,4 @@
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +16,13 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     # Uploaded files (company logo, later documents). A Docker volume, never in git.
     media_dir: str = "/media"
+
+    # Kylas CRM. Off unless KYLAS_ENABLED=true AND a key AND a source id (company settings) are
+    # set. The key is only ever sent as the api-key header: never logged, stored or shown.
+    kylas_enabled: bool = False
+    kylas_base_url: str = "https://api.kylas.io/v1"
+    kylas_api_key: SecretStr | None = None
+    kylas_timeout_seconds: float = 20
 
 
 settings = Settings()

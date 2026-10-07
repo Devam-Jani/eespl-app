@@ -34,6 +34,22 @@ services:
       db:
         condition: service_healthy
 
+  # Kylas sync: pushes queued leads (every minute) and polls lead / deal outcomes (every 5 min).
+  # Same image and code as the api, another command. Sends nothing while Kylas is off.
+  worker:
+    build: ./backend
+    container_name: eespl-worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    command: python -m app.crm.worker
+    volumes:
+      - ./backend:/app
+    depends_on:
+      api:
+        condition: service_started
+
   web:
     build: ./frontend
     container_name: eespl-web

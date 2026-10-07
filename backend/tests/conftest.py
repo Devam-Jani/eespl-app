@@ -39,6 +39,7 @@ PER_TEST_TABLES = [
     "tender_members", "tender_revisions", "tenders", "tender_sequences", "channels",
     "task_photos", "tasks", "area_scopes", "drawing_revisions", "drawings", "site_nodes",
     "site_members", "sites", "site_sequences",
+    "kylas_outbox", "lead_activities", "leads", "lead_sequences", "kylas_cursors",
 ]  # fmt: skip
 # Tables that also hold seeded rows (unit conversions, categories), or are referenced by them
 # (products), are cleaned with DELETE so the seed survives.

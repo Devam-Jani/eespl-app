@@ -21,7 +21,9 @@ export const MENU: MenuItem[] = [
   { to: "/settings/categories", label: "Categories", perms: ["library.edit"], section: "Settings" },
   { to: "/settings/tags", label: "Tags", perms: ["library.edit"], section: "Settings" },
   { to: "/settings/units", label: "Units & conversions", perms: ["library.edit"], section: "Settings" },
+  { to: "/settings/kylas", label: "Integrations › Kylas", perms: ["admin.settings"], section: "Settings" },
   { to: "/settings/stage-templates", label: "Stage templates", perms: ["site.view"], section: "Settings" },
+  { to: "/leads", label: "Leads", perms: ["leads.view"], section: "Modules" },
   { to: "/tenders", label: "Tenders", perms: ["tender.view"], section: "Modules" },
   { to: "/sites", label: "Sites", perms: ["site.view"], section: "Modules" },
   {
