@@ -35,6 +35,8 @@ PER_TEST_TABLES = [
     "tc_template_clauses", "tc_templates", "tc_clauses",
     "tags", "company_gstins", "company_bank_accounts",
     "vendor_contacts", "vendor_bank_accounts", "vendor_products", "vendors",
+    "boq_line_candidates", "boq_lines", "boq_sections", "boq_imports", "tender_tc",
+    "tender_members", "tenders", "tender_sequences",
 ]  # fmt: skip
 # Tables that also hold seeded rows (unit conversions, categories), or are referenced by them
 # (products), are cleaned with DELETE so the seed survives.

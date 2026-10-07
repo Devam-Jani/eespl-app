@@ -747,6 +747,8 @@ class CompanyProfileIn(BaseModel):
     phone: str | None = Field(default=None, max_length=50)
     website: str | None = Field(default=None, max_length=200)
     default_gst_percent: Percent | None = None
+    # auto-pricing: suggestions scoring below this stay unpriced
+    pricing_threshold: Decimal | None = Field(default=None, ge=0, le=1, decimal_places=3)
 
     _pan = field_validator("pan")(validate_pan)
     _tan = field_validator("tan")(_pattern(TAN_RE, "AHMA12345B"))
@@ -769,6 +771,7 @@ class CompanyProfileOut(ORM):
     phone: str | None
     website: str | None
     default_gst_percent: Decimal
+    pricing_threshold: Decimal
     has_logo: bool = False
     updated_at: datetime
 

@@ -489,7 +489,7 @@ def update_company(
     profile = _profile(db)
     before = audit.model_snapshot(profile)
     for field, value in body.model_dump(exclude_unset=True).items():
-        if field == "default_gst_percent" and value is None:
+        if field in ("default_gst_percent", "pricing_threshold") and value is None:
             continue
         setattr(profile, field, value)
     db.flush()

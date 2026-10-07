@@ -20,6 +20,7 @@ from app.masters.routers import (
     vendors,
 )
 from app.routers import audit, permissions, roles, users
+from app.tenders import routers as tenders
 
 app = FastAPI(title="EESPL App")
 
@@ -44,6 +45,7 @@ app.include_router(library.units_router)
 app.include_router(tc.router)
 app.include_router(vendors.router)
 app.include_router(admin_settings.router)
+app.include_router(tenders.router)
 
 
 @app.get("/api/health")
