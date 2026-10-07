@@ -8,6 +8,7 @@
     docker compose exec api python -m app.cli import-powerplay-vendors /data/powerplay/<file>.xlsx
     docker compose exec api python -m app.cli import-powerplay-team /data/powerplay/<file>.xlsx
     docker compose exec api python -m app.cli backtest-rates [--set-default]
+    docker compose exec api python -m app.cli import-powerplay-projects /data/powerplay/<file>.xlsx
 
 The password is prompted for (twice) when run in a terminal. When stdin is not a terminal,
 one line is read from stdin instead, so scripts can pipe it in without it appearing in argv.
@@ -241,6 +242,59 @@ def run_backtest(set_default: bool) -> None:
                 print(f"Company default rate policy: {before} -> {best}")
 
 
+def run_import_projects(paths: list[str]) -> None:
+    """Past Powerplay projects as closed sites (see app.sites.powerplay_projects)."""
+    import glob
+    from pathlib import Path
+
+    from app.sites.powerplay_projects import import_projects
+
+    files = sorted(
+        {p for pattern in paths for p in glob.glob(pattern)}
+        | {p for p in paths if Path(p).exists()}
+    )
+    if not files:
+        print(f"file not found: {' '.join(paths)}")
+        sys.exit(1)
+    with SessionLocal() as db:
+        for path in files:
+            try:
+                result = import_projects(db, path)
+            except ValueError as exc:
+                print(f"{Path(path).name}: {exc}")
+                sys.exit(1)
+            audit.record(
+                db,
+                "import.powerplay_projects",
+                "site",
+                None,
+                after={
+                    "file": Path(path).name,
+                    "rows": result.rows,
+                    "imported": len(result.imported),
+                    "already": result.already,
+                    "skipped": len(result.skipped),
+                    "merged": result.merged,
+                    "near_duplicates": result.near_duplicates,
+                },
+            )
+            db.commit()
+            print(f"{Path(path).name}: {result.rows} projects read")
+            print(
+                f"  imported as closed sites: {len(result.imported)}; already there: "
+                f"{result.already}"
+            )
+            print(f"  skipped ({len(result.skipped)}):")
+            for name, reason in result.skipped:
+                print(f"    - {name!r}: {reason}")
+            print(f"  merged exact duplicates ({len(result.merged)}):")
+            for name, n in result.merged:
+                print(f"    - {name!r} x{n}")
+            print(f"  near-duplicates kept separate, flagged ({len(result.near_duplicates)}):")
+            for a, b in result.near_duplicates:
+                print(f"    - {a!r} / {b!r}")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -260,6 +314,11 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("path")
 
     p = sub.add_parser(
+        "import-powerplay-projects", help="Import past Powerplay projects as closed sites"
+    )
+    p.add_argument("paths", nargs="+")
+
+    p = sub.add_parser(
         "backtest-rates", help="Compare rate policies on the library (leave-one-BOQ-out)"
     )
     p.add_argument("--set-default", action="store_true", help="Make the winner the company default")
@@ -277,6 +336,8 @@ def main(argv: list[str] | None = None) -> None:
         run_import_library(args.path)
     elif args.command == "import-tc":
         run_import_tc(args.path)
+    elif args.command == "import-powerplay-projects":
+        run_import_projects(args.paths)
     elif args.command == "backtest-rates":
         run_backtest(args.set_default)
     elif args.command in POWERPLAY:

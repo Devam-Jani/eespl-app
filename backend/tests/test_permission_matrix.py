@@ -24,7 +24,7 @@ ALL = [
     "vendors.view", "vendors.edit", "settings.company",
     "library.view", "library.edit",
     "tender.view", "tender.edit", "tender.margin",
-    "site.view", "site.edit", "site.update",
+    "site.view", "site.edit", "site.update", "drawings.approve",
     "indent.raise", "indent.approve", "indent.dispatch", "indent.receive",
     "attendance.manage", "pettycash.manage",
     "finance.view", "finance.edit",
@@ -54,6 +54,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "site.view",
         "site.edit",
         "site.update",
+        "drawings.approve",
         "indent.raise",
         "indent.approve",
         "attendance.manage",
@@ -111,12 +112,13 @@ EXPECTED: dict[str, dict[str, str]] = {
         "finance.edit",
         "dashboard.view",
     ),  # fmt: skip
-    "client": {"site.view": "assigned"},
+    # no site access until the client portal (M6)
+    "client": {},
 }
 
 REAL_ENDPOINTS = {
     "admin.users", "admin.roles", "audit.view", "clients.view", "library.view",
-    "vendors.view", "settings.company",
+    "vendors.view", "settings.company", "site.view",
 }  # fmt: skip
 
 probe_app = FastAPI()
@@ -144,6 +146,8 @@ def _call(client: TestClient, code: str, headers, db):
         return client.get("/api/vendors", headers=headers)
     if code == "settings.company":
         return client.get("/api/settings/company", headers=headers)
+    if code == "site.view":
+        return client.get("/api/sites", headers=headers)
     if code == "library.view":
         return client.get("/api/products", headers=headers)
     return client.get(f"/_probe/{code}", headers=headers)

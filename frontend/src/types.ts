@@ -363,6 +363,7 @@ export type Tender = {
   created_at: string;
   revision: number;
   revision_label: string;
+  site_id: number | null;
   submitted_revisions: number;
   // only with tender.margin; null when no line is system-priced
   cost_total?: string | null;
@@ -591,4 +592,164 @@ export const RATE_POLICIES: Record<string, string> = {
   lower_latest_median: "Lower of latest and median",
   latest: "Latest rate",
   trimmed_mean: "Trimmed mean (top and bottom 10% dropped)",
+};
+
+// --- sites ---
+
+export type SiteStatus = "planned" | "active" | "on_hold" | "completed" | "closed";
+
+export type Site = {
+  id: number;
+  code: string;
+  name: string;
+  client_id: number | null;
+  client_name: string | null;
+  channel_id: number | null;
+  channel_name: string | null;
+  tender_id: number | null;
+  tender_code: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  lat: string | null;
+  lng: string | null;
+  start_date: string | null;
+  target_date: string | null;
+  late: boolean;
+  status: SiteStatus;
+  site_incharge_id: string | null;
+  incharge_name: string | null;
+  notes: string | null;
+  source: "app" | "powerplay";
+  source_ref: string | null;
+  progress_percent: string;
+  members: { user_id: string; full_name: string; role_on_site: string }[];
+  created_at: string;
+};
+
+export type SiteLookups = {
+  clients: { id: number; name: string }[];
+  channels: { id: number; name: string }[];
+  users: { id: string; full_name: string }[];
+  templates: { id: number; name: string }[];
+};
+
+export type SiteNode = {
+  id: number;
+  parent_id: number | null;
+  kind: string;
+  name: string;
+  path: string;
+  sort_order: number;
+  level_no: number | null;
+  area_sqm: string | null;
+  meta: Record<string, unknown> | null;
+  progress_percent: string;
+};
+
+export type TemplateStep = {
+  id?: number;
+  sort_order?: number;
+  name: string;
+  weight_percent: string;
+  needs_photo: boolean;
+  needs_inspection: boolean;
+  hold_point: boolean;
+  typical_days: number;
+};
+
+export type StageTemplate = {
+  id: number;
+  name: string;
+  system_id: number | null;
+  system_name: string | null;
+  work_category_id: number | null;
+  work_category_name: string | null;
+  keywords: string | null;
+  is_active: boolean;
+  steps: TemplateStep[];
+  total_days: number;
+};
+
+export type AreaScope = {
+  id: number;
+  node_id: number;
+  node_path: string;
+  boq_line_id: number | null;
+  stage_template_id: number;
+  stage_template_name: string;
+  qty: string;
+  unit: string | null;
+  progress_percent: string;
+  tasks: number;
+  started: number;
+};
+
+export type ScopeLine = {
+  boq_line_id: number;
+  item_no: string | null;
+  description: string;
+  unit: string | null;
+  boq_qty: string | null;
+  qty_note: string | null;
+  suggested_template_id: number | null;
+  assigned: string;
+  difference: string;
+  state: "ok" | "under" | "over" | "no_qty";
+  scopes: AreaScope[];
+};
+
+export type ScopeOverview = { lines: ScopeLine[]; other_scopes: AreaScope[] };
+
+export type SiteTask = {
+  id: number;
+  node_id: number | null;
+  node_path: string | null;
+  area_scope_id: number | null;
+  step_id: number | null;
+  name: string;
+  sort_order: number;
+  planned_start: string | null;
+  planned_end: string | null;
+  actual_start: string | null;
+  actual_end: string | null;
+  status: "not_started" | "in_progress" | "done" | "certified" | "blocked";
+  late: boolean;
+  assignee_id: string | null;
+  assignee_name: string | null;
+  progress_percent: string;
+  parent_task_id: number | null;
+  depends_on: number[];
+  weight_percent: string | null;
+  needs_photo: boolean;
+  needs_inspection: boolean;
+  hold_point: boolean;
+  remark: string | null;
+  inspection: { item: string; passed: boolean | null }[] | null;
+  certified_at: string | null;
+  photos: { id: number; filename: string; uploaded_at: string }[];
+};
+
+export type DrawingRevision = {
+  id: number;
+  rev: string;
+  filename: string;
+  size_bytes: number;
+  status: "draft" | "submitted" | "approved" | "rejected";
+  uploaded_by_name: string | null;
+  uploaded_at: string;
+  approved_by_name: string | null;
+  approved_at: string | null;
+  remark: string | null;
+};
+
+export type Drawing = {
+  id: number;
+  title: string;
+  discipline: string;
+  node_id: number | null;
+  node_path: string | null;
+  latest_approved: DrawingRevision | null;
+  latest: DrawingRevision | null;
+  revisions: DrawingRevision[];
 };
