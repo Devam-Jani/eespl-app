@@ -393,3 +393,42 @@ def next_code_plain(db: Session, kind: str) -> str:
         {"k": kind},
     ).scalar_one()
     return f"{kind}-{value:04d}"
+
+
+# --- PO checks and texts -------------------------------------------------------------------------
+
+
+def our_gstin(db: Session, po: PurchaseOrder) -> CompanyGstin | None:
+    """The GSTIN the PO is billed from (its own, else the company default)."""
+    if po.from_gstin_id:
+        return db.get(CompanyGstin, po.from_gstin_id)
+    return db.scalar(
+        select(CompanyGstin).order_by(CompanyGstin.is_default.desc(), CompanyGstin.id).limit(1)
+    )
+
+
+def po_warnings(db: Session, po: PurchaseOrder) -> list[str]:
+    out = []
+    if our_gstin(db, po) is None:
+        out.append("GSTIN not set: add the company GSTIN before the PO is sent")
+    if not po.vendor.gstin:
+        taxed = [ln.product.name for ln in po.lines if Decimal(ln.gst_percent) > 0]
+        taxed += [c.description or c.kind for c in po.charges if Decimal(c.gst_percent) > 0]
+        if taxed:
+            out.append(
+                "Supplier unregistered (no GSTIN), but GST is entered on: "
+                + ", ".join(taxed)
+                + ". An unregistered supplier cannot charge GST."
+            )
+    return out
+
+
+def indent_qty_text(db: Session, line: PoLine) -> str | None:
+    """The PO qty in the unit it was indented in, when that differs: "20 nos"."""
+    if not line.indent_line_id:
+        return None
+    il = db.get(IndentLine, line.indent_line_id)
+    if il is None or il.unit == line.unit or not Decimal(il.base_qty):
+        return None
+    qty = Decimal(line.base_qty) * Decimal(il.qty) / Decimal(il.base_qty)
+    return f"{qty.quantize(QTY, ROUND_HALF_UP).normalize():f} {il.unit}"

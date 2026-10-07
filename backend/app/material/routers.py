@@ -232,6 +232,7 @@ def _settings_out(p: CompanyProfile) -> PurchaseSettings:
         allow_negative_stock=p.allow_negative_stock,
         grn_approval_levels=p.grn_approval_levels,
         po_tc_template_id=p.po_tc_template_id,
+        freight_sac=p.freight_sac,
     )
 
 
@@ -253,6 +254,8 @@ def put_settings(
         raise unprocessable("T&C template not found")
     before = _settings_out(p).model_dump(mode="json")
     for k, v in body.model_dump().items():
+        if k == "freight_sac" and v is None:
+            continue
         setattr(p, k, v)
     _record(
         db,
@@ -1127,7 +1130,9 @@ def rfq_to_po(
                     "qty": ln.qty,
                     "unit": ln.unit,
                     "rate": quotes[(ln.id, vendor_id)].rate,
-                    "gst_percent": quotes[(ln.id, vendor_id)].gst_percent,
+                    "gst_percent": quotes[(ln.id, vendor_id)].gst_percent
+                    if db.get(Vendor, vendor_id).gstin
+                    else ZERO,
                 }
                 for ln in lines
             ],
@@ -1217,6 +1222,8 @@ def _po_out(db: Session, po: PurchaseOrder, principal: Principal) -> PoOut:
                 gst_percent=ln.gst_percent,
                 amount=ln.amount,
                 received_qty=ln.received_qty,
+                hsn_code=ln.product.hsn_code,
+                indent_qty=svc.indent_qty_text(db, ln),
             )
             for ln in po.lines
         ],
@@ -1232,6 +1239,9 @@ def _po_out(db: Session, po: PurchaseOrder, principal: Principal) -> PoOut:
             for c in po.charges
         ],
         approval_limit=limit,
+        vendor_registered=bool(po.vendor.gstin),
+        gstin_missing=svc.our_gstin(db, po) is None,
+        warnings=svc.po_warnings(db, po),
         needs_approver=needs_approver,
         can_edit=edit_ok and po.status in ("draft", "pending_approval"),
         can_approve=po.status == "pending_approval"
@@ -1280,9 +1290,13 @@ def _fill_po(db: Session, po: PurchaseOrder, body: PoIn, principal: Principal) -
         setattr(po, k, getattr(body, k))
     if body.payment_terms is None and vendor.payment_terms_days:
         po.payment_terms = f"{vendor.payment_terms_days} days from the invoice"
+    # an unregistered supplier cannot charge GST: 0 % unless someone typed a rate (then warned)
+    unregistered = not vendor.gstin
     lines = []
     for ln in body.lines:
         product = _product(db, ln.product_id)
+        if unregistered and "gst_percent" not in ln.model_fields_set:
+            ln.gst_percent = ZERO
         if ln.indent_line_id:
             il = db.get(IndentLine, ln.indent_line_id)
             if il is None or il.product_id != product.id:
@@ -1304,6 +1318,9 @@ def _fill_po(db: Session, po: PurchaseOrder, body: PoIn, principal: Principal) -
             )
         )
     po.lines = lines
+    for c in body.charges:
+        if unregistered and "gst_percent" not in c.model_fields_set:
+            c.gst_percent = ZERO
     po.charges = [
         PoCharge(
             kind=c.kind,
@@ -1545,6 +1562,10 @@ def mark_sent(
     _po_edit(db, principal, po, "send")
     if po.status != "approved":
         raise _conflict(f"{po.code} is {po.status}; approve it first")
+    if svc.our_gstin(db, po) is None:
+        raise unprocessable(
+            "GSTIN not set: add the company GSTIN (Settings > GSTIN addresses) first"
+        )
     po.status, po.sent_at = "sent", _now()
     return _po_status(db, request, principal, po, "approved")
 

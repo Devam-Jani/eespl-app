@@ -16,6 +16,7 @@ class PurchaseSettings(BaseModel):
     allow_negative_stock: bool
     grn_approval_levels: int = Field(ge=1, le=2)
     po_tc_template_id: int | None = None
+    freight_sac: str | None = Field(default=None, pattern=r"^[0-9]{4,8}$")  # None: unchanged
 
 
 # --- stores --------------------------------------------------------------------------------------
@@ -271,6 +272,8 @@ class PoLineOut(BaseModel):
     gst_percent: Decimal
     amount: Decimal
     received_qty: Decimal
+    hsn_code: str | None = None
+    indent_qty: str | None = None  # the qty in the indented unit, e.g. "20 nos"
 
 
 class PoChargeOut(BaseModel):
@@ -317,6 +320,9 @@ class PoOut(BaseModel):
     lines: list[PoLineOut]
     charges: list[PoChargeOut]
     approval_limit: Decimal
+    vendor_registered: bool = True
+    gstin_missing: bool = False  # our GSTIN is not set: the PO cannot be sent
+    warnings: list[str] = []
     needs_approver: bool
     can_edit: bool
     can_approve: bool

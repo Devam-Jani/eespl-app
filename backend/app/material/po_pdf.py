@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (HTML templates read better unwrapped)
 """The purchase order PDF (EESPL letterhead, GST split, charges, amount in words, PO T&C)."""
 
 import base64
@@ -8,7 +9,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.masters.models import CompanyGstin, CompanyProfile, TcTemplate
+from app.masters.models import CompanyProfile, TcTemplate
+from app.material import service as svc
 from app.material.models import Indent, PoIndent, PurchaseOrder, Store
 from app.sites.models import Site
 from app.tenders.export import company, inr
@@ -52,6 +54,9 @@ tr { page-break-inside: avoid; }
 .totals td { border: none; padding: 2px 4px; }
 .totals .grand td { font-size: 10pt; font-weight: bold; border-top: 1px solid #333; }
 .words { margin-top: 4px; font-style: italic; }
+.warn { color: #c00000; font-weight: bold; }
+.note { margin-top: 6px; color: #c00000; font-weight: bold; }
+table.gst { width: 60%; margin-top: 2px; }
 h2 { font-size: 9.5pt; margin: 12px 0 4px; }
 .tc { display: flex; gap: 6px; margin-bottom: 2px; page-break-inside: avoid; }
 .tc .no { min-width: 16px; text-align: right; }
@@ -145,7 +150,8 @@ def terms(db: Session) -> list[str]:
 
 def html_document(db: Session, po: PurchaseOrder) -> str:
     c = company(db)
-    gstin = db.get(CompanyGstin, po.from_gstin_id) if po.from_gstin_id else None
+    profile = db.get(CompanyProfile, 1)
+    gstin = svc.our_gstin(db, po)
     store = db.get(Store, po.store_id)
     site = db.get(Site, store.site_id) if store.site_id else None
     indent_codes = list(
@@ -164,9 +170,12 @@ def html_document(db: Session, po: PurchaseOrder) -> str:
     rows = []
     for i, ln in enumerate(po.lines, start=1):
         tax = Decimal(ln.amount) * Decimal(ln.gst_percent) / 100
+        indented = svc.indent_qty_text(db, ln)
         rows.append(
             f"<tr><td>{i}</td><td>{_e(ln.product.name)}<br><small>{_e(ln.product.code)}"
-            f"</small></td><td class='num'>{_e(_num(ln.qty))}</td><td>{_e(ln.unit)}</td>"
+            f"</small></td><td>{_e(ln.product.hsn_code or '')}</td>"
+            f"<td class='num'>{_e(_num(ln.qty))} {_e(ln.unit)}"
+            f"{f'<br><small>({_e(indented)})</small>' if indented else ''}</td>"
             f"<td class='num'>{_e(inr(ln.rate))}</td>"
             f"<td class='num'>{_e(_num(ln.discount_percent, 2))}%</td>"
             f"<td class='num'>{_e(inr(ln.amount))}</td>"
@@ -174,12 +183,15 @@ def html_document(db: Session, po: PurchaseOrder) -> str:
             f"<td class='num'>{_e(inr(Decimal(ln.amount) + tax))}</td></tr>"
         )
 
+    freight_sac = profile.freight_sac if profile else "9965"
+
     def charge_label(ch) -> str:
         text = ch.description or ch.kind.title()
         return text if text.casefold() == ch.kind else f"{text} ({ch.kind})"
 
     charges = "".join(
-        f"<tr><td colspan='6'>{_e(charge_label(ch))}</td>"
+        f"<tr><td colspan='2'>{_e(charge_label(ch))}</td>"
+        f"<td>{_e(freight_sac if ch.kind == 'freight' else '')}</td><td colspan='3'></td>"
         f"<td class='num'>{_e(inr(ch.amount))}</td><td class='num'>{_e(_num(ch.gst_percent, 2))}%"
         f"</td><td class='num'>{_e(inr(Decimal(ch.amount) * (1 + Decimal(ch.gst_percent) / 100)))}"
         "</td></tr>"
@@ -201,26 +213,56 @@ def html_document(db: Session, po: PurchaseOrder) -> str:
         f'<div class="tc"><span class="no">{i}.</span><span>{_e(t)}</span></div>'
         for i, t in enumerate(terms(db), start=1)
     )
-    deliver = ", ".join(
-        p
-        for p in (
-            store.name,
-            store.address or (site.address if site else None),
-            site.city if site else None,
-        )
-        if p
+    address = ", ".join(
+        x
+        for x in (store.address or (site.address if site else None), site.city if site else None)
+        if x
     )
+    deliver = f"<b>{_e(store.name)}</b><br>{_e(address) if address else '<span class="warn">Address not set</span>'}"
     vendor_addr = ", ".join(p for p in (v.address, v.city, v.state) if p)
     if gstin:
-        our_gstin = f"GSTIN: {gstin.gstin} ({gstin.state})"
+        our_gstin = f"GSTIN: {_e(gstin.gstin)} ({_e(gstin.state)})"
     else:
-        our_gstin = f"GSTIN: {c.gstin}" if c.gstin else ""
+        our_gstin = '<span class="warn">GSTIN not set</span>'
+    contact = " · ".join(
+        _e(x) for x in (f"Phone: {profile.phone}" if profile and profile.phone else None,
+                        f"Email: {profile.email}" if profile and profile.email else None) if x
+    )  # fmt: skip
+    # GST summary by rate: lines and charges grouped by their GST %
+    by_rate: dict[Decimal, Decimal] = {}
+    for ln in po.lines:
+        by_rate[Decimal(ln.gst_percent)] = by_rate.get(
+            Decimal(ln.gst_percent), Decimal(0)
+        ) + Decimal(ln.amount)
+    for ch in po.charges:
+        by_rate[Decimal(ch.gst_percent)] = by_rate.get(
+            Decimal(ch.gst_percent), Decimal(0)
+        ) + Decimal(ch.amount)
+    summary_rows = []
+    for rate, taxable in sorted(by_rate.items()):
+        tax = (taxable * rate / 100).quantize(Decimal("0.01"))
+        split = (f"<td class='num' colspan='2'>{_e(inr(tax))}</td>" if po.interstate else
+                 f"<td class='num'>{_e(inr((tax / 2).quantize(Decimal('0.01'))))}</td>"
+                 f"<td class='num'>{_e(inr(tax - (tax / 2).quantize(Decimal('0.01'))))}</td>")  # fmt: skip
+        summary_rows.append(f"<tr><td class='num'>{_e(_num(rate, 2))}%</td><td class='num'>{_e(inr(taxable))}</td>"
+                            f"{split}<td class='num'>{_e(inr(tax))}</td></tr>")  # fmt: skip
+    split_head = (
+        "<th class='num' colspan='2'>IGST</th>"
+        if po.interstate
+        else "<th class='num'>CGST</th><th class='num'>SGST</th>"
+    )
+    gst_summary = (f"<h2>GST summary</h2><table class='gst'><thead><tr><th class='num'>Rate</th><th class='num'>Taxable</th>"
+                   f"{split_head}<th class='num'>Total tax</th></tr></thead><tbody>{''.join(summary_rows)}</tbody></table>")  # fmt: skip
+    unregistered = (
+        "" if v.gstin else
+        '<div class="note">Supplier unregistered, no input tax credit.</div>'
+    )  # fmt: skip
     expected = f"{po.expected_delivery:%d-%m-%Y}" if po.expected_delivery else "—"
     site_line = f"<br><b>Site:</b> {_e(site.code)} {_e(site.name)}" if site else ""
     return f"""<!doctype html><html><head><meta charset="utf-8"><style>{CSS}</style></head><body>
 <div class="head">{logo}<div><h1>{_e(c.name)}</h1>
 <div>{_e(gstin.address if gstin else c.address)}</div>
-<div>{_e(our_gstin)}</div></div></div>
+<div>{our_gstin}</div><div>{contact}</div></div></div>
 <div class="title">PURCHASE ORDER</div>
 <div class="boxes">
 <div class="box"><h3>Supplier</h3><b>{_e(v.name)}</b><br>{_e(vendor_addr)}<br>
@@ -230,9 +272,9 @@ def html_document(db: Session, po: PurchaseOrder) -> str:
 <b>Expected delivery:</b> {_e(expected)}<br>
 <b>Indent:</b> {_e(", ".join(indent_codes) or "—")}<br>
 <b>Supply:</b> {"Inter-state (IGST)" if po.interstate else "Intra-state (CGST + SGST)"}</div>
-<div class="box"><h3>Deliver to</h3>{_e(deliver)}{site_line}</div>
+<div class="box"><h3>Deliver to</h3>{deliver}{site_line}</div>
 </div>
-<table><thead><tr><th>#</th><th>Item</th><th class="num">Qty</th><th>Unit</th>
+<table><thead><tr><th>#</th><th>Item</th><th>HSN/SAC</th><th class="num">Qty</th>
 <th class="num">Rate</th><th class="num">Disc</th><th class="num">Taxable</th>
 <th class="num">GST</th><th class="num">Amount</th></tr></thead>
 <tbody>{"".join(rows)}{charges}</tbody></table>
@@ -244,6 +286,7 @@ def html_document(db: Session, po: PurchaseOrder) -> str:
 <tr class="grand"><td>Grand total</td><td class="num">{_e(inr(po.grand_total))}</td></tr>
 </table>
 <div class="words">{_e(in_words(po.grand_total))}</div>
+{unregistered}{gst_summary}
 <h2>Payment terms</h2><div>{_e(po.payment_terms or "As agreed")}</div>
 {f"<h2>Remarks</h2><div>{_e(po.remark)}</div>" if po.remark else ""}
 <h2>Terms &amp; Conditions</h2>{tc}
