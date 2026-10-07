@@ -12,6 +12,8 @@ import Placeholder from "./pages/Placeholder";
 import Products from "./pages/Products";
 import RateLibrary from "./pages/RateLibrary";
 import Roles from "./pages/Roles";
+import SiteDetail from "./pages/SiteDetail";
+import Sites from "./pages/Sites";
 import SystemDetail from "./pages/SystemDetail";
 import Systems from "./pages/Systems";
 import TcLibrary from "./pages/TcLibrary";
@@ -23,6 +25,7 @@ import Categories from "./pages/settings/Categories";
 import CompanyBanks from "./pages/settings/CompanyBanks";
 import CompanyProfile from "./pages/settings/CompanyProfile";
 import GstinAddresses from "./pages/settings/GstinAddresses";
+import StageTemplates from "./pages/settings/StageTemplates";
 import Tags from "./pages/settings/Tags";
 import UnitsConversions from "./pages/settings/UnitsConversions";
 
@@ -35,6 +38,8 @@ const PAGES: Record<string, JSX.Element> = {
   "/tc-library": <TcLibrary />,
   "/vendors": <Vendors />,
   "/tenders": <Tenders />,
+  "/sites": <Sites />,
+  "/settings/stage-templates": <StageTemplates />,
   "/settings/company": <CompanyProfile />,
   "/settings/gstins": <GstinAddresses />,
   "/settings/bank-accounts": <CompanyBanks />,
@@ -84,6 +89,14 @@ export default function App() {
               element={
                 <RequirePermission perms={["tender.view"]}>
                   <TenderDetail />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/sites/:id"
+              element={
+                <RequirePermission perms={["site.view"]}>
+                  <SiteDetail />
                 </RequirePermission>
               }
             />

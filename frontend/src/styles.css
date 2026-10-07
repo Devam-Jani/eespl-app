@@ -1415,3 +1415,143 @@ input.full {
 .delta-down {
   color: #067647;
 }
+
+/* --- sites --- */
+
+.progress {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  min-width: 5rem;
+  height: 1.1rem;
+  background: #e8ece9;
+  border-radius: 999px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: #4c9a6f;
+}
+
+.progress-label {
+  position: relative;
+  display: block;
+  text-align: center;
+  font-size: 0.72rem;
+  line-height: 1.1rem;
+  font-weight: 600;
+}
+
+.tree td {
+  vertical-align: middle;
+}
+
+.tree-toggle {
+  display: inline-block;
+  width: 1.6rem;
+}
+
+.tree-pick {
+  max-height: 45vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem;
+}
+
+.tree-pick .check {
+  display: block;
+}
+
+.scope-line {
+  border-top: 1px solid var(--border);
+  padding: 0.6rem 0;
+}
+
+.gantt-head {
+  display: flex;
+  justify-content: space-between;
+  margin-left: 14rem;
+}
+
+.gantt-group {
+  font-weight: 600;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.gantt-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 1.3rem;
+}
+
+.gantt-label {
+  width: 13.5rem;
+  flex: none;
+  font-size: 0.78rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.gantt-track {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  background: #f6f8f7;
+}
+
+.gantt-bar {
+  position: absolute;
+  border-radius: 3px;
+}
+
+.gantt-bar.planned {
+  top: 2px;
+  height: 7px;
+  background: #b9c2bd;
+}
+
+.gantt-bar.planned.late {
+  background: #f2b8b5;
+}
+
+.gantt-bar.actual {
+  top: 10px;
+  height: 7px;
+  background: #4c9a6f;
+}
+
+.gantt-bar.actual.in_progress {
+  background: #3b82c4;
+}
+
+.gantt-bar.actual.blocked {
+  background: #b42318;
+}
+
+.gantt-today {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #b42318;
+}
+
+.photo-strip {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.photo-strip img {
+  height: 90px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}

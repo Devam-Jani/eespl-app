@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, downloadFile, queryString } from "../api";
 import { useAuth } from "../auth";
 import Modal from "../components/Modal";
@@ -148,6 +148,7 @@ export default function TenderDetail() {
 
 function DetailsTab({ tender, canEdit, onChange }: { tender: Tender; canEdit: boolean; onChange: (t: Tender) => void }) {
   const { can } = useAuth();
+  const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [lookups, setLookups] = useState<TenderLookups | null>(null);
   const [closing, setClosing] = useState<TenderStatus | null>(null);
@@ -157,11 +158,34 @@ function DetailsTab({ tender, canEdit, onChange }: { tender: Tender; canEdit: bo
     if (canEdit) api<TenderLookups>("/api/tenders/lookups").then(setLookups, () => setLookups(null));
   }, [canEdit]);
 
+  async function createSiteFor(t: Tender) {
+    try {
+      const site = await api<{ id: number }>("/api/sites/from-tender", { method: "POST", json: { tender_id: t.id, start_date: new Date().toISOString().slice(0, 10) } });
+      navigate(`/sites/${site.id}`);
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }
+
+  async function createSite() {
+    const start = prompt("Site start date (YYYY-MM-DD)", new Date().toISOString().slice(0, 10));
+    if (start === null) return;
+    setError(null);
+    try {
+      const site = await api<{ id: number }>("/api/sites/from-tender", { method: "POST", json: { tender_id: tender.id, start_date: start || null } });
+      navigate(`/sites/${site.id}`);
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }
+
   async function setStatus(status: TenderStatus, extra: Record<string, string | null> = {}) {
     setError(null);
     try {
-      onChange(await api<Tender>(`/api/tenders/${tender.id}`, { method: "PATCH", json: { status, ...extra } }));
+      const updated = await api<Tender>(`/api/tenders/${tender.id}`, { method: "PATCH", json: { status, ...extra } });
+      onChange(updated);
       setClosing(null);
+      if (status === "won" && !updated.site_id && can("site.edit") && confirm("Tender won. Create the site now?")) await createSiteFor(updated);
     } catch (err) {
       setError(errorText(err));
     }
@@ -212,6 +236,18 @@ function DetailsTab({ tender, canEdit, onChange }: { tender: Tender; canEdit: bo
               <button className="btn btn-primary" onClick={() => setEditing(true)}>
                 Edit
               </button>
+            )}
+            {tender.site_id ? (
+              <Link className="btn" to={`/sites/${tender.site_id}`}>
+                Open site
+              </Link>
+            ) : (
+              tender.status === "won" &&
+              can("site.edit") && (
+                <button className="btn btn-primary" onClick={() => void createSite()}>
+                  Create site
+                </button>
+              )
             )}
           </div>
         )}

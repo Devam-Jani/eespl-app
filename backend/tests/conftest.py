@@ -37,12 +37,15 @@ PER_TEST_TABLES = [
     "vendor_contacts", "vendor_bank_accounts", "vendor_products", "vendors",
     "boq_line_candidates", "boq_lines", "boq_sections", "boq_imports", "tender_tc",
     "tender_members", "tender_revisions", "tenders", "tender_sequences", "channels",
+    "task_photos", "tasks", "area_scopes", "drawing_revisions", "drawings", "site_nodes",
+    "site_members", "sites", "site_sequences",
 ]  # fmt: skip
 # Tables that also hold seeded rows (unit conversions, categories), or are referenced by them
 # (products), are cleaned with DELETE so the seed survives.
 PER_TEST_DELETES = [
     "DELETE FROM unit_conversions WHERE product_id IS NOT NULL OR created_by IS NOT NULL",
     "DELETE FROM product_prices",
+    "DELETE FROM stage_templates WHERE created_by IS NOT NULL",  # the seeded ones stay
     "DELETE FROM system_components",
     "DELETE FROM systems",
     "DELETE FROM products",

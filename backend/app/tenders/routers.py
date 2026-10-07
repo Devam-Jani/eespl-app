@@ -23,7 +23,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app import audit
@@ -175,6 +175,7 @@ def _tender_out(db: Session, tender: Tender, with_cost: bool) -> TenderOut:
         revision=tender.revision,
         revision_label=revisions.revision_label(db, tender),
         submitted_revisions=revisions.submitted_count(db, tender),
+        site_id=db.scalar(text("SELECT id FROM sites WHERE tender_id = :t"), {"t": tender.id}),
     )
     if not with_cost:
         return TenderOut(**data)
