@@ -49,6 +49,9 @@ export default function Sites() {
   const [offset, setOffset] = useState(0);
   const [page, setPage] = useState<Page<Site> | null>(null);
   const [lookups, setLookups] = useState<SiteLookups | null>(null);
+  // margin % per site (only returned with tender.margin)
+  const [margins, setMargins] = useState<Record<string, { margin_percent: string | null; over_cost: boolean }>>({});
+  const showMargin = can("tender.margin") && can("billing.view");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,6 +70,10 @@ export default function Sites() {
   useEffect(() => {
     api<SiteLookups>("/api/sites/lookups").then(setLookups, () => setLookups(null));
   }, []);
+
+  useEffect(() => {
+    if (showMargin) api<typeof margins>("/api/finance/site-margins").then(setMargins, () => setMargins({}));
+  }, [showMargin]);
 
   const setFilter = (key: keyof typeof filters) => (e: { target: { value: string } }) => {
     setOffset(0);
@@ -158,6 +165,7 @@ export default function Sites() {
               <th>Channel</th>
               <th>Status</th>
               <th>Progress</th>
+              {showMargin && <th className="num">Margin %</th>}
               <th>In-charge</th>
               <th>Target</th>
             </tr>
@@ -181,6 +189,12 @@ export default function Sites() {
                 <td>
                   <ProgressBar value={s.progress_percent} />
                 </td>
+                {showMargin && (
+                  <td className={`num ${margins[s.id]?.over_cost ? "text-danger" : ""}`} title={margins[s.id]?.over_cost ? "Cost to date is more than billed" : undefined}>
+                    {margins[s.id]?.margin_percent != null ? `${margins[s.id].margin_percent}%` : "—"}
+                    {margins[s.id]?.over_cost && " ⚠"}
+                  </td>
+                )}
                 <td>{s.incharge_name ?? "—"}</td>
                 <td className={`nowrap ${s.late ? "text-danger" : ""}`} title={s.late ? "Past the target date" : undefined}>
                   {shortDate(s.target_date)}
@@ -189,7 +203,7 @@ export default function Sites() {
             ))}
             {page?.items.length === 0 && (
               <tr>
-                <td colSpan={8} className="empty">
+                <td colSpan={showMargin ? 9 : 8} className="empty">
                   No sites found.
                 </td>
               </tr>

@@ -483,6 +483,7 @@ class IssueIn(BaseModel):
     store_id: int | None = None  # default: the site's store
     task_id: int | None = None
     area_scope_id: int | None = None
+    subcontractor_id: int | None = None  # handed to a subcontractor (recovered on their RA bill)
     issued_on: date | None = None
     remark: str | None = None
     lines: list[IssueLineIn] = Field(min_length=1)

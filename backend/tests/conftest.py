@@ -51,6 +51,12 @@ PER_TEST_TABLES = [
     "dpr_photos", "dprs", "attendance", "staff_attendance", "labour", "wo_measurements", "wo_lines",
     "work_orders", "inspections", "mom_points", "moms", "equipment_usage", "asset_movements",
     "assets", "site_budgets", "site_costs",
+    "tally_exports", "labour_advances", "labour_wage_payments", "staff_advances", "payslips",
+    "payroll_runs", "salary_structures", "petty_cash_entries", "petty_cash_accounts",
+    "subcon_retention_releases", "subcon_bill_lines", "subcon_bills", "payment_allocations",
+    "payments", "vendor_bill_lines", "vendor_bill_grns", "vendor_bills", "retention_releases",
+    "receipt_allocations", "receipts", "invoice_lines", "tax_invoices", "ra_bill_lines", "ra_bills",
+    "contract_lines", "client_contracts", "finance_settings",
 ]  # fmt: skip
 # Tables that also hold seeded rows (unit conversions, categories), or are referenced by them
 # (products), are cleaned with DELETE so the seed survives.
@@ -63,6 +69,8 @@ PER_TEST_DELETES = [
     "DELETE FROM products",
     "DELETE FROM categories WHERE id > :seeded_max_category",
     "DELETE FROM checklist_templates WHERE created_by IS NOT NULL",  # the seeded ones stay
+    "DELETE FROM expense_categories WHERE created_by IS NOT NULL",  # the seeded ones stay
+    "INSERT INTO finance_settings SELECT * FROM finance_settings_seed",
     "INSERT INTO company_profile (id) VALUES (1)",
     "INSERT INTO stores (name, kind) VALUES ('Ethios Godown', 'godown')",
 ]
@@ -86,6 +94,8 @@ def test_database() -> Iterator[None]:
     cfg = Config(str(backend_dir / "alembic.ini"))
     cfg.set_main_option("script_location", str(backend_dir / "migrations"))
     command.upgrade(cfg, "head")
+    with engine.begin() as conn:  # the seeded settings row, restored after every test
+        conn.execute(text("CREATE TABLE finance_settings_seed AS SELECT * FROM finance_settings"))
     yield
     engine.dispose()
 

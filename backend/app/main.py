@@ -17,6 +17,11 @@ from app.execution import dpr as ex_dpr
 from app.execution import inspections as ex_inspections
 from app.execution import labour as ex_labour
 from app.execution import subcon as ex_subcon
+from app.finance import billing as fin_billing
+from app.finance import payables as fin_payables
+from app.finance import payroll as fin_payroll
+from app.finance import petty as fin_petty
+from app.finance import reports as fin_reports
 from app.masters.routers import (
     admin_settings,
     channels,
@@ -62,7 +67,19 @@ app.include_router(sites.templates_router)
 app.include_router(crm.router)
 app.include_router(crm.settings_router)
 app.include_router(material.router)
-for _module in (ex_dpr, ex_labour, ex_subcon, ex_inspections, ex_assets, ex_budget):
+for _module in (
+    ex_dpr,
+    ex_labour,
+    ex_subcon,
+    ex_inspections,
+    ex_assets,
+    ex_budget,
+    fin_billing,
+    fin_payables,
+    fin_petty,
+    fin_payroll,
+    fin_reports,
+):
     app.include_router(_module.router)
 
 

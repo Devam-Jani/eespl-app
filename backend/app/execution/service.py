@@ -11,6 +11,7 @@ Budget "actual so far" per head:
   equipment    equipment usage amounts (hours or days x rate, plus fuel)
   freight      the site's freight entries (PO freight as GRNs arrive, transfers, bills)
   other        costs entered by hand (site_costs), under any head
+  (approved petty cash expenses are added to the head of their category, mostly other)
 """
 
 import calendar
@@ -434,6 +435,10 @@ def actuals(db: Session, site_id: int) -> dict[str, Decimal]:
             )
         )
     )
+    from app.finance.service import expenses_by_head  # approved petty cash expenses
+
+    for head, amount in expenses_by_head(db, site_id).items():
+        out[head] += amount
     for head, amount in db.execute(
         select(SiteCost.head, func.sum(SiteCost.amount))
         .where(SiteCost.site_id == site_id)

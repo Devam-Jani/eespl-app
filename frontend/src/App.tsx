@@ -34,6 +34,14 @@ import StageTemplates from "./pages/settings/StageTemplates";
 import Tags from "./pages/settings/Tags";
 import UnitsConversions from "./pages/settings/UnitsConversions";
 
+const fin = () => import("./pages/finance/Reports");
+const Billing = lazy(() => import("./pages/finance/Billing"));
+const Payables = lazy(() => import("./pages/finance/Payables"));
+const PettyCash = lazy(() => import("./pages/finance/PettyCash"));
+const Payroll = lazy(() => import("./pages/finance/Payroll"));
+const SiteProfit = lazy(() => import("./pages/finance/Reports"));
+const Tally = lazy(() => fin().then((m) => ({ default: m.Tally })));
+const FinanceSettings = lazy(() => fin().then((m) => ({ default: m.FinanceSettings })));
 const ex = () => import("./pages/execution/Pages");
 const AttendanceToday = lazy(() => ex().then((m) => ({ default: m.AttendanceToday })));
 const LabourMaster = lazy(() => ex().then((m) => ({ default: m.LabourMaster })));
@@ -73,6 +81,13 @@ const PAGES: Record<string, JSX.Element> = {
   "/settings/categories": <Categories />,
   "/settings/tags": <Tags />,
   "/settings/units": <UnitsConversions />,
+  "/billing": <Billing />,
+  "/payables": <Payables />,
+  "/petty-cash": <PettyCash />,
+  "/payroll": <Payroll />,
+  "/site-profit": <SiteProfit />,
+  "/tally": <Tally />,
+  "/settings/finance": <FinanceSettings />,
   "/attendance": <AttendanceToday />,
   "/labour": <LabourMaster />,
   "/subcontractors": <Subcontractors />,

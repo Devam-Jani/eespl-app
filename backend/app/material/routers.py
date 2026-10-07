@@ -2457,10 +2457,15 @@ def create_issue(
         site_id=site.id,
         task_id=body.task_id,
         area_scope_id=body.area_scope_id,
+        subcontractor_id=body.subcontractor_id,
         issued_on=body.issued_on or date.today(),
         remark=body.remark,
         created_by=principal.user.id,
     )
+    if body.subcontractor_id:
+        sub = db.get(Vendor, body.subcontractor_id)
+        if sub is None or sub.type != "subcontractor":
+            raise unprocessable("Pick a subcontractor (a vendor of type subcontractor)")
     db.add(issue)
     db.flush()
     for ln in body.lines:
