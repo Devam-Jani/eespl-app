@@ -9,6 +9,7 @@ export type MenuItem = {
 export const MENU: MenuItem[] = [
   { to: "/dashboard", label: "Dashboard", perms: ["dashboard.view"], section: "Modules" },
   { to: "/clients", label: "Clients", perms: ["clients.view"], section: "Masters" },
+  { to: "/channels", label: "Channels", perms: ["clients.view"], section: "Masters" },
   { to: "/products", label: "Products", perms: ["library.view"], section: "Masters" },
   { to: "/systems", label: "Systems (rate calculator)", perms: ["library.view"], section: "Masters" },
   { to: "/rate-library", label: "Rate library", perms: ["library.view"], section: "Masters" },

@@ -39,7 +39,7 @@ export default function Tenders() {
   const canEdit = can("tender.edit");
   const navigate = useNavigate();
   const [q, setQ] = useState("");
-  const [filters, setFilters] = useState({ q: "", status: "", owner_id: "", client_id: "" });
+  const [filters, setFilters] = useState({ q: "", status: "", owner_id: "", client_id: "", channel_id: "" });
   const [offset, setOffset] = useState(0);
   const [page, setPage] = useState<Page<Tender> | null>(null);
   const [lookups, setLookups] = useState<TenderLookups | null>(null);
@@ -99,6 +99,14 @@ export default function Tenders() {
                   </option>
                 ))}
               </select>
+              <select value={filters.channel_id} onChange={setFilter("channel_id")}>
+                <option value="">All channels</option>
+                {lookups.channels.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
               <select value={filters.owner_id} onChange={setFilter("owner_id")}>
                 <option value="">All owners</option>
                 {lookups.users.map((u) => (
@@ -126,6 +134,7 @@ export default function Tenders() {
               <th>Code</th>
               <th>Name</th>
               <th>Client</th>
+              <th>Channel</th>
               <th>Due</th>
               <th>Owner</th>
               <th>Status</th>
@@ -142,7 +151,8 @@ export default function Tenders() {
                   {t.name}
                   {t.site_city && <span className="muted small"> · {t.site_city}</span>}
                 </td>
-                <td>{t.client_name}</td>
+                <td>{t.client_name ?? "—"}</td>
+                <td>{t.channel_name ?? "—"}</td>
                 <td className={`nowrap ${t.overdue ? "text-danger" : ""}`} title={t.overdue ? "Overdue and not submitted" : undefined}>
                   {shortDate(t.due_on)}
                 </td>
@@ -155,7 +165,7 @@ export default function Tenders() {
             ))}
             {page?.items.length === 0 && (
               <tr>
-                <td colSpan={7} className="empty">
+                <td colSpan={8} className="empty">
                   No tenders found.
                 </td>
               </tr>
@@ -192,6 +202,7 @@ export function TenderForm({
   const [form, setForm] = useState({
     name: tender?.name ?? "",
     client_id: tender?.client_id?.toString() ?? "",
+    channel_id: tender?.channel_id?.toString() ?? "",
     site_name: tender?.site_name ?? "",
     site_city: tender?.site_city ?? "",
     site_state: tender?.site_state ?? "",
@@ -209,10 +220,15 @@ export function TenderForm({
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!form.client_id && !form.channel_id) {
+      setError("Choose the client, the channel, or both");
+      return;
+    }
     setBusy(true);
     const body: Record<string, unknown> = {
       name: form.name.trim(),
-      client_id: Number(form.client_id),
+      client_id: form.client_id ? Number(form.client_id) : null,
+      channel_id: form.channel_id ? Number(form.channel_id) : null,
       site_name: form.site_name || null,
       site_city: form.site_city || null,
       site_state: form.site_state || null,
@@ -245,12 +261,23 @@ export function TenderForm({
             <input required value={form.name} onChange={set("name")} autoFocus />
           </label>
           <label className="field">
-            <span>Client *</span>
-            <select required value={form.client_id} onChange={set("client_id")}>
-              <option value="">Choose…</option>
+            <span>Client (end client, e.g. Adani Realty)</span>
+            <select value={form.client_id} onChange={set("client_id")}>
+              <option value="">— not known yet —</option>
               {lookups.clients.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Channel (who brought it)</span>
+            <select value={form.channel_id} onChange={set("channel_id")}>
+              <option value="">— direct —</option>
+              {lookups.channels.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.type})
                 </option>
               ))}
             </select>

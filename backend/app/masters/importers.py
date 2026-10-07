@@ -37,7 +37,13 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app import audit
-from app.masters.library import exclusion_reason, is_competitor_note, recompute_stats, source_stats
+from app.masters.library import (
+    exclusion_reason,
+    is_competitor_note,
+    link_channels,
+    recompute_stats,
+    source_stats,
+)
 from app.masters.models import LibraryItem, LibraryLine, TcClause, TcTemplate, TcTemplateClause
 from app.masters.tc import recompute_usage
 from app.masters.units import RATE_ONLY_NOTE, is_rate_only, load_aliases, normalise_unit
@@ -52,7 +58,7 @@ ITEM_COLUMNS = {
     "min_rate": "Min",
     "median_rate": "Median",
     "max_rate": "Max",
-    "latest_client": "Latest client folder",
+    "latest_channel": "Latest client folder",
     "latest_source_file": "Latest source file",
     "product_make": "Product / make",
     "remarks": "Remarks",
@@ -60,7 +66,7 @@ ITEM_COLUMNS = {
     "check": "Check",
 }
 LINE_COLUMNS = {
-    "client_folder": "Client folder",
+    "channel": "Client folder",
     "file": "File",
     "sheet": "Sheet",
     "row": "Row",
@@ -249,7 +255,7 @@ def import_library(db: Session, path: str | Path) -> LibraryImportResult:
             "min_rate": _decimal(r["min_rate"]),
             "median_rate": _decimal(r["median_rate"]),
             "max_rate": _decimal(r["max_rate"]),
-            "latest_client": _text(r["latest_client"], 200),
+            "latest_channel": _text(r["latest_channel"], 200),
             "latest_source_file": _text(r["latest_source_file"]),
             "product_make": _text(r["product_make"]),
             "remarks": _text(r["remarks"]),
@@ -347,7 +353,7 @@ def import_library(db: Session, path: str | Path) -> LibraryImportResult:
         lines[source_key] = {
             "source_key": source_key,
             "library_item_id": item_id,
-            "client_folder": _text(r["client_folder"], 200),
+            "channel": _text(r["channel"], 200),
             "file": file,
             "sheet": sheet,
             "row": int(row) if row is not None else None,
@@ -383,6 +389,8 @@ def import_library(db: Session, path: str | Path) -> LibraryImportResult:
     _delete_stale(db, LibraryItem, set(db.scalars(select(LibraryItem.source_key))) - items.keys())
     result.unrecognised_units = dict(sorted(unrecognised.items(), key=lambda kv: -kv[1]))
 
+    link_channels(db)
+    link_channels(db)
     result.items_stats_from_lines = recompute_stats(db)
     result.items_excluded = dict(
         db.execute(

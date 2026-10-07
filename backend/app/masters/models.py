@@ -69,6 +69,27 @@ class Unit(Tracked, Base):
     aliases: Mapped[list[str]] = mapped_column(ARRAY(String(50)), server_default="{}")
 
 
+CHANNEL_TYPES = ("salesperson", "partner", "manufacturer", "other")
+
+
+class Channel(Tracked, Base):
+    """Who brought a tender: a salesperson, an applicator partner or a manufacturer route. The
+    rate library's folders are channels, not end clients."""
+
+    __tablename__ = "channels"
+    __table_args__ = (
+        CheckConstraint(
+            "type IN ('salesperson', 'partner', 'manufacturer', 'other')", name="type_valid"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), unique=True)
+    type: Mapped[str] = mapped_column(String(20), server_default="other")
+    is_active: Mapped[bool] = mapped_column(server_default=true())
+    notes: Mapped[str | None] = mapped_column(Text)
+
+
 class Client(Tracked, Base):
     __tablename__ = "clients"
     __table_args__ = (CheckConstraint(_in("type", CLIENT_TYPES), name="type_valid"),)
@@ -215,7 +236,7 @@ class LibraryItem(Tracked, Base):
     min_rate: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
     median_rate: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
     max_rate: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
-    latest_client: Mapped[str | None] = mapped_column(String(200))
+    latest_channel: Mapped[str | None] = mapped_column(String(200))
     latest_source_file: Mapped[str | None] = mapped_column(Text)
     product_make: Mapped[str | None] = mapped_column(Text)
     remarks: Mapped[str | None] = mapped_column(Text)
@@ -256,7 +277,11 @@ class LibraryLine(Tracked, Base):
     library_item_id: Mapped[int | None] = mapped_column(
         ForeignKey("library_items.id", ondelete="SET NULL"), index=True
     )
-    client_folder: Mapped[str | None] = mapped_column(String(200))
+    # the top-level folder the BOQ came from: a channel (salesperson / partner / manufacturer)
+    channel: Mapped[str | None] = mapped_column(String(200))
+    channel_id: Mapped[int | None] = mapped_column(
+        ForeignKey("channels.id", ondelete="SET NULL"), index=True
+    )
     file: Mapped[str] = mapped_column(Text)
     sheet: Mapped[str | None] = mapped_column(String(200))
     row: Mapped[int | None] = mapped_column(Integer)
@@ -534,7 +559,7 @@ class CompanyProfile(Tracked, Base):
     pricing_threshold: Mapped[Decimal] = mapped_column(Numeric(4, 3), server_default="0.55")
     # Which past rate a library suggestion uses (app.masters.rate_policy.POLICIES); the default
     # is the winner of "python -m app.cli backtest-rates".
-    rate_policy: Mapped[str] = mapped_column(String(30), server_default="client_median")
+    rate_policy: Mapped[str] = mapped_column(String(30), server_default="channel_median")
 
 
 class CompanyGstin(Tracked, Base):

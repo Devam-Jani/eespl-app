@@ -27,16 +27,16 @@ CENT = Decimal("0.01")
 POLICIES: dict[str, str] = {
     "latest": "Latest rate",
     "median": "Median of all BOQs",
-    "client_last": "Same client's last rate, else the median",
+    "channel_last": "Same channel's last rate, else the median",
     "trimmed_mean": "Trimmed mean (top and bottom 10% dropped)",
-    "client_median": "Same client's median, else the median",
+    "channel_median": "Same channel's median, else the median",
     "lower_latest_median": "Lower of latest and median",
 }
 UNAVAILABLE: dict[str, str] = {
     "median_12_months": "Median of the last 12 months: the library has no BOQ dates",
     "location_median": "Same city/state median: the library has no city or state",
 }
-DEFAULT_POLICY = "median"  # replaced by the backtest winner in company settings
+DEFAULT_POLICY = "channel_median"  # replaced by the backtest winner in company settings
 
 
 @dataclass(frozen=True)
@@ -45,7 +45,7 @@ class Obs:
 
     rate: Decimal
     file: str
-    client: str | None
+    channel: str | None  # the library folder the BOQ came from
     order: int = 0  # position of the file in the rebuilt BOQ order; higher = later
 
 
@@ -56,7 +56,7 @@ class Choice:
     sources: list[Obs] = field(default_factory=list)
 
 
-def client_key(name: str | None) -> frozenset[str]:
+def channel_key(name: str | None) -> frozenset[str]:
     return frozenset(re.findall(r"[a-z0-9]+", (name or "").lower())) - {
         "ltd",
         "pvt",
@@ -67,9 +67,9 @@ def client_key(name: str | None) -> frozenset[str]:
     }
 
 
-def same_client(a: str | None, b: str | None) -> bool:
-    """Client folder vs client name: equal words, or one name's words inside the other's."""
-    ka, kb = client_key(a), client_key(b)
+def same_channel(a: str | None, b: str | None) -> bool:
+    """Library folder vs channel name: equal words, or one name's words inside the other's."""
+    ka, kb = channel_key(a), channel_key(b)
     return bool(ka and kb) and (ka <= kb or kb <= ka)
 
 
@@ -97,7 +97,7 @@ def trimmed_mean(values: list[Decimal], share: Decimal = Decimal("0.1")) -> Deci
 
 
 def choose(
-    policy: str, pool: list[Obs], client: str | None = None, preferred_file: str | None = None
+    policy: str, pool: list[Obs], channel: str | None = None, preferred_file: str | None = None
 ) -> Choice | None:
     """The suggested rate for one item under `policy`, rounded to paise (half up)."""
     if not pool:
@@ -119,14 +119,14 @@ def choose(
         latest = _median([o.rate for o in lines])
         median = _median(rates)
         return done(latest, "latest", lines) if latest <= median else done(median, "median", pool)
-    if policy in ("client_last", "client_median"):
-        own = [o for o in pool if same_client(o.client, client)] if client else []
+    if policy in ("channel_last", "channel_median"):
+        own = [o for o in pool if same_channel(o.channel, channel)] if channel else []
         if not own:
             return done(_median(rates), "median", pool)
-        if policy == "client_last":
+        if policy == "channel_last":
             lines = _latest(own, preferred_file)
-            return done(_median([o.rate for o in lines]), "client_last", lines)
-        return done(_median([o.rate for o in own]), "client_median", own)
+            return done(_median([o.rate for o in lines]), "channel_last", lines)
+        return done(_median([o.rate for o in own]), "channel_median", own)
     raise ValueError(f"Unknown rate policy {policy!r}")
 
 
@@ -202,7 +202,7 @@ def load_histories(db: Session, item_ids: Iterable[int] | None = None) -> dict[i
             LibraryLine.library_item_id,
             LibraryLine.rate,
             LibraryLine.file,
-            LibraryLine.client_folder,
+            LibraryLine.channel,
         ).where(
             LibraryLine.rate.is_not(None),
             LibraryLine.library_item_id.is_not(None),
@@ -212,10 +212,10 @@ def load_histories(db: Session, item_ids: Iterable[int] | None = None) -> dict[i
     ).all()
     files_by_item: dict[int, set[str]] = defaultdict(set)
     raw: dict[int, list[tuple[Decimal, str, str | None]]] = defaultdict(list)
-    for item_id, rate, file, client in rows:
+    for item_id, rate, file, channel in rows:
         root = _root(item_id, parent)
         files_by_item[root].add(file)
-        raw[root].append((rate, file, client))
+        raw[root].append((rate, file, channel))
     latest_file: dict[int, str] = {}
     for root, item_files in files_by_item.items():
         src = latest_src.get(root)
@@ -291,7 +291,7 @@ def backtest(
             pool = [o for o in h.lines if o.file != target.file]
             preferred = h.latest_file if h.latest_file != target.file else None
             for p, s in scores.items():
-                c = choose(p, pool, target.client, preferred)
+                c = choose(p, pool, target.channel, preferred)
                 s.add(c.rate if c else None, target.rate)
     for s in scores.values():
         s.lines += unlinked

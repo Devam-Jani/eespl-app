@@ -4,6 +4,7 @@ import { RequireAuth, RequirePermission } from "./components/Guards";
 import Layout from "./components/Layout";
 import { MENU } from "./menu";
 import Audit from "./pages/Audit";
+import Channels from "./pages/Channels";
 import Clients from "./pages/Clients";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
@@ -27,6 +28,7 @@ import UnitsConversions from "./pages/settings/UnitsConversions";
 
 const PAGES: Record<string, JSX.Element> = {
   "/clients": <Clients />,
+  "/channels": <Channels />,
   "/products": <Products />,
   "/systems": <Systems />,
   "/rate-library": <RateLibrary />,

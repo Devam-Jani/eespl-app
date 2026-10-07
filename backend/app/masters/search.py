@@ -59,7 +59,7 @@ SYNONYMS = {word: group for group in SYNONYM_GROUPS for word in group}
 ITEM_COLUMNS = """
     i.id, i.description, i.unit, i.unit_raw, i.boq_count,
     i.latest_rate, i.min_rate, i.median_rate, i.max_rate,
-    i.latest_client, i.product_make, i.needs_check, i.check_note,
+    i.latest_channel, i.product_make, i.needs_check, i.check_note,
     i.is_excluded, i.excluded_reason, i.is_competitor
 """
 FILTERS = """

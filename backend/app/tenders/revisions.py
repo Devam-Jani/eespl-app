@@ -93,7 +93,7 @@ def build_snapshot(db: Session, tender: Tender) -> dict[str, Any]:
         "tender": {
             "code": tender.code,
             "name": tender.name,
-            "client_name": tender.client.name,
+            "client_name": tender.client.name if tender.client else None,
             "site_name": tender.site_name,
             "site_city": tender.site_city,
             "site_state": tender.site_state,

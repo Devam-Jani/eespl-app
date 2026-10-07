@@ -134,9 +134,9 @@ def export_search(
     return xlsx_response(
         "rate-library",
         ["Description", "Unit", "Suggested rate", "Latest", "Min", "Median", "Max", "BOQs",
-         "Latest client", "Other bidder", "Hidden", "Check note"],
+         "Latest channel", "Other bidder", "Hidden", "Check note"],
         [[h.description, h.unit, h.suggested_rate, h.latest_rate, h.min_rate, h.median_rate,
-          h.max_rate, h.boq_count, h.latest_client, h.is_competitor, h.is_excluded, h.check_note]
+          h.max_rate, h.boq_count, h.latest_channel, h.is_competitor, h.is_excluded, h.check_note]
          for h in hits],
     )  # fmt: skip
 
@@ -160,7 +160,7 @@ def item_lines(item_id: int, db: DbSession) -> list[LibraryLineOut]:
             LibraryLine.is_competitor,
             LibraryLine.is_excluded,
             LibraryLine.from_eespl_file.desc(),
-            LibraryLine.client_folder,
+            LibraryLine.channel,
             LibraryLine.file,
         )
     )

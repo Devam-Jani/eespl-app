@@ -1,7 +1,7 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, status
-from sqlalchemy import or_, select
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import func, or_, select
 
 from app import audit
 from app.auth.deps import CurrentPrincipal, require_permission
@@ -151,6 +151,14 @@ def delete_client(
 ) -> None:
     client = get_or_404(db, Client, client_id, "Client")
     check_scope(scope, principal, client.created_by, "delete")
+    from app.tenders.models import Tender
+
+    tenders = db.scalar(select(func.count()).where(Tender.client_id == client.id))
+    if tenders:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{client.name} has {tenders} tenders; set it inactive instead",
+        )
     audit.record(
         db,
         "client.delete",

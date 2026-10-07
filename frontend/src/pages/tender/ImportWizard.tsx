@@ -10,7 +10,10 @@ const FIELDS: [string, string][] = [
   ["description2", "Second description column"],
   ["unit", "Unit"],
   ["qty", "Quantity"],
+  ["qty2", "Second quantity column (added to the quantity)"],
   ["rate", "Client's rate (kept for reference only)"],
+  ["material_rate", "Client's material rate (reference)"],
+  ["application_rate", "Client's application rate (reference)"],
   ["amount", "Amount (not imported)"],
   ["product", "Client's make / product"],
   ["remarks", "Client's remarks"],
@@ -99,8 +102,8 @@ export default function ImportWizard({ tenderId, onClose, onImported }: { tender
 
       {step === "upload" && (
         <div>
-          <p>Choose the client's BOQ (.xlsx, .xls or .csv, up to 20 MB). You will see how it reads before anything is saved.</p>
-          <input type="file" accept=".xlsx,.xlsm,.xls,.csv" disabled={busy} onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
+          <p>Choose the client's BOQ (.xlsx, .xls, .csv, or a PDF with a text layer up to 60 pages; at most 20 MB). You will see how it reads before anything is saved.</p>
+          <input type="file" accept=".xlsx,.xlsm,.xls,.csv,.pdf" disabled={busy} onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
           {busy && <p className="muted">Reading the file…</p>}
         </div>
       )}
@@ -140,7 +143,10 @@ export default function ImportWizard({ tenderId, onClose, onImported }: { tender
             </label>
             <div className="field">
               <span>File</span>
-              <span className="muted small">{preview.filename}</span>
+              <span className="muted small">
+                {preview.filename}
+                {preview.page_count ? ` · ${preview.page_count} pages` : ""}
+              </span>
             </div>
           </div>
 
@@ -207,7 +213,7 @@ export default function ImportWizard({ tenderId, onClose, onImported }: { tender
             <table className="table compact">
               <thead>
                 <tr>
-                  <th>Rows</th>
+                  <th>{preview.page_count ? "Page" : "Rows"}</th>
                   <th>Item</th>
                   <th>Description</th>
                   <th>Unit</th>
@@ -219,14 +225,14 @@ export default function ImportWizard({ tenderId, onClose, onImported }: { tender
                 {preview.rows.map((r, i) =>
                   r.type === "section" ? (
                     <tr key={i} className="boq-section">
-                      <td className="muted small">{(r.rows as number[]).join(", ")}</td>
+                      <td className="muted small nowrap">{(r.page as string) ?? (r.rows as number[]).join(", ")}</td>
                       <td colSpan={5}>
                         <strong>{String(r.title)}</strong>
                       </td>
                     </tr>
                   ) : (
                     <tr key={i} className={r.status === "not_quoted" ? "row-muted" : ""}>
-                      <td className="muted small nowrap">{(r.rows as number[]).join(", ")}</td>
+                      <td className="muted small nowrap">{(r.page as string) ?? (r.rows as number[]).join(", ")}</td>
                       <td>{(r.item_no as string) ?? ""}</td>
                       <td>
                         <span className="clamp" title={String(r.description)}>

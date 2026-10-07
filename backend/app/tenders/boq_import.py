@@ -51,7 +51,10 @@ FIELDS = (
     "description2",
     "unit",
     "qty",
+    "qty2",  # a second quantity column under the same heading (added to qty)
     "rate",
+    "material_rate",
+    "application_rate",
     "amount",
     "product",
     "remarks",
@@ -129,7 +132,38 @@ HEADER_RULES: dict[str, tuple[set[str], tuple[str, ...]]] = {
         },
         ("qty", "quantit"),
     ),
-    "rate": ({"rate", "unit rate", "rate rs", "rate in rs", "rate inr", "rates"}, ("rate",)),
+    "rate": (
+        {
+            "rate",
+            "unit rate",
+            "rate rs",
+            "rate in rs",
+            "rate inr",
+            "rates",
+            "total rate",
+            "total rate m l",
+            "total rate rs",
+            "rate m l",
+            "supply apply rate",
+        },
+        ("rate",),
+    ),
+    # split rates (material + application = total): kept for reference next to the total
+    "material_rate": (
+        {"material rate", "supply rate", "material", "material cost"},
+        ("material rate", "supply rate", "material cost"),
+    ),
+    "application_rate": (
+        {
+            "application rate",
+            "labour rate",
+            "laying rate",
+            "application",
+            "labour",
+            "application charges",
+        },
+        ("application rate", "labour rate", "laying rate", "application charge", "labour cost"),
+    ),
     "amount": (
         {"amount", "amount rs", "total amount", "amount in rs", "value", "total", "amt"},
         ("amount", "amt"),
@@ -162,6 +196,8 @@ CLAIM_ORDER = (
     "unit",
     "qty",
     "amount",
+    "material_rate",
+    "application_rate",
     "rate",
     "our_remarks",
     "remarks",
@@ -184,8 +220,11 @@ TOTAL_ROW = re.compile(
     re.I,
 )
 TC_MARKER = re.compile(r"\bterms\s*(&|and)\s*conditions\b", re.I)
+# "GENERAL NOTES :", "Notes:", "General Points:" — a block of notes, not items
+NOTES_HEAD = re.compile(r"^\s*(general\s+)?(notes?|points)\s*(:|-|$)", re.I)
 MAIN_NO = re.compile(r"^\d+(\.\d+)*[a-z]?\.?$", re.I)
 SUB_NO = re.compile(r"^\(?([a-h]|i{1,3}|iv|v|vi{0,3}|ix|x)[).]$", re.I)
+BARE_SUB = re.compile(r"^[a-h]$")  # "a", "b" (lower case only: "A", "B" are sections)
 DASHES = {"-", "--", "—", "–", "nil", "na", "n/a"}
 
 
@@ -196,10 +235,34 @@ class BoqFormatError(ValueError):
 # --- step 1: reading ---------------------------------------------------------------------------
 
 
+class Grid(dict):
+    """{sheet name: rows}. For a PDF, `pages` gives each row's (first, last) page."""
+
+    pages: dict[str, list[tuple[int, int]]]
+    page_count: int | None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pages = {}
+        self.page_count = None
+
+
+PDF_SHEET = "PDF"
+
+
 def read_grid(path: str | Path) -> dict[str, list[list[Any]]]:
-    """{sheet name: rows of cell values}. Hidden sheets are left out."""
+    """{sheet name: rows of cell values}. Hidden sheets are left out. A PDF becomes one sheet
+    (app.tenders.pdf_import), with the page of every row in `.pages`."""
     path = Path(path)
     suffix = path.suffix.lower()
+    if suffix == ".pdf":
+        from app.tenders.pdf_import import read_pdf
+
+        pdf = read_pdf(path)
+        grid = Grid({PDF_SHEET: pdf.rows})
+        grid.pages[PDF_SHEET] = pdf.pages
+        grid.page_count = pdf.page_count
+        return grid
     if suffix in (".xlsx", ".xlsm"):
         wb = load_workbook(path, data_only=True)  # not read-only: merged ranges are honoured
         sheets = {}
@@ -243,7 +306,7 @@ def read_grid(path: str | Path) -> dict[str, list[list[Any]]]:
             for r in csv.reader(io.StringIO(text), dialect)
         ][:MAX_ROWS]
         return {path.stem[:31] or "CSV": rows}
-    raise BoqFormatError("Upload an .xlsx, .xls or .csv file")
+    raise BoqFormatError("Upload an .xlsx, .xls, .csv or .pdf file")
 
 
 # --- step 2: header row and columns -------------------------------------------------------------
@@ -272,8 +335,35 @@ def _match(field_name: str, header: str) -> float:
     return 0.0
 
 
-def guess_columns(header_row: list[Any]) -> dict[str, dict[str, Any]]:
-    """{field: {column, letter, header, confidence, alternatives}} from one header row."""
+def _with_above(header_row: list[Any], above: list[Any]) -> tuple[list[Any], dict[int, str]]:
+    """Header texts with the row above prefixed: "TOTAL QUANTITY" over "Up to Plinth" and
+    "Above plinth" gives "TOTAL QUANTITY Up to Plinth" ... A heading spans to the right over
+    cells that are None (merged); an empty string stops it. Returns (texts, {column: above})."""
+    combined: list[Any] = []
+    spans: dict[int, str] = {}
+    current: str | None = None
+    for i in range(max(len(header_row), len(above))):
+        a = above[i] if i < len(above) else None
+        if a is None:
+            text = current
+        else:
+            current = _text(a)
+            text = current
+        if text:
+            spans[i] = text
+        own = header_row[i] if i < len(header_row) else None
+        combined.append(" ".join(p for p in (text, _text(own)) if p) or own)
+    return combined, spans
+
+
+def guess_columns(
+    header_row: list[Any], above: list[Any] | None = None
+) -> dict[str, dict[str, Any]]:
+    """{field: {column, letter, header, confidence, alternatives}} from one header row, or from
+    a header row and the row above it (a heading over two sub-columns)."""
+    spans: dict[int, str] = {}
+    if above is not None:
+        header_row, spans = _with_above(header_row, above)
     headers = {i: _norm_header(v) for i, v in enumerate(header_row) if _norm_header(v)}
     taken: set[int] = set()
     result: dict[str, dict[str, Any]] = {}
@@ -287,6 +377,19 @@ def guess_columns(header_row: list[Any]) -> dict[str, dict[str, Any]]:
             continue
         confidence, column = scored[0]
         alternatives = [i for s, i in scored[1:] if s == confidence]
+        if name == "qty" and alternatives and spans.get(column):
+            second = alternatives[0]
+            if spans.get(second) == spans[column]:
+                # "TOTAL QUANTITY" over "Up to Plinth" and "Above plinth": both are quantity
+                taken.add(second)
+                result["qty2"] = {
+                    "column": second,
+                    "letter": column_letter(second),
+                    "header": str(header_row[second]).strip(),
+                    "confidence": confidence,
+                    "alternatives": [],
+                }
+                alternatives = alternatives[1:]
         if alternatives:  # e.g. "Sika Rate" and "Saint Gobain Rate": first one, less sure
             confidence = min(confidence, 0.6)
         if name == "description2" and "description" not in result:
@@ -309,11 +412,21 @@ def _header_score(columns: dict[str, dict[str, Any]]) -> float:
     return sum(HEADER_WEIGHTS.get(f, 0.5) * c["confidence"] for f, c in columns.items())
 
 
+def header_guess(rows: list[list[Any]], index: int) -> dict[str, dict[str, Any]]:
+    """The column guess for the header on row `index` (0-based): the row alone, or with the row
+    above when that reads better (a two-row header)."""
+    plain = guess_columns(rows[index])
+    if index == 0:
+        return plain
+    two = guess_columns(rows[index], rows[index - 1])
+    return two if _header_score(two) > _header_score(plain) + 0.5 else plain
+
+
 def detect_header(rows: list[list[Any]]) -> tuple[int, dict[str, dict[str, Any]], float]:
     """(0-based header row index, column guess, score) for the best row in the first 30."""
     best = (0, {}, 0.0)
-    for index, row in enumerate(rows[:HEADER_SCAN_ROWS]):
-        columns = guess_columns(row)
+    for index in range(min(len(rows), HEADER_SCAN_ROWS)):
+        columns = header_guess(rows, index)
         score = _header_score(columns)
         if score > best[2] + 1e-9:
             best = (index, columns, score)
@@ -354,7 +467,7 @@ def _number(value: Any) -> Decimal | None:
         return None
     if isinstance(value, int | float):
         return Decimal(str(value))
-    text = str(value).replace(",", "").replace("₹", "").strip()
+    text = str(value).replace(",", "").replace("₹", "").replace(" ", "").strip()
     try:
         return Decimal(text) if text else None
     except InvalidOperation:
@@ -375,7 +488,7 @@ def _note(value: Any) -> str | None:
 def _kind(item_no: str | None) -> str | None:
     if not item_no:
         return None
-    if SUB_NO.match(item_no):
+    if SUB_NO.match(item_no) or BARE_SUB.match(item_no):
         return "sub"
     return "main"  # 1, 1.2, 653A, H, "Separate item (657)", "Additional item: 6.1" ...
 
@@ -394,6 +507,9 @@ class Row:
     remarks: str | None
     our_remarks: str | None
     has_quantities: bool
+    material_rate: Decimal | None = None
+    application_rate: Decimal | None = None
+    notes_head: bool = False
 
 
 @dataclass
@@ -418,6 +534,8 @@ class ParsedLine:
     section: int | None  # index into sections
     rows: list[int]
     source_row: int | None = None  # the row with the quantity (client format export writes here)
+    client_material_rate: Decimal | None = None
+    client_application_rate: Decimal | None = None
 
     @property
     def status(self) -> str:
@@ -447,11 +565,16 @@ class ParsedBoq:
         }
 
 
+def _money(value: Decimal | None) -> Decimal | None:
+    return value.quantize(RATE_PLACES, ROUND_HALF_UP) if value is not None else None
+
+
 def _join(*parts: str | None) -> str:
     return " — ".join(p for p in parts if p)
 
 
 HEADING_MAX = 100
+PARENT_NOTE_MAX = 400  # a heading note this short is the items' spec: it goes into their text
 
 
 def split_heading(text: str) -> tuple[str, str | None]:
@@ -471,7 +594,9 @@ def split_heading(text: str) -> tuple[str, str | None]:
     return f"{cut}…", text
 
 
-def _extract(row: list[Any], number: int, cols: dict[str, int]) -> tuple[Row | None, str | None]:
+def _extract(
+    row: list[Any], number: int, cols: dict[str, int], labels: dict[str, str] | None = None
+) -> tuple[Row | None, str | None]:
     def cell(name: str) -> Any:
         i = cols.get(name)
         return row[i] if i is not None and i < len(row) else None
@@ -483,6 +608,8 @@ def _extract(row: list[Any], number: int, cols: dict[str, int]) -> tuple[Row | N
     item_no = _text(cell("item_no"))
     description = _join(_text(cell("description")), _text(cell("description2")))
     if not description:
+        if item_no and NOTES_HEAD.match(item_no):
+            return None, "general notes"
         return None, "no description"
     if TOTAL_ROW.match(description):
         return None, "total row"
@@ -490,6 +617,18 @@ def _extract(row: list[Any], number: int, cols: dict[str, int]) -> tuple[Row | N
     unit_raw = _text(cell("unit"))
     qty_cell, rate_cell = cell("qty"), cell("rate")
     qty = _number(qty_cell)
+    remarks = _text(cell("remarks"))
+    if "qty2" in cols:
+        # two quantity columns under one heading: qty is their sum, both kept in the remarks
+        second = _number(cell("qty2"))
+        if second is not None:
+            qty = (qty or Decimal(0)) + second
+        if _text(qty_cell) or _text(cell("qty2")):
+            labels = labels or {}
+            split = "; ".join(
+                f"{labels.get(f) or f}: {_text(cell(f)) or '—'}" for f in ("qty", "qty2")
+            )
+            remarks = _join(split, remarks)
     qty_note = None if qty is not None else _note(qty_cell)
     rate = _number(rate_cell)
     if qty_note is None and rate is None and _note(rate_cell) == "NQ":
@@ -508,9 +647,14 @@ def _extract(row: list[Any], number: int, cols: dict[str, int]) -> tuple[Row | N
             qty_note=qty_note,
             rate=rate,
             product=_text(cell("product")),
-            remarks=_text(cell("remarks")),
+            remarks=remarks,
             our_remarks=_text(cell("our_remarks")),
             has_quantities=has_quantities,
+            material_rate=_number(cell("material_rate")),
+            application_rate=_number(cell("application_rate")),
+            notes_head=len(description) <= 30
+            and bool(NOTES_HEAD.match(description))
+            and not has_quantities,
         ),
         None,
     )
@@ -528,6 +672,9 @@ def parse(
         raise BoqFormatError("Choose the description column")
     pending: list[Row] = []
     state = {"section": None, "parent": None, "last": None}  # last: "line" | "heading" | None
+    head = rows[header_row - 1] if 0 < header_row <= len(rows) else []
+    labels = {f: _text(head[c]) for f, c in column_map.items() if c is not None and c < len(head)}
+    in_notes = False
 
     def add_section(r: Row) -> None:
         short, note = split_heading(r.description)
@@ -535,7 +682,8 @@ def parse(
         result.sections.append(ParsedSection(title=title[:500], rows=[r.number], note=note))
         result.order.append(("section", len(result.sections) - 1))
         state["section"] = len(result.sections) - 1
-        state["parent"] = short
+        state["parent"] = _join(short, note) if note and len(note) <= PARENT_NOTE_MAX else short
+        state["siblings"] = False
         state["last"] = "heading"
 
     def continue_last_line(r: Row) -> None:
@@ -573,6 +721,8 @@ def parse(
                     x.rate.quantize(RATE_PLACES, ROUND_HALF_UP) if x.rate is not None else None
                 ),
                 client_product=x.product,
+                client_material_rate=_money(x.material_rate),
+                client_application_rate=_money(x.application_rate),
                 client_remarks=_join(*(r.remarks for r in extra_rows), x.remarks) or None,
                 our_remarks=_join(*(r.our_remarks for r in extra_rows), x.our_remarks) or None,
                 section=state["section"],
@@ -589,9 +739,13 @@ def parse(
             flush_unclaimed(pending)
             if x.kind == "main":
                 state["parent"] = None
+                state["siblings"] = False
                 add_line(x.item_no, x.description, x, [])
             elif x.kind == "sub" and state["parent"]:
                 add_line(x.item_no, _join(state["parent"], x.description), x, [])
+            elif x.kind is None and state.get("siblings") and state["parent"] and not pending:
+                # "6 Sealing around pipes" + "50mm dia pipe" (qty), then "75mm dia pipe" (qty)
+                add_line(None, _join(state["parent"], x.description), x, [])
             else:
                 add_line(x.item_no, x.description, x, [])
             return
@@ -606,7 +760,8 @@ def parse(
                 x,
                 [title, *after],
             )
-            state["parent"] = None
+            state["parent"] = _join(title.description, *(r.description for r in after))
+            state["siblings"] = True
         elif any(r.kind == "sub" for r in after):
             # "4 ..." then steps i) ... iv) and the quantity on v): one item with all the steps
             steps = [_join(r.item_no, r.description) for r in after] + [
@@ -621,7 +776,7 @@ def parse(
             add_line(x.item_no, _join(state["parent"], x.description), x, [])
 
     for index, values in enumerate(rows[header_row:], start=header_row + 1):
-        row, reason = _extract(values, index, column_map)
+        row, reason = _extract(values, index, column_map, labels)
         if reason == "terms & conditions":
             result.skipped.append((index, "terms & conditions block"))
             remaining = sum(1 for v in rows[index:] if any(c not in (None, "") for c in v))
@@ -634,7 +789,14 @@ def parse(
                 result.skipped.append((index, reason))
             else:
                 result.skipped.append((index, "blank row"))
+                in_notes = False  # a notes block ends at a blank row
             continue
+        if row.notes_head:
+            in_notes = True
+        if in_notes and not row.has_quantities:
+            result.skipped.append((index, "general notes"))
+            continue
+        in_notes = False
         if row.has_quantities:
             resolve(row)
             pending = []
@@ -665,12 +827,33 @@ def _drop_empty_sections(result: ParsedBoq) -> None:
     result.skipped.sort()
 
 
-def preview_rows(result: ParsedBoq, limit: int = PREVIEW_ROWS) -> list[dict[str, Any]]:
+def page_label(pages: list[tuple[int, int]] | None, rows: list[int]) -> str | None:
+    """ "p. 3" or "p. 3–4" for grid rows (1-based) of a PDF; None for spreadsheets."""
+    if not pages or not rows:
+        return None
+    found = [pages[r - 1] for r in rows if 0 < r <= len(pages)]
+    if not found:
+        return None
+    first, last = min(p[0] for p in found), max(p[1] for p in found)
+    return f"p. {first}" if first == last else f"p. {first}–{last}"
+
+
+def preview_rows(
+    result: ParsedBoq, limit: int = PREVIEW_ROWS, pages: list[tuple[int, int]] | None = None
+) -> list[dict[str, Any]]:
     out = []
     for kind, i in result.order[:limit]:
         if kind == "section":
             s = result.sections[i]
-            out.append({"type": "section", "title": s.title, "note": s.note, "rows": s.rows})
+            out.append(
+                {
+                    "type": "section",
+                    "title": s.title,
+                    "note": s.note,
+                    "rows": s.rows,
+                    "page": page_label(pages, s.rows),
+                }
+            )
         else:
             ln = result.lines[i]
             out.append(
@@ -688,6 +871,9 @@ def preview_rows(result: ParsedBoq, limit: int = PREVIEW_ROWS) -> list[dict[str,
                     "our_remarks": ln.our_remarks,
                     "status": ln.status,
                     "rows": ln.rows,
+                    "page": page_label(pages, ln.rows),
+                    "client_material_rate": ln.client_material_rate,
+                    "client_application_rate": ln.client_application_rate,
                 }
             )
     return out

@@ -77,7 +77,8 @@ export default function TenderDetail() {
             {tender.name} <StatusBadge status={tender.status} /> <span className="badge badge-muted">{tender.revision_label}</span>
           </h1>
           <p className="muted">
-            {tender.client_name}
+            {tender.client_name ?? "No client yet"}
+            {tender.channel_name ? ` · via ${tender.channel_name}` : ""}
             {tender.site_city ? ` · ${tender.site_city}` : ""} · due{" "}
             <span className={tender.overdue ? "text-danger" : ""}>{shortDate(tender.due_on)}</span>
           </p>
@@ -168,7 +169,8 @@ function DetailsTab({ tender, canEdit, onChange }: { tender: Tender; canEdit: bo
 
   const rows: [string, string][] = [
     ["Code", tender.code],
-    ["Client", tender.client_name],
+    ["Client", tender.client_name ?? "—"],
+    ["Channel", tender.channel_name ?? "—"],
     ["Site", [tender.site_name, tender.site_city, tender.site_state].filter(Boolean).join(", ") || "—"],
     ["Received on", shortDate(tender.received_on)],
     ["Due on", shortDate(tender.due_on)],

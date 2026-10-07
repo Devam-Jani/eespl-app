@@ -12,6 +12,7 @@ from app.config import settings
 from app.db import get_engine
 from app.masters.routers import (
     admin_settings,
+    channels,
     clients,
     library,
     products,
@@ -38,6 +39,7 @@ app.include_router(roles.router)
 app.include_router(permissions.router)
 app.include_router(audit.router)
 app.include_router(clients.router)
+app.include_router(channels.router)
 app.include_router(products.router)
 app.include_router(systems.router)
 app.include_router(library.router)

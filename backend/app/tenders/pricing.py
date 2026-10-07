@@ -34,7 +34,7 @@ from sqlalchemy.orm import Session
 from app.masters.conversions import ConversionError, Rule, convert_with
 from app.masters.models import CompanyProfile, System, UnitConversion
 from app.masters.rate import MissingPriceError, system_rate
-from app.masters.rate_policy import POLICIES, History, Obs, choose, load_histories, same_client
+from app.masters.rate_policy import POLICIES, History, Obs, choose, load_histories, same_channel
 from app.masters.search import STOPWORDS, SYNONYMS, search_library
 from app.tenders.models import BoqLine, BoqLineCandidate, BoqSection, Tender
 
@@ -164,10 +164,10 @@ class SuggestResult:
 
 @dataclass
 class PolicyContext:
-    """What a library rate needs: the policy, the tender's client and the item histories."""
+    """What a library rate needs: the policy, the tender's channel and the item histories."""
 
     policy: str
-    client: str | None
+    channel: str | None
     histories: dict[int, History] = field(default_factory=dict)
 
 
@@ -178,7 +178,7 @@ MAX_SOURCES = 12
 def rate_policy(db: Session) -> str:
     profile = db.get(CompanyProfile, 1)
     policy = profile.rate_policy if profile else None
-    return policy if policy in POLICIES else "median"
+    return policy if policy in POLICIES else "channel_median"
 
 
 def _s(value: Decimal | None) -> str | None:
@@ -191,12 +191,12 @@ def library_rate(hit: dict[str, Any], ctx: PolicyContext) -> tuple[Decimal, dict
     history = ctx.histories.get(hit["id"])
     pool = history.lines if history else []
     if pool:
-        choice = choose(ctx.policy, pool, ctx.client, history.latest_file)
+        choice = choose(ctx.policy, pool, ctx.channel, history.latest_file)
         rates = sorted(o.rate for o in pool)
         latest = choose("latest", pool, None, history.latest_file)
         median = choose("median", pool)
-        own = [o for o in pool if ctx.client and same_client(o.client, ctx.client)]
-        client_last = choose("latest", own, None, history.latest_file) if own else None
+        own = [o for o in pool if ctx.channel and same_channel(o.channel, ctx.channel)]
+        channel_last = choose("latest", own, None, history.latest_file) if own else None
         rate = choice.rate
         sources: list[Obs] = sorted(choice.sources, key=lambda o: -o.order)
         details = {
@@ -207,10 +207,10 @@ def library_rate(hit: dict[str, Any], ctx: PolicyContext) -> tuple[Decimal, dict
             "min_rate": _s(rates[0]),
             "max_rate": _s(rates[-1]),
             "n_boqs": len({o.file for o in pool}),
-            "client_last_rate": _s(client_last.rate) if client_last else None,
+            "channel_last_rate": _s(channel_last.rate) if channel_last else None,
             "sources": [
                 {
-                    "client": o.client,
+                    "channel": o.channel,
                     "file": o.file.rsplit("/", 1)[-1],
                     "date": None,
                     "rate": _s(o.rate),
@@ -233,7 +233,7 @@ def library_rate(hit: dict[str, Any], ctx: PolicyContext) -> tuple[Decimal, dict
             "min_rate": _s(hit.get("min_rate")),
             "max_rate": _s(hit.get("max_rate")),
             "n_boqs": hit["boq_count"],
-            "client_last_rate": None,
+            "channel_last_rate": None,
             "sources": [],
             "sources_total": 0,
         }
@@ -422,7 +422,7 @@ def suggest(
     ]
     systems = list(db.scalars(select(System).where(System.is_active)))
     matcher = _SystemMatcher(db, systems, rules)
-    ctx = PolicyContext(rate_policy(db), tender.client.name if tender.client else None)
+    ctx = PolicyContext(rate_policy(db), tender.channel.name if tender.channel else None)
     ctx.histories = load_histories(db)
     lines = (
         list(lines)
