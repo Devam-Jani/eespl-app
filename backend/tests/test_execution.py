@@ -8,6 +8,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select, text
 
+from app.config import settings
 from app.execution import service as svc
 from app.execution.models import ChecklistTemplate, Labour, SiteBudget
 from app.masters.models import Product, Vendor
@@ -18,6 +19,11 @@ from tests.conftest import login
 D = Decimal
 TODAY = svc.today()
 PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 64  # an invented "photo"
+
+
+@pytest.fixture(autouse=True)
+def media(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "media_dir", str(tmp_path))
 
 
 @pytest.fixture
