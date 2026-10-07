@@ -706,10 +706,35 @@ def get_kylas_settings(db: DbSession) -> KylasSettingsOut:
     return _settings_out(db)
 
 
+def _check_won_stage(body: KylasSettingsIn) -> None:
+    """A won stage needs its deal pipeline, and must be one of that pipeline's stages in Kylas
+    (checked live: the deal poll would never match a stage of another pipeline)."""
+    if body.won_stage_id is None:
+        return
+    if body.deal_pipeline_id is None:
+        raise unprocessable("Set the deal pipeline id together with the won stage id")
+    client = kylas_client.client()
+    if not client.is_configured:
+        raise unprocessable("The won stage can only be checked with a Kylas API key in .env")
+    found = kylas_client.deal_pipelines(client)
+    if not found.ok:
+        raise unprocessable(f"Could not check the stage with Kylas (HTTP {found.status_code})")
+    pipeline = next((p for p in found.items if p["id"] == body.deal_pipeline_id), None)
+    if pipeline is None:
+        raise unprocessable(f"{body.deal_pipeline_id} is not a deal pipeline in Kylas")
+    if body.won_stage_id not in {s["id"] for s in pipeline["stages"]}:
+        stages = ", ".join(f"{s['id']} {s['name']}" for s in pipeline["stages"])
+        raise unprocessable(
+            f"{body.won_stage_id} is not a stage of pipeline {pipeline['id']} "
+            f"({pipeline['name']}); its stages are {stages}"
+        )
+
+
 @settings_router.put("", dependencies=AdminSettings)
 def set_kylas_settings(
     body: KylasSettingsIn, request: Request, db: DbSession, principal: CurrentPrincipal
 ) -> KylasSettingsOut:
+    _check_won_stage(body)
     p = db.get(CompanyProfile, 1)
     if p is None:
         p = CompanyProfile(id=1)
@@ -739,26 +764,26 @@ def set_kylas_settings(
 
 @settings_router.post("/test", dependencies=AdminSettings)
 def test_connection(db: DbSession) -> dict[str, str | int | bool | None]:
-    """One GET (the source list). Says whether Kylas answered; never echoes the key."""
+    """One GET (the lead fields, for the source list, read as kylas-discover reads it). Says
+    whether Kylas answered and whether the configured source exists; never echoes the key."""
     client = kylas_client.client()
     if not client.is_configured:
         return {"ok": False, "message": "No Kylas API key in .env"}
-    result = client.get("/sources")
-    if not result.ok:
+    found = kylas_client.lead_sources(client)
+    if not found.ok:
         return {
             "ok": False,
-            "status": result.status_code,
-            "message": "Kylas did not accept the request"
-            if result.status_code in (401, 403)
-            else (result.error or "No answer")[:200],
+            "status": found.status_code,
+            "message": "Kylas did not accept the API key"
+            if found.status_code in (401, 403)
+            else (found.error or "No answer")[:200],
         }
-    items = (
-        result.body.get("content", result.body)
-        if isinstance(result.body, dict)
-        else (result.body or [])
-    )
-    return {
-        "ok": True,
-        "status": result.status_code,
-        "message": f"Connected: {len(items) if isinstance(items, list) else '?'} sources",
-    }
+    message = f"Connected: {len(found.items)} lead sources"
+    p = db.get(CompanyProfile, 1)
+    if p is not None and p.kylas_source_id:
+        source = next((s for s in found.items if s["id"] == p.kylas_source_id), None)
+        if source:
+            message += f"; source {p.kylas_source_id} is '{source['name']}'"
+        else:
+            message += f"; source {p.kylas_source_id} is NOT a Kylas lead source"
+    return {"ok": True, "status": found.status_code, "message": message}

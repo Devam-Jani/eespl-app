@@ -22,6 +22,10 @@ _test_url = make_url(os.environ.get("TEST_DATABASE_URL") or settings.database_ur
     database=TEST_DB_NAME
 )
 assert _test_url.database != DEV_DB_NAME, "tests must not run against the dev database"
+# Tests never reach the real Kylas, whatever .env holds: Kylas is off and has no key. Tests
+# that need it switch it on with a fake key and a mock transport (tests/test_crm.py).
+settings.kylas_enabled = False
+settings.kylas_api_key = None
 settings.database_url = _test_url.render_as_string(hide_password=False)
 
 from app.auth.security import hash_password  # noqa: E402

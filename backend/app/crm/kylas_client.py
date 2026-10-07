@@ -249,3 +249,111 @@ def _short(response: httpx.Response) -> str:
 def client() -> KylasClient:
     """The client every sender uses; a seam so tests can hand in a stub transport."""
     return KylasClient()
+
+
+# --- setup lookups (read-only; shared by kylas-discover, Test connection and Settings) -----------
+
+
+@dataclass(frozen=True)
+class Lookup:
+    """ok=False: Kylas did not answer (status_code / error say why)."""
+
+    ok: bool
+    items: tuple = ()
+    status_code: int | None = None
+    error: str | None = None
+
+
+def _content(body: Any) -> list[dict]:
+    if isinstance(body, dict):
+        body = body.get("content", body.get("data", []))
+    return [x for x in body if isinstance(x, dict)] if isinstance(body, list) else []
+
+
+def display_name(item: dict) -> str:
+    for key in ("displayName", "name", "value"):
+        if item.get(key):
+            return str(item[key]).strip()
+    return f"{item.get('firstName') or ''} {item.get('lastName') or ''}".strip() or "?"
+
+
+def _paged(kylas: KylasClient, path: str, max_pages: int = 50) -> Lookup:
+    out: list[dict] = []
+    sep = "&" if "?" in path else "?"
+    for page in range(max_pages):
+        result = kylas.get(f"{path}{sep}page={page}&size=100")
+        if not result.ok:
+            return Lookup(ok=False, status_code=result.status_code, error=result.error)
+        items = _content(result.body)
+        out.extend(items)
+        if not isinstance(result.body, dict) or result.body.get("last", True) or not items:
+            break
+    return Lookup(ok=True, items=tuple(out))
+
+
+def lead_sources(kylas: KylasClient) -> Lookup:
+    """Lead sources: the values of the lead's "source" picklist field. One GET.
+    (Kylas has no /sources endpoint: it answers 404.)"""
+    result = kylas.get("/entities/lead/fields")
+    if not result.ok:
+        return Lookup(ok=False, status_code=result.status_code, error=result.error)
+    if not isinstance(result.body, list):
+        return Lookup(ok=False, status_code=result.status_code, error="lead fields: not a list")
+    field = next(
+        (
+            f
+            for f in result.body
+            if isinstance(f, dict) and str(f.get("name", "")).lower() == "source"
+        ),
+        None,
+    )
+    if field is None:
+        return Lookup(ok=False, status_code=result.status_code, error="no 'source' lead field")
+    values = (field.get("picklist") or {}).get("values") or []
+    return Lookup(
+        ok=True,
+        status_code=result.status_code,
+        items=tuple(
+            {"id": v.get("id"), "name": display_name(v)}
+            for v in values
+            if isinstance(v, dict) and not v.get("deleted")
+        ),
+    )
+
+
+def deal_pipelines(kylas: KylasClient) -> Lookup:
+    """Deal pipelines with their stages (/pipelines needs entityType, else 400)."""
+    found = _paged(kylas, "/pipelines?entityType=DEAL")
+    if not found.ok:
+        return found
+    return Lookup(
+        ok=True,
+        items=tuple(
+            {
+                "id": p.get("id"),
+                "name": display_name(p),
+                "stages": [
+                    {"id": s.get("id"), "name": display_name(s), "position": s.get("position")}
+                    for s in sorted(
+                        (x for x in p.get("stages") or [] if isinstance(x, dict)),
+                        key=lambda x: x.get("position") or 0,
+                    )
+                ],
+            }
+            for p in found.items
+        ),
+    )
+
+
+def users(kylas: KylasClient) -> Lookup:
+    """Users: id, name, active (no emails or phones). Kylas pages them 10 at a time by default."""
+    found = _paged(kylas, "/users")
+    if not found.ok:
+        return found
+    return Lookup(
+        ok=True,
+        items=tuple(
+            {"id": u.get("id"), "name": display_name(u), "active": u.get("active", True)}
+            for u in found.items
+        ),
+    )

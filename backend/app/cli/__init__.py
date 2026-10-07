@@ -297,77 +297,30 @@ def run_import_projects(paths: list[str]) -> None:
 
 
 def run_kylas_discover() -> None:
-    """Ids and names of Kylas sources, users, pipelines and their stages: nothing else (no
-    emails, phones or keys), for Settings > Integrations > Kylas. Read-only GETs."""
-    from app.crm.kylas_client import client
+    """Ids and names of Kylas lead sources, users, deal pipelines and their stages: nothing else
+    (no emails, phones or keys), for Settings > Integrations > Kylas. Read-only GETs."""
+    from app.crm import kylas_client
 
-    kylas = client()
+    kylas = kylas_client.client()
     if not kylas.is_configured:
         print("KYLAS_API_KEY is not set in .env: nothing to discover")
         return
-
-    def items(body):
-        if isinstance(body, dict):
-            body = body.get("content", body.get("data", []))
-        return body if isinstance(body, list) else []
-
-    def name_of(item):
-        for key in ("displayName", "name", "value"):
-            if item.get(key):
-                return str(item[key])
-        first, last = item.get("firstName") or "", item.get("lastName") or ""
-        return f"{first} {last}".strip() or "?"
-
-    def pages(path):
-        """Every item of a paged list (page size 100), or None when Kylas does not answer."""
-        out, page = [], 0
-        sep = "&" if "?" in path else "?"
-        while page < 50:
-            result = kylas.get(f"{path}{sep}page={page}&size=100")
-            if not result.ok:
-                print(f"  (no answer: HTTP {result.status_code})")
-                return None
-            out.extend(i for i in items(result.body) if isinstance(i, dict))
-            body = result.body if isinstance(result.body, dict) else {}
-            if body.get("last", True) or not items(result.body):
-                return out
-            page += 1
-        return out
-
-    # Lead sources are the values of the lead's "source" picklist field.
-    print("Sources (lead source picklist):")
-    fields = kylas.get("/entities/lead/fields")
-    if not fields.ok:
-        print(f"  (no answer: HTTP {fields.status_code})")
-    else:
-        source = next(
-            (
-                x
-                for x in fields.body or []
-                if isinstance(x, dict) and str(x.get("name", "")).lower() == "source"
-            ),
-            None,
-        )
-        picklist = (source or {}).get("picklist") or {}
-        for value in picklist.get("values") or []:
-            if isinstance(value, dict) and not value.get("deleted"):
-                print(f"  {value.get('id')}  {name_of(value)}")
-
-    print("Users:")
-    for user in pages("/users") or []:
-        print(
-            f"  {user.get('id')}  {name_of(user)}"
-            + ("" if user.get("active", True) else "  (inactive)")
-        )
-
-    print("Deal pipelines and stages:")
-    for pipeline in pages("/pipelines?entityType=DEAL") or []:
-        print(f"  {pipeline.get('id')}  {name_of(pipeline)}")
-        for stage in sorted(
-            (x for x in pipeline.get("stages") or [] if isinstance(x, dict)),
-            key=lambda x: x.get("position") or 0,
-        ):
-            print(f"      stage {stage.get('id')}  {name_of(stage)}")
+    sections = (
+        ("Sources (lead source picklist)", kylas_client.lead_sources),
+        ("Users", kylas_client.users),
+        ("Deal pipelines and stages", kylas_client.deal_pipelines),
+    )
+    for title, lookup in sections:
+        print(f"{title}:")
+        found = lookup(kylas)
+        if not found.ok:
+            print(f"  (no answer: HTTP {found.status_code})")
+            continue
+        for item in found.items:
+            flag = "  (inactive)" if item.get("active") is False else ""
+            print(f"  {item['id']}  {item['name']}{flag}")
+            for stage in item.get("stages") or []:
+                print(f"      stage {stage['id']}  {stage['name']}")
 
 
 def main(argv: list[str] | None = None) -> None:

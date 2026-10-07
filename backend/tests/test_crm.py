@@ -30,6 +30,23 @@ class FakeKylas:
         self.leads: dict[int, dict] = {}
         self.deals_search: list[dict] = []
         self.deals: dict[int, dict] = {}
+        self.sources = [
+            {"id": 999, "displayName": "EESPL App"},
+            {"id": 3005767, "displayName": "Ethios Loyalty"},
+            {"id": 1, "displayName": "Old", "deleted": True},
+        ]
+        # two pages, as Kylas pages lists
+        self.pipelines = [
+            {
+                "id": 10,
+                "name": "Project",
+                "stages": [
+                    {"id": 21, "name": "Open", "position": 1},
+                    {"id": 20, "name": "Won", "position": 2},
+                ],
+            },
+            {"id": 11, "name": "Deal", "stages": [{"id": 30, "name": "Closure", "position": 1}]},
+        ]
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -47,7 +64,26 @@ class FakeKylas:
             body = self.deals.get(int(path.rsplit("/", 1)[1]))
             return httpx.Response(200, json=body) if body else httpx.Response(404)
         if request.method == "GET" and path == "/sources":
-            return httpx.Response(200, json=[{"id": 1, "name": "Website"}])
+            return httpx.Response(404)  # as the real Kylas answers
+        if request.method == "GET" and path == "/entities/lead/fields":
+            return httpx.Response(
+                200,
+                json=[
+                    {"id": 7, "name": "firstName"},
+                    {"id": 8, "name": "source", "picklist": {"values": self.sources}},
+                ],
+            )
+        if request.method == "GET" and path == "/pipelines":
+            if request.url.params.get("entityType") != "DEAL":
+                return httpx.Response(400)
+            page = int(request.url.params.get("page", 0))
+            return httpx.Response(
+                200,
+                json={
+                    "content": self.pipelines[page : page + 1],
+                    "last": page >= len(self.pipelines) - 1,
+                },
+            )
         return httpx.Response(404)
 
     def calls(self, method: str, path: str) -> list[httpx.Request]:
@@ -438,3 +474,51 @@ def test_kylas_user_id_needs_admin_settings(boss, login_as, make_user, db):
     office, office_headers = login_as("office_admin", email="office@example.com")
     r = office.patch(f"/api/users/{target.id}", json={"kylas_user_id": 1}, headers=office_headers)
     assert r.status_code == 403
+
+
+# --- settings checks -----------------------------------------------------------------------------
+
+
+def test_connection_counts_the_lead_sources(boss, kylas):
+    client, headers = boss
+    configure(client, headers)  # source 999
+    r = client.post("/api/settings/kylas/test", headers=headers).json()
+    assert r["ok"] is True
+    assert r["message"] == "Connected: 2 lead sources; source 999 is 'EESPL App'"
+    assert [x.url.path for x in kylas.requests] == ["/v1/entities/lead/fields"]  # one GET
+    configure(client, headers, source_id=12345)
+    r = client.post("/api/settings/kylas/test", headers=headers).json()
+    assert "12345 is NOT a Kylas lead source" in r["message"]
+
+
+def test_won_stage_must_belong_to_the_pipeline(boss, kylas):
+    client, headers = boss
+    base = {"source_id": 999, "owner_rule": "default", "default_owner_id": 222}
+
+    def put(**extra):
+        return client.put("/api/settings/kylas", json={**base, **extra}, headers=headers)
+
+    r = put(won_stage_id=20)
+    assert r.status_code == 422 and "pipeline id together" in r.json()["detail"]
+    r = put(deal_pipeline_id=11, won_stage_id=20)  # 20 belongs to pipeline 10
+    assert r.status_code == 422
+    assert r.json()["detail"] == (
+        "20 is not a stage of pipeline 11 (Deal); its stages are " "30 Closure"
+    )
+    r = put(deal_pipeline_id=99, won_stage_id=20)
+    assert r.status_code == 422 and "99 is not a deal pipeline" in r.json()["detail"]
+    r = put(deal_pipeline_id=10, won_stage_id=20)
+    assert r.status_code == 200
+    assert (r.json()["deal_pipeline_id"], r.json()["won_stage_id"]) == (10, 20)
+    assert put(deal_pipeline_id=10).status_code == 200  # a pipeline alone is fine
+
+
+def test_won_stage_needs_kylas_to_check_it(boss, kylas, monkeypatch):
+    client, headers = boss
+    monkeypatch.setattr(settings, "kylas_api_key", None)
+    r = client.put(
+        "/api/settings/kylas",
+        json={"source_id": 999, "deal_pipeline_id": 10, "won_stage_id": 20},
+        headers=headers,
+    )
+    assert r.status_code == 422 and "API key" in r.json()["detail"]
