@@ -34,6 +34,13 @@ import StageTemplates from "./pages/settings/StageTemplates";
 import Tags from "./pages/settings/Tags";
 import UnitsConversions from "./pages/settings/UnitsConversions";
 
+const ex = () => import("./pages/execution/Pages");
+const AttendanceToday = lazy(() => ex().then((m) => ({ default: m.AttendanceToday })));
+const LabourMaster = lazy(() => ex().then((m) => ({ default: m.LabourMaster })));
+const Subcontractors = lazy(() => ex().then((m) => ({ default: m.Subcontractors })));
+const Assets = lazy(() => ex().then((m) => ({ default: m.Assets })));
+const DailyReports = lazy(() => ex().then((m) => ({ default: m.DailyReports })));
+const Checklists = lazy(() => ex().then((m) => ({ default: m.Checklists })));
 // the material module is its own chunk
 const Freight = lazy(() => import("./pages/material/Freight"));
 const Grns = lazy(() => import("./pages/material/Grns"));
@@ -66,6 +73,12 @@ const PAGES: Record<string, JSX.Element> = {
   "/settings/categories": <Categories />,
   "/settings/tags": <Tags />,
   "/settings/units": <UnitsConversions />,
+  "/attendance": <AttendanceToday />,
+  "/labour": <LabourMaster />,
+  "/subcontractors": <Subcontractors />,
+  "/assets": <Assets />,
+  "/daily-reports": <DailyReports />,
+  "/settings/checklists": <Checklists />,
   "/indents": <Indents />,
   "/rfqs": <Rfqs />,
   "/purchase-orders": <Pos />,

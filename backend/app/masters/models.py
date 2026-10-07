@@ -577,6 +577,7 @@ class CompanyProfile(Tracked, Base):
     po_approval_limit: Mapped[Decimal] = mapped_column(Numeric(14, 2), server_default="50000")
     allow_negative_stock: Mapped[bool] = mapped_column(server_default="false")
     grn_approval_levels: Mapped[int] = mapped_column(Integer, server_default="1")
+    asset_overdue_days: Mapped[int] = mapped_column(Integer, server_default="30")
     po_tc_template_id: Mapped[int | None] = mapped_column(
         ForeignKey("tc_templates.id", ondelete="SET NULL")
     )

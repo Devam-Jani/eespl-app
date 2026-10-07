@@ -28,6 +28,9 @@ ALL = [
     "indent.view", "indent.create", "indent.approve",
     "po.view", "po.edit", "po.approve", "grn.view", "grn.edit", "grn.approve",
     "store.view", "store.edit",
+    "dpr.view", "dpr.edit", "labour.view", "labour.edit", "subcon.view", "subcon.edit",
+    "subcon.approve", "inspection.view", "inspection.edit", "asset.view", "asset.edit",
+    "budget.view", "budget.edit",
     "attendance.manage", "pettycash.manage",
     "finance.view", "finance.edit",
     "dashboard.view",
@@ -69,6 +72,19 @@ EXPECTED: dict[str, dict[str, str]] = {
         "grn.approve",
         "store.view",
         "store.edit",
+        "dpr.view",
+        "dpr.edit",
+        "labour.view",
+        "labour.edit",
+        "subcon.view",
+        "subcon.edit",
+        "subcon.approve",
+        "inspection.view",
+        "inspection.edit",
+        "asset.view",
+        "asset.edit",
+        "budget.view",
+        "budget.edit",
         "attendance.manage",
         "pettycash.manage",
         "finance.view",
@@ -97,6 +113,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "site.view": "assigned",
         "site.update": "assigned",
         "indent.view": "assigned",
+        "dpr.view": "assigned",
         "dashboard.view": "own",
         "leads.view": "own",
         "leads.edit": "own",
@@ -110,6 +127,13 @@ EXPECTED: dict[str, dict[str, str]] = {
         "grn.edit": "assigned",
         "store.view": "assigned",
         "store.edit": "assigned",
+        "dpr.view": "assigned",
+        "dpr.edit": "assigned",
+        "labour.view": "assigned",
+        "labour.edit": "assigned",
+        "inspection.view": "assigned",
+        "inspection.edit": "assigned",
+        "asset.view": "assigned",
         "attendance.manage": "assigned",
         "pettycash.manage": "assigned",
     },
@@ -128,6 +152,8 @@ EXPECTED: dict[str, dict[str, str]] = {
         "grn.approve",
         "store.view",
         "store.edit",
+        "asset.view",
+        "asset.edit",
     ),  # fmt: skip
     "accounts": _all(
         "clients.view",
@@ -139,6 +165,12 @@ EXPECTED: dict[str, dict[str, str]] = {
         "site.view",
         "po.view",
         "grn.view",
+        "dpr.view",
+        "labour.view",
+        "subcon.view",
+        "inspection.view",
+        "asset.view",
+        "budget.view",
         "attendance.manage",
         "pettycash.manage",
         "finance.view",
@@ -153,6 +185,7 @@ REAL_ENDPOINTS = {
     "admin.users", "admin.roles", "audit.view", "clients.view", "library.view",
     "vendors.view", "settings.company", "site.view", "leads.view",
     "indent.view", "po.view", "grn.view", "store.view",
+    "dpr.view", "labour.view", "subcon.view", "inspection.view", "asset.view",
 }  # fmt: skip
 
 probe_app = FastAPI()
@@ -187,6 +220,10 @@ def _call(client: TestClient, code: str, headers, db):
     if code in ("indent.view", "po.view", "grn.view"):
         path = {"indent.view": "indents", "po.view": "pos", "grn.view": "grns"}[code]
         return client.get(f"/api/material/{path}", headers=headers)
+    execution = {"dpr.view": "dprs", "labour.view": "labour", "subcon.view": "work-orders",
+                 "inspection.view": "inspections", "asset.view": "assets"}  # fmt: skip
+    if code in execution:
+        return client.get(f"/api/execution/{execution[code]}", headers=headers)
     if code == "store.view":
         return client.get("/api/material/stores", headers=headers)
     if code == "library.view":

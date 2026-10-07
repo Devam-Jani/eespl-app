@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { errorText } from "../format";
@@ -12,16 +12,26 @@ import TasksTab from "./site/TasksTab";
 // three.js is only downloaded when the 3D tab is opened
 const Site3DTab = lazy(() => import("./site/Site3DTab"));
 const MaterialTab = lazy(() => import("./site/MaterialTab"));
+// the execution tabs are their own chunk too
+const DprTab = lazy(() => import("./site/DprTab"));
+const LabourTab = lazy(() => import("./site/LabourTab"));
+const WorkOrdersTab = lazy(() => import("./site/WorkOrdersTab"));
+const InspectionsTab = lazy(() => import("./site/InspectionsTab"));
+const MomTab = lazy(() => import("./site/MomTab"));
+const AssetsTab = lazy(() => import("./site/AssetsTab"));
+const BudgetTab = lazy(() => import("./site/BudgetTab"));
 import { ProgressBar, SiteForm, SiteStatusBadge } from "./Sites";
 import { shortDate } from "./Tenders";
 
-type Tab = "overview" | "structure" | "scope" | "tasks" | "drawings" | "material" | "3d";
+type Tab = "overview" | "structure" | "scope" | "tasks" | "drawings" | "material" | "3d" | "dpr" | "labour" | "workorders" | "inspections" | "mom" | "assets" | "budget";
 
 export default function SiteDetail() {
   const { id } = useParams();
   const { can } = useAuth();
   const [site, setSite] = useState<Site | null>(null);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [params, setParams] = useSearchParams();
+  const tab = (params.get("tab") as Tab | null) ?? "overview";
+  const setTab = (t: Tab) => setParams(t === "overview" ? {} : { tab: t }, { replace: true });
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -67,23 +77,45 @@ export default function SiteDetail() {
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="tabs tabs-inline">
-        {(
+      {(() => {
+        const tabs = (
           [
-            ["overview", "Overview"],
-            ["structure", "Structure"],
-            ["scope", "Scope"],
-            ["tasks", "Tasks"],
-            ["drawings", "Drawings"],
-            ...(can("indent.view", "indent.create", "store.view", "grn.view", "po.view") ? [["material", "Material"]] : []),
-            ["3d", "3D"],
-          ] as [Tab, string][]
-        ).map(([key, label]) => (
-          <button key={key} className={`tab ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>
-            {label}
-          </button>
-        ))}
-      </div>
+            ["overview", "Overview", true],
+            ["dpr", "DPR", can("dpr.view")],
+            ["tasks", "Tasks", true],
+            ["labour", "Labour", can("labour.view")],
+            ["material", "Material", can("indent.view", "indent.create", "store.view", "grn.view", "po.view")],
+            ["inspections", "Inspections", can("inspection.view")],
+            ["workorders", "Work orders", can("subcon.view")],
+            ["mom", "MOM", can("inspection.view")],
+            ["assets", "Assets", can("asset.view")],
+            ["budget", "Budget", can("budget.view")],
+            ["structure", "Structure", true],
+            ["scope", "Scope", true],
+            ["drawings", "Drawings", true],
+            ["3d", "3D", true],
+          ] as [Tab, string, boolean][]
+        ).filter(([, , show]) => show);
+        return (
+          <>
+            {/* on a phone the tab bar is a menu */}
+            <select className="tab-select tap-input" value={tab} onChange={(e) => setTab(e.target.value as Tab)} aria-label="Section">
+              {tabs.map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <div className="tabs tabs-inline tab-bar">
+              {tabs.map(([key, label]) => (
+                <button key={key} className={`tab ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </>
+        );
+      })()}
       <div className="top-gap">
         {tab === "overview" && <Overview site={site} onChange={setSite} />}
         {tab === "structure" && <StructureTab site={site} onChange={load} />}
@@ -95,6 +127,15 @@ export default function SiteDetail() {
             <MaterialTab site={site} />
           </Suspense>
         )}
+        <Suspense fallback={<p className="muted">Loading…</p>}>
+          {tab === "dpr" && <DprTab site={site} />}
+          {tab === "labour" && <LabourTab site={site} />}
+          {tab === "workorders" && <WorkOrdersTab site={site} />}
+          {tab === "inspections" && <InspectionsTab site={site} onChange={load} />}
+          {tab === "mom" && <MomTab site={site} />}
+          {tab === "assets" && <AssetsTab site={site} />}
+          {tab === "budget" && <BudgetTab site={site} />}
+        </Suspense>
         {tab === "3d" && (
           <Suspense fallback={<p className="muted">Loading the 3D view…</p>}>
             <Site3DTab site={site} onChange={load} onOpenStructure={() => setTab("structure")} />
@@ -107,12 +148,18 @@ export default function SiteDetail() {
 
 const ROLES = ["incharge", "supervisor", "sales", "office", "viewer"];
 
+type ExecOverview = {
+  dpr_missing: { count: number; days: string[] } | null;
+  open_points: { id: number; text: string; due_date: string | null; mom_code: string; overdue: boolean }[] | null;
+};
+
 function Overview({ site, onChange }: { site: Site; onChange: (s: Site) => void }) {
   const { can } = useAuth();
   const canEdit = can("site.edit");
   const [editing, setEditing] = useState(false);
   const [lookups, setLookups] = useState<SiteLookups | null>(null);
   const [late, setLate] = useState<SiteTask[]>([]);
+  const [ex, setEx] = useState<ExecOverview | null>(null);
   const [members, setMembers] = useState(
     site.members.map((m) => ({
       user_id: m.user_id,
@@ -124,6 +171,7 @@ function Overview({ site, onChange }: { site: Site; onChange: (s: Site) => void 
   useEffect(() => {
     api<SiteLookups>("/api/sites/lookups").then(setLookups, () => setLookups(null));
     api<SiteTask[]>(`/api/sites/${site.id}/tasks?filter=late`).then(setLate, () => setLate([]));
+    api<ExecOverview>(`/api/execution/sites/${site.id}/overview`).then(setEx, () => setEx(null));
   }, [site.id]);
 
   async function saveMembers() {
@@ -172,6 +220,38 @@ function Overview({ site, onChange }: { site: Site; onChange: (s: Site) => void 
             </div>
           ))}
         </dl>
+        {ex?.dpr_missing && (
+          <p className={ex.dpr_missing.count ? "alert alert-warn" : "muted"}>
+            {ex.dpr_missing.count ? (
+              <>
+                DPR missing on {ex.dpr_missing.count} day(s) in the last 30
+                {ex.dpr_missing.days.length > 0 && ` (latest ${shortDate(ex.dpr_missing.days[ex.dpr_missing.days.length - 1])})`} · <Link to="?tab=dpr">write it</Link>
+              </>
+            ) : (
+              "Every DPR of the last 30 days is in."
+            )}
+          </p>
+        )}
+        {ex?.open_points && (
+          <>
+            <h2 className="section-title top-gap">Open MOM points ({ex.open_points.length})</h2>
+            {ex.open_points.length === 0 ? (
+              <p className="muted">None.</p>
+            ) : (
+              <ul className="plain-list">
+                {ex.open_points.map((p) => (
+                  <li key={p.id} className={p.overdue ? "text-danger" : ""}>
+                    {p.text}{" "}
+                    <span className="small muted">
+                      {p.mom_code}
+                      {p.due_date ? ` · due ${shortDate(p.due_date)}` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
         <h2 className="section-title top-gap">Late tasks ({late.length})</h2>
         {late.length === 0 ? (
           <p className="muted">Nothing is late.</p>

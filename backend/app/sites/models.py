@@ -193,6 +193,10 @@ class StageTemplateStep(Tracked, Base):
     needs_photo: Mapped[bool] = mapped_column(server_default="true")
     needs_inspection: Mapped[bool] = mapped_column(server_default="false")
     hold_point: Mapped[bool] = mapped_column(server_default="false")  # certify before next step
+    # certifying the hold point needs a passed inspection with this checklist
+    checklist_template_id: Mapped[int | None] = mapped_column(
+        ForeignKey("checklist_templates.id", ondelete="SET NULL")
+    )
     typical_days: Mapped[int] = mapped_column(Integer, server_default="1")
 
 

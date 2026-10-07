@@ -1840,3 +1840,228 @@ input.full {
 .empty3d-box p {
   margin: 0 0 0.75rem;
 }
+
+/* ---------- execution (M4 part 2): daily forms built for a 360 px phone ---------- */
+
+.daily {
+  max-width: 720px;
+}
+
+.daily-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.daily-card textarea {
+  font-size: 1rem;
+}
+
+.daily-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.daily-actions > * {
+  flex: 1;
+}
+
+.sticky-actions {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface, #fff);
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--border, #dfe3e1);
+}
+
+.tap,
+.tap-wide,
+.tap-input {
+  min-height: 46px;
+  font-size: 1rem;
+}
+
+.tap {
+  min-width: 46px;
+  padding: 0 0.8rem;
+  border: 1px solid var(--border, #cfd6d2);
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.tap.on {
+  background: #0f6b5c;
+  border-color: #0f6b5c;
+  color: #fff;
+}
+
+.tap:disabled {
+  opacity: 0.5;
+}
+
+.tap-wide {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 0.3rem 0;
+}
+
+.tap-input {
+  padding: 0 0.6rem;
+}
+
+.tap-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.mark-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.6rem 0 0;
+}
+
+.mark-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 0.75rem;
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid var(--border, #e6eae8);
+  border-left: 4px solid transparent;
+}
+
+.mark-row.present {
+  border-left-color: #3f9a5c;
+}
+
+.mark-row.half_day {
+  border-left-color: #f0a531;
+}
+
+.mark-row.absent {
+  border-left-color: #d64545;
+}
+
+.mark-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 140px;
+}
+
+.mark-buttons {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.mark-buttons .tap {
+  width: 52px;
+  padding: 0;
+}
+
+.tap.mark-present.on {
+  background: #3f9a5c;
+  border-color: #3f9a5c;
+}
+
+.tap.mark-half_day.on {
+  background: #f0a531;
+  border-color: #f0a531;
+}
+
+.tap.mark-absent.on {
+  background: #d64545;
+  border-color: #d64545;
+}
+
+.mark-buttons .ot {
+  width: 64px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.check-item {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border, #e6eae8);
+  display: grid;
+  gap: 0.4rem;
+}
+
+.signature canvas {
+  width: 100%;
+  height: 150px;
+  border: 1px dashed #9aa3a0;
+  border-radius: 8px;
+  background: #fff;
+  touch-action: none;
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+.tab-select {
+  display: none;
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+
+.row-over td {
+  background: #fdecec;
+}
+
+.progress-fill.over {
+  background: #d64545;
+}
+
+.small-bar {
+  height: 5px;
+  margin-top: 3px;
+}
+
+.point-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0;
+}
+
+.inline-form.wrap {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 760px) {
+  .tab-select {
+    display: block;
+  }
+
+  .tab-bar {
+    display: none;
+  }
+
+  .daily-actions {
+    flex-direction: column;
+  }
+
+  .modal-wide {
+    width: 100%;
+  }
+}
+
+.wrap-row {
+  flex-wrap: wrap;
+  max-width: 100%;
+}

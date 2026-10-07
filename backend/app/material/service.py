@@ -27,8 +27,10 @@ from app.masters.conversions import ConversionError, convert
 from app.masters.models import CompanyGstin, CompanyProfile, Product, Vendor
 from app.material.models import (
     FreightEntry,
+    Grn,
     Indent,
     IndentLine,
+    PoLine,
     PurchaseOrder,
     StockLedger,
     Store,
@@ -333,48 +335,61 @@ def refresh_po(po: PurchaseOrder) -> None:
         po.status = "partly_received"
 
 
-def po_sites(db: Session, po: PurchaseOrder) -> dict[int | None, Decimal]:
-    """The PO's value per site (from its indent lines; else the delivery store's site)."""
-    out: dict[int | None, Decimal] = defaultdict(Decimal)
+def line_site(db: Session, po: PurchaseOrder, line: PoLine) -> int | None:
+    """The site a PO line is for: its indent's site, else the delivery store's site."""
+    if line.indent_line_id:
+        il = db.get(IndentLine, line.indent_line_id)
+        if il is not None:
+            return db.get(Indent, il.indent_id).site_id
     store = db.get(Store, po.store_id)
-    for ln in po.lines:
-        site_id = None
-        if ln.indent_line_id:
-            il = db.get(IndentLine, ln.indent_line_id)
-            site_id = db.get(Indent, il.indent_id).site_id if il else None
-        out[site_id or (store.site_id if store else None)] += Decimal(ln.amount)
-    return out
+    return store.site_id if store else None
 
 
-def po_freight(db: Session, po: PurchaseOrder, user_id) -> None:
-    """Freight charges of an approved PO, charged to its sites by value (inbound)."""
-    db.query(FreightEntry).filter(FreightEntry.po_id == po.id).delete()
+def grn_freight(db: Session, po: PurchaseOrder, grn: Grn, user_id) -> None:
+    """A PO's freight is charged to sites as the material arrives: each GRN carries the share of
+    every freight charge that its received value bears to the PO's taxable value, split over
+    the sites of the lines received. A cancelled or short-closed PO charges no more freight."""
     freight = [c for c in po.charges if c.kind == "freight" and Decimal(c.amount) > 0]
-    if not freight:
+    if not freight or not po.taxable:
         return
-    shares = po_sites(db, po)
-    total_value = sum(shares.values(), ZERO) or Decimal(1)
+    lines = {ln.id: ln for ln in po.lines}
+    value: dict[int | None, Decimal] = defaultdict(Decimal)
+    for gl in grn.lines:
+        pl = lines.get(gl.po_line_id or 0)
+        if pl is not None and Decimal(gl.accepted_qty) > 0:
+            value[line_site(db, po, pl)] += Decimal(gl.accepted_qty) * Decimal(gl.rate)
     store = db.get(Store, po.store_id)
     for charge in freight:
-        left = Decimal(charge.amount)
-        items = list(shares.items())
-        for i, (site_id, value) in enumerate(items):
-            amount = (
-                left if i == len(items) - 1 else money(Decimal(charge.amount) * value / total_value)
-            )
-            left -= amount
+        for site_id, v in value.items():
+            amount = money(Decimal(charge.amount) * v / Decimal(po.taxable))
+            if amount <= 0:
+                continue
             db.add(
                 FreightEntry(
                     source="po",
                     po_id=po.id,
+                    grn_id=grn.id,
                     site_id=site_id,
                     direction="inbound",
-                    on_date=po.po_date,
+                    on_date=grn.received_at,
                     amount=amount,
                     gst_percent=charge.gst_percent,
                     transporter=po.vendor.name,
                     to_place=store.name if store else None,
-                    remark=charge.description,
+                    remark=f"{charge.description or 'Freight'} ({grn.code})",
                     created_by=user_id,
                 )
             )
+
+
+def next_code_plain(db: Session, kind: str) -> str:
+    """AST-0001 ...: one running number, not reset by year."""
+    value = db.execute(
+        text(
+            "INSERT INTO doc_sequences (kind, period, last_value) VALUES (:k, 'all', 1) "
+            "ON CONFLICT (kind, period) DO UPDATE SET last_value = doc_sequences.last_value + 1 "
+            "RETURNING last_value"
+        ),
+        {"k": kind},
+    ).scalar_one()
+    return f"{kind}-{value:04d}"

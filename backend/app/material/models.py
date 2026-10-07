@@ -37,7 +37,9 @@ Money = Numeric(14, 2)
 Rate = Numeric(14, 4)
 
 STORE_KINDS = ("godown", "site")
-LEDGER_REFS = ("grn", "transfer_out", "transfer_in", "issue", "return", "adjust", "opening")
+LEDGER_REFS = (
+    "grn", "transfer_out", "transfer_in", "shortage", "issue", "return", "adjust", "opening",
+)  # fmt: skip
 INDENT_STATUSES = (
     "draft",
     "submitted",

@@ -433,6 +433,7 @@ def _ref_codes(db: Session, rows: list[StockLedger]) -> dict[tuple[str, int], st
     tables = {
         "grn": Grn,
         "transfer_out": Transfer,
+        "shortage": Transfer,
         "transfer_in": Transfer,
         "issue": SiteIssue,
         "return": SiteIssue,
@@ -1452,7 +1453,6 @@ def _approve_po(db: Session, po: PurchaseOrder, principal: Principal) -> None:
         ind = db.get(Indent, i)
         db.refresh(ind)
         svc.refresh_indent(ind)
-    svc.po_freight(db, po, principal.user.id)
 
 
 def _po_status(db, request, principal, po, before, reason=None) -> PoOut:
@@ -1918,9 +1918,7 @@ def _post_grn(db: Session, g: Grn, user_id) -> None:
     if po is not None:
         db.refresh(po)
         svc.refresh_po(po)
-        db.query(FreightEntry).filter(
-            FreightEntry.po_id == po.id, FreightEntry.grn_id.is_(None)
-        ).update({"grn_id": g.id})
+        svc.grn_freight(db, po, g, user_id)
     for i in touched_indents:
         ind = db.get(Indent, i)
         db.refresh(ind)
@@ -2264,17 +2262,30 @@ def receive_transfer(
             raise unprocessable(f"{ln.product.name}: give the reason for the shortage")
         ln.qty_received, ln.shortage_qty = got, short
         ln.shortage_reason = r.shortage_reason if short > 0 else None
-        if got > 0:
+        # all that was sent comes in; what did not arrive is written off in the receiving
+        # store (a 'shortage' entry), so its value is charged to the receiving site
+        svc.post(
+            db,
+            store_id=dst.id,
+            product=ln.product,
+            qty=Decimal(ln.qty_sent),
+            rate=ln.rate or ZERO,
+            ref_type="transfer_in",
+            ref_id=t.id,
+            user_id=principal.user.id,
+            note=t.code,
+        )
+        if short > 0:
             svc.post(
                 db,
                 store_id=dst.id,
                 product=ln.product,
-                qty=got,
+                qty=-short,
                 rate=ln.rate or ZERO,
-                ref_type="transfer_in",
+                ref_type="shortage",
                 ref_id=t.id,
                 user_id=principal.user.id,
-                note=t.code,
+                note=f"{t.code}: {ln.shortage_reason}",
             )
     t.status, t.received_at, t.received_by = "received", _now(), principal.user.id
     if Decimal(t.freight_amount) > 0:

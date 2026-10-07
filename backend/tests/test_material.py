@@ -305,14 +305,14 @@ def test_full_flow_indent_rfq_po_grn_transfer_issue(boss, masters, db):
     assert r.status_code == 201
     assert stock(client, h, site_store["id"])[products["T-CRYS"]][0] == 48
 
-    # freight: the PO freight is inbound to this site (from its indent), the transfer godown->site
+    # freight: the PO freight follows the GRN (19,200 of 27,600 received), the transfer godown->site
     report = client.get(
         "/api/material/freight/report", params={"site_id": s["id"]}, headers=h
     ).json()
     assert len(report) == 1
-    assert D(report[0]["inbound"]) == 1000 and D(report[0]["godown_to_site"]) == 750
+    assert D(report[0]["inbound"]) == D("695.65") and D(report[0]["godown_to_site"]) == 750
     summary = client.get(f"/api/material/sites/{s['id']}/summary", headers=h).json()
-    assert D(summary["freight"]["total"]) == 1750
+    assert D(summary["freight"]["total"]) == D("1445.65")
 
     # the ledger is append-only and explains the balance
     ledger = client.get(
@@ -320,8 +320,9 @@ def test_full_flow_indent_rfq_po_grn_transfer_issue(boss, masters, db):
         params={"product_id": products["T-CRYS"]},
         headers=h,
     ).json()
-    assert [r["ref_type"] for r in ledger] == ["return", "issue", "transfer_in"]
-    assert D(ledger[0]["balance"]) == 48 and ledger[2]["ref_code"] == t["code"]
+    assert [r["ref_type"] for r in ledger] == ["return", "issue", "shortage", "transfer_in"]
+    assert D(ledger[0]["balance"]) == 48 and ledger[3]["ref_code"] == t["code"]
+    assert D(ledger[2]["qty"]) == -2 and ledger[2]["ref_code"] == t["code"]
 
 
 # --- GST and landed cost -------------------------------------------------------------------------

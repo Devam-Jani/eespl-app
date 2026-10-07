@@ -15,6 +15,10 @@ export default function StageTemplates() {
   const [draft, setDraft] = useState<StageTemplate | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [checklists, setChecklists] = useState<{ id: number; name: string }[]>([]);
+  useEffect(() => {
+    api<{ id: number; name: string }[]>("/api/execution/checklists").then(setChecklists, () => setChecklists([]));
+  }, []);
 
   async function load() {
     try {
@@ -30,7 +34,18 @@ export default function StageTemplates() {
 
   useEffect(() => {
     if (selected === "new")
-      setDraft({ id: 0, name: "", system_id: null, system_name: null, work_category_id: null, work_category_name: null, keywords: "", is_active: true, steps: [{ ...EMPTY_STEP, weight_percent: "100" }], total_days: 1 });
+      setDraft({
+        id: 0,
+        name: "",
+        system_id: null,
+        system_name: null,
+        work_category_id: null,
+        work_category_name: null,
+        keywords: "",
+        is_active: true,
+        steps: [{ ...EMPTY_STEP, weight_percent: "100" }],
+        total_days: 1,
+      });
     else setDraft(templates.find((t) => t.id === selected) ?? null);
   }, [selected, templates]);
 
@@ -123,8 +138,9 @@ export default function StageTemplates() {
                   <th>Step</th>
                   <th className="num">Weight %</th>
                   <th>Photo</th>
-                  <th>Checklist</th>
+                  <th>Inspection</th>
                   <th>Hold point</th>
+                  <th title="Certifying the hold point needs a passed inspection with this checklist">Hold-point checklist</th>
                   <th className="num">Days</th>
                   {canEdit && <th />}
                 </tr>
@@ -148,8 +164,32 @@ export default function StageTemplates() {
                     <td className="center">
                       <input type="checkbox" disabled={!canEdit} checked={s.hold_point} onChange={(e) => setStep(i, { hold_point: e.target.checked })} />
                     </td>
+                    <td>
+                      {s.hold_point && (
+                        <select
+                          disabled={!canEdit}
+                          value={s.checklist_template_id ?? ""}
+                          onChange={(e) => setStep(i, { checklist_template_id: Number(e.target.value) || null })}
+                          aria-label="Hold-point checklist"
+                        >
+                          <option value="">— none —</option>
+                          {checklists.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </td>
                     <td className="num">
-                      <input className="input-num" type="number" min={1} disabled={!canEdit} value={s.typical_days} onChange={(e) => setStep(i, { typical_days: Number(e.target.value) || 1 })} />
+                      <input
+                        className="input-num"
+                        type="number"
+                        min={1}
+                        disabled={!canEdit}
+                        value={s.typical_days}
+                        onChange={(e) => setStep(i, { typical_days: Number(e.target.value) || 1 })}
+                      />
                     </td>
                     {canEdit && (
                       <td className="row-actions nowrap">
@@ -168,7 +208,9 @@ export default function StageTemplates() {
                 ))}
               </tbody>
             </table>
-            <p className={total === 100 ? "muted small" : "text-danger small"}>Weights add up to {total}% {total === 100 ? "✓" : "(must be 100)"}</p>
+            <p className={total === 100 ? "muted small" : "text-danger small"}>
+              Weights add up to {total}% {total === 100 ? "✓" : "(must be 100)"}
+            </p>
             {canEdit && (
               <div className="form-actions">
                 <button className="btn" onClick={() => setDraft({ ...draft, steps: [...draft.steps, { ...EMPTY_STEP }] })}>

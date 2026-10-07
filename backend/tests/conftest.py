@@ -48,6 +48,9 @@ PER_TEST_TABLES = [
     "transfer_lines", "transfers", "grn_photos", "grn_lines", "grns", "po_charges", "po_lines",
     "po_indents", "purchase_orders", "rfq_quotes", "rfq_vendors", "rfq_lines", "rfq_indents",
     "rfqs", "indent_lines", "indents", "stores", "company_profile",
+    "dpr_photos", "dprs", "attendance", "staff_attendance", "labour", "wo_measurements", "wo_lines",
+    "work_orders", "inspections", "mom_points", "moms", "equipment_usage", "asset_movements",
+    "assets", "site_budgets", "site_costs",
 ]  # fmt: skip
 # Tables that also hold seeded rows (unit conversions, categories), or are referenced by them
 # (products), are cleaned with DELETE so the seed survives.
@@ -59,6 +62,7 @@ PER_TEST_DELETES = [
     "DELETE FROM systems",
     "DELETE FROM products",
     "DELETE FROM categories WHERE id > :seeded_max_category",
+    "DELETE FROM checklist_templates WHERE created_by IS NOT NULL",  # the seeded ones stay
     "INSERT INTO company_profile (id) VALUES (1)",
     "INSERT INTO stores (name, kind) VALUES ('Ethios Godown', 'godown')",
 ]

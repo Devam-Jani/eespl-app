@@ -11,6 +11,12 @@ from app.auth.router import router as auth_router
 from app.config import settings
 from app.crm import routers as crm
 from app.db import get_engine
+from app.execution import assets as ex_assets
+from app.execution import budget as ex_budget
+from app.execution import dpr as ex_dpr
+from app.execution import inspections as ex_inspections
+from app.execution import labour as ex_labour
+from app.execution import subcon as ex_subcon
 from app.masters.routers import (
     admin_settings,
     channels,
@@ -56,6 +62,8 @@ app.include_router(sites.templates_router)
 app.include_router(crm.router)
 app.include_router(crm.settings_router)
 app.include_router(material.router)
+for _module in (ex_dpr, ex_labour, ex_subcon, ex_inspections, ex_assets, ex_budget):
+    app.include_router(_module.router)
 
 
 @app.get("/api/health")
