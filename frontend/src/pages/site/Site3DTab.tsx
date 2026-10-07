@@ -1,0 +1,658 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { api, ApiError, fetchObjectUrl } from "../../api";
+import { useAuth } from "../../auth";
+import { errorText } from "../../format";
+import type { Site, SiteTask } from "../../types";
+import { shortDate } from "../Tenders";
+import { CATEGORY_LABEL, LATE_COLOR, legendCounts, realisticColor, STATUS_COLORS, workColor } from "./three/colors";
+import type { Category, NodeStatus } from "./three/colors";
+import { layout } from "./three/layout";
+import type { Box, LayoutNode } from "./three/layout";
+import { TaskDialog } from "./TasksTab";
+
+type ModelNode = LayoutNode & { status: NodeStatus };
+type Model = { site_id: number; version: string; site_progress: number; nodes: ModelNode[] };
+type Hover = { x: number; y: number; node: ModelNode } | null;
+
+const POLL_MS = 60_000;
+const GROUP_KINDS = new Set(["tower", "wing", "floor", "basement"]);
+const CATEGORIES: Exclude<Category, "rollup">[] = ["done", "progress", "hold", "blocked", "not_started", "none"];
+
+/** The 3D tab: the site's block model coloured by work status (or realistic tones). */
+export default function Site3DTab({ site, onChange }: { site: Site; onChange: () => void }) {
+  const { can } = useAuth();
+  const canUpdate = can("site.update", "site.edit");
+  const canEdit = can("site.edit");
+  const [model, setModel] = useState<Model | null>(null);
+  const [mode, setMode] = useState<"work" | "real">("work");
+  const [cutaway, setCutaway] = useState<number | null>(null);
+  const [maxLevel, setMaxLevel] = useState<number | null>(null);
+  const [below, setBelow] = useState(false);
+  const [templateFilter, setTemplateFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [templates, setTemplates] = useState<{ id: number; name: string }[]>([]);
+  const [hover, setHover] = useState<Hover>(null);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const mount = useRef<HTMLDivElement>(null);
+  const labelsEl = useRef<HTMLDivElement>(null);
+  const three = useRef<{
+    renderer: THREE.WebGLRenderer;
+    scene: THREE.Scene;
+    camera: THREE.PerspectiveCamera;
+    controls: OrbitControls;
+    content: THREE.Group;
+    ground: THREE.Mesh;
+    pickables: { mesh: THREE.InstancedMesh; boxes: Box[] }[];
+    labels: { el: HTMLDivElement; pos: THREE.Vector3 }[];
+    render: () => void;
+  } | null>(null);
+  const framed = useRef(false);
+
+  // --- data ---
+
+  const load = useCallback(
+    async (version?: string) => {
+      try {
+        const next = await api<Model>(`/api/sites/${site.id}/model`, version ? { headers: { "If-None-Match": `"${version}"` } } : {});
+        setModel((m) => (m && m.version === next.version ? m : next));
+      } catch (err) {
+        if (!(err instanceof ApiError && err.status === 304)) setError(errorText(err));
+      }
+    },
+    [site.id],
+  );
+
+  useEffect(() => {
+    void load();
+    api<{ id: number; name: string }[]>("/api/stage-templates").then(setTemplates, () => setTemplates([]));
+  }, [load]);
+
+  useEffect(() => {
+    const t = setInterval(() => void load(model?.version), POLL_MS);
+    return () => clearInterval(t);
+  }, [load, model?.version]);
+
+  const nodes = useMemo(() => model?.nodes ?? [], [model]);
+  const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
+  const boxes = useMemo(() => layout(nodes), [nodes]);
+  const workBelow = useMemo(() => {
+    const kids = new Map<number | null, ModelNode[]>();
+    for (const n of nodes) kids.set(n.parent_id, [...(kids.get(n.parent_id) ?? []), n]);
+    const memo = new Map<number, boolean>();
+    const walk = (n: ModelNode): boolean => {
+      if (memo.has(n.id)) return memo.get(n.id)!;
+      const v = n.status.has_scope || (kids.get(n.id) ?? []).some(walk);
+      memo.set(n.id, v);
+      return v;
+    };
+    nodes.forEach(walk);
+    return memo;
+  }, [nodes]);
+  const lateBelow = useMemo(() => {
+    const out = new Set<number>();
+    for (const n of nodes) {
+      if (!n.status.is_late) continue;
+      for (let p: ModelNode | undefined = n; p; p = p.parent_id !== null ? byId.get(p.parent_id) : undefined) out.add(p.id);
+    }
+    return out;
+  }, [nodes, byId]);
+  const levels = useMemo(() => [...new Set(boxes.filter((b) => b.role === "floor").map((b) => b.level!))].sort((a, b) => a - b), [boxes]);
+  const usedTemplates = useMemo(() => {
+    const ids = new Set(nodes.flatMap((n) => n.status.template_ids));
+    return templates.filter((t) => ids.has(t.id));
+  }, [nodes, templates]);
+  // places that carry work themselves or hold nothing else (a flat is counted through its rooms)
+  const legend = useMemo(() => {
+    const parents = new Set(nodes.map((n) => n.parent_id));
+    return legendCounts(nodes.map((n) => ({ status: n.status, countable: !GROUP_KINDS.has(n.kind) && (n.status.has_scope || !parents.has(n.id)) })));
+  }, [nodes]);
+
+  // --- scene (once) ---
+
+  useEffect(() => {
+    const el = mount.current;
+    if (!el) return;
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(el.clientWidth, el.clientHeight);
+    el.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color("#f3f5f4");
+    const camera = new THREE.PerspectiveCamera(45, el.clientWidth / el.clientHeight, 0.5, 5000);
+    camera.position.set(60, 50, 80);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    scene.add(new THREE.HemisphereLight("#ffffff", "#b8b4aa", 1.7));
+    const sun = new THREE.DirectionalLight("#ffffff", 1.6);
+    sun.position.set(80, 140, 60);
+    scene.add(sun);
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ color: "#d3dccf", roughness: 1 }));
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+    const content = new THREE.Group();
+    scene.add(content);
+    const v = new THREE.Vector3();
+    const render = () => {
+      renderer.render(scene, camera);
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      for (const label of three.current?.labels ?? []) {
+        v.copy(label.pos).project(camera);
+        const visible = v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05;
+        label.el.style.display = visible ? "block" : "none";
+        if (visible) label.el.style.transform = `translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px) translate(-50%, -100%)`;
+      }
+    };
+    controls.addEventListener("change", render);
+    three.current = { renderer, scene, camera, controls, content, ground, pickables: [], labels: [], render };
+    const resize = new ResizeObserver(() => {
+      renderer.setSize(el.clientWidth, el.clientHeight);
+      camera.aspect = el.clientWidth / Math.max(1, el.clientHeight);
+      camera.updateProjectionMatrix();
+      render();
+    });
+    resize.observe(el);
+    return () => {
+      resize.disconnect();
+      controls.dispose();
+      renderer.dispose();
+      el.removeChild(renderer.domElement);
+      three.current = null;
+    };
+  }, []);
+
+  // --- what is drawn, and how ---
+
+  const visible = useCallback(
+    (b: Box): boolean => {
+      if (b.role === "group") return false;
+      if (b.below && !below) return false;
+      if (maxLevel !== null && b.level !== null && b.level > maxLevel) return false;
+      const cut = cutaway !== null ? boxes.find((x) => x.node_id === cutaway && x.role === "floor") : undefined;
+      if (b.role === "flat" || b.role === "room") return !!cut && b.floor_id === cut.node_id;
+      if (cut && b.tower_id === cut.tower_id) {
+        if (b.node_id === cut.node_id) return false;
+        if (b.level !== null && b.level > cut.level!) return false;
+      }
+      return true;
+    },
+    [below, maxLevel, cutaway, boxes],
+  );
+
+  const look = useCallback(
+    (b: Box): { color: string; ghost: boolean; late: boolean } => {
+      const n = byId.get(b.node_id);
+      if (!n) return { color: "#cccccc", ghost: false, late: false };
+      const leaf = b.role !== "floor" && b.role !== "group";
+      const filteredOut =
+        leaf &&
+        ((templateFilter && !n.status.template_ids.includes(Number(templateFilter))) ||
+          (statusFilter && workColor(n.status, false).category !== statusFilter));
+      if (mode === "real") return { color: realisticColor(b.kind), ghost: b.role === "flat" || !!filteredOut, late: false };
+      if (filteredOut) return { color: STATUS_COLORS.none, ghost: true, late: false };
+      const c = workColor(n.status, workBelow.get(n.id) ?? false);
+      return { color: c.color, ghost: c.ghost || b.role === "flat", late: n.status.is_late };
+    },
+    [byId, mode, templateFilter, statusFilter, workBelow],
+  );
+
+  useEffect(() => {
+    const t = three.current;
+    if (!t || !model) return;
+    // clear the previous build
+    for (const child of [...t.content.children]) {
+      t.content.remove(child);
+      if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
+        child.geometry.dispose();
+        (child.material as THREE.Material).dispose();
+      }
+    }
+    labelsEl.current?.replaceChildren();
+    const shown = boxes.filter(visible);
+    const solid: Box[] = [];
+    const ghost: Box[] = [];
+    const late: Box[] = [];
+    const styles = new Map<Box, { color: string }>();
+    for (const b of shown) {
+      const s = look(b);
+      styles.set(b, s);
+      (s.ghost ? ghost : solid).push(b);
+      if (s.late) late.push(b);
+    }
+    const unit = new THREE.BoxGeometry(1, 1, 1);
+    const matrix = new THREE.Matrix4();
+    const quat = new THREE.Quaternion();
+    const color = new THREE.Color();
+    const make = (list: Box[], material: THREE.Material) => {
+      if (!list.length) return null;
+      const mesh = new THREE.InstancedMesh(unit.clone(), material, list.length);
+      list.forEach((b, i) => {
+        matrix.compose(new THREE.Vector3(b.x, b.y, b.z), quat, new THREE.Vector3(b.w, b.h, b.d));
+        mesh.setMatrixAt(i, matrix);
+        mesh.setColorAt(i, color.set(styles.get(b)!.color));
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      t.content.add(mesh);
+      return mesh;
+    };
+    const pickables: { mesh: THREE.InstancedMesh; boxes: Box[] }[] = [];
+    const solidMesh = make(solid, new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0 }));
+    if (solidMesh) pickables.push({ mesh: solidMesh, boxes: solid });
+    const ghostMesh = make(ghost, new THREE.MeshStandardMaterial({ transparent: true, opacity: 0.22, depthWrite: false, roughness: 1 }));
+    if (ghostMesh) pickables.push({ mesh: ghostMesh, boxes: ghost });
+    unit.dispose();
+    // late: red outlines
+    if (late.length) {
+      const pts: number[] = [];
+      for (const b of late) {
+        const [x0, x1, y0, y1, z0, z1] = [b.x - b.w / 2, b.x + b.w / 2, b.y - b.h / 2, b.y + b.h / 2, b.z - b.d / 2, b.z + b.d / 2];
+        const c = [
+          [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1],
+          [x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1],
+        ];
+        for (const [a, e] of [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]) pts.push(...c[a], ...c[e]);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+      t.content.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: LATE_COLOR })));
+    }
+    // ground under everything, hidden when looking below it
+    const all = new THREE.Box3();
+    for (const b of boxes.filter((x) => x.role !== "group")) all.expandByPoint(new THREE.Vector3(b.x - b.w / 2, 0, b.z - b.d / 2)).expandByPoint(new THREE.Vector3(b.x + b.w / 2, 0, b.z + b.d / 2));
+    const size = all.isEmpty() ? new THREE.Vector3(40, 0, 40) : all.getSize(new THREE.Vector3());
+    const centre = all.isEmpty() ? new THREE.Vector3() : all.getCenter(new THREE.Vector3());
+    t.ground.scale.set(size.x + 40, size.z + 40, 1);
+    t.ground.position.set(centre.x, -0.02, centre.z);
+    (t.ground.material as THREE.MeshStandardMaterial).color.set(mode === "real" ? "#a9b994" : "#d3dccf");
+    t.ground.visible = !below;
+    // labels: towers with their %, floors with theirs (work view)
+    const labels: { el: HTMLDivElement; pos: THREE.Vector3 }[] = [];
+    const addLabel = (text: string, pos: THREE.Vector3, cls: string) => {
+      const div = document.createElement("div");
+      div.className = `label3d ${cls}`;
+      div.textContent = text;
+      labelsEl.current?.appendChild(div);
+      labels.push({ el: div, pos });
+    };
+    for (const b of boxes.filter((x) => x.role === "group" && x.kind === "tower")) {
+      const n = byId.get(b.node_id);
+      const top = Math.max(...shown.filter((x) => x.tower_id === b.node_id).map((x) => x.y + x.h / 2), 0);
+      addLabel(`${n?.name ?? ""} · ${Math.round(n?.status.percent ?? 0)}%`, new THREE.Vector3(b.x, top + 2, 0), "label-tower");
+    }
+    if (mode === "work" && cutaway === null) {
+      const floors = shown.filter((b) => b.role === "floor");
+      if (floors.length <= 80) {
+        for (const b of floors) {
+          const n = byId.get(b.node_id);
+          if (n && workBelow.get(n.id)) {
+            const late = lateBelow.has(n.id);
+            addLabel(`${n.name} ${Math.round(n.status.percent)}%${late ? " · late" : ""}`, new THREE.Vector3(b.x + b.w / 2 + 0.3, b.y + 0.4, b.z + b.d / 2), late ? "label-floor label-late" : "label-floor");
+          }
+        }
+      }
+    }
+    t.pickables = pickables;
+    t.labels = labels;
+    if (!framed.current && shown.length) {
+      framed.current = true;
+      view("reset");
+    }
+    t.render();
+    // view() only reads refs; rebuild when the drawing inputs change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model, boxes, visible, look, below, mode, cutaway, byId, workBelow, lateBelow]);
+
+  // --- camera ---
+
+  function view(kind: "reset" | "top" | "front") {
+    const t = three.current;
+    if (!t) return;
+    const box = new THREE.Box3();
+    for (const b of boxes.filter(visible)) box.expandByPoint(new THREE.Vector3(b.x - b.w / 2, b.y - b.h / 2, b.z - b.d / 2)).expandByPoint(new THREE.Vector3(b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2));
+    if (box.isEmpty()) return;
+    const c = box.getCenter(new THREE.Vector3());
+    const r = Math.max(10, box.getSize(new THREE.Vector3()).length() / 2);
+    const d = r / Math.sin((t.camera.fov * Math.PI) / 360);
+    const dir = kind === "top" ? new THREE.Vector3(0, 1, 0.001) : kind === "front" ? new THREE.Vector3(0, 0.15, 1) : new THREE.Vector3(0.75, 0.55, 1);
+    t.camera.position.copy(c).add(dir.normalize().multiplyScalar(d * 1.05));
+    t.camera.near = d / 100;
+    t.camera.far = d * 10;
+    t.camera.updateProjectionMatrix();
+    t.controls.target.copy(c);
+    t.controls.update();
+    t.render();
+  }
+
+  // --- picking ---
+
+  const pick = useCallback((e: { clientX: number; clientY: number }): Box | null => {
+    const t = three.current;
+    const el = mount.current;
+    if (!t || !el) return null;
+    const rect = el.getBoundingClientRect();
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1), t.camera);
+    const hits = ray.intersectObjects(t.pickables.map((p) => p.mesh), false);
+    // a room inside a see-through flat wins over the flat
+    const found = hits
+      .map((h) => {
+        const p = t.pickables.find((x) => x.mesh === h.object);
+        return p && h.instanceId !== undefined ? { box: p.boxes[h.instanceId], dist: h.distance } : null;
+      })
+      .filter((x): x is { box: Box; dist: number } => !!x);
+    return (found.find((f) => f.box.role === "room") ?? found[0])?.box ?? null;
+  }, []);
+
+  const downAt = useRef<{ x: number; y: number } | null>(null);
+  const hoverFrame = useRef(0);
+
+  function onMove(e: React.PointerEvent) {
+    const { clientX, clientY } = e;
+    cancelAnimationFrame(hoverFrame.current);
+    hoverFrame.current = requestAnimationFrame(() => {
+      const b = pick({ clientX, clientY });
+      const rect = mount.current!.getBoundingClientRect();
+      const n = b ? byId.get(b.node_id) : undefined;
+      setHover(n ? { x: clientX - rect.left, y: clientY - rect.top, node: n } : null);
+    });
+  }
+
+  function onClick(e: React.PointerEvent) {
+    const start = downAt.current;
+    if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 5) return; // a drag
+    const b = pick(e);
+    if (!b) return;
+    if (b.role === "floor") {
+      setCutaway(b.node_id);
+      setSelected(null);
+    } else setSelected(b.node_id);
+  }
+
+  function saveImage() {
+    const t = three.current;
+    if (!t) return;
+    t.render();
+    const link = document.createElement("a");
+    link.href = t.renderer.domElement.toDataURL("image/png");
+    link.download = `${site.code}-3d-${new Date().toISOString().slice(0, 10)}.png`;
+    link.click();
+  }
+
+  const cutNode = cutaway !== null ? byId.get(cutaway) : undefined;
+  const hasBelow = boxes.some((b) => b.below);
+
+  return (
+    <div className="split-3d">
+      <div className="card">
+        <div className="toolbar">
+          <div className="page-actions">
+            <div className="tabs">
+              <button className={`tab ${mode === "work" ? "active" : ""}`} onClick={() => setMode("work")}>
+                Work status
+              </button>
+              <button className={`tab ${mode === "real" ? "active" : ""}`} onClick={() => setMode("real")}>
+                Realistic
+              </button>
+            </div>
+            <button className="btn btn-small" onClick={() => view("reset")}>
+              Reset view
+            </button>
+            <button className="btn btn-small" onClick={() => view("top")}>
+              Top
+            </button>
+            <button className="btn btn-small" onClick={() => view("front")}>
+              Front
+            </button>
+            {hasBelow && (
+              <label className="check">
+                <input type="checkbox" checked={below} onChange={(e) => setBelow(e.target.checked)} /> Below ground
+              </label>
+            )}
+            {levels.length > 1 && (
+              <label className="check" title="Show floors up to">
+                Floors up to{" "}
+                <input
+                  type="range"
+                  min={levels[0]}
+                  max={levels[levels.length - 1]}
+                  value={maxLevel ?? levels[levels.length - 1]}
+                  onChange={(e) => setMaxLevel(Number(e.target.value) >= levels[levels.length - 1] ? null : Number(e.target.value))}
+                />{" "}
+                <strong>{maxLevel === null ? "all" : maxLevel === 0 ? "G" : maxLevel < 0 ? `B${-maxLevel}` : maxLevel}</strong>
+              </label>
+            )}
+            <select aria-label="Open floor" value={cutaway ?? ""} onChange={(e) => setCutaway(e.target.value ? Number(e.target.value) : null)}>
+              <option value="">Open floor…</option>
+              {boxes
+                .filter((b) => b.role === "floor")
+                .sort((a, b) => (a.tower_id ?? 0) - (b.tower_id ?? 0) || b.level! - a.level!)
+                .map((b) => (
+                  <option key={b.node_id} value={b.node_id}>
+                    {byId.get(b.tower_id ?? -1)?.name ?? ""} {byId.get(b.node_id)?.name}
+                  </option>
+                ))}
+            </select>
+            <select value={templateFilter} onChange={(e) => setTemplateFilter(e.target.value)}>
+              <option value="">All work</option>
+              {usedTemplates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">All statuses</option>
+              {CATEGORIES.filter((c) => c !== "none").map((c) => (
+                <option key={c} value={c}>
+                  {CATEGORY_LABEL[c]}
+                </option>
+              ))}
+            </select>
+            <button className="btn btn-small" onClick={saveImage}>
+              Save image
+            </button>
+          </div>
+          {cutNode && (
+            <span className="inline-form">
+              <span className="badge badge-info">Cutaway: {cutNode.name}</span>
+              <button className="btn btn-small btn-ghost" onClick={() => setCutaway(null)}>
+                Show all floors
+              </button>
+            </span>
+          )}
+        </div>
+        {error && <div className="alert alert-error">{error}</div>}
+        <div
+          className="viewport3d"
+          ref={mount}
+          onPointerMove={onMove}
+          onPointerLeave={() => setHover(null)}
+          onPointerDown={(e) => (downAt.current = { x: e.clientX, y: e.clientY })}
+          onPointerUp={onClick}
+        >
+          <div className="labels3d" ref={labelsEl} />
+          {hover && (
+            <div className="tooltip3d" style={{ left: hover.x + 14, top: hover.y + 14 }}>
+              <strong>{hover.node.name}</strong> <span className="muted">{hover.node.kind.replace("_", " ")}</span>
+              <div>{Math.round(hover.node.status.percent)}% done</div>
+              {hover.node.status.current_step && <div>Now: {hover.node.status.current_step}</div>}
+              {hover.node.status.next_step && <div>Next: {hover.node.status.next_step}</div>}
+              {hover.node.status.waiting_certification && <div>Waiting for certification</div>}
+              {hover.node.status.is_late && <div className="text-danger">Late</div>}
+            </div>
+          )}
+          {!nodes.length && model && <div className="empty3d">No structure yet: add a tower on the Structure tab.</div>}
+        </div>
+        <div className="legend3d">
+          {mode === "work" ? (
+            <>
+              {CATEGORIES.map((c) => (
+                <span key={c} className="legend-item">
+                  <span className={`swatch ${c === "none" ? "swatch-ghost" : ""}`} style={{ background: STATUS_COLORS[c] }} /> {CATEGORY_LABEL[c]} ({legend[c]})
+                </span>
+              ))}
+              <span className="legend-item">
+                <span className="swatch swatch-late" /> Late ({legend.late})
+              </span>
+              <span className="legend-item muted">Floors and towers: rolled-up % (grey → green)</span>
+            </>
+          ) : (
+            <span className="muted">Realistic tones: concrete floors, brick flats, tiled wet areas.</span>
+          )}
+          <span className="push-right muted small">Click a floor to open it · click a room for its steps · updates every minute</span>
+        </div>
+      </div>
+      {selected !== null && byId.get(selected) && (
+        <NodePanel
+          site={site}
+          node={byId.get(selected)!}
+          canUpdate={canUpdate}
+          canEdit={canEdit}
+          onClose={() => setSelected(null)}
+          onChanged={() => {
+            void load();
+            onChange();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+const STEP_BADGE: Record<string, string> = {
+  not_started: "badge-muted",
+  in_progress: "badge-info",
+  done: "badge-warn",
+  certified: "badge-ok",
+  blocked: "badge-danger",
+};
+
+function NodePanel({
+  site,
+  node,
+  canUpdate,
+  canEdit,
+  onClose,
+  onChanged,
+}: {
+  site: Site;
+  node: ModelNode;
+  canUpdate: boolean;
+  canEdit: boolean;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [tasks, setTasks] = useState<SiteTask[]>([]);
+  const [scopeNames, setScopeNames] = useState<Map<number, string>>(new Map());
+  const [photos, setPhotos] = useState<{ key: string; url: string | null; name: string }[]>([]);
+  const [open, setOpen] = useState<SiteTask | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const list = await api<SiteTask[]>(`/api/sites/${site.id}/tasks?node_id=${node.id}`);
+      setTasks(list); // the place and everything inside it (a flat shows its rooms)
+      const scope = await api<{ lines: { scopes: { id: number; stage_template_name: string }[] }[]; other_scopes: { id: number; stage_template_name: string }[] }>(`/api/sites/${site.id}/scope`);
+      setScopeNames(new Map([...scope.lines.flatMap((l) => l.scopes), ...scope.other_scopes].map((s) => [s.id, s.stage_template_name])));
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }, [site.id, node.id]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    let alive = true;
+    const last = tasks
+      .flatMap((t) => t.photos.map((p) => ({ task: t.id, ...p })))
+      .sort((a, b) => b.uploaded_at.localeCompare(a.uploaded_at))
+      .slice(0, 3);
+    Promise.all(last.map(async (p) => ({ key: `${p.task}-${p.id}`, name: p.filename, url: await fetchObjectUrl(`/api/sites/${site.id}/tasks/${p.task}/photos/${p.id}`) }))).then(
+      (list) => alive && setPhotos(list),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [tasks, site.id]);
+
+  const groups = useMemo(() => {
+    const out = new Map<number | null, SiteTask[]>();
+    for (const t of tasks) out.set(t.area_scope_id, [...(out.get(t.area_scope_id) ?? []), t]);
+    return [...out.entries()].map(([scopeId, list]) => ({ scopeId, list, where: list[0]?.node_path?.split(" › ").pop() ?? "" }));
+  }, [tasks]);
+
+  return (
+    <aside className="card panel3d">
+      <div className="toolbar">
+        <div>
+          <h2 className="section-title">{node.name}</h2>
+          <span className="muted small">
+            {node.kind.replace("_", " ")} · {Math.round(node.status.percent)}% done
+          </span>
+        </div>
+        <button className="btn btn-ghost btn-icon" onClick={onClose} aria-label="Close">
+          ×
+        </button>
+      </div>
+      {error && <div className="alert alert-error">{error}</div>}
+      {photos.length > 0 && (
+        <div className="photo-strip">
+          {photos.map((p) => (p.url ? <img key={p.key} src={p.url} alt={p.name} /> : null))}
+        </div>
+      )}
+      {groups.length === 0 && <p className="muted">No work scheduled here.</p>}
+      {groups.map(({ scopeId, list, where }) => (
+        <div key={scopeId ?? 0} className="top-gap">
+          <strong className="small">
+            {list[0]?.node_id !== node.id && `${where}: `}
+            {(scopeId && scopeNames.get(scopeId)) || "Tasks"}
+          </strong>
+          <table className="table compact">
+            <tbody>
+              {list.map((t) => (
+                <tr key={t.id}>
+                  <td>
+                    {t.name} {t.hold_point && <span className="badge badge-orange">hold</span>}
+                    <div className={`muted small ${t.late ? "text-danger" : ""}`}>
+                      {shortDate(t.planned_start)} – {shortDate(t.planned_end)}
+                    </div>
+                  </td>
+                  <td>
+                    <span className={`badge ${STEP_BADGE[t.status]}`}>{t.status.replace("_", " ")}</span>
+                  </td>
+                  <td>
+                    {canUpdate && (
+                      <button className="btn btn-small" onClick={() => setOpen(t)}>
+                        Update task
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+      {open && (
+        <TaskDialog
+          site={site}
+          task={open}
+          canUpdate={canUpdate}
+          canEdit={canEdit}
+          onClose={() => setOpen(null)}
+          onSaved={(t) => {
+            setOpen(t);
+            void load();
+            onChanged();
+          }}
+        />
+      )}
+    </aside>
+  );
+}

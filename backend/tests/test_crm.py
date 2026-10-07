@@ -522,3 +522,31 @@ def test_won_stage_needs_kylas_to_check_it(boss, kylas, monkeypatch):
         headers=headers,
     )
     assert r.status_code == 422 and "API key" in r.json()["detail"]
+
+
+# --- phone required ------------------------------------------------------------------------------
+
+
+def test_lead_needs_a_phone_and_old_phoneless_leads_are_not_pushed(boss, kylas, db):
+    client, headers = boss
+    configure(client, headers)
+    r = client.post("/api/leads", json={"contact_name": "No Phone"}, headers=headers)
+    assert r.status_code == 422
+    r = client.post("/api/leads", json={"contact_name": "No Phone", "phone": ""}, headers=headers)
+    assert r.status_code == 422
+    lead = new_lead(client, headers)
+    r = client.patch(f"/api/leads/{lead['id']}", json={"phone": None}, headers=headers)
+    assert r.status_code == 422
+    # a lead saved before phones were required, already queued
+    old = Lead(code="L-OLD-1", contact_name="Old lead", kylas_sync_status="pending")
+    db.add(old)
+    db.flush()
+    db.add(KylasOutbox(lead_id=old.id, status="pending", next_attempt_at=kylas_push.now()))
+    db.commit()
+    before = len(kylas.requests)
+    report = sweep()
+    assert report.disabled == 1 and len(kylas.requests) == before  # no call for it
+    got = client.get(f"/api/leads/{old.id}", headers=headers).json()
+    assert got["kylas_sync_status"] == "disabled" and "phone" in got["kylas_last_error"]
+    r = client.post(f"/api/leads/{old.id}/kylas/retry", headers=headers)
+    assert r.status_code == 422 and "phone" in r.json()["detail"]

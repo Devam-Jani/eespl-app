@@ -74,7 +74,7 @@ export default function LeadDetail() {
       <div className="page-header">
         <div>
           <h1>
-            {lead.contact_name} <LeadStatusBadge status={lead.status} /> <KylasBadge status={lead.kylas_sync_status} />
+            {lead.contact_name} <LeadStatusBadge status={lead.status} /> <KylasBadge status={lead.kylas_sync_status} phone={lead.phone} />
           </h1>
           <p className="muted">
             {lead.company ?? ""} {lead.city ? `· ${lead.city}` : ""}
@@ -133,13 +133,13 @@ export default function LeadDetail() {
           </dl>
           <h2 className="section-title top-gap">Kylas</h2>
           <p className="small">
-            <KylasBadge status={lead.kylas_sync_status} />
+            <KylasBadge status={lead.kylas_sync_status} phone={lead.phone} />
             {lead.kylas_lead_id && <> Kylas lead {lead.kylas_lead_id}</>}
             {lead.kylas_forecasting && <> · {lead.kylas_forecasting}</>}
             {lead.kylas_synced_at && <> · sent {new Date(lead.kylas_synced_at).toLocaleString("en-IN")}</>}
           </p>
           {lead.kylas_last_error && <p className="small text-danger">{lead.kylas_last_error}</p>}
-          {canEdit && !lead.kylas_lead_id && (lead.kylas_sync_status === "failed" || lead.kylas_sync_status === "disabled") && (
+          {canEdit && !lead.kylas_lead_id && lead.phone && (lead.kylas_sync_status === "failed" || lead.kylas_sync_status === "disabled") && (
             <button className="btn btn-small" onClick={() => void run(api<Detail>(`/api/leads/${lead.id}/kylas/retry`, { method: "POST" }))}>
               Retry
             </button>
