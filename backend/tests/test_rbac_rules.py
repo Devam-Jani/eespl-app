@@ -168,21 +168,15 @@ def test_user_admin_lifecycle(login_as, db):
 
     r = c.post(f"/api/users/{uid}/reset-password", json={"password": "brand-new-pass"}, headers=h)
     assert r.status_code == 204
-    assert (
-        c.post(
-            "/api/auth/login", json={"email": "pat@example.com", "password": "brand-new-pass"}
-        ).status_code
-        == 200
-    )
+    assert c.post(
+        "/api/auth/login", json={"email": "pat@example.com", "password": "brand-new-pass"}
+    ).status_code == 200
 
     r = c.post(f"/api/users/{uid}/deactivate", headers=h)
     assert r.json()["is_active"] is False
-    assert (
-        c.post(
-            "/api/auth/login", json={"email": "pat@example.com", "password": "brand-new-pass"}
-        ).status_code
-        == 401
-    )
+    assert c.post(
+        "/api/auth/login", json={"email": "pat@example.com", "password": "brand-new-pass"}
+    ).status_code == 401
 
 
 def test_cannot_deactivate_yourself(login_as, db):

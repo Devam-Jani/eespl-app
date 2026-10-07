@@ -21,7 +21,9 @@ from openpyxl import Workbook
 HERE = Path(__file__).parent
 
 APP = "Providing and applying APP modified bitumen membrane 4 mm thick over terrace slab"
-PIPE_PARENT = "Sealing / packing the joint around the PVC pipe opening with polymer modified mortar"
+PIPE_PARENT = (
+    "Sealing / packing the joint around the PVC pipe opening with polymer modified mortar"
+)
 PIPE = f"{PIPE_PARENT} — 110mm dia pipe"
 CRYSTAL = "Integral crystalline admixture for RCC raft and retaining walls"
 TOILET = "Toilet sunken slab waterproofing with two coat acrylic polymer cementitious coating"
