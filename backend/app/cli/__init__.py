@@ -297,41 +297,30 @@ def run_import_projects(paths: list[str]) -> None:
 
 
 def run_kylas_discover() -> None:
-    """Ids and names of Kylas sources, users, pipelines and their stages: nothing else (no
-    emails, phones or keys), for Settings > Integrations > Kylas. Read-only GETs."""
-    from app.crm.kylas_client import client
+    """Ids and names of Kylas lead sources, users, deal pipelines and their stages: nothing else
+    (no emails, phones or keys), for Settings > Integrations > Kylas. Read-only GETs."""
+    from app.crm import kylas_client
 
-    kylas = client()
+    kylas = kylas_client.client()
     if not kylas.is_configured:
         print("KYLAS_API_KEY is not set in .env: nothing to discover")
         return
-
-    def items(body):
-        if isinstance(body, dict):
-            body = body.get("content", body.get("data", []))
-        return body if isinstance(body, list) else []
-
-    def name_of(item):
-        for key in ("name", "displayName", "value"):
-            if item.get(key):
-                return str(item[key])
-        first, last = item.get("firstName") or "", item.get("lastName") or ""
-        return f"{first} {last}".strip() or "?"
-
-    for title, path in (("Sources", "/sources"), ("Users", "/users"), ("Pipelines", "/pipelines")):
-        result = kylas.get(path)
+    sections = (
+        ("Sources (lead source picklist)", kylas_client.lead_sources),
+        ("Users", kylas_client.users),
+        ("Deal pipelines and stages", kylas_client.deal_pipelines),
+    )
+    for title, lookup in sections:
         print(f"{title}:")
-        if not result.ok:
-            print(f"  (no answer: HTTP {result.status_code})")
+        found = lookup(kylas)
+        if not found.ok:
+            print(f"  (no answer: HTTP {found.status_code})")
             continue
-        for item in items(result.body):
-            if not isinstance(item, dict):
-                continue
-            print(f"  {item.get('id')}  {name_of(item)}")
-            if title == "Pipelines":
-                for stage in item.get("stages") or []:
-                    if isinstance(stage, dict):
-                        print(f"      stage {stage.get('id')}  {name_of(stage)}")
+        for item in found.items:
+            flag = "  (inactive)" if item.get("active") is False else ""
+            print(f"  {item['id']}  {item['name']}{flag}")
+            for stage in item.get("stages") or []:
+                print(f"      stage {stage['id']}  {stage['name']}")
 
 
 def main(argv: list[str] | None = None) -> None:
