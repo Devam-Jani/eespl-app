@@ -47,6 +47,7 @@ class User(Base):
     password_hash: Mapped[str | None] = mapped_column(String(255))
     job_title: Mapped[str | None] = mapped_column(String(100))
     is_active: Mapped[bool] = mapped_column(server_default=true())
+    kylas_user_id: Mapped[int | None] = mapped_column(BigInteger)  # owner of their Kylas leads
     failed_logins: Mapped[int] = mapped_column(server_default="0")
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

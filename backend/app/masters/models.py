@@ -560,6 +560,21 @@ class CompanyProfile(Tracked, Base):
     # Which past rate a library suggestion uses (app.masters.rate_policy.POLICIES); the default
     # is the winner of "python -m app.cli backtest-rates".
     rate_policy: Mapped[str] = mapped_column(String(30), server_default="channel_median")
+    # Kylas CRM (Settings > Integrations > Kylas; the API key lives in .env only).
+    # While kylas_source_id is empty nothing is pushed, so app leads never land in another
+    # app's source of the shared Kylas account.
+    kylas_source_id: Mapped[int | None] = mapped_column(BigInteger)
+    kylas_owner_rule: Mapped[str] = mapped_column(String(20), server_default="creator")
+    kylas_default_owner_id: Mapped[int | None] = mapped_column(BigInteger)
+    kylas_deal_pipeline_id: Mapped[int | None] = mapped_column(BigInteger)
+    kylas_won_stage_id: Mapped[int | None] = mapped_column(BigInteger)
+    kylas_lead_code_field: Mapped[str] = mapped_column(String(60), server_default="cfInquiryType")
+    kylas_category_field: Mapped[str] = mapped_column(
+        String(60), server_default="cfCustomerCategrory"
+    )
+    kylas_junk_reasons: Mapped[list[str]] = mapped_column(
+        JSONB, server_default='["Wrong number", "False enquiry", "Duplicate"]'
+    )
 
 
 class CompanyGstin(Tracked, Base):

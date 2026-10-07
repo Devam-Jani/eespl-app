@@ -62,6 +62,7 @@ class UserOut(BaseModel):
     full_name: str
     phone: str | None
     job_title: str | None = None
+    kylas_user_id: int | None = None
     has_password: bool = False
     is_active: bool
     locked_until: datetime | None
@@ -86,6 +87,7 @@ class UserUpdate(BaseModel):
     phone: str | None = Field(default=None, max_length=50)
     job_title: str | None = Field(default=None, max_length=100)
     is_active: bool | None = None
+    kylas_user_id: int | None = Field(default=None, gt=0)  # admin.settings only
 
     _email = field_validator("email")(_lower)
 
