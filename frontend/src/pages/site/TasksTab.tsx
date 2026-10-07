@@ -184,7 +184,7 @@ function Gantt({ groups, onOpen }: { groups: [string, SiteTask[]][]; onOpen: (t:
   );
 }
 
-function TaskDialog({
+export function TaskDialog({
   site,
   task,
   canUpdate,

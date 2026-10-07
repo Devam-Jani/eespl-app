@@ -25,7 +25,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -38,7 +38,7 @@ from app.masters.models import Category, Channel, Client, System
 from app.masters.routers.common import Limit, Offset, Search, like, paginate, unprocessable
 from app.masters.schemas import Page
 from app.models import User
-from app.sites import builder, service, work
+from app.sites import builder, model3d, service, work
 from app.sites.models import (
     AreaScope,
     Drawing,
@@ -467,6 +467,27 @@ def _nodes_out(db: Session, site: Site) -> list[NodeOut]:
         )
         for n in ordered
     ]
+
+
+@router.get("/{site_id}/model")
+def site_model(
+    site_id: int,
+    request: Request,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    scope: ViewScope,
+) -> Response:
+    """Every node with its work status, for the 3D view. Send If-None-Match with the last
+    ETag (the payload's `version`) and an unchanged site answers 304 with no body."""
+    site = service.get_visible(db, site_id, scope, principal)
+    tag = model3d.version(db, site.id)
+    etag = f'"{tag}"'
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
+    payload = model3d.build(db, site.id)
+    payload["version"] = tag
+    payload["site_progress"] = float(site.progress_percent or 0)
+    return JSONResponse(payload, headers={"ETag": etag, "Cache-Control": "no-cache"})
 
 
 @router.get("/{site_id}/nodes")

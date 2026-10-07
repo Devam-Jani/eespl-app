@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
@@ -8,10 +8,13 @@ import DrawingsTab from "./site/DrawingsTab";
 import ScopeTab from "./site/ScopeTab";
 import StructureTab from "./site/StructureTab";
 import TasksTab from "./site/TasksTab";
+
+// three.js is only downloaded when the 3D tab is opened
+const Site3DTab = lazy(() => import("./site/Site3DTab"));
 import { ProgressBar, SiteForm, SiteStatusBadge } from "./Sites";
 import { shortDate } from "./Tenders";
 
-type Tab = "overview" | "structure" | "scope" | "tasks" | "drawings";
+type Tab = "overview" | "structure" | "scope" | "tasks" | "drawings" | "3d";
 
 export default function SiteDetail() {
   const { id } = useParams();
@@ -70,6 +73,7 @@ export default function SiteDetail() {
             ["scope", "Scope"],
             ["tasks", "Tasks"],
             ["drawings", "Drawings"],
+            ["3d", "3D"],
           ] as [Tab, string][]
         ).map(([key, label]) => (
           <button key={key} className={`tab ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>
@@ -83,6 +87,11 @@ export default function SiteDetail() {
         {tab === "scope" && <ScopeTab site={site} onChange={load} />}
         {tab === "tasks" && <TasksTab site={site} onChange={load} />}
         {tab === "drawings" && <DrawingsTab site={site} />}
+        {tab === "3d" && (
+          <Suspense fallback={<p className="muted">Loading the 3D view…</p>}>
+            <Site3DTab site={site} onChange={load} />
+          </Suspense>
+        )}
       </div>
     </>
   );

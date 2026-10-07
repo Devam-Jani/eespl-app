@@ -49,7 +49,13 @@ export function LeadStatusBadge({ status }: { status: string }) {
   return <span className={`badge ${STATUS_BADGE[status] ?? ""}`}>{LEAD_STATUSES[status] ?? status}</span>;
 }
 
-export function KylasBadge({ status }: { status: KylasSync }) {
+export function KylasBadge({ status, phone }: { status: KylasSync; phone?: string | null }) {
+  if (phone === null && status !== "synced")
+    return (
+      <span className="badge badge-warn" title="Add a phone number: Kylas finds a lead by phone, so a lead without one is not sent">
+        Kylas: needs phone
+      </span>
+    );
   return <span className={`badge ${SYNC[status][0]}`}>{SYNC[status][1]}</span>;
 }
 
@@ -207,7 +213,7 @@ export default function Leads() {
                     <td>{l.owner_name ?? "—"}</td>
                     <td className={`nowrap ${l.follow_up_due ? "text-danger" : ""}`}>{shortDate(l.next_follow_up)}</td>
                     <td>
-                      <KylasBadge status={l.kylas_sync_status} />
+                      <KylasBadge status={l.kylas_sync_status} phone={l.phone} />
                     </td>
                   </tr>
                 ))}
@@ -347,8 +353,8 @@ export function LeadForm({
             <input required autoFocus value={form.contact_name} onChange={set("contact_name")} />
           </label>
           <label className="field">
-            <span>Phone (mobile)</span>
-            <input value={form.phone} onChange={set("phone")} onBlur={() => void checkPhone()} placeholder="98765 43210" />
+            <span>Phone (mobile) *</span>
+            <input required value={form.phone} onChange={set("phone")} onBlur={() => void checkPhone()} placeholder="98765 43210" />
           </label>
           {dupes.length > 0 && (
             <div className="alert alert-warn" style={{ gridColumn: "1 / -1" }}>

@@ -82,7 +82,8 @@ class LeadFields(BaseModel):
 
 class LeadIn(LeadFields):
     contact_name: str = Field(min_length=1, max_length=200)
-    phone: str | None = None
+    # required: Kylas finds a lead by phone after a timeout; without one it could be pushed twice
+    phone: str = Field(min_length=1)
     lead_source: LeadSource = "other"
 
     _phone = field_validator("phone")(normalise_phone)
@@ -95,6 +96,13 @@ class LeadUpdate(LeadFields):
     status: LeadStatus | None = None
 
     _phone = field_validator("phone")(normalise_phone)
+
+    @field_validator("phone")
+    @classmethod
+    def _keep_phone(cls, v):
+        if v is None:
+            raise ValueError("A lead needs a phone number")
+        return v
 
 
 class ActivityIn(BaseModel):
@@ -662,6 +670,8 @@ def retry_kylas(
     lead = _editable(db, lead_id, view, principal)
     if lead.kylas_lead_id:
         raise HTTPException(status.HTTP_409_CONFLICT, "This lead is already in Kylas")
+    if not lead.phone:
+        raise unprocessable(kylas_push.NEEDS_PHONE)
     queued = kylas_push.retry(db, lead)
     _record(db, request, principal, "lead.kylas_retry", lead, after={"queued": queued})
     db.commit()

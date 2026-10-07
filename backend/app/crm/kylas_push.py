@@ -123,11 +123,17 @@ def build_payload(lead: Lead, p: CompanyProfile, owner_id: int | None) -> dict:
 # --- queueing ------------------------------------------------------------------------------------
 
 
+NEEDS_PHONE = "Add a phone number: without one Kylas cannot be searched after a timeout"
+
+
 def queue_lead(db: Session, lead: Lead) -> bool:
     """Inside the lead's own transaction. True when an outbox row was written."""
     on, _ = enabled(db)
     if not on:
         lead.kylas_sync_status = "disabled"
+        return False
+    if not lead.phone:
+        lead.kylas_sync_status, lead.kylas_last_error = "disabled", NEEDS_PHONE
         return False
     lead.kylas_sync_status = "pending"
     db.add(KylasOutbox(lead_id=lead.id, status="pending", attempts=0, next_attempt_at=now()))
@@ -142,6 +148,9 @@ def retry(db: Session, lead: Lead) -> bool:
         lead.kylas_last_error = f"Kylas is off: {why}"
         return False
     if lead.kylas_lead_id:
+        return False
+    if not lead.phone:
+        lead.kylas_sync_status, lead.kylas_last_error = "disabled", NEEDS_PHONE
         return False
     row = db.scalar(select(KylasOutbox).where(KylasOutbox.lead_id == lead.id))
     if row is None:
@@ -240,10 +249,10 @@ def send(db: Session, row: KylasOutbox, client: KylasClient, report: PushReport)
         row.status, row.next_attempt_at = "done", None
         db.commit()
         return
-    if not on:
+    if not on or not lead.phone:
         row.status, row.next_attempt_at = "failed", None
         lead.kylas_sync_status = "disabled"
-        lead.kylas_last_error = f"Kylas is off: {why}"
+        lead.kylas_last_error = f"Kylas is off: {why}" if not on else NEEDS_PHONE
         report.disabled += 1
         db.commit()
         return
