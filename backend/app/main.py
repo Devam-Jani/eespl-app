@@ -21,6 +21,7 @@ from app.masters.routers import (
     tc,
     vendors,
 )
+from app.material import routers as material
 from app.routers import audit, permissions, roles, users
 from app.sites import routers as sites
 from app.tenders import routers as tenders
@@ -54,6 +55,7 @@ app.include_router(sites.router)
 app.include_router(sites.templates_router)
 app.include_router(crm.router)
 app.include_router(crm.settings_router)
+app.include_router(material.router)
 
 
 @app.get("/api/health")

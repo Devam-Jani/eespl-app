@@ -44,6 +44,10 @@ PER_TEST_TABLES = [
     "task_photos", "tasks", "area_scopes", "drawing_revisions", "drawings", "site_nodes",
     "site_members", "sites", "site_sequences",
     "kylas_outbox", "lead_activities", "leads", "lead_sequences", "kylas_cursors",
+    "doc_sequences", "stock_ledger", "freight_entries", "site_issue_lines", "site_issues",
+    "transfer_lines", "transfers", "grn_photos", "grn_lines", "grns", "po_charges", "po_lines",
+    "po_indents", "purchase_orders", "rfq_quotes", "rfq_vendors", "rfq_lines", "rfq_indents",
+    "rfqs", "indent_lines", "indents", "stores", "company_profile",
 ]  # fmt: skip
 # Tables that also hold seeded rows (unit conversions, categories), or are referenced by them
 # (products), are cleaned with DELETE so the seed survives.
@@ -55,8 +59,8 @@ PER_TEST_DELETES = [
     "DELETE FROM systems",
     "DELETE FROM products",
     "DELETE FROM categories WHERE id > :seeded_max_category",
-    "DELETE FROM company_profile",
     "INSERT INTO company_profile (id) VALUES (1)",
+    "INSERT INTO stores (name, kind) VALUES ('Ethios Godown', 'godown')",
 ]
 
 PASSWORD = "correct-horse-battery"

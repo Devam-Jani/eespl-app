@@ -1738,3 +1738,105 @@ input.full {
   color: #b00000;
   font-weight: 600;
 }
+
+/* ---------- material (M4) ---------- */
+
+.line-cards {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.line-card {
+  border: 1px solid var(--border, #dfe3e1);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  background: #fbfcfb;
+}
+
+.line-card .field {
+  margin-bottom: 0.4rem;
+}
+
+.line-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-end;
+}
+
+.line-row .field {
+  flex: 1;
+  min-width: 0;
+}
+
+.line-row .field.grow {
+  flex: 3;
+}
+
+.line-card input[inputmode="decimal"] {
+  font-size: 1.05rem;
+}
+
+.accepted {
+  display: block;
+  padding: 0.45rem 0;
+  font-size: 1.05rem;
+}
+
+.compare td,
+.compare th {
+  vertical-align: top;
+}
+
+.cell-best {
+  background: #eaf6ee;
+}
+
+.quote-inputs {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: 0.2rem;
+}
+
+.quote-inputs .input-num {
+  width: 5.5rem;
+}
+
+.po-totals {
+  margin-top: 0.75rem;
+  margin-left: auto;
+  width: min(360px, 100%);
+}
+
+.po-totals .grand td {
+  font-weight: 700;
+  border-top: 1px solid #333;
+}
+
+.right {
+  text-align: right;
+}
+
+@media (max-width: 760px) {
+  .line-row {
+    flex-wrap: wrap;
+  }
+
+  .modal {
+    padding: 1rem;
+  }
+
+  .modal-backdrop {
+    padding: 0.4rem;
+  }
+}
+
+.empty3d-box {
+  text-align: center;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+}
+
+.empty3d-box p {
+  margin: 0 0 0.75rem;
+}

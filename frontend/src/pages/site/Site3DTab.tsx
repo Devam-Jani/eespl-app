@@ -9,6 +9,8 @@ import { shortDate } from "../Tenders";
 import { CATEGORY_LABEL, LATE_COLOR, legendCounts, realisticColor, STATUS_COLORS, workColor } from "./three/colors";
 import type { Category, NodeStatus } from "./three/colors";
 import { layout } from "./three/layout";
+import { composeSnapshot } from "./three/snapshot";
+import type { SnapLabel } from "./three/snapshot";
 import type { Box, LayoutNode } from "./three/layout";
 import { TaskDialog } from "./TasksTab";
 
@@ -21,7 +23,7 @@ const GROUP_KINDS = new Set(["tower", "wing", "floor", "basement"]);
 const CATEGORIES: Exclude<Category, "rollup">[] = ["done", "progress", "hold", "blocked", "not_started", "none"];
 
 /** The 3D tab: the site's block model coloured by work status (or realistic tones). */
-export default function Site3DTab({ site, onChange }: { site: Site; onChange: () => void }) {
+export default function Site3DTab({ site, onChange, onOpenStructure }: { site: Site; onChange: () => void; onOpenStructure?: () => void }) {
   const { can } = useAuth();
   const canUpdate = can("site.update", "site.edit");
   const canEdit = can("site.edit");
@@ -188,9 +190,7 @@ export default function Site3DTab({ site, onChange }: { site: Site; onChange: ()
       if (!n) return { color: "#cccccc", ghost: false, late: false };
       const leaf = b.role !== "floor" && b.role !== "group";
       const filteredOut =
-        leaf &&
-        ((templateFilter && !n.status.template_ids.includes(Number(templateFilter))) ||
-          (statusFilter && workColor(n.status, false).category !== statusFilter));
+        leaf && ((templateFilter && !n.status.template_ids.includes(Number(templateFilter))) || (statusFilter && workColor(n.status, false).category !== statusFilter));
       if (mode === "real") return { color: realisticColor(b.kind), ghost: b.role === "flat" || !!filteredOut, late: false };
       if (filteredOut) return { color: STATUS_COLORS.none, ghost: true, late: false };
       const c = workColor(n.status, workBelow.get(n.id) ?? false);
@@ -251,10 +251,30 @@ export default function Site3DTab({ site, onChange }: { site: Site; onChange: ()
       for (const b of late) {
         const [x0, x1, y0, y1, z0, z1] = [b.x - b.w / 2, b.x + b.w / 2, b.y - b.h / 2, b.y + b.h / 2, b.z - b.d / 2, b.z + b.d / 2];
         const c = [
-          [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1],
-          [x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1],
+          [x0, y0, z0],
+          [x1, y0, z0],
+          [x1, y0, z1],
+          [x0, y0, z1],
+          [x0, y1, z0],
+          [x1, y1, z0],
+          [x1, y1, z1],
+          [x0, y1, z1],
         ];
-        for (const [a, e] of [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]) pts.push(...c[a], ...c[e]);
+        for (const [a, e] of [
+          [0, 1],
+          [1, 2],
+          [2, 3],
+          [3, 0],
+          [4, 5],
+          [5, 6],
+          [6, 7],
+          [7, 4],
+          [0, 4],
+          [1, 5],
+          [2, 6],
+          [3, 7],
+        ])
+          pts.push(...c[a], ...c[e]);
       }
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
@@ -262,7 +282,8 @@ export default function Site3DTab({ site, onChange }: { site: Site; onChange: ()
     }
     // ground under everything, hidden when looking below it
     const all = new THREE.Box3();
-    for (const b of boxes.filter((x) => x.role !== "group")) all.expandByPoint(new THREE.Vector3(b.x - b.w / 2, 0, b.z - b.d / 2)).expandByPoint(new THREE.Vector3(b.x + b.w / 2, 0, b.z + b.d / 2));
+    for (const b of boxes.filter((x) => x.role !== "group"))
+      all.expandByPoint(new THREE.Vector3(b.x - b.w / 2, 0, b.z - b.d / 2)).expandByPoint(new THREE.Vector3(b.x + b.w / 2, 0, b.z + b.d / 2));
     const size = all.isEmpty() ? new THREE.Vector3(40, 0, 40) : all.getSize(new THREE.Vector3());
     const centre = all.isEmpty() ? new THREE.Vector3() : all.getCenter(new THREE.Vector3());
     t.ground.scale.set(size.x + 40, size.z + 40, 1);
@@ -290,7 +311,11 @@ export default function Site3DTab({ site, onChange }: { site: Site; onChange: ()
           const n = byId.get(b.node_id);
           if (n && workBelow.get(n.id)) {
             const late = lateBelow.has(n.id);
-            addLabel(`${n.name} ${Math.round(n.status.percent)}%${late ? " · late" : ""}`, new THREE.Vector3(b.x + b.w / 2 + 0.3, b.y + 0.4, b.z + b.d / 2), late ? "label-floor label-late" : "label-floor");
+            addLabel(
+              `${n.name} ${Math.round(n.status.percent)}%${late ? " · late" : ""}`,
+              new THREE.Vector3(b.x + b.w / 2 + 0.3, b.y + 0.4, b.z + b.d / 2),
+              late ? "label-floor label-late" : "label-floor",
+            );
           }
         }
       }
@@ -312,7 +337,8 @@ export default function Site3DTab({ site, onChange }: { site: Site; onChange: ()
     const t = three.current;
     if (!t) return;
     const box = new THREE.Box3();
-    for (const b of boxes.filter(visible)) box.expandByPoint(new THREE.Vector3(b.x - b.w / 2, b.y - b.h / 2, b.z - b.d / 2)).expandByPoint(new THREE.Vector3(b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2));
+    for (const b of boxes.filter(visible))
+      box.expandByPoint(new THREE.Vector3(b.x - b.w / 2, b.y - b.h / 2, b.z - b.d / 2)).expandByPoint(new THREE.Vector3(b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2));
     if (box.isEmpty()) return;
     const c = box.getCenter(new THREE.Vector3());
     const r = Math.max(10, box.getSize(new THREE.Vector3()).length() / 2);
@@ -336,7 +362,10 @@ export default function Site3DTab({ site, onChange }: { site: Site; onChange: ()
     const rect = el.getBoundingClientRect();
     const ray = new THREE.Raycaster();
     ray.setFromCamera(new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1), t.camera);
-    const hits = ray.intersectObjects(t.pickables.map((p) => p.mesh), false);
+    const hits = ray.intersectObjects(
+      t.pickables.map((p) => p.mesh),
+      false,
+    );
     // a room inside a see-through flat wins over the flat
     const found = hits
       .map((h) => {
@@ -349,13 +378,15 @@ export default function Site3DTab({ site, onChange }: { site: Site; onChange: ()
 
   const downAt = useRef<{ x: number; y: number } | null>(null);
   const hoverFrame = useRef(0);
+  useEffect(() => () => cancelAnimationFrame(hoverFrame.current), []);
 
   function onMove(e: React.PointerEvent) {
     const { clientX, clientY } = e;
     cancelAnimationFrame(hoverFrame.current);
     hoverFrame.current = requestAnimationFrame(() => {
+      if (!mount.current) return; // the tab was closed meanwhile
       const b = pick({ clientX, clientY });
-      const rect = mount.current!.getBoundingClientRect();
+      const rect = mount.current.getBoundingClientRect();
       const n = b ? byId.get(b.node_id) : undefined;
       setHover(n ? { x: clientX - rect.left, y: clientY - rect.top, node: n } : null);
     });
@@ -372,12 +403,45 @@ export default function Site3DTab({ site, onChange }: { site: Site; onChange: ()
     } else setSelected(b.node_id);
   }
 
+  /** A PNG on white: header (site, code, date, overall %), the view, its labels and the legend. */
   function saveImage() {
     const t = three.current;
-    if (!t) return;
+    if (!t || !nodes.length) return;
     t.render();
+    const source = t.renderer.domElement;
+    const w = source.clientWidth || source.width;
+    const h = source.clientHeight || source.height;
+    const v = new THREE.Vector3();
+    const labels: SnapLabel[] = [];
+    for (const l of t.labels) {
+      v.copy(l.pos).project(t.camera);
+      if (!(v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05)) continue;
+      labels.push({
+        text: l.el.textContent ?? "",
+        x: ((v.x + 1) / 2) * w,
+        y: ((1 - v.y) / 2) * h,
+        tower: l.el.classList.contains("label-tower"),
+        late: l.el.classList.contains("label-late"),
+      });
+    }
+    const legendItems =
+      mode === "work"
+        ? [
+            ...CATEGORIES.map((c) => ({ label: CATEGORY_LABEL[c], color: STATUS_COLORS[c], count: legend[c], ghost: c === "none" })),
+            { label: "Late", color: LATE_COLOR, count: legend.late, outline: true },
+          ]
+        : [];
+    const out = composeSnapshot(source, source.width / w, {
+      siteName: site.name,
+      siteCode: site.code,
+      percent: model?.site_progress ?? Number(site.progress_percent),
+      date: new Date(),
+      labels,
+      legend: legendItems,
+      note: mode === "work" ? "Floors and towers: rolled-up % (grey → green)" : "Realistic tones: concrete floors, brick flats, tiled wet areas.",
+    });
     const link = document.createElement("a");
-    link.href = t.renderer.domElement.toDataURL("image/png");
+    link.href = out.toDataURL("image/png");
     link.download = `${site.code}-3d-${new Date().toISOString().slice(0, 10)}.png`;
     link.click();
   }
@@ -452,7 +516,7 @@ export default function Site3DTab({ site, onChange }: { site: Site; onChange: ()
                 </option>
               ))}
             </select>
-            <button className="btn btn-small" onClick={saveImage}>
+            <button className="btn btn-small" onClick={saveImage} disabled={!nodes.length} title={nodes.length ? undefined : "Add a structure first"}>
               Save image
             </button>
           </div>
@@ -485,7 +549,18 @@ export default function Site3DTab({ site, onChange }: { site: Site; onChange: ()
               {hover.node.status.is_late && <div className="text-danger">Late</div>}
             </div>
           )}
-          {!nodes.length && model && <div className="empty3d">No structure yet: add a tower on the Structure tab.</div>}
+          {!nodes.length && model && (
+            <div className="empty3d">
+              <div className="empty3d-box">
+                <p>No structure yet. Add a tower in the Structure tab.</p>
+                {onOpenStructure && (
+                  <button className="btn btn-primary" onClick={onOpenStructure}>
+                    Go to the Structure tab
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
         <div className="legend3d">
           {mode === "work" ? (
@@ -556,7 +631,9 @@ function NodePanel({
     try {
       const list = await api<SiteTask[]>(`/api/sites/${site.id}/tasks?node_id=${node.id}`);
       setTasks(list); // the place and everything inside it (a flat shows its rooms)
-      const scope = await api<{ lines: { scopes: { id: number; stage_template_name: string }[] }[]; other_scopes: { id: number; stage_template_name: string }[] }>(`/api/sites/${site.id}/scope`);
+      const scope = await api<{ lines: { scopes: { id: number; stage_template_name: string }[] }[]; other_scopes: { id: number; stage_template_name: string }[] }>(
+        `/api/sites/${site.id}/scope`,
+      );
       setScopeNames(new Map([...scope.lines.flatMap((l) => l.scopes), ...scope.other_scopes].map((s) => [s.id, s.stage_template_name])));
     } catch (err) {
       setError(errorText(err));
@@ -601,11 +678,7 @@ function NodePanel({
         </button>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      {photos.length > 0 && (
-        <div className="photo-strip">
-          {photos.map((p) => (p.url ? <img key={p.key} src={p.url} alt={p.name} /> : null))}
-        </div>
-      )}
+      {photos.length > 0 && <div className="photo-strip">{photos.map((p) => (p.url ? <img key={p.key} src={p.url} alt={p.name} /> : null))}</div>}
       {groups.length === 0 && <p className="muted">No work scheduled here.</p>}
       {groups.map(({ scopeId, list, where }) => (
         <div key={scopeId ?? 0} className="top-gap">
