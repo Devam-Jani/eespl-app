@@ -34,6 +34,13 @@ import StageTemplates from "./pages/settings/StageTemplates";
 import Tags from "./pages/settings/Tags";
 import UnitsConversions from "./pages/settings/UnitsConversions";
 
+// the client portal is its own chunk (and its own phone-first layout)
+const portal = () => import("./portal/Portal");
+const PortalLayout = lazy(() => portal().then((m) => ({ default: m.PortalLayout })));
+const PortalHome = lazy(() => portal().then((m) => ({ default: m.PortalHome })));
+const PortalSitePage = lazy(() => portal().then((m) => ({ default: m.PortalSitePage })));
+const InviteAccept = lazy(() => portal().then((m) => ({ default: m.InviteAccept })));
+const Snags = lazy(() => import("./pages/Snags"));
 const fin = () => import("./pages/finance/Reports");
 const Billing = lazy(() => import("./pages/finance/Billing"));
 const Payables = lazy(() => import("./pages/finance/Payables"));
@@ -74,6 +81,7 @@ const PAGES: Record<string, JSX.Element> = {
   "/leads": <Leads />,
   "/settings/kylas": <KylasSettingsPage />,
   "/sites": <Sites />,
+  "/snags": <Snags />,
   "/settings/stage-templates": <StageTemplates />,
   "/settings/company": <CompanyProfile />,
   "/settings/gstins": <GstinAddresses />,
@@ -114,9 +122,22 @@ export default function App() {
         <Suspense fallback={<p className="muted">Loading…</p>}>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/portal/invite/:token" element={<InviteAccept />} />
             <Route
+              path="/portal"
               element={
                 <RequireAuth>
+                  <PortalLayout />
+                </RequireAuth>
+              }
+            >
+              <Route index element={<PortalHome />} />
+              <Route path="sites/:id" element={<PortalSitePage />} />
+              <Route path="*" element={<Navigate to="/portal" replace />} />
+            </Route>
+            <Route
+              element={
+                <RequireAuth staff>
                   <Layout />
                 </RequireAuth>
               }

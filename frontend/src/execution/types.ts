@@ -169,6 +169,8 @@ export type InspectionOut = {
   client_rep: string | null;
   inspected_by_name: string | null;
   has_signature: boolean;
+  client_signoff?: "none" | "waiting" | "signed";
+  client_signed_name?: string | null;
   photos: { n: number; filename: string; item_id: number | null }[];
 };
 

@@ -198,6 +198,9 @@ def _insp_out(db, i: Inspection) -> dict:
         "client_rep": i.client_rep,
         "inspected_by_name": who.get(i.inspected_by),
         "has_signature": bool(i.signature_path),
+        "client_signoff": i.client_signoff,
+        "client_signed_name": i.client_signed_name,
+        "client_signed_at": i.client_signed_at,
         "photos": [
             {"n": n, "filename": p["filename"], "item_id": p.get("item_id")}
             for n, p in enumerate(i.photos)

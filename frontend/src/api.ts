@@ -97,12 +97,12 @@ export function queryString(params: Record<string, string | number | undefined>)
 }
 
 /** Download a file from the API (with the same silent refresh) and save it in the browser. */
-export async function downloadFile(path: string, retry = true, method: "GET" | "POST" = "GET"): Promise<void> {
-  const headers = new Headers();
+export async function downloadFile(path: string, retry = true, method: "GET" | "POST" = "GET", extra?: Record<string, string>): Promise<void> {
+  const headers = new Headers(extra);
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
   const res = await fetch(path, { method, headers, credentials: "same-origin" });
   if (res.status === 401 && retry) {
-    if (await refreshAccessToken()) return downloadFile(path, false, method);
+    if (await refreshAccessToken()) return downloadFile(path, false, method, extra);
     onSessionLost();
     throw new ApiError(401, "Your session has expired. Please sign in again.");
   }
@@ -120,11 +120,11 @@ export async function downloadFile(path: string, retry = true, method: "GET" | "
 }
 
 /** An object URL for a protected image (an <img src> cannot send the Bearer token). */
-export async function fetchObjectUrl(path: string, retry = true): Promise<string | null> {
-  const headers = new Headers();
+export async function fetchObjectUrl(path: string, retry = true, extra?: Record<string, string>): Promise<string | null> {
+  const headers = new Headers(extra);
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
   const res = await fetch(path, { headers, credentials: "same-origin" });
-  if (res.status === 401 && retry && (await refreshAccessToken())) return fetchObjectUrl(path, false);
+  if (res.status === 401 && retry && (await refreshAccessToken())) return fetchObjectUrl(path, false, extra);
   if (!res.ok) return null;
   return URL.createObjectURL(await res.blob());
 }

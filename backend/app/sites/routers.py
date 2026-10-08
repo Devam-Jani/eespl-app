@@ -980,7 +980,15 @@ def _task_out(t: Task, paths: dict[int, str]) -> TaskOut:
         remark=t.remark,
         inspection=t.inspection,
         certified_at=t.certified_at,
-        photos=[PhotoOut(id=p.id, filename=p.filename, uploaded_at=p.created_at) for p in t.photos],
+        photos=[
+            PhotoOut(
+                id=p.id,
+                filename=p.filename,
+                uploaded_at=p.created_at,
+                share_with_client=p.share_with_client,
+            )
+            for p in t.photos
+        ],
     )
 
 
@@ -1283,6 +1291,7 @@ def _drawing_out(d: Drawing, paths: dict[int, str]) -> DrawingOut:
         latest_approved=_rev_out(approved[-1]) if approved else None,
         latest=_rev_out(revs[-1]) if revs else None,
         revisions=[_rev_out(r) for r in reversed(revs)],
+        share_with_client=d.share_with_client,
     )
 
 

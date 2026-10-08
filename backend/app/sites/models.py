@@ -285,6 +285,7 @@ class TaskPhoto(Tracked, Base):
     task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), index=True)
     stored_path: Mapped[str] = mapped_column(String(400))  # under the media volume
     filename: Mapped[str] = mapped_column(String(200))
+    share_with_client: Mapped[bool] = mapped_column(server_default="false")  # portal
 
 
 class Drawing(Tracked, Base):
@@ -296,6 +297,7 @@ class Drawing(Tracked, Base):
     node_id: Mapped[int | None] = mapped_column(ForeignKey("site_nodes.id", ondelete="SET NULL"))
     title: Mapped[str] = mapped_column(String(300))
     discipline: Mapped[str] = mapped_column(String(15), server_default="waterproofing")
+    share_with_client: Mapped[bool] = mapped_column(server_default="false")  # portal
     # the latest approved revision (None until one is approved)
     current_revision_id: Mapped[int | None] = mapped_column(
         ForeignKey("drawing_revisions.id", ondelete="SET NULL", use_alter=True)

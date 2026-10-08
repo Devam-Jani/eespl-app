@@ -96,7 +96,8 @@ def _site_line(site: Site) -> str:
 # --- DPR -----------------------------------------------------------------------------------------
 
 
-def dpr(db: Session, site: Site, out: dict, d: Dpr) -> bytes:
+def dpr(db: Session, site: Site, out: dict, d: Dpr, client: bool = False) -> bytes:
+    """client=True: the portal copy, without suppliers or operators (people are headcount only)."""
     a = out["auto"]
     lab = a["labour"]
     tasks = (
@@ -108,7 +109,7 @@ def dpr(db: Session, site: Site, out: dict, d: Dpr) -> bytes:
         or "<tr><td colspan='4' class='muted'>No task updates.</td></tr>"
     )
     mat = "".join(
-        f"<tr><td>In</td><td>{e(r['code'])}</td><td>{e(r['from'])}</td><td>{e(r['items'])}</td></tr>"
+        f"<tr><td>In</td><td>{e(r['code'])}</td><td>{'' if client else e(r['from'])}</td><td>{e(r['items'])}</td></tr>"
         for r in a["received"]
     )
     mat += "".join(
@@ -120,7 +121,7 @@ def dpr(db: Session, site: Site, out: dict, d: Dpr) -> bytes:
     trades = ", ".join(f"{k} {v}" for k, v in sorted(lab["by_trade"].items())) or "—"
     equip = "".join(
         f"<tr><td>{e(u['asset'])}</td><td class='num'>{e(u['quantity'])} {e(u['basis'])}(s)</td>"
-        f"<td>{e(u['operator'] or '')}</td></tr>"
+        f"<td>{'' if client else e(u['operator'] or '')}</td></tr>"
         for u in a["equipment"]
     )
     equip = equip or "<tr><td colspan='3' class='muted'>No equipment used.</td></tr>"
@@ -131,7 +132,7 @@ def dpr(db: Session, site: Site, out: dict, d: Dpr) -> bytes:
     for t in a["tasks"]:
         for p in t["photos"]:
             tp = db.get(TaskPhoto, p["id"])
-            if tp:
+            if tp and (tp.share_with_client or not client):  # the client sees shared ones only
                 task_photos.append((tp.stored_path, f"{t['where']} · {t['name']}"))
     body = f"""
 <div class="meta"><div><b>Site:</b> {e(site.code)} · {e(_site_line(site))}</div><div><b>Date:</b> {d.on_date:%d-%m-%Y}</div>

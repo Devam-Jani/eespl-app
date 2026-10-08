@@ -139,7 +139,15 @@ class ContractLine(Tracked, Base):
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
-RA_STATUSES = ("draft", "submitted", "certified", "invoiced", "cancelled")
+RA_STATUSES = (
+    "draft",
+    "submitted",
+    "certified_by_client",
+    "rejected_by_client",
+    "certified",
+    "invoiced",
+    "cancelled",
+)
 
 
 class RaBill(Tracked, Base):
@@ -161,7 +169,7 @@ class RaBill(Tracked, Base):
     seq: Mapped[int] = mapped_column(Integer)
     period_from: Mapped[date | None] = mapped_column(Date)
     period_to: Mapped[date] = mapped_column(Date)
-    status: Mapped[str] = mapped_column(String(10), server_default="draft", index=True)
+    status: Mapped[str] = mapped_column(String(20), server_default="draft", index=True)
     gross: Mapped[Decimal] = money_col()  # submitted, this bill
     certified_gross: Mapped[Decimal | None] = mapped_column(Money)
     retention: Mapped[Decimal] = money_col()
@@ -172,6 +180,12 @@ class RaBill(Tracked, Base):
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     certified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     certified_by_client: Mapped[str | None] = mapped_column(String(200))
+    # the client's own certification / rejection in the portal (staff then confirm)
+    client_remark: Mapped[str | None] = mapped_column(Text)
+    client_acted_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    client_acted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     remark: Mapped[str | None] = mapped_column(Text)
 
     lines: Mapped[list["RaBillLine"]] = relationship(
@@ -199,6 +213,7 @@ class RaBillLine(Base):
     rate: Mapped[Decimal] = mapped_column(Rate)
     amount: Mapped[Decimal] = money_col()
     certified_amount: Mapped[Decimal | None] = mapped_column(Money)
+    client_qty: Mapped[Decimal | None] = mapped_column(Qty)  # what the client certified
 
 
 class TaxInvoice(Tracked, Base):

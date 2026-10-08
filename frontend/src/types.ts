@@ -732,7 +732,7 @@ export type SiteTask = {
   remark: string | null;
   inspection: { item: string; passed: boolean | null }[] | null;
   certified_at: string | null;
-  photos: { id: number; filename: string; uploaded_at: string }[];
+  photos: { id: number; filename: string; uploaded_at: string; share_with_client?: boolean }[];
 };
 
 export type DrawingRevision = {
@@ -757,6 +757,7 @@ export type Drawing = {
   latest_approved: DrawingRevision | null;
   latest: DrawingRevision | null;
   revisions: DrawingRevision[];
+  share_with_client?: boolean;
 };
 
 // --- CRM leads ---

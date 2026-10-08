@@ -6,6 +6,7 @@ import Modal from "../../components/Modal";
 import { errorText } from "../../format";
 import type { Drawing, DrawingRevision, Site } from "../../types";
 import { useNodes } from "./StructureTab";
+import { ShareTick } from "./TasksTab";
 
 const REV_BADGE: Record<string, string> = { draft: "badge-muted", submitted: "badge-info", approved: "badge-ok", rejected: "badge-danger" };
 
@@ -68,14 +69,19 @@ export default function DrawingsTab({ site }: { site: Site }) {
         <div key={d.id} className="scope-line">
           <div className="toolbar">
             <div>
-              <strong>{d.title}</strong> <span className="muted small">{d.discipline}{d.node_path ? ` · ${d.node_path}` : ""}</span>
+              <strong>{d.title}</strong>{" "}
+              <span className="muted small">
+                {d.discipline}
+                {d.node_path ? ` · ${d.node_path}` : ""}
+              </span>
+              {(canUpload || can("portal.manage")) && <ShareTick path={`/api/portal-admin/drawings/${d.id}/share`} shared={!!d.share_with_client} />}
               <div className="small">
-                {d.latest_approved ? (
-                  <span className="badge badge-ok">Approved: {d.latest_approved.rev}</span>
-                ) : (
-                  <span className="badge badge-warn">No approved revision</span>
+                {d.latest_approved ? <span className="badge badge-ok">Approved: {d.latest_approved.rev}</span> : <span className="badge badge-warn">No approved revision</span>}
+                {d.latest && d.latest.id !== d.latest_approved?.id && (
+                  <span className="badge badge-info">
+                    Latest: {d.latest.rev} ({d.latest.status})
+                  </span>
                 )}
-                {d.latest && d.latest.id !== d.latest_approved?.id && <span className="badge badge-info">Latest: {d.latest.rev} ({d.latest.status})</span>}
               </div>
             </div>
             {canUpload && (

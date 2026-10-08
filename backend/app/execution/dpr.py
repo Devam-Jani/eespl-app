@@ -207,6 +207,17 @@ def save_dpr(
         d.id,
         after=body.model_dump(mode="json"),
     )
+    if body.submit:
+        from app.portal import service as portal
+
+        portal.tell_clients(
+            db,
+            site.id,
+            "dpr",
+            "dpr_submitted",
+            f"Daily report of {day:%d %b %Y} for {site.code}",
+            f"/portal/sites/{site.id}?tab=dpr",
+        )
     db.commit()
     db.refresh(d)
     return _out(db, site, day, d, principal)

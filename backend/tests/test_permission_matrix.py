@@ -38,6 +38,7 @@ ALL = [
     "finance.view", "finance.edit",
     "dashboard.view",
     "leads.view", "leads.edit",
+    "portal.view", "portal.comment", "portal.snag", "portal.approve", "portal.manage",
 ]  # fmt: skip
 
 
@@ -102,6 +103,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "dashboard.view",
         "leads.view",
         "leads.edit",
+        "portal.manage",
     ),  # fmt: skip
     "estimator": _all(
         "clients.view",
@@ -129,6 +131,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "dashboard.view": "own",
         "leads.view": "own",
         "leads.edit": "own",
+        "portal.manage": "assigned",
     },
     "site_supervisor": {
         "site.view": "assigned",
@@ -197,8 +200,10 @@ EXPECTED: dict[str, dict[str, str]] = {
         "finance.edit",
         "dashboard.view",
     ),  # fmt: skip
-    # no site access until the client portal (M6)
-    "client": {},
+    # the client portal only; every staff endpoint stays 403 (tests/test_portal.py)
+    "client": dict.fromkeys(
+        ["portal.view", "portal.comment", "portal.snag", "portal.approve"], "own"
+    ),
 }
 
 REAL_ENDPOINTS = {
@@ -209,6 +214,12 @@ REAL_ENDPOINTS = {
     "billing.view", "payables.view", "payroll.view",
 }  # fmt: skip
 
+
+def _probe_path(code: str) -> str:
+    # client logins only reach /api/portal/..., so the portal codes are probed there
+    return f"/api/portal/_probe/{code}" if code.startswith("portal.") else f"/_probe/{code}"
+
+
 probe_app = FastAPI()
 probe_app.include_router(app.router)
 for _code in ALL:
@@ -217,7 +228,7 @@ for _code in ALL:
         def _probe(scope: str = Depends(require_permission(_code))) -> dict[str, str]:  # noqa: B008
             return {"scope": scope}
 
-        probe_app.add_api_route(f"/_probe/{_code}", _probe, methods=["GET"])
+        probe_app.add_api_route(_probe_path(_code), _probe, methods=["GET"])
 
 
 def _call(client: TestClient, code: str, headers, db):
@@ -253,7 +264,7 @@ def _call(client: TestClient, code: str, headers, db):
         return client.get("/api/material/stores", headers=headers)
     if code == "library.view":
         return client.get("/api/products", headers=headers)
-    return client.get(f"/_probe/{code}", headers=headers)
+    return client.get(_probe_path(code), headers=headers)
 
 
 def test_catalogue_and_roles_match_the_spec(db):

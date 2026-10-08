@@ -33,6 +33,8 @@ from app.masters.routers import (
     vendors,
 )
 from app.material import routers as material
+from app.portal import routers as portal
+from app.portal import staff as portal_staff
 from app.routers import audit, permissions, roles, users
 from app.sites import routers as sites
 from app.tenders import routers as tenders
@@ -79,8 +81,16 @@ for _module in (
     fin_petty,
     fin_payroll,
     fin_reports,
+    portal,
 ):
     app.include_router(_module.router)
+for _r in (
+    portal_staff.router,
+    portal_staff.snags_router,
+    portal_staff.comments_router,
+    portal_staff.notes_router,
+):
+    app.include_router(_r)
 
 
 @app.get("/api/health")
