@@ -94,6 +94,12 @@ class LeadUpdate(LeadFields):
     phone: str | None = None
     lead_source: LeadSource | None = None
     status: LeadStatus | None = None
+    # required when the lead is marked lost (app.tenders.models.LOST_REASONS)
+    lost_reason: (
+        Literal["price", "competitor", "timing", "spec", "relationship", "other"] | None
+    ) = None
+    lost_to: str | None = Field(default=None, max_length=200)
+    lost_note: str | None = None
 
     _phone = field_validator("phone")(normalise_phone)
 
@@ -159,6 +165,9 @@ class LeadOut(BaseModel):
     kylas_forecasting: str | None
     kylas_converted_at: str | None
     kylas_won_at: str | None
+    lost_reason: str | None = None
+    lost_to: str | None = None
+    lost_note: str | None = None
     created_at: str
     duplicates: list[DuplicateOut] = []
 
@@ -317,6 +326,9 @@ def _out(db: Session, lead: Lead) -> dict:
         kylas_forecasting=lead.kylas_forecasting,
         kylas_converted_at=_iso(lead.kylas_converted_at),
         kylas_won_at=_iso(lead.kylas_won_at),
+        lost_reason=lead.lost_reason,
+        lost_to=lead.lost_to,
+        lost_note=lead.lost_note,
         created_at=lead.created_at.isoformat(),
     )
 
@@ -580,6 +592,10 @@ def update_lead(
         if field in ("contact_name", "lead_source", "status") and value is None:
             continue
         setattr(lead, field, value)
+    if lead.status == "lost" and not lead.lost_reason:
+        raise unprocessable("Pick why the lead was lost")
+    if lead.status != "lost":
+        lead.lost_reason = lead.lost_to = lead.lost_note = None
     if lead.status != old_status:
         db.add(
             LeadActivity(

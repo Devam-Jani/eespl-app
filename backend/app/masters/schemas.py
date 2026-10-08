@@ -202,6 +202,8 @@ class ProductIn(BaseModel):
     gst_percent: Percent = Decimal(18)
     hsn_code: str | None = Field(default=None, pattern=r"^[0-9]{4,8}$")
     is_active: bool = True
+    # low-stock alert below this total stock (product unit)
+    reorder_level: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=3)
 
 
 class ProductUpdate(BaseModel):
@@ -215,6 +217,7 @@ class ProductUpdate(BaseModel):
     gst_percent: Percent | None = None
     hsn_code: str | None = Field(default=None, pattern=r"^[0-9]{4,8}$")
     is_active: bool | None = None
+    reorder_level: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=3)
 
 
 class ProductCost(BaseModel):
@@ -235,6 +238,7 @@ class ProductOut(ORM):
     gst_percent: Decimal
     hsn_code: str | None = None
     is_active: bool
+    reorder_level: Decimal | None = None
     cost: ProductCost | None = None
 
     @field_validator("category", mode="before")

@@ -719,3 +719,94 @@ def test_notifications_go_to_the_right_side(boss, portal, db):  # noqa: F811
     assert (
         client.get(f"/api/portal/sites/{s}", headers=h).status_code == 403
     )  # staff without preview
+
+
+# --- M6 review fixes -----------------------------------------------------------------------------
+
+
+def test_snag_can_be_assigned_to_another_staff_member_of_the_site(boss, portal, db, make_user):  # noqa: F811
+    from app.sites.models import SiteMember
+
+    client, h = boss
+    s = portal["sites"]["A"]
+    member = make_user("supervisor-on-a@example.com", "site_supervisor", name="DEMO Supervisor A")
+    outsider = make_user("supervisor-elsewhere@example.com", "site_supervisor")
+    gone = make_user("left@example.com", "site_supervisor", is_active=False)
+    db.add_all(
+        [
+            SiteMember(site_id=s, user_id=member.id, role_on_site="supervisor"),
+            SiteMember(site_id=s, user_id=gone.id, role_on_site="supervisor"),
+        ]
+    )
+    db.commit()
+    names = {
+        u["full_name"]
+        for u in client.get("/api/snags/assignees", params={"site_id": s}, headers=h).json()
+    }
+    assert (
+        "DEMO Supervisor A" in names and "left" not in names and "supervisor-elsewhere" not in names
+    )
+    sn = client.post("/api/snags", data={"site_id": s, "title": "Loose tile"}, headers=h).json()
+    r = client.patch(f"/api/snags/{sn['id']}", json={"assigned_to": str(member.id)}, headers=h)
+    assert r.status_code == 200 and r.json()["assigned_to_name"] == "DEMO Supervisor A"
+    assert db.scalar(
+        select(Notification.id).where(
+            Notification.user_id == member.id, Notification.kind == "snag_assigned"
+        )
+    )
+    for other in (outsider, gone):
+        assert (
+            client.patch(
+                f"/api/snags/{sn['id']}", json={"assigned_to": str(other.id)}, headers=h
+            ).status_code
+            == 422
+        )
+    bad = client.post(
+        "/api/snags", data={"site_id": s, "title": "x", "assigned_to": str(outsider.id)}, headers=h
+    )
+    assert bad.status_code == 422
+
+
+def test_portal_billing_labels_due_now_and_total_outstanding(boss, portal):  # noqa: F811
+    client, h = boss
+    a, s, rid = portal["user_A"], portal["sites"]["A"], portal["A"]["ra"]
+    pu = portal["ra_lines"]["PU coating"]["contract_line_id"]
+    body = {
+        "lines": [{"contract_line_id": pu, "certified_qty": "70"}],
+        "certified_by_client": "PMC",
+    }
+    assert (
+        client.post(f"/api/finance/ra-bills/{rid}/certify", json=body, headers=h).status_code == 200
+    )
+    assert (
+        client.post(f"/api/finance/ra-bills/{rid}/invoice", json={}, headers=h).status_code == 201
+    )
+    o = a.get(f"/api/portal/sites/{s}/billing").json()["outstanding"]
+    total, due, ret = float(o["total"]), float(o["due"]), float(o["retention_in_total"])
+    assert ret > 0 and due > 0 and abs(total - (due + ret)) < 0.01
+
+
+def test_client_can_upload_dwg_and_dxf_but_not_other_files(portal):
+    a, s = portal["user_A"], portal["sites"]["A"]
+    for name in ("layout.dwg", "layout.DXF"):
+        r = a.post(
+            f"/api/portal/sites/{s}/documents",
+            data={"title": name},
+            files={"file": (name, b"AC1032 invented", "application/octet-stream")},
+        )
+        assert r.status_code == 201, r.text
+    r = a.post(
+        f"/api/portal/sites/{s}/documents",
+        data={"title": "x"},
+        files={"file": ("run.exe", b"MZ", "application/octet-stream")},
+    )
+    assert r.status_code == 422 and ".dwg" in r.text
+    keys = [
+        d["key"]
+        for d in a.get(f"/api/portal/sites/{s}/documents").json()
+        if d["filename"].lower().startswith("layout")
+    ]
+    assert (
+        len(keys) == 2
+        and a.get(f"/api/portal/sites/{s}/documents/{keys[0]}").content == b"AC1032 invented"
+    )

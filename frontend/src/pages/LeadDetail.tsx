@@ -3,7 +3,8 @@ import type { FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
-import { errorText, inr } from "../format";
+import { errorText, inr, LOST_REASONS } from "../format";
+import Modal from "../components/Modal";
 import type { LeadDetail as Detail, LeadLookups } from "../types";
 import { KylasBadge, LEAD_SOURCES, LEAD_STATUSES, LeadForm, LeadStatusBadge } from "./Leads";
 import { shortDate } from "./Tenders";
@@ -17,6 +18,7 @@ export default function LeadDetail() {
   const [lead, setLead] = useState<Detail | null>(null);
   const [lookups, setLookups] = useState<LeadLookups | null>(null);
   const [editing, setEditing] = useState(false);
+  const [losing, setLosing] = useState(false);
   const [note, setNote] = useState({ type: "note", text: "" });
   const [error, setError] = useState<string | null>(null);
 
@@ -64,6 +66,13 @@ export default function LeadDetail() {
     ["Est. value", lead.est_value ? inr(lead.est_value) : "—"],
     ["Next follow-up", shortDate(lead.next_follow_up)],
     ["Requirement", lead.requirement ?? "—"],
+    ...(lead.status === "lost"
+      ? ([
+          ["Lost because", lead.lost_reason ? (LOST_REASONS[lead.lost_reason] ?? lead.lost_reason) : "—"],
+          ["Lost to", lead.lost_to ?? "—"],
+          ["Note", lead.lost_note ?? "—"],
+        ] as [string, string][])
+      : []),
   ];
 
   return (
@@ -88,7 +97,12 @@ export default function LeadDetail() {
         </div>
         {canEdit && (
           <div className="page-actions">
-            <select value={lead.status} onChange={(e) => void run(api<Detail>(`/api/leads/${lead.id}`, { method: "PATCH", json: { status: e.target.value } }))}>
+            <select
+              value={lead.status}
+              onChange={(e) =>
+                e.target.value === "lost" ? setLosing(true) : void run(api<Detail>(`/api/leads/${lead.id}`, { method: "PATCH", json: { status: e.target.value } }))
+              }
+            >
               {Object.entries(LEAD_STATUSES).map(([v, l]) => (
                 <option key={v} value={v}>
                   {l}
@@ -109,6 +123,15 @@ export default function LeadDetail() {
         )}
       </div>
       {error && <div className="alert alert-error">{error}</div>}
+      {losing && (
+        <LostDialog
+          onClose={() => setLosing(false)}
+          onSave={(body) => {
+            setLosing(false);
+            void run(api<Detail>(`/api/leads/${lead.id}`, { method: "PATCH", json: { status: "lost", ...body } }));
+          }}
+        />
+      )}
       {lead.duplicates.length > 0 && (
         <div className="alert alert-warn">
           Same phone as{" "}
@@ -186,5 +209,49 @@ export default function LeadDetail() {
         />
       )}
     </>
+  );
+}
+
+function LostDialog({ onClose, onSave }: { onClose: () => void; onSave: (body: { lost_reason: string; lost_to: string | null; lost_note: string | null }) => void }) {
+  const [reason, setReason] = useState("");
+  const [to, setTo] = useState("");
+  const [note, setNote] = useState("");
+  return (
+    <Modal title="Mark the lead lost" onClose={onClose}>
+      <form
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          onSave({ lost_reason: reason, lost_to: to.trim() || null, lost_note: note.trim() || null });
+        }}
+      >
+        <label className="field">
+          <span>Reason *</span>
+          <select required value={reason} onChange={(e) => setReason(e.target.value)} autoFocus>
+            <option value="">Choose…</option>
+            {Object.entries(LOST_REASONS).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Lost to (competitor, if known)</span>
+          <input value={to} onChange={(e) => setTo(e.target.value)} maxLength={200} />
+        </label>
+        <label className="field">
+          <span>Details</span>
+          <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
+        </label>
+        <div className="form-actions">
+          <button type="button" className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn btn-primary" disabled={!reason}>
+            Mark lost
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }

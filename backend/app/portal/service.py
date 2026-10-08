@@ -196,6 +196,16 @@ def staff_of(db: Session, site_id: int) -> list:
     return [u for u in dict.fromkeys(ids) if u and u not in clients]
 
 
+def active_staff(db: Session, site_id: int) -> list[User]:
+    """Active staff on the site (in-charge and members): who a snag can be assigned to."""
+    ids = staff_of(db, site_id)
+    if not ids:
+        return []
+    return list(
+        db.scalars(select(User).where(User.id.in_(ids), User.is_active).order_by(User.full_name))
+    )
+
+
 def tell_clients(
     db: Session, site_id: int, section: str, kind: str, title: str, link: str | None = None
 ) -> int:

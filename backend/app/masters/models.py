@@ -19,6 +19,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    false,
     func,
     text,
     true,
@@ -104,6 +105,8 @@ class Client(Tracked, Base):
     state: Mapped[str | None] = mapped_column(String(100))
     notes: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(server_default=true())
+    # invented analytics demo data (python -m app.cli seed-demo-analytics); never real
+    is_demo: Mapped[bool] = mapped_column(server_default=false(), index=True)
 
     contacts: Mapped[list["ClientContact"]] = relationship(
         lazy="selectin",
@@ -140,6 +143,10 @@ class Product(Tracked, Base):
     gst_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), server_default="18")
     hsn_code: Mapped[str | None] = mapped_column(String(8))  # HSN (goods) / SAC (services)
     is_active: Mapped[bool] = mapped_column(server_default=true())
+    # invented analytics demo data (python -m app.cli seed-demo-analytics); never real
+    is_demo: Mapped[bool] = mapped_column(server_default=false(), index=True)
+    # low-stock alert and the purchase dashboard: total stock below this (base unit)
+    reorder_level: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
 
     category: Mapped["Category | None"] = relationship(lazy="joined")
 
@@ -469,6 +476,8 @@ class Vendor(Tracked, Base):
     payment_terms_days: Mapped[int | None] = mapped_column(Integer)
     notes: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(server_default=true())
+    # invented analytics demo data (python -m app.cli seed-demo-analytics); never real
+    is_demo: Mapped[bool] = mapped_column(server_default=false(), index=True)
 
     contacts: Mapped[list["VendorContact"]] = relationship(
         lazy="selectin",

@@ -16,10 +16,18 @@ export function inr(value: string | number | null | undefined): string {
 export function num(value: string | number | null | undefined, digits = 4): string {
   if (value === null || value === undefined || value === "") return "—";
   const n = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(n)
-    ? n.toLocaleString("en-IN", { maximumFractionDigits: digits })
-    : "—";
+  return Number.isFinite(n) ? n.toLocaleString("en-IN", { maximumFractionDigits: digits }) : "—";
 }
+
+/** Why a tender or lead was lost (the pick-list on the server). */
+export const LOST_REASONS: Record<string, string> = {
+  price: "Price",
+  competitor: "Competitor",
+  timing: "Timing",
+  spec: "Specification",
+  relationship: "Relationship",
+  other: "Other",
+};
 
 export function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);

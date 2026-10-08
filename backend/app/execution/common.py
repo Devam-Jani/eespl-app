@@ -53,11 +53,21 @@ def safe_name(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9._ ()-]+", "_", Path(name).name)[:150] or "file"
 
 
-async def save_upload(file: UploadFile, folder: str) -> tuple[str, str]:
-    """Store an uploaded photo / PDF under the media volume; (relative path, file name)."""
+# CAD drawings: stored and downloaded as they are, never opened or rendered
+CAD_TYPES = frozenset({".dwg", ".dxf"})
+
+
+async def save_upload(
+    file: UploadFile, folder: str, extra: frozenset[str] = frozenset()
+) -> tuple[str, str]:
+    """Store an uploaded photo / PDF (or one of the `extra` types) under the media volume;
+    (relative path, file name)."""
     name = safe_name(file.filename or "photo.jpg")
-    if Path(name).suffix.lower() not in PHOTO_TYPES:
-        raise unprocessable("Upload a photo (.jpg, .png, .webp, .heic) or a PDF")
+    if Path(name).suffix.lower() not in PHOTO_TYPES | extra:
+        kinds = "a photo (.jpg, .png, .webp, .heic) or a PDF"
+        if extra:
+            kinds += " or " + ", ".join(sorted(extra))
+        raise unprocessable(f"Upload {kinds}")
     data = await file.read(PHOTO_MAX + 1)
     if len(data) > PHOTO_MAX:
         raise unprocessable("The file is larger than 15 MB")

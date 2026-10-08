@@ -668,8 +668,8 @@ function DocumentsTab({ siteId }: { siteId: number }) {
             <input className="tap-input" value={title} onChange={(e) => setTitle(e.target.value)} required />
           </label>
           <label className="field">
-            <span>File (PDF or photo)</span>
-            <input type="file" accept=".pdf,image/*" onChange={(e) => setUpload(e.target.files?.[0] ?? null)} required />
+            <span>File (PDF, photo, DWG or DXF)</span>
+            <input type="file" accept=".pdf,image/*,.dwg,.dxf" onChange={(e) => setUpload(e.target.files?.[0] ?? null)} required />
           </label>
           <button className="btn btn-primary tap-wide" disabled={!upload || !title.trim()}>
             Upload
@@ -763,8 +763,12 @@ function BillingTab({ siteId }: { siteId: number }) {
       {error && <div className="alert alert-error">{error}</div>}
       <div className="portal-grid">
         <div className="card">
-          <div className="muted small">Outstanding (due now)</div>
+          <div className="muted small">Due now</div>
           <div className="portal-big">{inr(o.due)}</div>
+          <div className="small">
+            Total outstanding {inr(o.total)} (incl. retention {inr(o.retention_in_total)})
+          </div>
+          <div className="small muted">Due now is the outstanding less the retention held until handover.</div>
           <div className="chips">
             {["0-30", "31-60", "61-90", "90+"].map((b) => (
               <span key={b} className="chip">

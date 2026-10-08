@@ -39,6 +39,8 @@ ALL = [
     "dashboard.view",
     "leads.view", "leads.edit",
     "portal.view", "portal.comment", "portal.snag", "portal.approve", "portal.manage",
+    "dashboard.company", "dashboard.sales", "dashboard.site", "dashboard.finance",
+    "dashboard.purchase", "reports.export",
 ]  # fmt: skip
 
 
@@ -104,6 +106,9 @@ EXPECTED: dict[str, dict[str, str]] = {
         "leads.view",
         "leads.edit",
         "portal.manage",
+        "dashboard.company",
+        "dashboard.sales",
+        "reports.export",
     ),  # fmt: skip
     "estimator": _all(
         "clients.view",
@@ -132,6 +137,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "leads.view": "own",
         "leads.edit": "own",
         "portal.manage": "assigned",
+        "dashboard.sales": "own",
     },
     "site_supervisor": {
         "site.view": "assigned",
@@ -151,6 +157,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "asset.view": "assigned",
         "attendance.manage": "assigned",
         "expense.create": "own",
+        "dashboard.site": "assigned",
     },
     "store_purchase": _all(
         "vendors.view",
@@ -169,6 +176,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "store.edit",
         "asset.view",
         "asset.edit",
+        "dashboard.purchase",
     ),  # fmt: skip
     "accounts": _all(
         "clients.view",
@@ -199,6 +207,8 @@ EXPECTED: dict[str, dict[str, str]] = {
         "finance.view",
         "finance.edit",
         "dashboard.view",
+        "dashboard.finance",
+        "reports.export",
     ),  # fmt: skip
     # the client portal only; every staff endpoint stays 403 (tests/test_portal.py)
     "client": dict.fromkeys(

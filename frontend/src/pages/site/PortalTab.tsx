@@ -255,7 +255,7 @@ export default function PortalTab({ site }: { site: Site }) {
       </div>
       <form className="inline-form top-gap" onSubmit={(e) => void uploadDoc(e)}>
         <input name="title" placeholder="Title" required className="grow" />
-        <input name="file" type="file" accept=".pdf,image/*" required />
+        <input name="file" type="file" accept=".pdf,image/*,.dwg,.dxf" required />
         <label className="check small">
           <input name="share_with_client" type="checkbox" value="true" /> Share with client
         </label>

@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, downloadFile, queryString } from "../api";
 import { useAuth } from "../auth";
 import Modal from "../components/Modal";
-import { errorText, inr } from "../format";
+import { errorText, inr, LOST_REASONS } from "../format";
 import type { Clause, Page, Revision, Tender, TenderLookups, TenderStatus, TenderTc } from "../types";
 import BoqTab from "./tender/BoqTab";
 import RevisionsTab from "./tender/RevisionsTab";
@@ -79,8 +79,7 @@ export default function TenderDetail() {
           <p className="muted">
             {tender.client_name ?? "No client yet"}
             {tender.channel_name ? ` · via ${tender.channel_name}` : ""}
-            {tender.site_city ? ` · ${tender.site_city}` : ""} · due{" "}
-            <span className={tender.overdue ? "text-danger" : ""}>{shortDate(tender.due_on)}</span>
+            {tender.site_city ? ` · ${tender.site_city}` : ""} · due <span className={tender.overdue ? "text-danger" : ""}>{shortDate(tender.due_on)}</span>
           </p>
         </div>
         <div className="page-actions">
@@ -206,7 +205,10 @@ function DetailsTab({ tender, canEdit, onChange }: { tender: Tender; canEdit: bo
     rows.push(["Cost of system-priced lines", inr(tender.cost_total)], ["Margin on them", inr(tender.margin_amount)]);
   }
   if (tender.lost_reason || tender.lost_to) {
-    rows.push(["Reason", tender.lost_reason ?? "—"], ["Competitor", tender.lost_to ?? "—"]);
+    rows.push(["Reason", tender.lost_reason ? (LOST_REASONS[tender.lost_reason] ?? tender.lost_reason) : "—"], ["Competitor", tender.lost_to ?? "—"]);
+  }
+  if (tender.lost_note) {
+    rows.push(["Note", tender.lost_note]);
   }
   rows.push(["Notes", tender.notes ?? "—"]);
 
@@ -287,7 +289,7 @@ function DetailsTab({ tender, canEdit, onChange }: { tender: Tender; canEdit: bo
           status={closing}
           tender={tender}
           onClose={() => setClosing(null)}
-          onSave={(reason, competitor) => setStatus(closing, { lost_reason: reason, lost_to: competitor })}
+          onSave={(reason, competitor, note) => setStatus(closing, { lost_reason: reason, lost_to: competitor, lost_note: note })}
         />
       )}
     </div>
@@ -303,31 +305,38 @@ function CloseTenderModal({
   status: TenderStatus;
   tender: Tender;
   onClose: () => void;
-  onSave: (reason: string | null, competitor: string | null) => Promise<void>;
+  onSave: (reason: string | null, competitor: string | null, note: string | null) => Promise<void>;
 }) {
   const [reason, setReason] = useState(tender.lost_reason ?? "");
+  const [note, setNote] = useState(tender.lost_note ?? "");
   const [competitor, setCompetitor] = useState(tender.lost_to ?? "");
   const label = status === "won" ? "Won" : status === "lost" ? "Lost" : "Dropped";
   const needsReason = status !== "won";
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    void onSave(reason.trim() || null, competitor.trim() || null);
+    void onSave(needsReason ? reason || null : null, competitor.trim() || null, note.trim() || null);
   }
 
   return (
     <Modal title={`Mark ${tender.code} as ${label.toLowerCase()}`} onClose={onClose}>
       <form onSubmit={submit}>
+        {needsReason && (
+          <label className="field">
+            <span>Reason *</span>
+            <select required value={reason} onChange={(e) => setReason(e.target.value)} autoFocus>
+              <option value="">Choose…</option>
+              {Object.entries(LOST_REASONS).map(([k, l]) => (
+                <option key={k} value={k}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="field">
-          <span>Reason{needsReason ? " *" : ""}</span>
-          <textarea
-            rows={3}
-            required={needsReason}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder={status === "won" ? "Why we won (price, relationship, spec…)" : "Price, spec, timing…"}
-            autoFocus
-          />
+          <span>{status === "won" ? "Why we won" : "Details"}</span>
+          <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder={status === "won" ? "Price, relationship, spec…" : "What happened"} />
         </label>
         <label className="field">
           <span>{status === "won" ? "Main competitor" : status === "lost" ? "Lost to (competitor)" : "Competitor (if known)"}</span>
@@ -469,7 +478,11 @@ function TermsTab({ tender, canEdit, onSaved }: { tender: Tender; canEdit: boole
               className={dragging === i ? "dragging" : ""}
             >
               <div className="clause-text">
-                {canEdit && <span className="drag-handle" title="Drag to reorder">⋮⋮</span>}
+                {canEdit && (
+                  <span className="drag-handle" title="Drag to reorder">
+                    ⋮⋮
+                  </span>
+                )}
                 {editing === r.key ? (
                   <textarea
                     rows={3}
@@ -482,9 +495,7 @@ function TermsTab({ tender, canEdit, onSaved }: { tender: Tender; canEdit: boole
                   <span className="pre-line">{r.text || <em className="muted">(empty)</em>}</span>
                 )}
                 {r.category && <span className="badge badge-muted">{r.category}</span>}
-                {r.clause_id && (r.library_text === null || r.text !== r.library_text) && (
-                  <span className="badge badge-info">edited for this tender</span>
-                )}
+                {r.clause_id && (r.library_text === null || r.text !== r.library_text) && <span className="badge badge-info">edited for this tender</span>}
                 {!r.clause_id && <span className="badge badge-orange">own text</span>}
               </div>
               {canEdit && (
@@ -521,9 +532,7 @@ function TermsTab({ tender, canEdit, onSaved }: { tender: Tender; canEdit: boole
                 <button
                   className="btn btn-small"
                   disabled={used.has(c.id)}
-                  onClick={() =>
-                    setRows((rs) => [...rs, { key: `c${c.id}`, clause_id: c.id, library_text: c.text, text: c.text, category: c.category }])
-                  }
+                  onClick={() => setRows((rs) => [...rs, { key: `c${c.id}`, clause_id: c.id, library_text: c.text, text: c.text, category: c.category }])}
                 >
                   {used.has(c.id) ? "Added" : "Add"}
                 </button>

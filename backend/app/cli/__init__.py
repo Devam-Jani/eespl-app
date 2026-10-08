@@ -323,6 +323,25 @@ def run_kylas_discover() -> None:
                 print(f"      stage {stage['id']}  {stage['name']}")
 
 
+def run_demo(purge: bool, sites: int, leads: int) -> None:
+    from app.analytics import demo
+
+    with SessionLocal() as db:
+        if purge:
+            removed = demo.purge(db)
+            print(f"Demo data removed: {sum(removed.values())} rows")
+            for table, n in sorted(removed.items()):
+                print(f"  {table}: {n}")
+            return
+        try:
+            made = demo.seed(db, sites=sites, leads=leads)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        print(f"Demo data created (invented, is_demo): {sum(made.values())} rows")
+        for table, n in made.items():
+            print(f"  {table}: {n}")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -353,6 +372,13 @@ def main(argv: list[str] | None = None) -> None:
     )
     p.add_argument("--set-default", action="store_true", help="Make the winner the company default")
 
+    p = sub.add_parser(
+        "seed-demo-analytics", help="Create (or --purge) the invented demo company (dashboards)"
+    )
+    p.add_argument("--purge", action="store_true", help="Delete every demo row and nothing else")
+    p.add_argument("--sites", type=int, default=60)
+    p.add_argument("--leads", type=int, default=400)
+
     for command, (_, label) in POWERPLAY.items():
         p = sub.add_parser(command, help=f"Import a Powerplay Excel export: {label}")
         p.add_argument("path")
@@ -372,5 +398,7 @@ def main(argv: list[str] | None = None) -> None:
         run_import_projects(args.paths)
     elif args.command == "backtest-rates":
         run_backtest(args.set_default)
+    elif args.command == "seed-demo-analytics":
+        run_demo(args.purge, args.sites, args.leads)
     elif args.command in POWERPLAY:
         run_import_powerplay(args.command, args.path)

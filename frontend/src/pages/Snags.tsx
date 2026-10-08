@@ -164,6 +164,11 @@ function SnagDialog({ id, onClose, onChange }: { id: number; onClose: () => void
   const { me } = useAuth();
   const [s, setS] = useState<Snag | null>(null);
   const [images, setImages] = useState<Record<number, string | null>>({});
+  const [staff, setStaff] = useState<{ id: string; full_name: string }[]>([]);
+  const siteId = s?.site_id;
+  useEffect(() => {
+    if (siteId) api<{ id: string; full_name: string }[]>(`/api/snags/assignees?site_id=${siteId}`).then(setStaff, () => setStaff([]));
+  }, [siteId]);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     api<Snag>(`/api/snags/${id}`).then(setS, (err) => setError(errorText(err)));
@@ -234,11 +239,18 @@ function SnagDialog({ id, onClose, onChange }: { id: number; onClose: () => void
             Add "after" photo
             <input type="file" hidden accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && void photo(e.target.files[0])} />
           </label>
-          {s.assigned_to !== me?.user.id && (
-            <button className="btn btn-small" onClick={() => void patch({ assigned_to: me?.user.id })}>
-              Assign to me
-            </button>
-          )}
+          <label className="small">
+            Assigned to{" "}
+            <select value={s.assigned_to ?? ""} onChange={(e) => e.target.value && void patch({ assigned_to: e.target.value })}>
+              <option value="">— choose —</option>
+              {staff.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.full_name}
+                  {u.id === me?.user.id ? " (me)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="small">
             Due <input type="date" value={s.due_date ?? ""} onChange={(e) => void patch({ due_date: e.target.value || null })} />
           </label>

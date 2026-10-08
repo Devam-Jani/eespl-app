@@ -7,7 +7,6 @@ import { MENU } from "./menu";
 import Audit from "./pages/Audit";
 import Channels from "./pages/Channels";
 import Clients from "./pages/Clients";
-import Home from "./pages/Home";
 import LeadDetail from "./pages/LeadDetail";
 import Leads from "./pages/Leads";
 import Login from "./pages/Login";
@@ -41,6 +40,18 @@ const PortalHome = lazy(() => portal().then((m) => ({ default: m.PortalHome })))
 const PortalSitePage = lazy(() => portal().then((m) => ({ default: m.PortalSitePage })));
 const InviteAccept = lazy(() => portal().then((m) => ({ default: m.InviteAccept })));
 const Snags = lazy(() => import("./pages/Snags"));
+// dashboards and analytics (with their charts) are one chunk
+const Dashboard = lazy(() => import("./analytics/Dashboard"));
+const an = () => import("./analytics/Pages");
+const SitesAnalytics = lazy(() => an().then((m) => ({ default: m.SitesAnalytics })));
+const FinanceAnalytics = lazy(() => an().then((m) => ({ default: m.FinanceAnalytics })));
+const ProfitabilityAnalytics = lazy(() => an().then((m) => ({ default: m.ProfitabilityAnalytics })));
+const PurchaseAnalytics = lazy(() => an().then((m) => ({ default: m.PurchaseAnalytics })));
+const LabourAnalytics = lazy(() => an().then((m) => ({ default: m.LabourAnalytics })));
+const StrategyAnalytics = lazy(() => an().then((m) => ({ default: m.StrategyAnalytics })));
+const DrillPage = lazy(() => an().then((m) => ({ default: m.DrillPage })));
+const AlertsPage = lazy(() => an().then((m) => ({ default: m.AlertsPage })));
+const ReportsPage = lazy(() => an().then((m) => ({ default: m.ReportsPage })));
 const fin = () => import("./pages/finance/Reports");
 const Billing = lazy(() => import("./pages/finance/Billing"));
 const Payables = lazy(() => import("./pages/finance/Payables"));
@@ -82,6 +93,15 @@ const PAGES: Record<string, JSX.Element> = {
   "/settings/kylas": <KylasSettingsPage />,
   "/sites": <Sites />,
   "/snags": <Snags />,
+  "/dashboard": <Dashboard />,
+  "/analytics/sites": <SitesAnalytics />,
+  "/analytics/finance": <FinanceAnalytics />,
+  "/analytics/profitability": <ProfitabilityAnalytics />,
+  "/analytics/purchase": <PurchaseAnalytics />,
+  "/analytics/labour": <LabourAnalytics />,
+  "/analytics/strategy": <StrategyAnalytics />,
+  "/alerts": <AlertsPage />,
+  "/reports": <ReportsPage />,
   "/settings/stage-templates": <StageTemplates />,
   "/settings/company": <CompanyProfile />,
   "/settings/gstins": <GstinAddresses />,
@@ -142,7 +162,8 @@ export default function App() {
                 </RequireAuth>
               }
             >
-              <Route index element={<Home />} />
+              <Route index element={<Dashboard />} />
+              <Route path="/drill" element={<DrillPage />} />
               {MENU.map((item) => (
                 <Route key={item.to} path={item.to} element={<RequirePermission perms={item.perms}>{PAGES[item.to] ?? <Placeholder title={item.label} />}</RequirePermission>} />
               ))}

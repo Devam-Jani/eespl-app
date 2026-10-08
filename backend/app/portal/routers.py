@@ -18,7 +18,7 @@ from app import audit
 from app.auth.security import hash_password, utcnow
 from app.db import DbSession
 from app.execution import pdf as xpdf
-from app.execution.common import media, names, pdf_response, save_upload, send_file
+from app.execution.common import CAD_TYPES, media, names, pdf_response, save_upload, send_file
 from app.execution.models import Dpr, Inspection, Mom, MomPoint
 from app.execution.service import today
 from app.finance import pdf as fpdf
@@ -599,7 +599,7 @@ async def upload_document(
     """The client's own drawing or document (kept apart from EESPL's); staff are told."""
     svc.need(ctx, "portal.comment")
     site = svc.portal_site(db, ctx, site_id, "documents")
-    rel, name = await save_upload(file, f"portal/client-uploads/{site.id}")
+    rel, name = await save_upload(file, f"portal/client-uploads/{site.id}", CAD_TYPES)
     doc = SiteDocument(
         site_id=site.id,
         title=title,
@@ -744,10 +744,12 @@ def billing(site_id: int, request: Request, db: DbSession, ctx: Ctx) -> dict:
         .order_by(Receipt.on_date.desc())
     ).all()
     buckets = dict.fromkeys(("0-30", "31-60", "61-90", "90+"), ZERO)
-    due = ZERO
+    due = total = in_retention = ZERO
     for p in fsvc.invoice_positions(db, [i for i in invs if i.kind == "invoice"], today()):
         buckets[fsvc.bucket(p["age"])] += p["due"]
         due += p["due"]
+        total += p["outstanding"]
+        in_retention += p["retention_held"]
     _retained, released, held = fsvc.retention_held(db, site.id)
     _audit(db, request, ctx, "portal.billing.view", "site", site.id)
     db.commit()
@@ -775,7 +777,10 @@ def billing(site_id: int, request: Request, db: DbSession, ctx: Ctx) -> dict:
             for r in receipts
         ],
         "outstanding": {
+            # "Due now" = outstanding less the retention still held in it; total = due + that
             "due": due,
+            "total": total,
+            "retention_in_total": in_retention,
             **buckets,
             "retention_held": held,
             "retention_released": released,

@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.analytics import routers as analytics
 from app.auth.router import router as auth_router
 from app.config import settings
 from app.crm import routers as crm
@@ -85,6 +86,8 @@ for _module in (
 ):
     app.include_router(_module.router)
 for _r in (
+    analytics.dashboard,
+    analytics.router,
     portal_staff.router,
     portal_staff.snags_router,
     portal_staff.comments_router,
