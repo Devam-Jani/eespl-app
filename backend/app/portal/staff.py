@@ -14,7 +14,7 @@ from sqlalchemy import delete, func, select, update
 from app.auth.deps import CurrentPrincipal, Principal
 from app.auth.router import revoke_all_refresh_tokens
 from app.db import DbSession
-from app.execution.common import names, record, save_upload, send_file
+from app.execution.common import CAD_TYPES, names, record, save_upload, send_file
 from app.execution.models import Inspection
 from app.execution.service import site_for
 from app.masters.models import Client, CompanyProfile
@@ -411,7 +411,7 @@ async def add_document(
     share_with_client: Annotated[bool, Form()] = False,
 ) -> dict:
     site = _can_share(db, principal, site_id)
-    rel, name = await save_upload(file, f"portal/documents/{site.id}")
+    rel, name = await save_upload(file, f"portal/documents/{site.id}", CAD_TYPES)
     d = SiteDocument(
         site_id=site.id,
         title=title,
@@ -567,6 +567,21 @@ def list_snags(
     ]
 
 
+@snags_router.get("/assignees")
+def assignees(site_id: int, db: DbSession, principal: CurrentPrincipal) -> list[dict]:
+    """Active staff on the site a snag can be assigned to."""
+    _staff(db, principal)
+    site = site_for(db, site_id, principal, "site.view")
+    return [{"id": str(u.id), "full_name": u.full_name} for u in svc.active_staff(db, site.id)]
+
+
+def _check_assignee(db, site_id: int, user_id: uuid.UUID | None) -> None:
+    if user_id is not None and user_id not in {u.id for u in svc.active_staff(db, site_id)}:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "Assign it to an active staff member of this site"
+        )
+
+
 @snags_router.get("/{sid}")
 def get_snag(sid: int, db: DbSession, principal: CurrentPrincipal) -> dict:
     return snag_out(db, _snag_view(db, principal, db.get(Snag, sid)), client=False)
@@ -594,6 +609,7 @@ async def create_snag(
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_ENTITY, "That place is not on this site"
             )
+    _check_assignee(db, site.id, assigned_to)
     s = Snag(
         code=material.next_code(db, "SNG"),
         site_id=site.id,
@@ -654,6 +670,8 @@ def patch_snag(
 ) -> dict:
     s = _snag_edit(db, principal, db.get(Snag, sid))
     changes = body.model_dump(exclude_unset=True)
+    if "assigned_to" in changes:
+        _check_assignee(db, s.site_id, changes["assigned_to"])
     new = changes.pop("status", None)
     if new and new != s.status:
         allowed = set(STAFF_MOVES[s.status])
