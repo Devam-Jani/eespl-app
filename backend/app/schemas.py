@@ -63,6 +63,11 @@ class UserOut(BaseModel):
     phone: str | None
     job_title: str | None = None
     kylas_user_id: int | None = None
+    pan: str | None = None
+    uan: str | None = None
+    esi_no: str | None = None
+    bank_account_masked: str | None = None
+    bank_ifsc: str | None = None
     has_password: bool = False
     is_active: bool
     locked_until: datetime | None
@@ -88,6 +93,11 @@ class UserUpdate(BaseModel):
     job_title: str | None = Field(default=None, max_length=100)
     is_active: bool | None = None
     kylas_user_id: int | None = Field(default=None, gt=0)  # admin.settings only
+    pan: str | None = Field(default=None, pattern=r"^[A-Z]{5}[0-9]{4}[A-Z]$")
+    uan: str | None = Field(default=None, pattern=r"^[0-9]{12}$")
+    esi_no: str | None = Field(default=None, pattern=r"^[0-9]{10,17}$")
+    bank_account: str | None = Field(default=None, pattern=r"^[0-9]{6,34}$")
+    bank_ifsc: str | None = Field(default=None, pattern=r"^[A-Z]{4}0[A-Z0-9]{6}$")
 
     _email = field_validator("email")(_lower)
 

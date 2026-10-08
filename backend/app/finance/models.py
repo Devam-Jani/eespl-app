@@ -69,6 +69,14 @@ class FinanceSettings(Tracked, Base):
     esi_employer_percent: Mapped[Decimal] = mapped_column(Pct, server_default="3.25")
     # [{"from": 0, "to": 11999, "amount": 0}, {"from": 12000, "to": null, "amount": 200}]
     pt_slabs: Mapped[list[dict[str, Any]]] = mapped_column(JSONB)
+    # 194Q only applies when our turnover last year was over 10 Cr; thresholds per section:
+    # {"194Q": {"annual": 5000000}, "194C": {"single": 30000, "annual": 100000}, "194J": {...}}
+    tds_194q_applies: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    tds_thresholds: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        server_default='{"194Q": {"annual": 5000000}, "194C": {"single": 30000, "annual": 100000}, '
+        '"194J": {"annual": 50000}}',
+    )
     tally_ledgers: Mapped[dict[str, Any]] = mapped_column(JSONB)
     party_ledgers: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
 
@@ -687,6 +695,7 @@ class Payslip(Tracked, Base):
     esi_employer: Mapped[Decimal] = money_col()
     pt: Mapped[Decimal] = money_col()
     advance_recovery: Mapped[Decimal] = money_col()
+    round_off: Mapped[Decimal] = money_col()  # net pay is rounded to the rupee
     net: Mapped[Decimal] = money_col()
     site_days: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")  # {site id: days}
 
