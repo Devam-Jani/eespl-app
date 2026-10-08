@@ -128,9 +128,7 @@ function GroupRows({ path, list, onOpen }: { path: string; list: SiteTask[]; onO
           <td className={`nowrap ${t.late ? "text-danger" : ""}`}>
             {shortDate(t.planned_start)} – {shortDate(t.planned_end)}
           </td>
-          <td className="nowrap muted">
-            {t.actual_start ? `${shortDate(t.actual_start)} – ${t.actual_end ? shortDate(t.actual_end) : "…"}` : "—"}
-          </td>
+          <td className="nowrap muted">{t.actual_start ? `${shortDate(t.actual_start)} – ${t.actual_end ? shortDate(t.actual_end) : "…"}` : "—"}</td>
           <td>
             <span className={`badge ${STATUS[t.status][0]}`}>{STATUS[t.status][1]}</span>
           </td>
@@ -148,8 +146,8 @@ function Gantt({ groups, onOpen }: { groups: [string, SiteTask[]][]; onOpen: (t:
   const min = Math.min(...dates.map((d) => Date.parse(d)));
   const max = Math.max(...dates.map((d) => Date.parse(d)), Date.now());
   const span = Math.max(1, (max - min) / DAY + 1);
-  const pos = (d: string) => (((Date.parse(d) - min) / DAY) / span) * 100;
-  const width = (a: string, b: string) => Math.max(0.6, ((Date.parse(b) - Date.parse(a)) / DAY + 1) / span * 100);
+  const pos = (d: string) => ((Date.parse(d) - min) / DAY / span) * 100;
+  const width = (a: string, b: string) => Math.max(0.6, (((Date.parse(b) - Date.parse(a)) / DAY + 1) / span) * 100);
   const today = ((Date.now() - min) / DAY / span) * 100;
   return (
     <div className="gantt">
@@ -281,7 +279,12 @@ export function TaskDialog({
           <h3 className="section-title">Inspection checklist</h3>
           {items.map((it, i) => (
             <div key={i} className="inline-form">
-              <input className="grow" value={it.item} disabled={!canUpdate || locked} onChange={(e) => setItems((xs) => xs.map((x, j) => (j === i ? { ...x, item: e.target.value } : x)))} />
+              <input
+                className="grow"
+                value={it.item}
+                disabled={!canUpdate || locked}
+                onChange={(e) => setItems((xs) => xs.map((x, j) => (j === i ? { ...x, item: e.target.value } : x)))}
+              />
               <select
                 value={it.passed === null ? "" : it.passed ? "pass" : "fail"}
                 disabled={!canUpdate || locked}
@@ -305,7 +308,12 @@ export function TaskDialog({
       )}
       <h3 className="section-title top-gap">Photos {task.needs_photo && <span className="badge badge-info">required to finish</span>}</h3>
       <div className="photo-strip">
-        {task.photos.map((p) => (photos[p.id] ? <img key={p.id} src={photos[p.id]!} alt={p.filename} /> : <span key={p.id} className="muted small">{p.filename}</span>))}
+        {task.photos.map((p) => (
+          <figure key={p.id} className="photo-share">
+            {photos[p.id] ? <img src={photos[p.id]!} alt={p.filename} /> : <span className="muted small">{p.filename}</span>}
+            {canUpdate && <ShareTick path={`/api/portal-admin/task-photos/${p.id}/share`} shared={!!p.share_with_client} />}
+          </figure>
+        ))}
         {task.photos.length === 0 && <span className="muted small">No photos yet.</span>}
       </div>
       {canUpdate && !locked && <input type="file" accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />}
@@ -325,5 +333,27 @@ export function TaskDialog({
         )}
       </div>
     </Modal>
+  );
+}
+
+/** "Share with client" tick for a photo or drawing (shown in the client portal when ticked). */
+export function ShareTick({ path, shared }: { path: string; shared: boolean }) {
+  const [on, setOn] = useState(shared);
+  const [busy, setBusy] = useState(false);
+  async function toggle(next: boolean) {
+    setBusy(true);
+    try {
+      const r = await api<{ share_with_client: boolean }>(path, { method: "PUT", json: { share: next } });
+      setOn(r.share_with_client);
+    } catch (err) {
+      alert(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <label className="check small" title="Show in the client portal">
+      <input type="checkbox" checked={on} disabled={busy} onChange={(e) => void toggle(e.target.checked)} /> Share with client
+    </label>
   );
 }

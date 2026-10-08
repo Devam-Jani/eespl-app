@@ -7,7 +7,15 @@ import { errorText, inr, num } from "../../format";
 import type { AgeingRow, Contract, FinanceLookups, Invoice, RaBill, Receipt } from "../../finance/types";
 import { shortDate } from "../Tenders";
 
-const RA_BADGE: Record<string, string> = { draft: "badge-muted", submitted: "badge-info", certified: "badge-ok", invoiced: "badge-ok", cancelled: "badge-danger" };
+const RA_BADGE: Record<string, string> = {
+  draft: "badge-muted",
+  submitted: "badge-info",
+  certified_by_client: "badge-warn",
+  rejected_by_client: "badge-danger",
+  certified: "badge-ok",
+  invoiced: "badge-ok",
+  cancelled: "badge-danger",
+};
 
 export function useFinanceLookups() {
   const [l, setL] = useState<FinanceLookups | null>(null);
@@ -217,7 +225,7 @@ function RaEditor({ bill, onClose, onChange }: { bill: RaBill; onClose: () => vo
   const { can } = useAuth();
   const edit = can("billing.edit");
   const [qty, setQty] = useState<Record<number, string>>(Object.fromEntries(bill.lines.map((l) => [l.contract_line_id, bill.status === "submitted" ? l.qty : l.qty])));
-  const [cert, setCert] = useState<Record<number, string>>(Object.fromEntries(bill.lines.map((l) => [l.contract_line_id, l.certified_qty ?? l.qty])));
+  const [cert, setCert] = useState<Record<number, string>>(Object.fromEntries(bill.lines.map((l) => [l.contract_line_id, l.client_qty ?? l.certified_qty ?? l.qty])));
   const [other, setOther] = useState({ amount: bill.other_deduction, remark: bill.other_deduction_remark ?? "", by: bill.certified_by_client ?? "" });
   const [error, setError] = useState<string | null>(null);
 
@@ -231,13 +239,15 @@ function RaEditor({ bill, onClose, onChange }: { bill: RaBill; onClose: () => vo
   }
 
   const draft = bill.status === "draft";
-  const certifying = bill.status === "submitted";
+  const certifying = bill.status === "submitted" || bill.status === "certified_by_client";
   return (
     <Modal title={`${bill.code} · ${bill.client_name ?? ""}`} onClose={onClose} wide>
       {error && <div className="alert alert-error">{error}</div>}
       <p>
-        <span className={`badge ${RA_BADGE[bill.status]}`}>{bill.status}</span> <span className="small muted">period to {shortDate(bill.period_to)}</span>
+        <span className={`badge ${RA_BADGE[bill.status]}`}>{bill.status.replace(/_/g, " ")}</span> <span className="small muted">period to {shortDate(bill.period_to)}</span>
       </p>
+      {bill.client_remark && <div className="alert alert-warn">Client: {bill.client_remark}</div>}
+      {bill.status === "certified_by_client" && <p className="small muted">The client certified in the portal (their qty per line below). It counts only after you confirm.</p>}
       <div className="table-wrap">
         <table className="table compact">
           <thead>
@@ -385,12 +395,22 @@ function RaEditor({ bill, onClose, onChange }: { bill: RaBill; onClose: () => vo
             Record certification
           </button>
         )}
+        {bill.status === "certified_by_client" && edit && (
+          <button className="btn btn-primary" onClick={() => void call("/confirm-client", "POST")}>
+            Confirm client certification
+          </button>
+        )}
+        {["certified_by_client", "rejected_by_client"].includes(bill.status) && edit && (
+          <button className="btn" onClick={() => void call("/reopen", "POST")}>
+            Back to draft
+          </button>
+        )}
         {bill.status === "certified" && edit && (
           <button className="btn btn-primary" onClick={() => void call("/invoice", "POST", {})}>
             Raise tax invoice
           </button>
         )}
-        {["draft", "submitted", "certified"].includes(bill.status) && edit && (
+        {["draft", "submitted", "certified_by_client", "rejected_by_client", "certified"].includes(bill.status) && edit && (
           <button className="btn btn-danger" onClick={() => confirm(`Cancel ${bill.code}? It keeps its number.`) && void call("/cancel", "POST")}>
             Cancel bill
           </button>

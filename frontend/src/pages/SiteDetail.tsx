@@ -21,11 +21,28 @@ const MomTab = lazy(() => import("./site/MomTab"));
 const AssetsTab = lazy(() => import("./site/AssetsTab"));
 const BudgetTab = lazy(() => import("./site/BudgetTab"));
 const FinanceTab = lazy(() => import("./site/FinanceTab"));
+// the portal tab carries the client portal pages (for the preview)
+const PortalTab = lazy(() => import("./site/PortalTab"));
 import { ProgressBar, SiteForm, SiteStatusBadge } from "./Sites";
 import { shortDate } from "./Tenders";
 
 type Tab =
-  "overview" | "structure" | "scope" | "tasks" | "drawings" | "material" | "3d" | "dpr" | "labour" | "workorders" | "inspections" | "mom" | "assets" | "budget" | "finance";
+  | "overview"
+  | "structure"
+  | "scope"
+  | "tasks"
+  | "drawings"
+  | "material"
+  | "3d"
+  | "dpr"
+  | "labour"
+  | "workorders"
+  | "inspections"
+  | "mom"
+  | "assets"
+  | "budget"
+  | "finance"
+  | "portal";
 
 export default function SiteDetail() {
   const { id } = useParams();
@@ -97,6 +114,7 @@ export default function SiteDetail() {
             ["scope", "Scope", true],
             ["drawings", "Drawings", true],
             ["3d", "3D", true],
+            ["portal", "Portal", can("portal.manage")],
           ] as [Tab, string, boolean][]
         ).filter(([, , show]) => show);
         return (
@@ -139,6 +157,7 @@ export default function SiteDetail() {
           {tab === "assets" && <AssetsTab site={site} />}
           {tab === "budget" && <BudgetTab site={site} />}
           {tab === "finance" && <FinanceTab site={site} />}
+          {tab === "portal" && <PortalTab site={site} />}
         </Suspense>
         {tab === "3d" && (
           <Suspense fallback={<p className="muted">Loading the 3D view…</p>}>

@@ -211,21 +211,25 @@ def interstate(
     return False
 
 
+def line_tax(amount, rate, interstate: bool) -> tuple[Decimal, Decimal, Decimal]:
+    """(CGST, SGST, IGST) of one line, each rounded to paise, so the invoice totals are the sum
+    of what the lines print."""
+    if interstate:
+        return ZERO, ZERO, money(Decimal(amount) * Decimal(rate) / 100)
+    half = money(Decimal(amount) * Decimal(rate) / 200)
+    return half, half, ZERO
+
+
 def invoice_tax(inv: TaxInvoice) -> None:
-    taxable = ZERO
-    tax = ZERO
+    """Totals from the lines: CGST / SGST / IGST are the sums of the per-line amounts; the
+    difference to the rupee is the round off."""
+    taxable = cgst = sgst = igst = ZERO
     for ln in inv.lines:
         taxable += Decimal(ln.amount)
-        tax += Decimal(ln.amount) * Decimal(ln.gst_percent) / 100
-    inv.taxable = money(taxable)
-    tax = money(tax)
-    if inv.interstate:
-        inv.igst, inv.cgst, inv.sgst = tax, ZERO, ZERO
-    else:
-        inv.cgst = money(tax / 2)
-        inv.sgst = tax - inv.cgst
-        inv.igst = ZERO
-    before = inv.taxable + tax
+        c, s_, i = line_tax(ln.amount, ln.gst_percent, inv.interstate)
+        cgst, sgst, igst = cgst + c, sgst + s_, igst + i
+    inv.taxable, inv.cgst, inv.sgst, inv.igst = money(taxable), cgst, sgst, igst
+    before = inv.taxable + cgst + sgst + igst
     inv.total = before.quantize(Decimal(1), ROUND_HALF_UP)
     inv.round_off = inv.total - before
 
@@ -325,6 +329,68 @@ def tds_for(db: Session, vendor) -> tuple[str | None, Decimal]:
     return rule.get("section"), Decimal(str(rule["individual" if individual else "other"]))
 
 
+def fy_start(on: date) -> date:
+    return date(on.year if on.month >= 4 else on.year - 1, 4, 1)
+
+
+def tds_on_bill(
+    db: Session,
+    vendor,
+    taxable: Decimal,
+    on: date,
+    exclude_id: int | None = None,
+    override: Decimal | None = None,
+) -> tuple[str | None, Decimal, Decimal, str | None]:
+    """(section, rate %, TDS amount, note) for a bill, with the thresholds of the year so far:
+    194Q only when the setting says it applies, and only on the part of this year's purchases from
+    the vendor above the threshold. 194C on a bill over the single limit; 194C / 194J once the
+    year's total passes the annual limit: the bill that crosses it catches up the earlier untaxed
+    bills (rate x the year's total so far - TDS already deducted this year), later bills deduct
+    on their own amount. A rate given by hand is applied to the whole bill."""
+    section, rate = tds_for(db, vendor)
+    if override is not None:
+        return section, Decimal(override), money(taxable * Decimal(override) / 100), None
+    if not section or not rate:
+        return section, ZERO, ZERO, None
+    st = settings(db)
+    limits = (st.tds_thresholds or {}).get(section, {})
+    year = (
+        VendorBill.vendor_id == vendor.id,
+        VendorBill.status != "cancelled",
+        VendorBill.bill_date >= fy_start(on),
+        VendorBill.bill_date < date(fy_start(on).year + 1, 4, 1),
+        VendorBill.id != (exclude_id or 0),
+    )
+    prior = Decimal(db.scalar(select(func.coalesce(func.sum(VendorBill.taxable), 0)).where(*year)))
+    deducted = Decimal(
+        db.scalar(select(func.coalesce(func.sum(VendorBill.tds_amount), 0)).where(*year))
+    )
+    if section == "194Q":
+        if not st.tds_194q_applies:
+            return section, ZERO, ZERO, None
+        limit = Decimal(str(limits.get("annual", 5000000)))
+        base = max(ZERO, prior + taxable - limit) - max(ZERO, prior - limit)
+        return (
+            (section, rate, money(base * rate / 100), None)
+            if base > 0
+            else (section, ZERO, ZERO, None)
+        )
+    annual = Decimal(str(limits.get("annual", 100000 if section == "194C" else 50000)))
+    single = Decimal(str(limits.get("single", 30000))) if section == "194C" else None
+    total = prior + taxable
+    if prior <= annual < total:  # this bill crosses the annual limit: catch up the year
+        amount = max(ZERO, money(total * rate / 100) - deducted)
+        note = (
+            f"TDS {section} catch-up: the year's bills reach {total:,.2f}, "
+            f"past the {annual:,.0f} limit; "
+            f"{rate.normalize():f} % on the year less {deducted:,.2f} already deducted"
+        )
+        return section, rate, amount, note
+    if total > annual or (single is not None and taxable > single):
+        return section, rate, money(taxable * rate / 100), None
+    return section, ZERO, ZERO, None
+
+
 def bill_paid(db: Session, bill_id: int) -> Decimal:
     return Decimal(
         db.scalar(
@@ -418,7 +484,20 @@ def compute_payslip(db: Session, p: Payslip, s, advances: Decimal) -> None:
     p.pt = pt_for(db, p.gross)
     before = p.gross - p.pf_employee - p.esi_employee - p.pt
     p.advance_recovery = min(advances, max(ZERO, before))
-    p.net = before - p.advance_recovery
+    round_net(p)
+
+
+def round_net(p: Payslip) -> None:
+    """Net pay to the rupee; the difference is the payslip's round off."""
+    exact = (
+        Decimal(p.gross)
+        - Decimal(p.pf_employee)
+        - Decimal(p.esi_employee)
+        - Decimal(p.pt)
+        - Decimal(p.advance_recovery)
+    )
+    p.net = exact.quantize(Decimal(1), ROUND_HALF_UP)
+    p.round_off = p.net - exact
 
 
 def staff_days(db: Session, user_id, month: str) -> tuple[int, dict[str, int]]:

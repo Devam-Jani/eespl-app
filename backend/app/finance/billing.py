@@ -32,6 +32,8 @@ from app.finance.models import (
 )
 from app.masters.models import Client, CompanyBankAccount
 from app.material import service as material
+from app.models import User
+from app.portal import service as portal
 from app.sites.models import Site
 from app.tenders.models import BoqLine, Tender
 
@@ -403,6 +405,7 @@ def _ra_out(db, b: RaBill) -> dict:
                 "rate": ln.rate,
                 "amount": ln.amount,
                 "certified_amount": ln.certified_amount,
+                "client_qty": ln.client_qty,
                 "previous_amount": svc.money(Decimal(ln.previous_qty) * Decimal(ln.rate)),
                 "cumulative_amount": svc.money(cum * Decimal(ln.rate)),
             }
@@ -430,6 +433,8 @@ def _ra_out(db, b: RaBill) -> dict:
         "net": b.net,
         "certified_by_client": b.certified_by_client,
         "remark": b.remark,
+        "client_remark": b.client_remark,
+        "client_acted_at": b.client_acted_at,
         "lines": lines,
         "invoice_id": inv.id if inv else None,
         "invoice_number": inv.number if inv else None,
@@ -590,6 +595,14 @@ def submit_ra(
         raise svc.unprocessable("Nothing to bill")
     b.status, b.submitted_at = "submitted", svc.now()
     record(db, request, principal, "ra.submit", "ra_bill", b.id)
+    portal.tell_clients(
+        db,
+        b.site_id,
+        "billing",
+        "ra_submitted",
+        f"{b.code} submitted for certification",
+        f"/portal/sites/{b.site_id}?tab=billing",
+    )
     db.commit()
     return _ra_out(db, b)
 
@@ -606,7 +619,7 @@ def certify_ra(
     """The client's certified quantities (they may cut what was submitted); both are kept."""
     b = _ra(db, rid, principal, scope)
     _edit(db, principal, b.site_id)
-    if b.status != "submitted":
+    if b.status not in ("submitted", "certified_by_client"):
         raise svc.conflict(f"{b.code} is {b.status}; submit it first")
     given = {x.contract_line_id: x.certified_qty for x in body.lines}
     for ln in b.lines:
@@ -638,13 +651,73 @@ def certify_ra(
     return _ra_out(db, b)
 
 
+@router.post("/ra-bills/{rid}/confirm-client")
+def confirm_client(
+    rid: int, request: Request, db: DbSession, principal: CurrentPrincipal, scope: BillingView
+) -> dict:
+    """Accept the client's own certification from the portal: their qty per line becomes the
+    certified figure. Until this, a client certification changes nothing in the books."""
+    b = _ra(db, rid, principal, scope)
+    _edit(db, principal, b.site_id)
+    if b.status != "certified_by_client":
+        raise svc.conflict(f"{b.code} is {b.status}")
+    for ln in b.lines:
+        ln.certified_qty = ln.client_qty if ln.client_qty is not None else ln.qty
+    who = db.get(User, b.client_acted_by) if b.client_acted_by else None
+    b.status, b.certified_at = "certified", svc.now()
+    b.certified_by_client = who.full_name if who else b.certified_by_client
+    svc.ra_totals(db, b, db.get(ClientContract, b.contract_id))
+    record(
+        db,
+        request,
+        principal,
+        "ra.confirm_client",
+        "ra_bill",
+        b.id,
+        after={"certified_gross": str(b.certified_gross), "by": b.certified_by_client},
+    )
+    portal.tell_clients(
+        db,
+        b.site_id,
+        "billing",
+        "ra_certified",
+        f"{b.code}: your certification was confirmed",
+        f"/portal/sites/{b.site_id}?tab=billing",
+    )
+    db.commit()
+    return _ra_out(db, b)
+
+
+@router.post("/ra-bills/{rid}/reopen")
+def reopen_ra(
+    rid: int, request: Request, db: DbSession, principal: CurrentPrincipal, scope: BillingView
+) -> dict:
+    """A bill the client rejected (or certified, when EESPL disagrees) goes back to draft."""
+    b = _ra(db, rid, principal, scope)
+    _edit(db, principal, b.site_id)
+    if b.status not in ("rejected_by_client", "certified_by_client"):
+        raise svc.conflict(f"{b.code} is {b.status}")
+    b.status, b.submitted_at = "draft", None
+    for ln in b.lines:
+        ln.client_qty = None
+    record(db, request, principal, "ra.reopen", "ra_bill", b.id)
+    db.commit()
+    return _ra_out(db, b)
+
+
 @router.post("/ra-bills/{rid}/cancel")
 def cancel_ra(
     rid: int, request: Request, db: DbSession, principal: CurrentPrincipal, scope: BillingView
 ) -> dict:
     b = _ra(db, rid, principal, scope)
     _edit(db, principal, b.site_id)
-    if b.status not in ("draft", "submitted", "certified"):
+    if b.status not in (
+        "draft",
+        "submitted",
+        "certified_by_client",
+        "rejected_by_client",
+        "certified",
+    ):
         raise svc.conflict(f"{b.code} is {b.status}; cancel its invoice with a credit note")
     b.status = "cancelled"  # keeps its number
     record(db, request, principal, "ra.cancel", "ra_bill", b.id)

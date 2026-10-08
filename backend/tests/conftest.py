@@ -57,6 +57,8 @@ PER_TEST_TABLES = [
     "payments", "vendor_bill_lines", "vendor_bill_grns", "vendor_bills", "retention_releases",
     "receipt_allocations", "receipts", "invoice_lines", "tax_invoices", "ra_bill_lines", "ra_bills",
     "contract_lines", "client_contracts", "finance_settings",
+    "notification_outbox", "notifications", "comments", "snag_photos", "snags", "site_documents",
+    "site_portal", "portal_invites", "client_user_sites", "client_users",
 ]  # fmt: skip
 # Tables that also hold seeded rows (unit conversions, categories), or are referenced by them
 # (products), are cleaned with DELETE so the seed survives.

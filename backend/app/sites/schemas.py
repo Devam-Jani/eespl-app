@@ -252,6 +252,7 @@ class PhotoOut(BaseModel):
     id: int
     filename: str
     uploaded_at: datetime
+    share_with_client: bool = False
 
 
 class TaskOut(BaseModel):
@@ -326,6 +327,7 @@ class DrawingOut(BaseModel):
     latest_approved: RevisionOut | None
     latest: RevisionOut | None
     revisions: list[RevisionOut]
+    share_with_client: bool = False
 
 
 class DecisionIn(BaseModel):

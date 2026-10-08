@@ -230,6 +230,7 @@ def _slip_out(db, p: Payslip) -> dict:
                 "esi_employer",
                 "pt",
                 "advance_recovery",
+                "round_off",
                 "net",
             )
         },
@@ -326,7 +327,7 @@ def run_payroll(
             if Decimal(x.amount) <= left:
                 x.recovered_in_payslip_id, left = p.id, left - Decimal(x.amount)
         p.advance_recovery = Decimal(p.advance_recovery) - left
-        p.net = Decimal(p.net) + left
+        svc.round_net(p)
     record(
         db,
         request,

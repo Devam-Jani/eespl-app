@@ -8,6 +8,7 @@ import app.execution.models  # noqa: F401  (registers the execution tables)
 import app.finance.models  # noqa: F401  (registers the finance tables)
 import app.masters.models  # noqa: F401  (registers the master tables)
 import app.material.models  # noqa: F401  (registers the material tables)
+import app.portal.models  # noqa: F401  (registers the portal tables)
 import app.sites.models  # noqa: F401  (registers the site tables)
 import app.tenders.models  # noqa: F401  (registers the tender tables)
 from app.config import settings

@@ -48,6 +48,12 @@ class User(Base):
     job_title: Mapped[str | None] = mapped_column(String(100))
     is_active: Mapped[bool] = mapped_column(server_default=true())
     kylas_user_id: Mapped[int | None] = mapped_column(BigInteger)  # owner of their Kylas leads
+    # payroll identifiers (payslips); the bank account is only ever shown masked
+    pan: Mapped[str | None] = mapped_column(String(10))
+    uan: Mapped[str | None] = mapped_column(String(12))
+    esi_no: Mapped[str | None] = mapped_column(String(17))
+    bank_account: Mapped[str | None] = mapped_column(String(34))
+    bank_ifsc: Mapped[str | None] = mapped_column(String(11))
     failed_logins: Mapped[int] = mapped_column(server_default="0")
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -63,6 +69,10 @@ class User(Base):
     @property
     def has_password(self) -> bool:
         return self.password_hash is not None
+
+    @property
+    def bank_account_masked(self) -> str | None:
+        return f"••••{self.bank_account[-4:]}" if self.bank_account else None
 
 
 class Role(Base):

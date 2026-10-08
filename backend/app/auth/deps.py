@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.auth.rbac import effective_permissions, widest
@@ -26,7 +26,18 @@ def _unauthorized(detail: str = "Not authenticated") -> HTTPException:
     )
 
 
+# A client login (only client portal permissions) may call these and nothing else.
+CLIENT_PATHS = ("/api/portal/", "/api/auth/", "/api/notifications")
+
+
+def is_client_login(permissions: dict[str, str]) -> bool:
+    return bool(permissions) and all(
+        c.startswith("portal.") and c != "portal.manage" for c in permissions
+    )
+
+
 def get_principal(
+    request: Request,
     db: DbSession,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
 ) -> Principal:
@@ -40,7 +51,10 @@ def get_principal(
     if user is None or not user.is_active:
         raise _unauthorized("Invalid or expired token")
     # Permissions are read from the database on every request, so role changes apply at once.
-    return Principal(user=user, permissions=effective_permissions(user.roles))
+    permissions = effective_permissions(user.roles)
+    if is_client_login(permissions) and not request.url.path.startswith(CLIENT_PATHS):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Client logins can only use the portal")
+    return Principal(user=user, permissions=permissions)
 
 
 CurrentPrincipal = Annotated[Principal, Depends(get_principal)]

@@ -321,6 +321,12 @@ def create_bill(
     days = vendor.payment_terms_days or 30
     b.due_date = body.due_date or body.bill_date + timedelta(days=days)
     _bill_tax(db, b)
+    b.tds_section, b.tds_percent, b.tds_amount, tds_note = svc.tds_on_bill(
+        db, vendor, Decimal(b.taxable), body.bill_date, None, body.tds_percent
+    )
+    if tds_note:
+        b.remark = f"{b.remark}\n{tds_note}" if b.remark else tds_note
+    b.payable = b.total - b.tds_amount
     db.add(b)
     db.flush()
     for g in grns:

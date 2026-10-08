@@ -320,6 +320,14 @@ class Inspection(Tracked, Base):
     )
     client_rep: Mapped[str | None] = mapped_column(String(200))
     signature_path: Mapped[str | None] = mapped_column(String(400))
+    # client sign-off in the portal: none | waiting | signed
+    client_signoff: Mapped[str] = mapped_column(String(8), server_default="none")
+    client_signed_name: Mapped[str | None] = mapped_column(String(200))
+    client_signed_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    client_signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    client_signature_path: Mapped[str | None] = mapped_column(String(400))
     photos: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default="[]")
 
     template: Mapped[ChecklistTemplate] = relationship(lazy="joined")
@@ -356,6 +364,10 @@ class MomPoint(Tracked, Base):
     owner_name: Mapped[str | None] = mapped_column(String(200))  # someone outside EESPL
     due_date: Mapped[date | None] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(8), server_default="open")
+    client_acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    client_acknowledged_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
 
 
 # --- tools, assets and equipment -----------------------------------------------------------------

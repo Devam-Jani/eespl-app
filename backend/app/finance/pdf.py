@@ -21,6 +21,7 @@ EXTRA_CSS = """
 .inv-meta h3 { margin: 0 0 3px; font-size: 8pt; color: #2f6f4f; text-transform: uppercase; }
 .words { margin-top: 4px; font-style: italic; }
 .small { font-size: 7.5pt; color: #444; }
+.keep { page-break-inside: avoid; }
 </style>
 """
 
@@ -28,6 +29,13 @@ EXTRA_CSS = """
 def _num(v) -> str:
     v = Decimal(v)
     return f"{v.normalize():f}" if v == v.to_integral() else f"{v:.3f}".rstrip("0")
+
+
+def short_item(text: str, limit: int = 80) -> str:
+    """The item's code and short name for an invoice: the BOQ title before " — " (the full
+    specification stays on the RA bill), cut at about 80 characters."""
+    title = text.split(" — ", 1)[0].strip()
+    return title if len(title) <= limit else title[: limit - 1].rstrip() + "…"
 
 
 def tax_invoice(db: Session, inv: TaxInvoice, out: dict) -> bytes:
@@ -47,14 +55,14 @@ def tax_invoice(db: Session, inv: TaxInvoice, out: dict) -> bytes:
     rows = []
     for n, ln in enumerate(inv.lines, start=1):
         rate = Decimal(ln.gst_percent)
-        tax = Decimal(ln.amount) * rate / 100
+        cgst, sgst, igst = svc.line_tax(ln.amount, rate, inv.interstate)  # what the totals add up
         split = (
-            f"<td class='num'>{_num(rate)}%</td><td class='num'>{e(inr(tax))}</td>"
+            f"<td class='num'>{_num(rate)}%</td><td class='num'>{e(inr(igst))}</td>"
             if inv.interstate
-            else f"<td class='num'>{_num(rate / 2)}% {e(inr(tax / 2))}</td><td class='num'>{_num(rate / 2)}% {e(inr(tax / 2))}</td>"
+            else f"<td class='num'>{_num(rate / 2)}% {e(inr(cgst))}</td><td class='num'>{_num(rate / 2)}% {e(inr(sgst))}</td>"
         )
         rows.append(
-            f"<tr><td>{n}</td><td class='pre'>{e(ln.description)}</td><td>{e(ln.sac or '')}</td>"
+            f"<tr><td>{n}</td><td>{e(short_item(ln.description))}</td><td>{e(ln.sac or '')}</td>"
             f"<td class='num'>{e(_num(ln.qty) if ln.qty is not None else '')} {e(ln.unit or '')}</td>"
             f"<td class='num'>{e(inr(ln.rate) if ln.rate is not None else '')}</td>"
             f"<td class='num'>{e(inr(ln.amount))}</td>{split}</tr>"
@@ -128,6 +136,7 @@ def tax_invoice(db: Session, inv: TaxInvoice, out: dict) -> bytes:
 {e(f"GSTIN: {inv.client_gstin}" if inv.client_gstin else "GSTIN: unregistered")}</div></div>
 <table><thead><tr><th>#</th><th>Description</th><th>SAC</th><th class="num">Qty</th><th class="num">Rate</th>
 <th class="num">Taxable</th>{tax_head}</tr></thead><tbody>{"".join(rows)}</tbody></table>
+<div class="keep">
 <table class="totals"><tr><td>Taxable value</td><td class="num">{e(inr(inv.taxable))}</td></tr>{tax_rows}
 <tr><td>Round off</td><td class="num">{e(inr(inv.round_off))}</td></tr>
 <tr><td><b>{"Credit total" if credit else "Invoice total"}</b></td><td class="num"><b>{e(inr(inv.total))}</b></td></tr></table>
@@ -136,7 +145,8 @@ def tax_invoice(db: Session, inv: TaxInvoice, out: dict) -> bytes:
 {f'<h2>Remarks</h2><div class="pre">{e(inv.remark)}</div>' if inv.remark else ""}
 <p class="small">Certified that the particulars given above are true and correct. Tax is not payable on reverse charge.</p>
 <div class="sign"><div><b>Receiver's signature</b><div class="line"></div></div>
-<div><b>For {e(c.name)}</b><div class="line">Authorised signatory</div></div></div>"""
+<div><b>For {e(c.name)}</b><div class="line">Authorised signatory</div></div></div>
+</div>"""
     return _doc(db, "CREDIT NOTE" if credit else "TAX INVOICE", body)
 
 
@@ -147,7 +157,7 @@ def ra_bill(db: Session, out: dict) -> bytes:
             continue
         cert = ln["certified_qty"]
         rows.append(
-            f"<tr><td>{e(ln['item_no'] or n)}</td><td>{e(ln['description'][:160])}</td><td>{e(ln['unit'])}</td>"
+            f"<tr><td>{e(ln['item_no'] or n)}</td><td class='desc'>{e(ln['description'])}</td><td>{e(ln['unit'])}</td>"
             f"<td class='num'>{_num(ln['boq_qty'])}</td><td class='num'>{_num(ln['previous_qty'])}</td>"
             f"<td class='num'>{_num(ln['qty'])}</td><td class='num'>{_num(cert) if cert is not None else '—'}</td>"
             f"<td class='num'>{_num(ln['cumulative_qty'])}</td><td class='num'>{e(inr(ln['rate']))}</td>"
@@ -155,7 +165,8 @@ def ra_bill(db: Session, out: dict) -> bytes:
             f"<td class='num'>{e(inr(ln['cumulative_amount']))}</td></tr>"
         )
     certified = out["certified_gross"] is not None
-    body = f"""{EXTRA_CSS}
+    # landscape, with the full specification in a wide description column
+    body = f"""{EXTRA_CSS}<style>@page {{ size: A4 landscape; }} td.desc {{ width: 42%; font-size: 7.5pt; }}</style>
 <div class="inv-meta"><div class="box"><h3>Bill</h3><b>{e(out["code"])}</b> · RA bill {out["seq"]}<br>
 <b>Period:</b> {e(f"{out['period_from']:%d-%m-%Y}" if out["period_from"] else "start")} to {out["period_to"]:%d-%m-%Y}<br>
 <b>Status:</b> {e(out["status"])}{f" · certified by {e(out['certified_by_client'])}" if out.get("certified_by_client") else ""}</div>
@@ -163,7 +174,7 @@ def ra_bill(db: Session, out: dict) -> bytes:
 <table><thead><tr><th>Item</th><th>Description</th><th>Unit</th><th class="num">BOQ qty</th><th class="num">Previous</th>
 <th class="num">This bill</th><th class="num">Certified</th><th class="num">Cumulative</th><th class="num">Rate</th>
 <th class="num">This bill ₹</th><th class="num">Cumulative ₹</th></tr></thead><tbody>{"".join(rows)}</tbody></table>
-<table class="totals">
+<div class="keep"><table class="totals">
 <tr><td>Gross this bill (submitted)</td><td class="num">{e(inr(out["gross"]))}</td></tr>
 {f'<tr><td>Gross this bill (certified)</td><td class="num">{e(inr(out["certified_gross"]))}</td></tr>' if certified else ""}
 <tr><td>Less retention {_num(out["retention_percent"])}%</td><td class="num">-{e(inr(out["retention"]))}</td></tr>
@@ -172,7 +183,7 @@ def ra_bill(db: Session, out: dict) -> bytes:
 <tr><td><b>Net amount (before GST)</b></td><td class="num"><b>{e(inr(out["net"]))}</b></td></tr></table>
 <p class="small">GST is charged on the tax invoice raised on the certified amount.</p>
 <div class="sign"><div><b>Certified by the client</b><div class="line">{e(out.get("certified_by_client") or "")}</div></div>
-<div><b>For {e(company(db).name)}</b><div class="line">Project manager</div></div></div>"""
+<div><b>For {e(company(db).name)}</b><div class="line">Project manager</div></div></div></div>"""
     return _doc(db, "RUNNING ACCOUNT BILL", body)
 
 
@@ -191,14 +202,31 @@ def payslip(db: Session, run: PayrollRun, p: Payslip, user: User) -> bytes:
         for i in range(n)
     )
     total_ded = sum((Decimal(x[1]) for x in ded), Decimal(0))
+    ids = "".join(
+        f"<br>{label}: {e(v)}"
+        for label, v in (
+            ("PAN", user.pan),
+            ("UAN", user.uan),
+            ("ESI no.", user.esi_no),
+            (
+                "Bank",
+                f"{user.bank_account_masked} · {user.bank_ifsc or ''}"
+                if user.bank_account
+                else None,
+            ),
+        )
+        if v
+    )
     body = f"""{EXTRA_CSS}
-<div class="inv-meta"><div class="box"><h3>Employee</h3><b>{e(user.full_name)}</b><br>{e(user.email)}</div>
+<div class="inv-meta"><div class="box"><h3>Employee</h3><b>{e(user.full_name)}</b><br>{e(user.email)}{ids}</div>
 <div class="box"><h3>Month</h3><b>{e(run.month)}</b> · {e(run.status)}<br>Days in month {p.days_in_month} · worked {p.worked_days}
 · leave {_num(p.leave_days)} · loss of pay {_num(p.lop_days)} · paid days {_num(p.paid_days)}</div></div>
 <table><thead><tr><th>Earnings</th><th class="num">₹</th><th>Deductions</th><th class="num">₹</th></tr></thead>
 <tbody>{rows}<tr><td><b>Gross</b></td><td class="num"><b>{e(inr(p.gross))}</b></td><td><b>Total deductions</b></td>
 <td class="num"><b>{e(inr(total_ded))}</b></td></tr></tbody></table>
-<table class="totals"><tr><td><b>Net pay</b></td><td class="num"><b>{e(inr(p.net))}</b></td></tr></table>
+<table class="totals"><tr><td>Gross less deductions</td><td class="num">{e(inr(Decimal(p.gross) - total_ded))}</td></tr>
+<tr><td>Round off</td><td class="num">{e(inr(p.round_off))}</td></tr>
+<tr><td><b>Net pay</b></td><td class="num"><b>{e(inr(p.net))}</b></td></tr></table>
 <div class="words">{e(in_words(p.net))}</div>
 <p class="small">Employer contributions (not deducted): PF {e(inr(p.pf_employer))} · ESI {e(inr(p.esi_employer))}.</p>
 <p class="small">This is a computer-generated payslip.</p>"""

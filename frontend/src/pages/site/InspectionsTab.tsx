@@ -64,6 +64,21 @@ export default function InspectionsTab({ site, onChange }: { site: Site; onChang
                   <button className="btn btn-small" onClick={() => void downloadFile(`/api/execution/inspections/${i.id}/pdf`).catch((err) => setError(errorText(err)))}>
                     PDF
                   </button>
+                  {i.client_signoff === "waiting" && <span className="badge badge-warn">waiting for client</span>}
+                  {i.client_signoff === "signed" && <span className="badge badge-ok">client signed: {i.client_signed_name}</span>}
+                  {i.client_signoff === "none" && can("inspection.edit") && (
+                    <button
+                      className="btn btn-small btn-ghost"
+                      onClick={() =>
+                        void api(`/api/portal-admin/inspections/${i.id}/request-signoff`, { method: "POST" }).then(
+                          () => void load(),
+                          (err) => setError(errorText(err)),
+                        )
+                      }
+                    >
+                      Ask client to sign
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

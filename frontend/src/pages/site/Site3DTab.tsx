@@ -15,7 +15,9 @@ import type { Box, LayoutNode } from "./three/layout";
 import { TaskDialog } from "./TasksTab";
 
 type ModelNode = LayoutNode & { status: NodeStatus };
-type Model = { site_id: number; version: string; site_progress: number; nodes: ModelNode[] };
+type Model = { site_id: number; version: string; site_progress: number; nodes: ModelNode[]; templates?: { id: number; name: string }[] };
+/** Client portal: the model comes from the portal API, read-only (no task panel). */
+export type PortalMode = { modelPath: string; headers?: Record<string, string> };
 type Hover = { x: number; y: number; node: ModelNode } | null;
 
 const POLL_MS = 60_000;
@@ -23,7 +25,17 @@ const GROUP_KINDS = new Set(["tower", "wing", "floor", "basement"]);
 const CATEGORIES: Exclude<Category, "rollup">[] = ["done", "progress", "hold", "blocked", "not_started", "none"];
 
 /** The 3D tab: the site's block model coloured by work status (or realistic tones). */
-export default function Site3DTab({ site, onChange, onOpenStructure }: { site: Site; onChange: () => void; onOpenStructure?: () => void }) {
+export default function Site3DTab({
+  site,
+  onChange,
+  onOpenStructure,
+  portal,
+}: {
+  site: Pick<Site, "id" | "code" | "name" | "progress_percent">;
+  onChange: () => void;
+  onOpenStructure?: () => void;
+  portal?: PortalMode;
+}) {
   const { can } = useAuth();
   const canUpdate = can("site.update", "site.edit");
   const canEdit = can("site.edit");
@@ -59,19 +71,22 @@ export default function Site3DTab({ site, onChange, onOpenStructure }: { site: S
   const load = useCallback(
     async (version?: string) => {
       try {
-        const next = await api<Model>(`/api/sites/${site.id}/model`, version ? { headers: { "If-None-Match": `"${version}"` } } : {});
+        const next = portal
+          ? await api<Model>(portal.modelPath, { headers: portal.headers })
+          : await api<Model>(`/api/sites/${site.id}/model`, version ? { headers: { "If-None-Match": `"${version}"` } } : {});
         setModel((m) => (m && m.version === next.version ? m : next));
+        if (next.templates) setTemplates(next.templates);
       } catch (err) {
         if (!(err instanceof ApiError && err.status === 304)) setError(errorText(err));
       }
     },
-    [site.id],
+    [site.id, portal],
   );
 
   useEffect(() => {
     void load();
-    api<{ id: number; name: string }[]>("/api/stage-templates").then(setTemplates, () => setTemplates([]));
-  }, [load]);
+    if (!portal) api<{ id: number; name: string }[]>("/api/stage-templates").then(setTemplates, () => setTemplates([]));
+  }, [load, portal]);
 
   useEffect(() => {
     const t = setInterval(() => void load(model?.version), POLL_MS);
@@ -578,12 +593,14 @@ export default function Site3DTab({ site, onChange, onOpenStructure }: { site: S
           ) : (
             <span className="muted">Realistic tones: concrete floors, brick flats, tiled wet areas.</span>
           )}
-          <span className="push-right muted small">Click a floor to open it · click a room for its steps · updates every minute</span>
+          <span className="push-right muted small">
+            {portal ? "Click a floor to open it · drag to turn" : "Click a floor to open it · click a room for its steps · updates every minute"}
+          </span>
         </div>
       </div>
-      {selected !== null && byId.get(selected) && (
+      {!portal && selected !== null && byId.get(selected) && (
         <NodePanel
-          site={site}
+          site={site as Site}
           node={byId.get(selected)!}
           canUpdate={canUpdate}
           canEdit={canEdit}

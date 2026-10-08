@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth";
 import { MENU } from "../menu";
+import Bell from "./Bell";
 
 export default function Layout() {
   const { me, can, logout } = useAuth();
@@ -36,6 +37,7 @@ export default function Layout() {
             <strong>{me?.user.full_name}</strong>
             <span className="muted">{me?.roles.map((r) => r.name).join(", ") || "No role"}</span>
           </div>
+          <Bell />
           <button className="btn btn-ghost" onClick={() => void logout()}>
             Sign out
           </button>

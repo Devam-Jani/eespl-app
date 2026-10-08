@@ -457,8 +457,9 @@ def test_vendor_bill_match_tds_partial_payment_and_approval_limit(boss, world, d
     assert r.status_code == 201, r.text
     bill = r.json()
     assert [i["kind"] for i in bill["match_issues"]] == ["rate"]  # 52 vs PO 50: 4 % > 1 %
-    assert bill["tds_section"] == "194Q" and D(bill["tds_amount"]) == D("5.20")  # 0.1 % of 5,200
-    assert D(bill["total"]) == 6136 and D(bill["payable"]) == D("6130.80")
+    # 194Q does not apply by default (turnover setting off): no TDS
+    assert bill["tds_section"] == "194Q" and D(bill["tds_amount"]) == 0
+    assert D(bill["total"]) == 6136 and D(bill["payable"]) == 6136
     assert (
         client.post(
             f"/api/finance/vendor-bills/{bill['id']}/approve", json={}, headers=h
@@ -481,7 +482,7 @@ def test_vendor_bill_match_tds_partial_payment_and_approval_limit(boss, world, d
     ).json()
     assert pay["status"] == "paid" and pay["number"].startswith("PAY/26-27/")
     bill = client.get(f"/api/finance/vendor-bills/{bill['id']}", headers=h).json()
-    assert bill["status"] == "partly_paid" and D(bill["outstanding"]) == D("4130.80")
+    assert bill["status"] == "partly_paid" and D(bill["outstanding"]) == 4136
     r = client.post(
         "/api/finance/payments",
         json={
@@ -531,7 +532,7 @@ def test_vendor_bill_match_tds_partial_payment_and_approval_limit(boss, world, d
     due = client.get("/api/finance/payables/due", params={"days": 30}, headers=h).json()
     assert {d["vendor_name"] for d in due} == {"Invented Chem Supplier", "Invented Transport"}
     ageing = client.get("/api/finance/payables/ageing", headers=h).json()
-    assert D(ageing["totals"]["total"]) == D("4130.80") + D("148500") - 120000
+    assert D(ageing["totals"]["total"]) == 4136 + D("148500") - 120000
 
 
 # --- subcontractor RA bills ----------------------------------------------------------------------
@@ -953,3 +954,169 @@ def test_finance_permissions(boss, world, db, make_user, login_as):
         ).status_code
         == 403
     )
+
+
+# --- M5 review fixes -----------------------------------------------------------------------------
+
+
+def test_194q_only_above_the_threshold_when_it_applies(boss, db):
+    from app.finance.models import FinanceSettings
+
+    client, h = boss
+    sup = Vendor(
+        name="Invented Big Supplier",
+        type="material_supplier",
+        gstin="24ABCFD1234E1Z5",
+        pan="ABCFD1234E",
+    )
+    db.add(sup)
+    db.commit()
+
+    def bill(no, amount, on="2026-10-07"):
+        r = client.post(
+            "/api/finance/vendor-bills",
+            json={
+                "vendor_id": sup.id,
+                "kind": "service",
+                "bill_no": no,
+                "bill_date": on,
+                "lines": [{"description": "Invented supply", "rate": amount, "gst_percent": "0"}],
+            },
+            headers=h,
+        )
+        assert r.status_code == 201, r.text
+        return r.json()
+
+    assert D(bill("Q-1", "4000000")["tds_amount"]) == 0  # 194Q does not apply (setting off)
+    fs = db.get(FinanceSettings, 1)
+    fs.tds_194q_applies = True
+    db.commit()
+    assert D(bill("Q-2", "900000")["tds_amount"]) == 0  # 49 lakh so far: under ₹50 lakh
+    b = bill("Q-3", "300000")  # crosses: only the ₹2 lakh above the threshold
+    assert D(b["tds_amount"]) == 200 and D(b["payable"]) == 299800  # 0.1 % of 2,00,000
+    assert D(bill("Q-4", "100000")["tds_amount"]) == 100  # all of it is above now
+    assert D(bill("Q-5", "100000", on="2027-04-02")["tds_amount"]) == 0  # a new financial year
+
+
+def test_194c_single_and_annual_limits(boss, db):
+    client, h = boss
+    t = Vendor(name="Invented Carrier", type="transporter", pan="ABCFD9999E")
+    db.add(t)
+    db.commit()
+
+    def bill(no, amount):
+        return client.post(
+            "/api/finance/vendor-bills",
+            json={
+                "vendor_id": t.id,
+                "kind": "freight",
+                "bill_no": no,
+                "bill_date": "2026-10-07",
+                "lines": [{"description": "Freight", "rate": amount, "gst_percent": "0"}],
+            },
+            headers=h,
+        ).json()
+
+    assert D(bill("C-1", "25000")["tds_amount"]) == 0  # under ₹30,000 single, ₹25,000 a year
+    assert D(bill("C-2", "35000")["tds_amount"]) == 700  # over the single limit: 2 %
+    assert D(bill("C-3", "20000")["tds_amount"]) == 0  # 80,000 a year so far
+    # the year passes ₹1,00,000: catch up, 2 % x 1,05,000 - 700 already deducted
+    c4 = bill("C-4", "25000")
+    assert D(c4["tds_amount"]) == 1400 and "catch-up" in c4["remark"]
+    assert D(bill("C-5", "10000")["tds_amount"]) == 200  # after that, on its own amount
+
+
+def test_194j_annual_limit_default_is_50000(boss, db):
+    from app.finance.models import FinanceSettings
+
+    assert db.get(FinanceSettings, 1).tds_thresholds["194J"]["annual"] == 50000
+
+
+def test_invoice_gst_totals_equal_the_line_sums(boss, db):
+    client, h = boss
+    cl = Client(name="Invented Odd Paise Ltd", state="Gujarat")
+    db.add_all(
+        [
+            cl,
+            CompanyGstin(
+                gstin="24AAACE1234A1Z1", state="Gujarat", address="Our office", is_default=True
+            ),
+        ]
+    )
+    db.commit()
+    inv = client.post(
+        "/api/finance/invoices",
+        json={
+            "client_id": cl.id,
+            "invoice_date": "2026-10-07",
+            "lines": [
+                {"description": "Line A", "amount": "296191.50", "gst_percent": "18"},
+                {"description": "Line B", "amount": "86000", "gst_percent": "18"},
+                {"description": "Line C", "amount": "0.05", "gst_percent": "18"},
+            ],
+        },
+        headers=h,
+    ).json()
+    # per line: 26,657.24 (from 26,657.235) + 7,740 + 0.00 (0.0045) in each of CGST and SGST
+    assert D(inv["cgst"]) == D(inv["sgst"]) == D("34397.24")
+    assert D(inv["total"]) == 450986 and D(inv["round_off"]) == D("-0.03")  # 450,986.03 - 0.03
+
+
+def test_payslip_net_is_rounded_to_the_rupee(boss, db, make_user):
+    client, h = boss
+    make_user("ravi@example.com", "site_supervisor", name="Invented Ravi")
+    u = uid(db, "ravi@example.com")
+    client.post(
+        "/api/finance/salary-structures",
+        json={
+            "user_id": u,
+            "effective_from": "2026-04-01",
+            "basic": "10500",
+            "hra": "3500",
+            "other_allowance": "500",
+            "esi": True,
+        },
+        headers=h,
+    )
+    run = client.post(
+        "/api/finance/payroll",
+        json={"month": "2026-09", "adjustments": [{"user_id": u, "lop_days": "2"}]},
+        headers=h,
+    ).json()
+    p = run["payslips"][0]
+    exact = (
+        D(p["gross"])
+        - D(p["pf_employee"])
+        - D(p["esi_employee"])
+        - D(p["pt"])
+        - D(p["advance_recovery"])
+    )
+    assert D(p["net"]) == exact.quantize(D(1)) and D(p["round_off"]) == D(p["net"]) - exact
+    assert D(p["round_off"]) == D("-0.34")  # 12,055.34 -> 12,055
+    user = db.get(User, uuid.UUID(u))
+    user.pan, user.uan, user.bank_account, user.bank_ifsc = (
+        "ABCPR1234K",
+        "100200300400",
+        "50100123456789",
+        "HDFC0001234",
+    )
+    db.commit()
+    from app.finance import pdf as fpdf
+    from app.finance.models import PayrollRun
+
+    html_parts = []
+    import app.execution.pdf as xpdf
+
+    orig = xpdf._doc
+
+    def capture(db_, title, body):
+        html_parts.append(body)
+        return b"%PDF"
+
+    fpdf._doc = capture
+    try:
+        fpdf.payslip(db, db.get(PayrollRun, run["id"]), db.get(Payslip, p["id"]), user)
+    finally:
+        fpdf._doc = orig
+    assert "ABCPR1234K" in html_parts[0] and "100200300400" in html_parts[0]
+    assert "••••6789" in html_parts[0] and "50100123456789" not in html_parts[0]

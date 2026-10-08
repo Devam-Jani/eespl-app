@@ -579,6 +579,7 @@ class CompanyProfile(Tracked, Base):
     allow_negative_stock: Mapped[bool] = mapped_column(server_default="false")
     grn_approval_levels: Mapped[int] = mapped_column(Integer, server_default="1")
     asset_overdue_days: Mapped[int] = mapped_column(Integer, server_default="30")
+    portal_invite_days: Mapped[int] = mapped_column(Integer, server_default="7")  # invite link life
     freight_sac: Mapped[str] = mapped_column(String(8), server_default="9965")  # on PO freight
     po_tc_template_id: Mapped[int | None] = mapped_column(
         ForeignKey("tc_templates.id", ondelete="SET NULL")

@@ -53,6 +53,7 @@ export type RaLine = {
   suggested_qty: string;
   qty: string;
   certified_qty: string | null;
+  client_qty?: string | null;
   cumulative_qty: string;
   rate: string;
   amount: Money;
@@ -71,7 +72,7 @@ export type RaBill = {
   client_name: string | null;
   period_from: string | null;
   period_to: string;
-  status: "draft" | "submitted" | "certified" | "invoiced" | "cancelled";
+  status: "draft" | "submitted" | "certified_by_client" | "rejected_by_client" | "certified" | "invoiced" | "cancelled";
   gross: Money;
   certified_gross: Money | null;
   retention: Money;
@@ -81,6 +82,7 @@ export type RaBill = {
   other_deduction_remark: string | null;
   net: Money;
   certified_by_client: string | null;
+  client_remark?: string | null;
   lines: RaLine[];
   invoice_id: number | null;
   invoice_number: string | null;

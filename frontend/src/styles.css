@@ -2083,3 +2083,261 @@ input.full {
 .ot-field input {
   margin-top: 2px;
 }
+
+/* --- client portal (phone first: works at 360 px) --------------------------------------------- */
+.portal {
+  min-height: 100vh;
+  background: var(--bg, #f5f7f6);
+}
+.portal-top {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fff;
+  border-bottom: 1px solid #e3e8e5;
+}
+.portal-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+}
+.portal-brand span:last-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.portal-logo {
+  height: 32px;
+  max-width: 96px;
+  object-fit: contain;
+}
+.portal-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.portal-main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 12px;
+}
+.portal-title {
+  font-size: 1.3rem;
+  margin: 8px 0 12px;
+}
+.portal-cards,
+.portal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.portal-card {
+  color: inherit;
+  text-decoration: none;
+  display: block;
+}
+.portal-card:hover {
+  border-color: #2f7d5b;
+}
+.portal-percent,
+.portal-big {
+  font-weight: 700;
+  color: #2f7d5b;
+}
+.portal-big {
+  font-size: 2rem;
+  line-height: 1.2;
+}
+.portal-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: #e3e8e5;
+  overflow: hidden;
+  margin: 6px 0;
+  flex: 1;
+}
+.portal-bar span {
+  display: block;
+  height: 100%;
+  background: #2f7d5b;
+}
+.portal-facts,
+.portal-figures,
+.portal-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 6px;
+}
+.portal-buttons {
+  gap: 8px;
+}
+.portal-part {
+  margin-top: 8px;
+}
+.portal-floor {
+  display: grid;
+  grid-template-columns: minmax(70px, 30%) 1fr 40px;
+  align-items: center;
+  gap: 8px;
+}
+.portal-item {
+  margin-bottom: 10px;
+}
+.portal-row {
+  padding: 6px 0;
+  border-top: 1px solid #eef1ef;
+}
+.portal-text {
+  white-space: pre-wrap;
+  margin: 6px 0;
+}
+.portal-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.portal-photos figure {
+  margin: 0;
+}
+.portal-thumb {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 6px;
+  display: block;
+  background: #eef1ef;
+}
+.portal-3d {
+  min-height: 320px;
+}
+.portal-framed {
+  min-height: 0;
+  max-width: 420px;
+  border: 1px solid #d6ddd9;
+  border-radius: 12px;
+  padding: 12px;
+  margin-top: 10px;
+}
+.portal .table-wrap {
+  overflow-x: auto;
+}
+.thread {
+  border-top: 1px solid #eef1ef;
+  padding-top: 8px;
+}
+.comment {
+  padding: 6px 8px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  background: #f3f6f4;
+}
+.comment.client {
+  background: #fff6e8;
+}
+.comment.internal {
+  background: #fdecec;
+  border: 1px dashed #d99;
+}
+.photo-share {
+  margin: 0;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.bell {
+  position: relative;
+}
+.bell-button {
+  position: relative;
+  padding: 6px 8px;
+}
+.bell-count {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #c0392b;
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+}
+.bell-panel {
+  position: absolute;
+  right: 0;
+  top: 110%;
+  width: min(340px, calc(100vw - 24px));
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #d6ddd9;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 8px;
+  z-index: 50;
+}
+.bell-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 8px 6px;
+  border-bottom: 1px solid #eef1ef;
+  cursor: pointer;
+  font: inherit;
+}
+.bell-item.unread {
+  background: #eef7f2;
+  font-weight: 600;
+}
+@media (max-width: 480px) {
+  .portal-main {
+    padding: 10px;
+  }
+  .portal-cards,
+  .portal-grid {
+    grid-template-columns: 1fr;
+  }
+  .portal-brand span:last-child {
+    font-size: 0.9rem;
+  }
+  .portal .modal {
+    width: calc(100vw - 16px);
+  }
+}
+/* the 3D view's controls wrap on a phone in the portal */
+.portal-3d .toolbar,
+.portal-3d .page-actions {
+  flex-wrap: wrap;
+}
+.portal-3d .page-actions > * {
+  max-width: 100%;
+}
+.portal-3d select {
+  max-width: 100%;
+}
+.portal-3d .card {
+  min-width: 0;
+  overflow: hidden;
+}
+.portal {
+  overflow-x: hidden;
+}

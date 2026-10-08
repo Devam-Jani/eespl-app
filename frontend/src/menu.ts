@@ -27,6 +27,7 @@ export const MENU: MenuItem[] = [
   { to: "/leads", label: "Leads", perms: ["leads.view"], section: "Modules" },
   { to: "/tenders", label: "Tenders", perms: ["tender.view"], section: "Modules" },
   { to: "/sites", label: "Sites", perms: ["site.view"], section: "Modules" },
+  { to: "/snags", label: "Snags", perms: ["site.view"], section: "Modules" },
   { to: "/indents", label: "Indents", perms: ["indent.view", "indent.create", "indent.approve"], section: "Modules" },
   { to: "/rfqs", label: "RFQs", perms: ["po.view"], section: "Modules" },
   { to: "/purchase-orders", label: "Purchase orders", perms: ["po.view"], section: "Modules" },
