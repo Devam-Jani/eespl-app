@@ -22,6 +22,7 @@ from app.analytics.common import (
 )
 from app.analytics.kpi import dpr_missing_today, first_submitted, stock_levels, vendor_balances
 from app.analytics.models import InvoiceSummary, SiteSummary
+from app.analytics.summary import forecast_text
 from app.auth.deps import Principal
 from app.crm.models import Lead
 from app.finance.models import PettyCashAccount, PettyCashEntry, RaBill, Receipt, TaxInvoice
@@ -532,7 +533,7 @@ def _sites(db, principal, scope, f: Filters, a: dict):
             "progress": s.progress,
             "elapsed": s.elapsed,
             "target": s.target_date,
-            "forecast": s.forecast_end,
+            "forecast": forecast_text(s.forecast_end, s.target_date, s.progress)[0],
             "delay": s.delay_reason,
             "contract": s.contract_value,
             "billed": s.billed,
@@ -553,7 +554,7 @@ def _sites(db, principal, scope, f: Filters, a: dict):
         col("progress", "Progress %", "pct"),
         col("elapsed", "Time gone %", "pct"),
         col("target", "Planned end", "date"),
-        col("forecast", "Forecast end", "date"),
+        col("forecast", "Forecast end"),
         col("delay", "Delay"),
         col("contract", "Contract", "inr"),
         col("billed", "Billed", "inr"),

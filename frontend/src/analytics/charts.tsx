@@ -188,6 +188,36 @@ export function HBarChart({
 }
 
 /** Progress against time gone, one dot per site; on the diagonal = on time. */
+export type Placed = { x: number; y: number; anchor: "start" | "end" | "middle" } | null;
+
+/** Where to put each label so none overlaps another label or a dot, or runs off the chart:
+ * right of the dot, then left, above, below, then nudged up / down; null = hover only. */
+export function placeLabels(points: { x: number; y: number; text: string }[], width: number, height: number, charW = 5.6, h = 11): Placed[] {
+  const boxes: { x0: number; x1: number; y0: number; y1: number }[] = points.map((p) => ({ x0: p.x - 5, x1: p.x + 5, y0: p.y - 5, y1: p.y + 5 }));
+  const hit = (b: { x0: number; x1: number; y0: number; y1: number }) => boxes.some((o) => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0);
+  return points.map((p) => {
+    const w = p.text.length * charW;
+    const tries: [number, number, "start" | "end" | "middle"][] = [
+      [p.x + 8, p.y + 4, "start"],
+      [p.x - 8, p.y + 4, "end"],
+      [p.x, p.y - 9, "middle"],
+      [p.x, p.y + 17, "middle"],
+      [p.x + 8, p.y - 8, "start"],
+      [p.x + 8, p.y + 16, "start"],
+      [p.x - 8, p.y - 8, "end"],
+      [p.x - 8, p.y + 16, "end"],
+    ];
+    for (const [tx, ty, anchor] of tries) {
+      const x0 = anchor === "start" ? tx : anchor === "end" ? tx - w : tx - w / 2;
+      const b = { x0, x1: x0 + w, y0: ty - h + 2, y1: ty + 2 };
+      if (b.x0 < 2 || b.x1 > width - 2 || b.y0 < 2 || b.y1 > height - 2 || hit(b)) continue;
+      boxes.push(b);
+      return { x: tx, y: ty, anchor };
+    }
+    return null;
+  });
+}
+
 export function ScatterChart({
   rows,
   x,
@@ -210,6 +240,13 @@ export function ScatterChart({
   const inner = S - 2 * pad;
   const px = (v: number) => pad + (v / 100) * inner;
   const py = (v: number) => S - pad - (v / 100) * inner;
+  const late = rows.filter((r) => Boolean(r[flag]));
+  const spots = placeLabels(
+    late.map((r) => ({ x: px(num(r[x]) ?? 0), y: py(num(r[y]) ?? 0), text: String(r[label]) })),
+    S,
+    S,
+  );
+  const hidden = spots.filter((p) => p === null).length;
   return (
     <figure className="chart scatter">
       <svg viewBox={`0 0 ${S} ${S}`} role="img">
@@ -230,18 +267,21 @@ export function ScatterChart({
         {rows.map((r, i) => {
           const vx = num(r[x]) ?? 0;
           const vy = num(r[y]) ?? 0;
-          const late = Boolean(r[flag]);
+          const isLate = Boolean(r[flag]);
           return (
             <g key={i} className={onClick ? "clickable" : undefined} onClick={onClick ? () => onClick(r) : undefined}>
-              {late ? <rect x={px(vx) - 5} y={py(vy) - 5} width={10} height={10} fill={PALETTE[3]} /> : <circle cx={px(vx)} cy={py(vy)} r={5} fill={PALETTE[0]} />}
+              {isLate ? <rect x={px(vx) - 5} y={py(vy) - 5} width={10} height={10} fill={PALETTE[3]} /> : <circle cx={px(vx)} cy={py(vy)} r={5} fill={PALETTE[0]} />}
               <title>{`${String(r[label])}: ${vy.toFixed(0)}% done, ${vx.toFixed(0)}% of the time gone`}</title>
-              {late && (
-                <text x={px(vx) + 7} y={py(vy) + 4} className="value">
-                  {String(r[label])}
-                </text>
-              )}
             </g>
           );
+        })}
+        {late.map((r, i) => {
+          const at = spots[i];
+          return at ? (
+            <text key={i} x={at.x} y={at.y} textAnchor={at.anchor} className="value" onClick={onClick ? () => onClick(r) : undefined}>
+              {String(r[label])}
+            </text>
+          ) : null;
         })}
         <text x={S / 2} y={S - 4} textAnchor="middle" className="axis">
           time gone →
@@ -257,7 +297,9 @@ export function ScatterChart({
         <span>
           <i style={{ background: PALETTE[3] }} /> delayed
         </span>
-        <span className="muted small">shaded: more than {threshold} points behind time · delayed sites labelled, hover for the rest</span>
+        <span className="muted small">
+          shaded: more than {threshold} points behind time · delayed sites labelled{hidden ? ` (${hidden} without room: hover)` : ""}, hover for the rest
+        </span>
       </div>
     </figure>
   );

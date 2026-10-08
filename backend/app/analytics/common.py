@@ -39,6 +39,27 @@ def pct(part, whole, places: str = "0.1") -> Decimal | None:
     return (part / whole * 100).quantize(Decimal(places), ROUND_HALF_UP) if whole else None
 
 
+def inr_compact(value) -> str:
+    """Compact Indian money for tiles: ₹29.49 Cr, ₹7.89 L, ₹72,228 (exact figures elsewhere)."""
+    if value is None or value == "":
+        return "—"
+    v = Decimal(str(value))
+    sign, a = ("-" if v < 0 else ""), abs(v)
+    if a >= 10_000_000:
+        return f"{sign}₹{a / 10_000_000:.2f} Cr"
+    if a >= 100_000:
+        return f"{sign}₹{a / 100_000:.2f} L"
+    whole = str(int(a.quantize(Decimal(1), ROUND_HALF_UP)))
+    if len(whole) > 3:
+        head, tail = whole[:-3], whole[-3:]
+        groups = []
+        while len(head) > 2:
+            groups.insert(0, head[-2:])
+            head = head[:-2]
+        whole = ",".join([head, *groups, tail])
+    return f"{sign}₹{whole}"
+
+
 def month_start(d: date) -> date:
     return d.replace(day=1)
 

@@ -294,9 +294,14 @@ export function LabourAnalytics() {
 // --- strategy ------------------------------------------------------------------------------------
 
 type Step = { step: string; label: string; count: number; value: string; conversion: number | null };
-type Funnel = { total: { steps: Step[]; lost: { count: number; value: string }; win_rate: number | null }; groups: { key: string; steps: Step[]; win_rate: number | null }[] };
+type Funnel = {
+  basis: string;
+  total: { steps: Step[]; lost: { count: number; value: string }; win_rate: number | null };
+  groups: { key: string; steps: Step[]; win_rate: number | null }[];
+};
 type Segment = { key: string; won: number; lost: number; win_rate: number | null; won_value: string };
 type WinLoss = {
+  basis: string;
   decided: number;
   won: number;
   win_rate: number | null;
@@ -381,6 +386,7 @@ function FunnelTab() {
           <p className="small">
             Lost: <b>{data.total.lost.count}</b> ({fmtValue(data.total.lost.value, "inr")}) · win rate <b>{fmtValue(data.total.win_rate, "pct")}</b> (won ÷ won + lost)
           </p>
+          <p className="muted small basis">{data.basis}</p>
         </Card>
         <Card
           title="By segment"
@@ -457,6 +463,7 @@ function WinLossTab() {
           <ExportButton path={`/api/analytics/strategy/winloss?format=xlsx&${qs}`} />
         </span>
       </p>
+      <p className="muted small basis">{data.basis}</p>
       <div className="analytics-grid">
         {Object.entries(data.segments).map(([dim, rows]) => (
           <Card key={dim} title={`Win rate by ${SEG_LABEL[dim]?.toLowerCase() ?? dim}`}>

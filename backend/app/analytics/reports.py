@@ -17,8 +17,9 @@ from sqlalchemy.orm import Session
 
 from app.analytics import kpi
 from app.analytics.alerts import visible
-from app.analytics.common import ZERO, money, now, pct, today
+from app.analytics.common import ZERO, inr_compact, money, now, pct, today
 from app.analytics.models import RULE_LABELS, Alert, InvoiceSummary, SiteSummary, WeeklyReport
+from app.analytics.summary import forecast_text
 from app.execution.models import Dpr, Inspection, Mom, MomPoint
 from app.execution.pdf import _doc, e
 from app.execution.service import IST
@@ -36,16 +37,21 @@ XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 # --- Excel ---------------------------------------------------------------------------------------
 
 
-def xlsx_book(sheets: list[tuple[str, list[dict], list[dict]]]) -> bytes:
-    """[(title, columns [{key, label}], rows [dict])] -> one sheet each."""
+def xlsx_book(sheets: list[tuple], note: str | None = None) -> bytes:
+    """[(title, columns [{key, label}], rows [dict])] -> one sheet each; a note (what the numbers
+    count) goes above the header of every sheet."""
     wb = Workbook()
     wb.remove(wb.active)
     for title, columns, rows in sheets:
         ws = wb.create_sheet(
             title=("".join(ch for ch in title if ch not in "[]:*?/\\")[:31]) or "Sheet"
         )
+        if note:
+            ws.append([note])
+            ws.cell(row=1, column=1).font = Font(italic=True)
+        head = 2 if note else 1
         ws.append([c["label"] for c in columns])
-        for cell in ws[1]:
+        for cell in ws[head]:
             cell.font = Font(bold=True, color="FFFFFF")
             cell.fill = PatternFill("solid", fgColor="0F6B5C")
         for r in rows:
@@ -55,8 +61,10 @@ def xlsx_book(sheets: list[tuple[str, list[dict], list[dict]]]) -> bytes:
                 max([len(str(c["label"]))] + [len(str(r.get(c["key"]) or "")) for r in rows[:200]])
                 + 2
             )
-            ws.column_dimensions[ws.cell(row=1, column=i + 1).column_letter].width = min(60, width)
-        ws.freeze_panes = "A2"
+            ws.column_dimensions[ws.cell(row=head, column=i + 1).column_letter].width = min(
+                60, width
+            )
+        ws.freeze_panes = f"A{head + 1}"
     if not wb.sheetnames:
         wb.create_sheet("Empty")
     out = BytesIO()
@@ -118,13 +126,18 @@ def fmt(value: Any, unit: str = "inr") -> str:
     return str(value)
 
 
+def tile_fmt(value: Any, unit: str) -> str:
+    """Tiles show compact money (₹29.49 Cr); tables keep exact rupees."""
+    return inr_compact(value) if unit == "inr" and value not in (None, "") else fmt(value, unit)
+
+
 def change(t: dict) -> str:
     if t.get("prev") in (None, "") or t["unit"] not in ("inr", "count", "pct"):
         return ""
     now_v, prev_v = Decimal(str(t["value"] or 0)), Decimal(str(t["prev"] or 0))
     diff = now_v - prev_v
     arrow = "▲" if diff > 0 else "▼" if diff < 0 else "="
-    return f"{arrow} {fmt(abs(diff), t['unit'])} vs {e(t.get('prev_label') or 'before')}"
+    return f"{arrow} {tile_fmt(abs(diff), t['unit'])} vs {e(t.get('prev_label') or 'before')}"
 
 
 def _when(as_of) -> str:
@@ -149,7 +162,7 @@ def management_pdf(
     blocks = []
     for sec in data["sections"]:
         cells = "".join(
-            f"<td><div class='muted'>{e(t['label'])}</div><div class='big'>{fmt(t['value'], t['unit'])}</div>"
+            f"<td><div class='muted'>{e(t['label'])}</div><div class='big'>{tile_fmt(t['value'], t['unit'])}</div>"
             f"<div class='muted small'>{change(t)}{(' · ' + e(t['note'])) if t.get('note') else ''}</div></td>"
             for t in sec["tiles"]
         )
@@ -158,7 +171,7 @@ def management_pdf(
     if show_margin and data.get("margin"):
         m = data["margin"]
         cells = "".join(
-            f"<td><div class='muted'>{e(t['label'])}</div><div class='big'>{fmt(t['value'], t['unit'])}</div>"
+            f"<td><div class='muted'>{e(t['label'])}</div><div class='big'>{tile_fmt(t['value'], t['unit'])}</div>"
             f"<div class='muted small'>{e(t.get('note') or '')}</div></td>"
             for t in m["tiles"]
         )
@@ -269,7 +282,7 @@ def site_status_pdf(db: Session, site: Site) -> bytes:
         f"<tr><td>{e(code)}</td><td>{e(p.text)}</td><td>{e(p.owner_name or 'EESPL')}</td><td>{p.due_date.strftime('%d %b') if p.due_date else ''}</td></tr>"
         for p, code in points
     )
-    forecast = s.forecast_end.strftime("%d %b %Y") if s and s.forecast_end else "—"
+    forecast = forecast_text(s.forecast_end, s.target_date, s.progress)[0] if s else "—"
     billing = (
         (
             f"<tr><td>Contract value</td><td class='num'>{fmt(s.contract_value)}</td></tr><tr><td>Certified to date</td><td class='num'>{fmt(s.certified)}</td></tr>"
