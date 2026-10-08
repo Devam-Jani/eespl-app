@@ -23,6 +23,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -109,6 +110,8 @@ class Site(Tracked, Base):
     source: Mapped[str] = mapped_column(String(10), server_default="app")
     source_ref: Mapped[str | None] = mapped_column(String(50), unique=True)  # Powerplay id
     progress_percent: Mapped[Decimal] = mapped_column(Percent, server_default="0")  # stored
+    # invented analytics demo data (python -m app.cli seed-demo-analytics); never real
+    is_demo: Mapped[bool] = mapped_column(server_default=false(), index=True)
 
     client: Mapped[Client | None] = relationship(lazy="joined")
     channel: Mapped[Channel | None] = relationship(lazy="joined")

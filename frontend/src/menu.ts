@@ -3,11 +3,21 @@ export type MenuItem = {
   label: string;
   /** Shown when the user holds any of these permissions. */
   perms: string[];
-  section: "Modules" | "Masters" | "Settings" | "Administration";
+  /** ...and all of these as well (e.g. tender.margin for pages that show cost). */
+  all?: string[];
+  section: "Modules" | "Analytics" | "Masters" | "Settings" | "Administration";
 };
 
 export const MENU: MenuItem[] = [
-  { to: "/dashboard", label: "Dashboard", perms: ["dashboard.view"], section: "Modules" },
+  { to: "/dashboard", label: "Dashboard", perms: ["dashboard.company", "dashboard.sales", "dashboard.site", "dashboard.finance", "dashboard.purchase"], section: "Modules" },
+  { to: "/analytics/sites", label: "Sites", perms: ["dashboard.company", "dashboard.site"], section: "Analytics" },
+  { to: "/analytics/finance", label: "Finance", perms: ["dashboard.company", "dashboard.finance"], section: "Analytics" },
+  { to: "/analytics/profitability", label: "Profitability", perms: ["dashboard.company", "dashboard.finance"], all: ["tender.margin"], section: "Analytics" },
+  { to: "/analytics/purchase", label: "Purchase", perms: ["dashboard.company", "dashboard.purchase"], section: "Analytics" },
+  { to: "/analytics/labour", label: "Labour", perms: ["dashboard.company", "dashboard.site"], section: "Analytics" },
+  { to: "/analytics/strategy", label: "Strategy: win more sites", perms: ["dashboard.company", "dashboard.sales"], section: "Analytics" },
+  { to: "/alerts", label: "Alerts", perms: ["dashboard.company", "dashboard.sales", "dashboard.site", "dashboard.finance", "dashboard.purchase"], section: "Analytics" },
+  { to: "/reports", label: "Reports", perms: ["dashboard.company"], section: "Analytics" },
   { to: "/clients", label: "Clients", perms: ["clients.view"], section: "Masters" },
   { to: "/channels", label: "Channels", perms: ["clients.view"], section: "Masters" },
   { to: "/products", label: "Products", perms: ["library.view"], section: "Masters" },

@@ -15,6 +15,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    false,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -23,6 +24,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 import app.tenders.models  # noqa: F401  (leads point at tenders)
 from app.masters.models import Channel, Client, Tracked
 from app.models import Base, User
+from app.tenders.models import LOST_REASONS
 
 LEAD_SOURCES = ("website", "call", "referral", "channel", "walk_in", "exhibition", "other")
 LEAD_STATUSES = ("new", "contacted", "site_visit", "quoted", "won", "lost", "junk")
@@ -49,6 +51,9 @@ class Lead(Tracked, Base):
         CheckConstraint(_in("status", LEAD_STATUSES), name="status_valid"),
         CheckConstraint(_in("lead_source", LEAD_SOURCES), name="source_valid"),
         CheckConstraint(_in("kylas_sync_status", SYNC_STATUSES), name="sync_status_valid"),
+        CheckConstraint(
+            "lost_reason IS NULL OR " + _in("lost_reason", LOST_REASONS), name="lost_reason_valid"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Identity(), primary_key=True)
@@ -91,6 +96,11 @@ class Lead(Tracked, Base):
     kylas_converted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     kylas_deal_id: Mapped[int | None] = mapped_column(BigInteger)
     kylas_won_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    lost_reason: Mapped[str | None] = mapped_column(String(12))
+    lost_to: Mapped[str | None] = mapped_column(String(200))  # the competitor, if known
+    lost_note: Mapped[str | None] = mapped_column(Text)
+    # invented analytics demo data (python -m app.cli seed-demo-analytics); never real
+    is_demo: Mapped[bool] = mapped_column(server_default=false(), index=True)
 
     channel: Mapped[Channel | None] = relationship(lazy="joined")
     client: Mapped[Client | None] = relationship(lazy="joined")

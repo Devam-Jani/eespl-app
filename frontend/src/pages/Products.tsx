@@ -175,15 +175,7 @@ export default function Products() {
   );
 }
 
-function ProductForm({
-  product,
-  onClose,
-  onSaved,
-}: {
-  product: Product | null;
-  onClose: () => void;
-  onSaved: () => Promise<void>;
-}) {
+function ProductForm({ product, onClose, onSaved }: { product: Product | null; onClose: () => void; onSaved: () => Promise<void> }) {
   const units = useUnits();
   const categories = useCategories("material");
   const [form, setForm] = useState({
@@ -195,11 +187,11 @@ function ProductForm({
     pack_size: product?.pack_size ?? "",
     gst_percent: product?.gst_percent ?? "18",
     hsn_code: product?.hsn_code ?? "",
+    reorder_level: product?.reorder_level ?? "",
     is_active: product?.is_active ?? true,
   });
   const [error, setError] = useState<string | null>(null);
-  const set = (key: keyof typeof form) => (e: { target: { value: string } }) =>
-    setForm((f) => ({ ...f, [key]: e.target.value }));
+  const set = (key: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -209,6 +201,7 @@ function ProductForm({
       brand: form.brand || null,
       pack_size: form.pack_size || null,
       hsn_code: form.hsn_code || null,
+      reorder_level: form.reorder_level || null,
       category_id: form.category_id ? Number(form.category_id) : null,
     };
     try {
@@ -253,11 +246,13 @@ function ProductForm({
             <span>Category</span>
             <select value={form.category_id} onChange={set("category_id")}>
               <option value="">—</option>
-              {categories.filter((c) => c.is_active || String(c.id) === form.category_id).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
+              {categories
+                .filter((c) => c.is_active || String(c.id) === form.category_id)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
             </select>
           </label>
           <label className="field">
@@ -281,6 +276,10 @@ function ProductForm({
           <label className="field">
             <span>HSN / SAC code</span>
             <input inputMode="numeric" pattern="[0-9]{4,8}" value={form.hsn_code} onChange={set("hsn_code")} placeholder="e.g. 3824" />
+          </label>
+          <label className="field">
+            <span>Reorder level ({form.unit || "unit"})</span>
+            <input type="number" step="0.001" min="0" value={form.reorder_level} onChange={set("reorder_level")} placeholder="Alert below this stock" />
           </label>
         </div>
         <label className="check">
@@ -346,10 +345,7 @@ function PriceHistory({ product, canAdd, onClose }: { product: Product; canAdd: 
   return (
     <Modal title={`Prices: ${product.name}`} onClose={onClose} wide>
       {error && <div className="alert alert-error">{error}</div>}
-      <p className="muted small">
-        Prices are never edited. A new price takes effect from its date; the current price is the latest one dated today or
-        earlier.
-      </p>
+      <p className="muted small">Prices are never edited. A new price takes effect from its date; the current price is the latest one dated today or earlier.</p>
       <div className="table-wrap">
         <table className="table compact">
           <thead>
@@ -392,33 +388,15 @@ function PriceHistory({ product, canAdd, onClose }: { product: Product; canAdd: 
           <div className="grid-4">
             <label className="field">
               <span>Purchase rate (₹)</span>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.purchase_rate}
-                onChange={(e) => setForm((f) => ({ ...f, purchase_rate: e.target.value }))}
-                required
-              />
+              <input type="number" step="0.01" min="0" value={form.purchase_rate} onChange={(e) => setForm((f) => ({ ...f, purchase_rate: e.target.value }))} required />
             </label>
             <label className="field">
               <span>Freight / unit (₹)</span>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.freight_per_unit}
-                onChange={(e) => setForm((f) => ({ ...f, freight_per_unit: e.target.value }))}
-              />
+              <input type="number" step="0.01" min="0" value={form.freight_per_unit} onChange={(e) => setForm((f) => ({ ...f, freight_per_unit: e.target.value }))} />
             </label>
             <label className="field">
               <span>Effective from</span>
-              <input
-                type="date"
-                value={form.effective_from}
-                onChange={(e) => setForm((f) => ({ ...f, effective_from: e.target.value }))}
-                required
-              />
+              <input type="date" value={form.effective_from} onChange={(e) => setForm((f) => ({ ...f, effective_from: e.target.value }))} required />
             </label>
             <label className="field">
               <span>Note</span>

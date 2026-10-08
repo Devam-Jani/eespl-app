@@ -43,7 +43,7 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-    command: python -m app.crm.worker
+    command: python -m app.worker
     volumes:
       - ./backend:/app
     depends_on:

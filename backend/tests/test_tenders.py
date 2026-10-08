@@ -562,10 +562,21 @@ def test_lost_needs_a_reason_and_overdue_flag(boss):
     assert r.status_code == 422
     r = client.patch(
         f"/api/tenders/{tender['id']}",
-        json={"status": "lost", "lost_reason": "Price", "lost_to": "Rival Co"},
+        json={"status": "lost", "lost_reason": "Price was 8% high", "lost_to": "Rival Co"},
         headers=headers,
     )
-    assert r.status_code == 200
+    assert r.status_code == 422  # the reason is a pick-list now
+    r = client.patch(
+        f"/api/tenders/{tender['id']}",
+        json={
+            "status": "lost",
+            "lost_reason": "price",
+            "lost_to": "Rival Co",
+            "lost_note": "8% high",
+        },
+        headers=headers,
+    )
+    assert r.status_code == 200 and r.json()["decided_at"] and r.json()["lost_note"] == "8% high"
     assert (r.json()["status"], r.json()["lost_to"], r.json()["overdue"]) == (
         "lost",
         "Rival Co",

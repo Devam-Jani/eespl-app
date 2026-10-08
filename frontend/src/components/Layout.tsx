@@ -5,8 +5,8 @@ import Bell from "./Bell";
 
 export default function Layout() {
   const { me, can, logout } = useAuth();
-  const visible = MENU.filter((item) => can(...item.perms));
-  const sections = ["Modules", "Masters", "Settings", "Administration"] as const;
+  const visible = MENU.filter((item) => can(...item.perms) && (item.all ?? []).every((c) => can(c)));
+  const sections = ["Modules", "Analytics", "Masters", "Settings", "Administration"] as const;
 
   return (
     <div className="shell">

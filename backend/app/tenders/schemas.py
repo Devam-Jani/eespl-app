@@ -13,6 +13,8 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 TenderStatus = Literal["draft", "submitted", "won", "lost", "dropped"]
+# why it was lost (app.tenders.models.LOST_REASONS)
+LostReason = Literal["price", "competitor", "timing", "spec", "relationship", "other"]
 LineStatus = Literal["unpriced", "suggested", "priced", "not_quoted"]
 QtyNote = Literal["QRO", "NQ"]
 Percent = Annotated[Decimal, Field(ge=0, lt=1000, max_digits=6, decimal_places=2)]
@@ -43,6 +45,8 @@ class TenderOut(BaseModel):
     status: str
     lost_reason: str | None
     lost_to: str | None
+    lost_note: str | None = None
+    decided_at: datetime | None = None
     quoted_total: Decimal
     tc_template_id: int | None
     notes: str | None
@@ -92,14 +96,15 @@ class TenderUpdate(BaseModel):
     owner_id: uuid.UUID | None = None
     member_ids: list[uuid.UUID] | None = None
     status: TenderStatus | None = None
-    lost_reason: str | None = None
-    lost_to: str | None = Field(default=None, max_length=200)
+    lost_reason: LostReason | None = None
+    lost_to: str | None = Field(default=None, max_length=200)  # the competitor, if known
+    lost_note: str | None = None
     notes: str | None = None
 
     @model_validator(mode="after")
     def _reason(self):
-        if self.status in ("lost", "dropped") and not (self.lost_reason or "").strip():
-            raise ValueError("Give a reason when a tender is lost or dropped")
+        if self.status in ("lost", "dropped") and not self.lost_reason:
+            raise ValueError("Pick why the tender was lost or dropped")
         return self
 
 

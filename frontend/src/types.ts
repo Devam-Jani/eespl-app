@@ -96,6 +96,7 @@ export type Product = {
   pack_size: string | null;
   gst_percent: string;
   hsn_code: string | null;
+  reorder_level?: string | null;
   is_active: boolean;
   cost: { current_price: Price | null } | null;
 };
@@ -359,6 +360,8 @@ export type Tender = {
   status: TenderStatus;
   lost_reason: string | null;
   lost_to: string | null;
+  lost_note?: string | null;
+  decided_at?: string | null;
   quoted_total: string;
   tc_template_id: number | null;
   notes: string | null;
@@ -801,6 +804,9 @@ export type Lead = {
   kylas_forecasting: string | null;
   kylas_converted_at: string | null;
   kylas_won_at: string | null;
+  lost_reason?: string | null;
+  lost_to?: string | null;
+  lost_note?: string | null;
   created_at: string;
   duplicates: LeadDuplicate[];
 };

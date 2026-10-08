@@ -7,7 +7,7 @@ goes to callers with tender.margin (see schemas.py).
 
 import re
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any
@@ -168,6 +168,8 @@ def _tender_out(db: Session, tender: Tender, with_cost: bool) -> TenderOut:
         status=tender.status,
         lost_reason=tender.lost_reason,
         lost_to=tender.lost_to,
+        lost_note=tender.lost_note,
+        decided_at=tender.decided_at,
         quoted_total=tender.quoted_total,
         tc_template_id=tender.tc_template_id,
         notes=tender.notes,
@@ -477,7 +479,10 @@ def update_tender(
             continue  # below, through revisions.submit
         setattr(tender, field, value)
     if body.status in ("draft", "submitted"):
-        tender.lost_reason = tender.lost_to = None
+        tender.lost_reason = tender.lost_to = tender.lost_note = None
+        tender.decided_at = None
+    elif body.status in ("won", "lost", "dropped") and before.get("status") != body.status:
+        tender.decided_at = datetime.now(UTC)
     if body.member_ids is not None:
         _check_users(db, body.member_ids)
         tender.members = []

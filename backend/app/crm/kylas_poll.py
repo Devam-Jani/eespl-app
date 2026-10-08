@@ -129,6 +129,8 @@ def poll_leads(db: Session, client: KylasClient, report: PollReport) -> None:
         elif outcome in ("lost", "junk") and lead.status != outcome:
             before = lead.status
             lead.status = outcome
+            if outcome == "lost":  # Kylas gives free text: kept as the note
+                lead.lost_reason, lead.lost_note = "other", reason
             _note(
                 db,
                 lead,

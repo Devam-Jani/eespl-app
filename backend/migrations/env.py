@@ -3,6 +3,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+import app.analytics.models  # noqa: F401  (registers the analytics tables and indexes)
 import app.crm.models  # noqa: F401  (registers the CRM tables)
 import app.execution.models  # noqa: F401  (registers the execution tables)
 import app.finance.models  # noqa: F401  (registers the finance tables)

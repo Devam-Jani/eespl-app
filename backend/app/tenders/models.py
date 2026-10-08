@@ -18,6 +18,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -27,6 +28,8 @@ from app.masters.models import Channel, Client, Tracked
 from app.models import Base, User
 
 TENDER_STATUSES = ("draft", "submitted", "won", "lost", "dropped")
+# why a tender or lead was lost (a pick-list; details go in lost_note)
+LOST_REASONS = ("price", "competitor", "timing", "spec", "relationship", "other")
 LINE_STATUSES = ("unpriced", "suggested", "priced", "not_quoted")
 PRICE_SOURCES = ("system", "library", "manual")
 QTY_NOTES = ("QRO", "NQ")
@@ -51,7 +54,12 @@ class TenderSequence(Base):
 
 class Tender(Tracked, Base):
     __tablename__ = "tenders"
-    __table_args__ = (CheckConstraint(_in("status", TENDER_STATUSES), name="status_valid"),)
+    __table_args__ = (
+        CheckConstraint(_in("status", TENDER_STATUSES), name="status_valid"),
+        CheckConstraint(
+            "lost_reason IS NULL OR " + _in("lost_reason", LOST_REASONS), name="lost_reason_valid"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Identity(), primary_key=True)
     code: Mapped[str] = mapped_column(String(20), unique=True)  # T-2026-0001
@@ -82,6 +90,11 @@ class Tender(Tracked, Base):
     # The revision being worked on (R0, R1 ...). Submitting freezes it in tender_revisions; the
     # next edit after that starts revision + 1.
     revision: Mapped[int] = mapped_column(Integer, server_default="0")
+    lost_note: Mapped[str | None] = mapped_column(Text)
+    # when it was won, lost or dropped (win rate by period)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # invented analytics demo data (python -m app.cli seed-demo-analytics); never real
+    is_demo: Mapped[bool] = mapped_column(server_default=false(), index=True)
 
     client: Mapped[Client | None] = relationship(lazy="joined")
     channel: Mapped[Channel | None] = relationship(lazy="joined")
