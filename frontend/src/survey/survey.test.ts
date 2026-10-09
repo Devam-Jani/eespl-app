@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calibrate, detectMarkers, homography, invert, measure, apply, polygonArea } from "./marker";
+import { calibrate, detectMarkers, extent, homography, invert, liveReach, measure, apply, polygonArea } from "./marker";
 import { project, render } from "./synthetic";
 import type { Camera, PlacedMarker } from "./synthetic";
 import { formatLength, parseLength, parseSize } from "./units";
@@ -54,7 +54,7 @@ async function dictionary(): Promise<Record<number, string>> {
   const mod = (await import("js-aruco2")) as unknown as { AR?: { Dictionary: new (n: string) => { codeList: string[] } } };
   const AR = mod.AR ?? (mod as unknown as { default: { AR: never } }).default.AR;
   const d = new (AR as { Dictionary: new (n: string) => { codeList: string[] } }).Dictionary("ARUCO_MIP_36h12");
-  return { 0: d.codeList[0], 1: d.codeList[1] };
+  return { 0: d.codeList[0], 1: d.codeList[1], 2: d.codeList[2], 3: d.codeList[3] };
 }
 
 // a camera 0.6 m above the floor, 1.5 m before the area, looking 15 degrees down
@@ -70,6 +70,8 @@ describe("marker photo", () => {
     const bits = await dictionary();
     expect(bits[0]).toBe((0xd2b63a09d).toString(2).padStart(36, "0"));
     expect(bits[1]).toBe((0x6001134e5).toString(2).padStart(36, "0"));
+    expect(bits[2]).toBe((0x1206fbe72).toString(2).padStart(36, "0"));
+    expect(bits[3]).toBe((0xff8ad6cb4).toString(2).padStart(36, "0"));
   });
 
   it("measures a 3.00 m x 2.00 m rectangle in perspective within 1% of 6.00 sqm", async () => {
@@ -98,7 +100,7 @@ describe("marker photo", () => {
     const bits = await dictionary();
     const img = render(CAM, MARKERS, bits, RECT);
     let seed = 11;
-    const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff) - 0.5;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff - 0.5;
     for (let i = 0; i < img.data.length; i += 4) {
       const n = rnd() * 16; // like the fake camera video and a phone in daylight
       for (let c = 0; c < 3; c++) img.data[i + c] = Math.max(0, Math.min(255, img.data[i + c] + n));
@@ -106,7 +108,15 @@ describe("marker photo", () => {
     const cal = calibrate(await detectMarkers(img), img.width);
     expect(cal.ok, cal.ok ? "" : cal.reason).toBe(true);
     if (!cal.ok) return;
-    const m = measure(cal, [{ x: 0, y: 0 }, { x: 3000, y: 0 }, { x: 3000, y: 2000 }, { x: 0, y: 2000 }].map((p) => project(CAM, p)));
+    const m = measure(
+      cal,
+      [
+        { x: 0, y: 0 },
+        { x: 3000, y: 0 },
+        { x: 3000, y: 2000 },
+        { x: 0, y: 2000 },
+      ].map((p) => project(CAM, p)),
+    );
     console.log(`marker test with noise: area ${m.areaSqm.toFixed(4)} sqm, scale disagreement ${(cal.scaleDisagreement * 100).toFixed(2)}%`);
     expect(Math.abs(m.areaSqm - 6) / 6).toBeLessThan(0.01);
   });
@@ -135,5 +145,102 @@ describe("marker photo", () => {
     const r4 = calibrate(await detectMarkers(one), one.width);
     expect(r4.ok).toBe(false);
     if (!r4.ok) expect(r4.reason).toMatch(/Only one marker/);
+  });
+
+  it("two loose A4 pages at a random spacing and angle still give the area within 1%", async () => {
+    const bits = await dictionary();
+    let seed = 7;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let k = 0; k < 3; k++) {
+      const loose: PlacedMarker[] = [
+        { id: 0, x: 950 + rnd() * 200, y: -960 + rnd() * 140, size: 150, rotDeg: rnd() * 360 },
+        { id: 1, x: 1550 + rnd() * 300, y: -960 + rnd() * 140, size: 150, rotDeg: rnd() * 360 },
+      ];
+      const img = render(CAM, loose, bits, RECT);
+      const cal = calibrate(await detectMarkers(img), img.width);
+      expect(cal.ok, cal.ok ? "" : cal.reason).toBe(true);
+      if (!cal.ok) return;
+      const m = measure(
+        cal,
+        [
+          { x: 0, y: 0 },
+          { x: 3000, y: 0 },
+          { x: 3000, y: 2000 },
+          { x: 0, y: 2000 },
+        ].map((p) => project(CAM, p)),
+      );
+      console.log(
+        `loose markers ${k + 1}: spacing ${Math.round(loose[1].x - loose[0].x)} mm, angles ${loose.map((l) => Math.round(l.rotDeg!)).join(" / ")} deg: area ${m.areaSqm.toFixed(4)} sqm`,
+      );
+      expect(Math.abs(m.areaSqm - 6) / 6).toBeLessThan(0.01);
+    }
+  });
+
+  it("refuses an area wider than the markers allow in this photo", async () => {
+    const bits = await dictionary();
+    const img = render(CAM, MARKERS, bits, RECT);
+    const cal = calibrate(await detectMarkers(img), img.width);
+    if (!cal.ok) throw new Error(cal.reason);
+    // 150 mm markers at 14 % of the frame: about 1.06 m across here; the 3.00 m area is too big
+    expect(cal.reachM).toBeGreaterThan(1.0);
+    expect(cal.reachM).toBeLessThan(1.1);
+    const big = measure(
+      cal,
+      [
+        { x: 0, y: 0 },
+        { x: 3000, y: 0 },
+        { x: 3000, y: 2000 },
+        { x: 0, y: 2000 },
+      ].map((p) => project(CAM, p)),
+    );
+    expect(big.tooBig).toBe(true);
+    const small = measure(
+      cal,
+      [
+        { x: 1000, y: -300 },
+        { x: 2000, y: -300 },
+        { x: 2000, y: 200 },
+        { x: 1000, y: 200 },
+      ].map((p) => project(CAM, p)),
+    );
+    expect(small.tooBig).toBe(false);
+    expect(Math.abs(small.areaSqm - 0.5) / 0.5).toBeLessThan(0.01);
+    expect(
+      extent([
+        { x: 0, y: 0 },
+        { x: 3, y: 4 },
+        { x: -1, y: 7 },
+        { x: -4, y: 3 },
+      ]),
+    ).toBeCloseTo(5, 6);
+  });
+
+  it("the A3 pair (250 mm, ids 2 and 3) measures 2.00 m x 1.50 m in one photo", async () => {
+    const bits = await dictionary();
+    const cam: Camera = { width: 1280, height: 960, hfovDeg: 70, pos: [1000, -2050, 1000], pitchDeg: 30 };
+    const a3: PlacedMarker[] = [
+      { id: 2, x: 420, y: -620, size: 250, rotDeg: 8 },
+      { id: 3, x: 1330, y: -600, size: 250, rotDeg: -5 },
+    ];
+    const rect = { x: 0, y: 0, w: 2000, h: 1500 };
+    const img = render(cam, a3, bits, rect);
+    const found = await detectMarkers(img);
+    expect(liveReach(found.map((f) => ({ id: f.id, corners: f.corners.map((c) => ({ x: c.x / img.width, y: c.y / img.height })) })))?.set.name).toBe("A3");
+    const cal = calibrate(found, img.width);
+    expect(cal.ok, cal.ok ? "" : cal.reason).toBe(true);
+    if (!cal.ok) return;
+    const m = measure(
+      cal,
+      [
+        { x: 0, y: 0 },
+        { x: 2000, y: 0 },
+        { x: 2000, y: 1500 },
+        { x: 0, y: 1500 },
+      ].map((p) => project(cam, p)),
+    );
+    console.log(`A3 markers: ${cal.widths.map((w) => (w * 100).toFixed(1)).join(" / ")}% of the width, reach ${cal.reachM.toFixed(2)} m, area ${m.areaSqm.toFixed(4)} sqm`);
+    expect(cal.set.mm).toBe(250);
+    expect(m.tooBig).toBe(false);
+    expect(Math.abs(m.areaSqm - 3) / 3).toBeLessThan(0.01);
   });
 });

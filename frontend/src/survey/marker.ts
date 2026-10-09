@@ -1,10 +1,16 @@
-// Marker photo maths. Two printed ArUco markers (ARUCO_MIP_36h12 ids 0 and 1, exactly 150 mm
-// across the black square) lie flat on the surface. Each detected marker gives a homography from
+// Marker photo maths. Two printed ArUco markers lie flat on the surface: the A4 pair
+// (ARUCO_MIP_36h12 ids 0 and 1, exactly 150 mm across the black square) or the A3 pair (ids 2
+// and 3, 250 mm), one marker per page, laid at any spacing and angle. Each detected marker gives a homography from
 // that plane (mm) to the photo (px); the user taps the area's corners on the photo and we map
 // them back to the plane. The two markers must agree on the scale within 2 %.
 
-export const MARKER_MM = 150;
 export const MIN_MARKER_SHARE = 0.1; // of the frame width
+/** The printed sets: the id pair says which sheet (and so the marker size) is in the photo. */
+export const MARKER_SETS = [
+  { name: "A4", ids: [0, 1], mm: 150 },
+  { name: "A3", ids: [2, 3], mm: 250 },
+] as const;
+export type MarkerSet = (typeof MARKER_SETS)[number];
 export const MAX_SCALE_DISAGREEMENT = 0.02;
 
 export type Pt = { x: number; y: number };
@@ -84,20 +90,48 @@ export function sides(pts: Pt[]): number[] {
   });
 }
 
-/** The marker's own plane: its four corners in mm, in the detector's corner order. */
-const PLANE: Pt[] = [
-  { x: 0, y: 0 },
-  { x: MARKER_MM, y: 0 },
-  { x: MARKER_MM, y: MARKER_MM },
-  { x: 0, y: MARKER_MM },
-];
+/** A marker's own plane: its four corners in mm, in the detector's corner order. */
+function plane(mm: number): Pt[] {
+  return [
+    { x: 0, y: 0 },
+    { x: mm, y: 0 },
+    { x: mm, y: mm },
+    { x: 0, y: mm },
+  ];
+}
+
+/** The set in the photo: the one with most of its markers found (A4 first on a tie). */
+export function markerSet(found: { id: number }[]): MarkerSet {
+  const n = (set: MarkerSet) => set.ids.filter((id) => found.some((m) => m.id === id)).length;
+  return [...MARKER_SETS].sort((a, b) => n(b) - n(a))[0];
+}
+
+/** How far across this photo can measure: the frame width at the markers (marker size / its
+ * share of the frame), in metres. At the 10 % limit that is 1.5 m for A4 and 2.5 m for A3. */
+export function reachM(mm: number, shares: number[]): number {
+  return mm / Math.min(...shares) / 1000;
+}
+
+/** The live estimate from markers found in a preview frame (corners in 0..1 of the frame). */
+export function liveReach(live: Detected[]): { set: MarkerSet; reachM: number } | null {
+  const set = markerSet(live);
+  const ours = live.filter((m) => (set.ids as readonly number[]).includes(m.id));
+  if (!ours.length) return null;
+  const shares = ours.map((m) => Math.max(...m.corners.map((c) => c.x)) - Math.min(...m.corners.map((c) => c.x)));
+  return { set, reachM: reachM(set.mm, shares) };
+}
 
 export type Calibration =
-  { ok: true; toPlane: H[]; joint: H; markers: Detected[]; scaleDisagreement: number; widths: number[] } | { ok: false; reason: string; markers: Detected[] };
+  | { ok: true; toPlane: H[]; joint: H; markers: Detected[]; scaleDisagreement: number; widths: number[]; set: MarkerSet; reachM: number }
+  | { ok: false; reason: string; markers: Detected[] };
 
 /** Check the detected markers and build the image -> plane mappings. */
 export function calibrate(found: Detected[], frameWidth: number): Calibration {
-  const ours = [0, 1].map((id) => found.find((m) => m.id === id)).filter((m): m is Detected => !!m);
+  const set = markerSet(found);
+  const PLANE = plane(set.mm);
+  const ours = set.ids.map((id) => found.find((m) => m.id === id)).filter((m): m is Detected => !!m);
+  const other = found.filter((m) => !(set.ids as readonly number[]).includes(m.id) && MARKER_SETS.some((st) => (st.ids as readonly number[]).includes(m.id)));
+  if (ours.length === 2 && other.length) return { ok: false, reason: "Markers from both sheet sizes are in the photo: use one pair only (A4 or A3).", markers: found };
   if (ours.length === 0) return { ok: false, reason: "No marker found: lay both sheets flat and keep them fully in the photo.", markers: found };
   if (ours.length === 1) return { ok: false, reason: "Only one marker found: both sheets must be in the photo.", markers: ours };
   const widths = ours.map((m) => (Math.max(...m.corners.map((c) => c.x)) - Math.min(...m.corners.map((c) => c.x))) / frameWidth);
@@ -105,11 +139,11 @@ export function calibrate(found: Detected[], frameWidth: number): Calibration {
     return { ok: false, reason: `Move closer: a marker is only ${Math.round(Math.min(...widths) * 100)}% of the photo width (needs 10%).`, markers: ours };
   const H = ours.map((m) => homography(PLANE, m.corners)); // plane -> image
   const toPlane = H.map(invert);
-  // marker 1 measured in marker 0's plane must come out 150 mm a side (and the other way round)
+  // marker 1 measured in marker 0's plane must come out the printed size (and the other way round)
   const scale = (from: number, to: number) => {
     const pts = ours[to].corners.map((c) => apply(toPlane[from], c));
     const s = sides(pts);
-    return s.reduce((a, b) => a + b, 0) / s.length / MARKER_MM;
+    return s.reduce((a, b) => a + b, 0) / s.length / set.mm;
   };
   const disagreement = Math.max(Math.abs(scale(0, 1) - 1), Math.abs(scale(1, 0) - 1));
   if (disagreement > MAX_SCALE_DISAGREEMENT)
@@ -118,13 +152,16 @@ export function calibrate(found: Detected[], frameWidth: number): Calibration {
       reason: `The two markers disagree on scale by ${(disagreement * 100).toFixed(1)}% (more than 2%): flatten the sheets and take the photo again.`,
       markers: ours,
     };
-  return { ok: true, toPlane, joint: jointFit(ours), markers: ours, scaleDisagreement: disagreement, widths };
+  return { ok: true, toPlane, joint: jointFit(ours, set.mm), markers: ours, scaleDisagreement: disagreement, widths, set, reachM: reachM(set.mm, widths) };
 }
 
-/** One plane homography from both markers' eight corners: marker 1's place on the floor is not
- * known, so it is estimated (rotation and offset, size fixed at 150 mm) in turn with the
- * homography. The two markers' wider spread pins the perspective far better than either alone. */
-export function jointFit(ours: Detected[]): H {
+/** One plane homography from both markers' eight corners. The two sheets are loose, so marker
+ * 1's place on the floor is not assumed: it is estimated (any rotation and offset, size fixed at
+ * the printed size) in turn with the homography. Each marker's own homography stays the
+ * independent scale check (calibrate). The markers' wider spread pins the perspective far better
+ * than either alone. */
+export function jointFit(ours: Detected[], mm: number): H {
+  const PLANE = plane(mm);
   let h = invert(homography(PLANE, ours[0].corners)); // image -> marker 0's plane
   for (let iter = 0; iter < 8; iter++) {
     const seen = ours[1].corners.map((c) => apply(h, c));
@@ -229,7 +266,26 @@ function intersect(a: Line, b: Line): Pt | null {
   return { x: a.p.x + a.d.x * t, y: a.p.y + a.d.y * t };
 }
 
-export type Measurement = { polygonM: [number, number][]; sidesM: number[]; areaSqm: number; spread: number };
+export type Measurement = { polygonM: [number, number][]; sidesM: number[]; areaSqm: number; spread: number; extentM: number; reachM: number; tooBig: boolean };
+
+/** The longer side of the smallest rectangle around the outline (rotating the box to each edge). */
+export function extent(pts: Pt[]): number {
+  let best = { area: Infinity, long: 0 };
+  pts.forEach((a, i) => {
+    const b = pts[(i + 1) % pts.length];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len === 0) return;
+    const u = { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
+    const along = pts.map((p) => p.x * u.x + p.y * u.y);
+    const across = pts.map((p) => -p.x * u.y + p.y * u.x);
+    const w = Math.max(...along) - Math.min(...along);
+    const h = Math.max(...across) - Math.min(...across);
+    if (w * h < best.area) best = { area: w * h, long: Math.max(w, h) };
+  });
+  return best.long;
+}
+
+export const TOO_BIG = "Too big for one marker photo: use AR or the laser.";
 
 /** Tapped corners (px) -> the area in the markers' plane: each marker's estimate, averaged. */
 export function measure(cal: Extract<Calibration, { ok: true }>, taps: Pt[]): Measurement {
@@ -241,7 +297,9 @@ export function measure(cal: Extract<Calibration, { ok: true }>, taps: Pt[]): Me
   const polygonM = first.map((p) => [Math.round(p.x - origin.x) / 1000, Math.round(p.y - origin.y) / 1000] as [number, number]);
   const sidesM = sides(first).map((s) => s / 1000);
   const areaSqm = areas[0];
-  return { polygonM, sidesM, areaSqm, spread: Math.abs(areas[1] - areas[2]) / areaSqm };
+  const extentM = extent(first) / 1000;
+  // what the markers allow: the frame width at the markers, a little slack for tapping
+  return { polygonM, sidesM, areaSqm, spread: Math.abs(areas[1] - areas[2]) / areaSqm, extentM, reachM: cal.reachM, tooBig: extentM > cal.reachM * 1.05 };
 }
 
 /** Detect the markers in an image (js-aruco2 is loaded only when the camera needs it). */

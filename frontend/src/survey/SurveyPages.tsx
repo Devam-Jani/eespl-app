@@ -118,7 +118,10 @@ export function SurveysList() {
             Camera pilot
           </Link>
           <button className="btn btn-small btn-ghost" onClick={() => void downloadFile("/api/surveys/marker-sheet.pdf").catch((e) => alert(errorText(e)))}>
-            ⤓ Marker sheet
+            ⤓ Marker sheet A4 (up to 1.5 m)
+          </button>
+          <button className="btn btn-small btn-ghost" onClick={() => void downloadFile("/api/surveys/marker-sheet.pdf?size=a3").catch((e) => alert(errorText(e)))}>
+            ⤓ Marker sheet A3 (up to 2.5 m)
           </button>
           {can("survey.edit") && (
             <button className="btn btn-primary" onClick={() => setCreating(true)}>

@@ -13,11 +13,17 @@ from app.survey import service as svc
 from app.survey.models import CAMERA_METHODS, AreaType, Survey
 from app.tenders.export import company, inr
 
-# ARUCO_MIP_36h12 codes 0 and 1: the dictionary js-aruco2 detects by default. 36 bits, row by
+# ARUCO_MIP_36h12 codes 0 to 3: the dictionary js-aruco2 detects by default. 36 bits, row by
 # row over a 6 x 6 grid; a 1 is a white cell. The marker is that grid inside a one-cell black
-# border (8 x 8 cells), so 150 mm across the black square = 18.75 mm a cell.
-MARKER_CODES = {0: 0xD2B63A09D, 1: 0x6001134E5}
+# border (8 x 8 cells). Ids 0 and 1 are the A4 pair (150 mm across the black square), ids 2 and
+# 3 the A3 pair (250 mm): the app tells the size from the ids.
+MARKER_CODES = {0: 0xD2B63A09D, 1: 0x6001134E5, 2: 0x1206FBE72, 3: 0xFF8AD6CB4}
 MARKER_MM = 150
+SHEETS = {
+    # ids, black square mm, white quiet zone in cells, page
+    "a4": ((0, 1), 150, 1.0, "A4", 210, 297),
+    "a3": ((2, 3), 250, 0.5, "A3", 297, 420),
+}
 
 
 def marker_bits(marker_id: int) -> list[list[int]]:
@@ -25,18 +31,20 @@ def marker_bits(marker_id: int) -> list[list[int]]:
     return [[int(bits[r * 6 + c]) for c in range(6)] for r in range(6)]
 
 
-def marker_svg(marker_id: int) -> str:
-    """The marker, exactly 150 mm across the black square, with its white quiet zone."""
+def marker_svg(marker_id: int, mm: int = MARKER_MM, quiet: float = 1.0) -> str:
+    """The marker, exactly `mm` across the black square, with its white quiet zone."""
+    q = quiet
     cells = "".join(
-        f'<rect x="{c + 2}" y="{r + 2}" width="1.002" height="1.002" fill="#fff"/>'
+        f'<rect x="{c + 1 + q}" y="{r + 1 + q}" width="1.002" height="1.002" fill="#fff"/>'
         for r, row in enumerate(marker_bits(marker_id))
         for c, bit in enumerate(row)
         if bit
     )
-    cell = MARKER_MM / 8
+    cell = mm / 8
+    n = 8 + 2 * q
     return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{cell * 10}mm" height="{cell * 10}mm" viewBox="0 0 10 10">'
-        f'<rect x="0" y="0" width="10" height="10" fill="#fff"/><rect x="1" y="1" width="8" height="8" fill="#000"/>{cells}</svg>'
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{cell * n}mm" height="{cell * n}mm" viewBox="0 0 {n} {n}">'
+        f'<rect x="0" y="0" width="{n}" height="{n}" fill="#fff"/><rect x="{q}" y="{q}" width="8" height="8" fill="#000"/>{cells}</svg>'
     )
 
 
@@ -55,26 +63,33 @@ def ruler_svg() -> str:
     )
 
 
-def marker_sheet(db: Session) -> bytes:
-    """Two A4 pages, one 150 mm marker each (two do not fit on one A4 with their margins)."""
+def marker_sheet(db: Session, size: str = "a4") -> bytes:
+    """Two pages, one marker each: A4 with 150 mm markers, or A3 with 250 mm markers (frames
+    about 2.5 m across at the 10 % limit). Two markers never fit on one page with their margins,
+    and the pages may be laid at any spacing: the app works out where the second one lies."""
     from weasyprint import HTML
 
+    ids, mm, quiet, page, page_w, page_h = SHEETS[size]
     c = company(db)
     pages = []
-    for marker_id in (0, 1):
+    for n, marker_id in enumerate(ids, start=1):
         pages.append(f"""<section class="sheet">
-<div class="top"><b>{e(c.name)}</b> · measuring camera marker {marker_id + 1} of 2</div>
+<div class="top"><b>{e(c.name)}</b> · measuring camera marker {n} of 2 ({page}, {mm} mm)</div>
 <div class="warn">PRINT AT 100% (ACTUAL SIZE). DO NOT SCALE OR "FIT TO PAGE".</div>
-<div class="marker">{marker_svg(marker_id)}</div>
-<div class="check">The black square must measure exactly 150 mm. Print check: the ruler below must measure exactly 100 mm (0 to 10 cm).</div>
+<div class="marker">{marker_svg(marker_id, mm, quiet)}</div>
+<div class="check">The black square must measure exactly {mm} mm. Print check: the ruler below must measure exactly 100 mm (0 to 10 cm).</div>
 <div class="ruler">{ruler_svg()}</div>
-<div class="how">Lay both sheets flat on the surface you measure, a little apart, fully in the photo. Keep them clean and uncreased.</div>
+<div class="how">Lay both sheets flat on the surface you measure, a little apart, at any angle, fully in the photo. Keep them clean and uncreased.</div>
 </section>""")
-    css = """@page { size: A4; margin: 0; } body { margin: 0; font-family: "DejaVu Sans", sans-serif; }
-.sheet { width: 210mm; height: 297mm; page-break-after: always; text-align: center; box-sizing: border-box; padding-top: 14mm; }
+    css = (
+        f"""@page {{ size: {page}; margin: 0; }} .sheet {{ width: {page_w}mm; height: {page_h}mm; }}
+"""
+        + """body { margin: 0; font-family: "DejaVu Sans", sans-serif; }
+.sheet { page-break-after: always; text-align: center; box-sizing: border-box; padding-top: 14mm; }
 .sheet:last-child { page-break-after: auto; } .top { font-size: 10pt; } .warn { font-size: 11pt; font-weight: bold; margin: 5mm 0 6mm; }
 .marker { display: flex; justify-content: center; } .marker svg { display: block; }
 .check { font-size: 9pt; margin: 6mm 20mm 3mm; } .ruler { display: flex; justify-content: center; } .how { font-size: 9pt; margin: 6mm 20mm; color: #444; }"""
+    )
     return HTML(
         string=f"<!doctype html><html><head><meta charset='utf-8'><style>{css}</style></head><body>{''.join(pages)}</body></html>"
     ).write_pdf()

@@ -1,0 +1,31 @@
+# Phone testing on the office network (docker compose --profile lan-https up -d).
+# The camera and WebXR need HTTPS on a phone; Caddy serves the web app over HTTPS on the PC's LAN
+# address with its own local certificate authority. Only private (LAN) addresses get an answer.
+# Never forward these ports on the router: this is for the office network only.
+{
+	local_certs
+	skip_install_trust
+	auto_https disable_redirects
+	# phones send no SNI for an IP address: use the LAN address certificate by default
+	default_sni {$LAN_IP}
+}
+
+https://{$LAN_IP} {
+	tls internal
+	@outside not remote_ip private_ranges
+	abort @outside
+	reverse_proxy web:5173
+}
+
+# The root certificate to install on the phone (plain HTTP, LAN only, nothing else here).
+http://{$LAN_IP} {
+	@outside not remote_ip private_ranges
+	abort @outside
+	handle /eespl-local-root.crt {
+		header Content-Type application/x-x509-ca-cert
+		root * /data/caddy/pki/authorities/local
+		rewrite * /root.crt
+		file_server
+	}
+	respond "EESPL phone testing: open https://{$LAN_IP}:8443 (install /eespl-local-root.crt first)" 200
+}

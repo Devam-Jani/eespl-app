@@ -2934,3 +2934,43 @@ li.late a {
   color: #fff;
   border-color: rgba(255, 255, 255, 0.5);
 }
+.too-big {
+  display: block;
+  margin-top: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(213, 94, 0, 0.9);
+  color: #fff;
+}
+/* the survey colours, on the 3D view itself */
+.legend3d-overlay {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  font-size: 0.8rem;
+  pointer-events: none;
+}
+/* phones: page actions (search, filters, buttons) wrap instead of widening the page */
+@media (max-width: 760px) {
+  .page-header .page-actions {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+  .page-header .page-actions > form {
+    flex: 1 1 100%;
+  }
+  .page-header .page-actions .search {
+    width: 100%;
+  }
+  .page-header .page-actions > select {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
