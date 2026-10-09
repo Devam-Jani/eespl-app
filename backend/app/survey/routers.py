@@ -513,6 +513,7 @@ def site_map(site_id: int, db: DbSession, principal: CurrentPrincipal, _: View) 
             "nodes": {str(k): v for k, v in state.items()},
             "products": by_node,
             "unplaced_areas": sum(1 for a in areas if a.node_id is None),
+            "ready": sorted(svc.ready_nodes(db, site.id)),
         }
     )
 
@@ -1399,6 +1400,37 @@ class IndentFromSurvey(BaseModel):
     site_id: int | None = None
     floors: list[str] | None = None  # floor keys ("T1 Floor 2"); none: the whole survey
     required_by: date | None = None
+    # planning may order ahead: by default only areas on a "work front ready" place are ordered
+    include_not_ready: bool = False
+
+
+@router.get("/{sid}/fronts")
+def survey_fronts(sid: int, db: DbSession, principal: CurrentPrincipal, scope: View) -> dict:
+    """Each floor of the survey with how many of its areas are on a "work front ready" place."""
+    s = svc.get_visible(db, sid, scope, principal)
+    site_id = s.site_id or (
+        db.scalar(select(Site.id).where(Site.tender_id == s.tender_id)) if s.tender_id else None
+    )
+    ready = svc.ready_nodes(db, site_id) if site_id else set()
+    floors: dict[str, dict] = {}
+    for a in s.areas:
+        key = " ".join(x for x in (a.tower, a.floor_label) if x) or "No floor"
+        f = floors.setdefault(
+            key,
+            {
+                "key": key,
+                "areas": 0,
+                "ready_areas": 0,
+                "treated_sqm": Decimal(0),
+                "ready_sqm": Decimal(0),
+            },
+        )
+        f["areas"] += 1
+        f["treated_sqm"] += Decimal(a.treated_area_sqm or 0)
+        if a.node_id in ready:
+            f["ready_areas"] += 1
+            f["ready_sqm"] += Decimal(a.treated_area_sqm or 0)
+    return jsonable_encoder({"site_id": site_id, "floors": list(floors.values())})
 
 
 @router.post("/{sid}/indent", status_code=status.HTTP_201_CREATED)
@@ -1431,18 +1463,25 @@ def create_indent(
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, "Missing permission: indent.create on that site"
         )
+    ready = svc.ready_nodes(db, site.id)
     areas = [
         a
         for a in s.areas
-        if body.floors is None
-        or (" ".join(x for x in (a.tower, a.floor_label) if x) or "No floor") in body.floors
+        if (
+            body.floors is None
+            or (" ".join(x for x in (a.tower, a.floor_label) if x) or "No floor") in body.floors
+        )
+        and (body.include_not_ready or a.node_id in ready)
     ]
     c = svc.consumption(db, areas)
     rows = [r for r in svc.packs(db, c.products) if r["qty"] > 0]
     if not rows:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "No product quantities on those floors (pick systems first)",
+            "No product quantities on those floors (pick systems first)"
+            if body.include_not_ready
+            else "No work front is ready on those floors: the supervisor ticks “work front ready” on site, "
+            "or switch on “show not ready” to order ahead",
         )
     store = material.site_store(db, site, principal.user.id)
     floors = ", ".join(body.floors) if body.floors else "all floors"

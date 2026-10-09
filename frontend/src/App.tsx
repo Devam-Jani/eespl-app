@@ -50,6 +50,7 @@ const SurveySettings = lazy(() => sv().then((m) => ({ default: m.SurveySettings 
 const qp = () => import("./quotations/QuotationPages");
 const QuotationsList = lazy(() => qp().then((m) => ({ default: m.QuotationsList })));
 const QuotationEditor = lazy(() => qp().then((m) => ({ default: m.QuotationEditor })));
+const WorkFronts = lazy(() => import("./pages/site/WorkFronts"));
 const QuotationLibrary = lazy(() => import("./quotations/LibraryPages").then((m) => ({ default: m.QuotationLibrary })));
 // dashboards and analytics (with their charts) are one chunk
 const Dashboard = lazy(() => import("./analytics/Dashboard"));
@@ -184,6 +185,14 @@ export default function App() {
                 element={
                   <RequirePermission perms={["survey.view"]}>
                     <PilotReport />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="/sites/:id/fronts"
+                element={
+                  <RequirePermission perms={["site.view"]}>
+                    <WorkFronts />
                   </RequirePermission>
                 }
               />

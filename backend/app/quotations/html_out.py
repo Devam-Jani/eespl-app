@@ -38,23 +38,76 @@ def _clause(text: str) -> str:
     return "".join(out)
 
 
+def band_mm(path: Path | None) -> float:
+    """The height of a full-width (210 mm) band image, mm."""
+    if not path:
+        return 0.0
+    from PIL import Image  # noqa: PLC0415
+
+    with Image.open(path) as im:
+        w, h = im.size
+    return round(210 * h / w, 1) if w else 0.0
+
+
+def _ratio(path: Path | None) -> float:
+    """height / width of an image."""
+    if not path:
+        return 1.0
+    from PIL import Image  # noqa: PLC0415
+
+    with Image.open(path) as im:
+        w, h = im.size
+    return h / w if w else 1.0
+
+
+def image_letterhead(doc: Doc) -> bool:
+    return bool(doc.header_image or doc.footer_image)
+
+
 def css(doc: Doc, for_pdf: bool) -> str:
+    box = 'font-family: "DejaVu Sans", Arial, sans-serif; color: #555; vertical-align: top; padding-top: 3mm;'
+    if image_letterhead(doc):
+        # bands across the page: the text keeps clear of them; on pre-printed paper the space stays blank
+        top, bottom = band_mm(doc.header_image) + 6, band_mm(doc.footer_image) + 12
+        margins = f"{top}mm 16mm {bottom}mm 16mm"
+        letterhead_box = ""
+        # fixed boxes repeat on every page; they sit in the text area, so they are pulled out to
+        # the page edges by the margins
+        bg = ""
+        wm = 150
+        mark_top = 148.5 - top - wm * _ratio(doc.watermark) / 2 if doc.watermark else 0
+        extra_css = f"""
+.lh-fixed {{ position: fixed; left: -16mm; width: 210mm; }}
+.lh-fixed img {{ display: block; width: 100%; }}
+.lh-top {{ top: -{top}mm; }}
+.lh-bottom {{ bottom: -{bottom}mm; }}
+.lh-mark {{ top: {mark_top:.1f}mm; left: {(210 - wm) / 2 - 16:.1f}mm; width: {wm}mm; z-index: -1; }}
+"""
+    else:
+        margins = "34mm 16mm 22mm 16mm"
+        bg = ""
+        extra_css = ""
+        letterhead_box = (
+            "" if doc.preprinted else "@top-center { content: element(letterhead); width: 100%; }"
+        )
     page = (
         f"""
 @page {{
-  size: A4; margin: 34mm 16mm 22mm 16mm;
-  @top-center {{ content: element(letterhead); width: 100%; }}
-  @bottom-left {{ font-family: "DejaVu Sans", Arial, sans-serif; content: "{escape(doc.footer)}"; font-size: 8pt; color: #555; }}
-  @bottom-center {{ font-family: "DejaVu Sans", Arial, sans-serif; content: "{escape(doc.footer_text.replace(chr(10), ' '))}"; font-size: 7.5pt; color: #555; }}
-  @bottom-right {{ font-family: "DejaVu Sans", Arial, sans-serif; content: "Page " counter(page) " of " counter(pages); font-size: 8pt; color: #555; }}
+  size: A4; margin: {margins}; {bg}
+  {letterhead_box}
+  @bottom-left {{ {box} content: "{escape(doc.footer)}"; font-size: 8pt; }}
+  @bottom-center {{ {box} content: "{escape(doc.footer_text.replace(chr(10), " "))}"; font-size: 7.5pt; }}
+  @bottom-right {{ {box} content: "Page " counter(page) " of " counter(pages); font-size: 8pt; }}
 }}
 .letterhead {{ position: running(letterhead); }}
-"""
+{extra_css}"""
         if for_pdf
         else """
 body { max-width: 190mm; margin: 0 auto; padding: 12px 18px 40px; background: #fff; }
 .letterhead { border-bottom: 2px solid var(--primary); margin-bottom: 14px; }
 .page-break { border-top: 1px dashed #bbb; margin: 22px 0 10px; }
+img.band { display: block; width: calc(100% + 36px); margin: -12px -18px 12px; }
+.footer-note + img.band { margin: 8px -18px -40px; }
 .footer-note { color: #666; font-size: 8pt; text-align: right; border-top: 1px solid #ddd; margin-top: 30px; padding-top: 4px; }
 """
     )
@@ -72,6 +125,7 @@ p {{ margin: 0 0 5px; }}
 .sign {{ margin-top: 14px; }}
 .page-break {{ break-before: page; }}
 h2.item {{ font-size: 10pt; margin: 14px 0 6px; color: #111; break-after: avoid; page-break-after: avoid; }}
+p.subtitle {{ font-weight: bold; margin: -2px 0 6px; break-after: avoid; }}
 h3.stage {{ font-size: 9.5pt; margin: 8px 0 3px; break-after: avoid; page-break-after: avoid; }}
 p.or {{ font-weight: bold; text-align: center; margin: 8px 0; break-after: avoid; page-break-after: avoid; }}
 /* numbers printed as text: the same in the browser preview and the PDF, never restarting */
@@ -106,12 +160,31 @@ ol.sub {{ margin: 2px 0 2px 16px; }}
 
 def html(doc: Doc, for_pdf: bool = True) -> str:
     logo = _img(doc.logo)
-    parts = [
-        '<div class="letterhead">',
-        f'<img src="{logo}" alt="">' if logo else "",
-        f'<div><div class="lh-name">{escape(doc.company_name)}</div>'
-        f'<div class="lh-text">{escape(doc.header_text)}</div></div></div>',
-    ]
+    if image_letterhead(doc):
+        # the PDF repeats the bands and the watermark on every page; the preview shows the bands
+        # at its top and end
+        parts = []
+        if for_pdf and not doc.preprinted:
+            for cls, path in (
+                ("lh-mark", doc.watermark),
+                ("lh-top", doc.header_image),
+                ("lh-bottom", doc.footer_image),
+            ):
+                if path:
+                    parts.append(
+                        f'<div class="lh-fixed {cls}"><img src="{_img(path)}" alt=""></div>'
+                    )
+        if not for_pdf and doc.header_image and not doc.preprinted:
+            parts.append(f'<img class="band" src="{_img(doc.header_image)}" alt="">')
+    elif doc.preprinted:
+        parts = []
+    else:
+        parts = [
+            '<div class="letterhead">',
+            f'<img src="{logo}" alt="">' if logo else "",
+            f'<div><div class="lh-name">{escape(doc.company_name)}</div>'
+            f'<div class="lh-text">{escape(doc.header_text)}</div></div></div>',
+        ]
     # the cover letter (a library preview of one block has none)
     has_letter = bool(doc.subject.strip() or "".join(doc.body).strip())
     if has_letter:
@@ -137,6 +210,8 @@ def html(doc: Doc, for_pdf: bool = True) -> str:
             if s.or_before:
                 parts.append('<p class="or"><mark>OR</mark></p>')
             parts.append(f'<h2 class="item">{escape(s.heading)}</h2>')
+            if s.subtitle:
+                parts.append(f'<p class="subtitle">{escape(s.subtitle)}</p>')
             for sec in s.sections:
                 if sec.or_before:
                     parts.append('<p class="or"><mark>OR</mark></p>')
@@ -213,6 +288,8 @@ def html(doc: Doc, for_pdf: bool = True) -> str:
         parts.append("</tbody></table>")
     if not for_pdf:
         parts.append(f'<div class="footer-note">{escape(doc.footer)}</div>')
+        if image_letterhead(doc) and doc.footer_image and not doc.preprinted:
+            parts.append(f'<img class="band" src="{_img(doc.footer_image)}" alt="">')
     title = f"{doc.code} R{doc.revision}"
     return (
         f"<!doctype html><html><head><meta charset='utf-8'><title>{escape(title)}</title>"

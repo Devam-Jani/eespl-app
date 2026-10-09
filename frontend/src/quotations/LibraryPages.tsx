@@ -10,11 +10,12 @@ import { errorText } from "../format";
 import { loadLookups, MarkupField, plain, SectionsEditor, useLookups } from "./common";
 import type { Lookups, Section } from "./common";
 
-type Kind = "letterhead" | "letter" | "spec" | "line" | "item" | "reference";
+type Kind = "letterhead" | "letter" | "spec" | "line" | "item" | "reference" | "preset";
 type Row = Record<string, unknown> & { id: number; version: number; needs_check: boolean; is_active: boolean; updated_at: string };
 type Version = { version: number; action: string; note: string | null; by: string | null; at: string; data: Record<string, unknown> };
 
 const TABS: { kind: Kind | "settings"; label: string }[] = [
+  { kind: "preset", label: "Presets" },
   { kind: "item", label: "Offer items" },
   { kind: "spec", label: "Specifications" },
   { kind: "line", label: "Offer lines" },
@@ -29,6 +30,7 @@ function title(kind: Kind, r: Row): string {
   if (kind === "spec") return `${r.option_label ? `Opt.${v("option_label")} · ` : ""}${v("title")}`;
   if (kind === "line") return plain(v("description")).slice(0, 90);
   if (kind === "reference") return `${v("client_name")} · ${v("project")}`;
+  if (kind === "preset") return `${v("name")} (${Array.isArray(r.items) ? r.items.length : 0} areas)`;
   return v("name");
 }
 
@@ -102,6 +104,12 @@ function KindPanel({ kind }: { kind: Kind }) {
               <button className={`outline-row ${sel !== "new" && sel?.id === r.id ? "on" : ""}`} onClick={() => setSel(r)}>
                 {title(kind, r)} <span className="muted small">v{r.version}</span>
                 {r.needs_check && <span className="badge badge-warn">imported, check</span>}
+                {r.area_type_missing === true && <span className="badge badge-warn">area type missing</span>}
+                {Array.isArray(r.checks) && r.checks.length > 0 && (
+                  <span className="badge badge-orange" title={(r.checks as string[]).join("\n")}>
+                    {r.checks.length} check{r.checks.length > 1 ? "s" : ""}
+                  </span>
+                )}
               </button>
             </li>
           ))}
@@ -148,6 +156,7 @@ const BLANK: Record<Kind, Record<string, unknown>> = {
   line: { description: "", uom: "sqft", rate_source: "fixed", default_rate: "", if_required: false, client_scope: false },
   item: { name: "", budget_title: "", area_type_id: null, sort_order: 0, specs: [], lines: [] },
   reference: { client_name: "", project: "", application: "", area_value: "", area_unit: "SQFT", state: "", include: true, sort_order: 0 },
+  preset: { name: "", letterhead_id: null, letter_template_id: null, tc_template_id: null, items: [], include_references: true },
 };
 
 function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | null; lookups: Lookups; edit: boolean; onSaved: (r: Row) => void }) {
@@ -173,7 +182,7 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
   async function save() {
     setError("");
     const body = { ...f };
-    for (const k of ["id", "version", "updated_at", "kind", "area_type_name", "created_at"]) delete body[k];
+    for (const k of ["id", "version", "updated_at", "kind", "area_type_name", "created_at", "checks", "area_type_missing", "item_names"]) delete body[k];
     for (const k of ["default_rate", "area_value", "area_type_id", "system_id", "library_item_id", "tc_template_id", "letter_template_id"]) if (body[k] === "") body[k] = null;
     if (kind === "item") {
       body.specs = ((f.specs as { spec_block_id: number }[]) ?? []).map((s) => ({ spec_block_id: s.spec_block_id }));
@@ -245,13 +254,27 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
             </div>
             <MarkupField label="Header text" value={v("header_text")} onChange={(x) => set("header_text", x)} rows={2} disabled={ro} />
             <MarkupField label="Footer text" value={v("footer_text")} onChange={(x) => set("footer_text", x)} rows={2} disabled={ro} />
-            {row && <Logo path={v("logo_path")} />}
-            {row && edit && (
-              <label className="field">
-                <span>Logo</span>
-                <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && void upload(`/api/quotations/library/letterhead/${row.id}/logo`, e.target.files[0])} />
-              </label>
-            )}
+            <label className="check">
+              <input type="checkbox" checked={!!f.preprinted} onChange={(e) => set("preprinted", e.target.checked)} disabled={ro} /> Pre-printed paper: leave the header and footer
+              space blank (for printing on letterhead stationery)
+            </label>
+            {row &&
+              (["logo", "header", "footer", "watermark"] as const).map((slot) => {
+                const key = { logo: "logo_path", header: "header_image_path", footer: "footer_image_path", watermark: "watermark_path" }[slot];
+                return (
+                  <div key={slot} className="field">
+                    <span>{{ logo: "Logo", header: "Header band (full width)", footer: "Footer band (full width)", watermark: "Watermark (made faint)" }[slot]}</span>
+                    <Logo path={v(key)} />
+                    {edit && (
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => e.target.files?.[0] && void upload(`/api/quotations/library/letterhead/${row.id}/logo?slot=${slot}`, e.target.files[0])}
+                      />
+                    )}
+                  </div>
+                );
+              })}
             <p className="muted small">The default T&amp;C set for this letterhead is a T&amp;C template (Masters › T&amp;C library); the applicator clause always names EESPL.</p>
           </>
         )}
@@ -334,7 +357,18 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
             </label>
           </>
         )}
+        {kind === "item" && Array.isArray(f.checks) && (f.checks as string[]).length > 0 && (
+          <div className="alert alert-warn checks">
+            <b>Specification and budgetary offer do not agree</b> (warnings, not blocks):
+            <ul>
+              {(f.checks as string[]).map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         {kind === "item" && <ItemEditor f={f} set={set} lookups={lookups} ro={ro} />}
+        {kind === "preset" && <PresetEditor f={f} set={set} lookups={lookups} ro={ro} />}
         {kind === "reference" && (
           <div className="form-grid two">
             {input("client_name", "Client")}
@@ -666,5 +700,96 @@ function SettingsPanel() {
         )}
       </div>
     </div>
+  );
+}
+
+function PresetEditor({ f, set, lookups, ro }: { f: Record<string, unknown>; set: (k: string, v: unknown) => void; lookups: Lookups; ro: boolean }) {
+  const items = (f.items as { offer_item_id: number; options: string[] }[]) ?? [];
+  const name = (id: number) => lookups.offer_items.find((i) => i.id === id)?.name ?? `#${id}`;
+  const move = (i: number, d: number) => {
+    const next = [...items];
+    const [x] = next.splice(i, 1);
+    next.splice(Math.max(0, Math.min(next.length, i + d)), 0, x);
+    set("items", next);
+  };
+  const v = (k: string) => (f[k] ?? "") as string;
+  return (
+    <>
+      <div className="form-grid two">
+        <label className="field">
+          <span>Name</span>
+          <input value={v("name")} onChange={(e) => set("name", e.target.value)} disabled={ro} placeholder="Bungalow - EESPL" />
+        </label>
+        <label className="field">
+          <span>Letterhead</span>
+          <select value={v("letterhead_id")} onChange={(e) => set("letterhead_id", e.target.value ? Number(e.target.value) : null)} disabled={ro}>
+            <option value="">—</option>
+            {lookups.letterheads.map((h) => (
+              <option key={h.id} value={h.id}>
+                {h.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Letter template</span>
+          <select value={v("letter_template_id")} onChange={(e) => set("letter_template_id", e.target.value ? Number(e.target.value) : null)} disabled={ro}>
+            <option value="">The letterhead's</option>
+            {lookups.letters.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>T&amp;C template id (empty: the letterhead's)</span>
+          <input value={v("tc_template_id")} onChange={(e) => set("tc_template_id", e.target.value ? Number(e.target.value) : null)} disabled={ro} />
+        </label>
+      </div>
+      <label className="check">
+        <input type="checkbox" checked={!!f.include_references} onChange={(e) => set("include_references", e.target.checked)} disabled={ro} /> Include "Our esteemed clients"
+      </label>
+      <h3 className="section-title top-gap">Areas, in order</h3>
+      {items.map((it, i) => (
+        <div key={i} className="inline-form">
+          <span>
+            {i + 1}. {name(it.offer_item_id)}
+            {it.options?.length ? ` · Opt.${it.options.join(", ")}` : ""}
+          </span>
+          {!ro && (
+            <>
+              <button className="btn btn-small btn-ghost" onClick={() => move(i, -1)} aria-label="Up">
+                ↑
+              </button>
+              <button className="btn btn-small btn-ghost" onClick={() => move(i, 1)} aria-label="Down">
+                ↓
+              </button>
+              <button
+                className="btn btn-small btn-ghost"
+                onClick={() =>
+                  set(
+                    "items",
+                    items.filter((_, j) => j !== i),
+                  )
+                }
+              >
+                Remove
+              </button>
+            </>
+          )}
+        </div>
+      ))}
+      {!ro && (
+        <select value="" onChange={(e) => e.target.value && set("items", [...items, { offer_item_id: Number(e.target.value), options: [] }])}>
+          <option value="">+ Add an area…</option>
+          {lookups.offer_items.map((i) => (
+            <option key={i.id} value={i.id}>
+              {i.name}
+            </option>
+          ))}
+        </select>
+      )}
+    </>
   );
 }

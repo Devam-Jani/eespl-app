@@ -292,7 +292,11 @@ def test_boq_lines_and_indent_draft_from_a_survey(boss, world, db):
         f"/api/surveys/{sid}/boq", json={"tender_id": world["tender"]}, headers=h
     ).json()
     assert one["lines"] == 1  # not split: one line per system
-    r = client.post(f"/api/surveys/{sid}/indent", json={"floors": ["Floor 2"]}, headers=h)
+    r = client.post(
+        f"/api/surveys/{sid}/indent",
+        json={"floors": ["Floor 2"], "include_not_ready": True},
+        headers=h,
+    )
     assert r.status_code == 201, r.text
     ind = db.get(Indent, r.json()["indent_id"])
     # floor 2: 4 sqm x 1.5 x 1.05 + 9 x 1.5 x 1.10 = 6.3 + 14.85 = 21.15 kg -> 2 bags = 40 kg

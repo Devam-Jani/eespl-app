@@ -219,7 +219,9 @@ def test_import_of_an_invented_offer(db, tmp_path, media):
         "spec_blocks": 3,
         "options": 4,
         "offer_lines": 7,
+        "offer_lines_reused": 0,
         "tc_clauses": 6,
+        "tc_clauses_reused": 0,
         "references": 2,
     }
     for fix in (
@@ -227,7 +229,7 @@ def test_import_of_an_invented_offer(db, tmp_path, media):
         "on on -> on",
         "Al low -> Allow",
         "HORIZINTAL -> HORIZONTAL",
-        "over the Roof -> over the surface (tanks, walls, pools)",
+        "over the Roof -> over the surface (tanks, walls, pools, sunken)",
     ):
         assert res.fixes.get(fix) == 1, (fix, res.fixes)
     assert any(k.startswith("duplicated UoM") for k in res.fixes)

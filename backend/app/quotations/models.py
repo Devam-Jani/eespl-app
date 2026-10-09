@@ -56,18 +56,23 @@ RATE_SOURCES = ("system", "library", "fixed")
 QUOTATION_STATUSES = ("draft", "sent", "negotiation", "won", "lost", "expired")
 OPEN_STATUSES = ("sent", "negotiation")
 FOLLOWUP_STATUSES = ("open", "done", "cancelled")
-LIBRARY_KINDS = ("letterhead", "letter", "spec", "line", "item", "reference")
+LIBRARY_KINDS = ("letterhead", "letter", "spec", "line", "item", "reference", "preset")
 # stage sections a spec block offers by default (custom headings are allowed too)
 STAGES = (
     "Surface preparation",
+    "Laying waterproofing membrane",
     "Pipe sleeve packing",
     "Tie rod hole treatment",
     "Construction joint treatment",
     "Patching work",
-    "Laying waterproofing membrane",
+    "Patching",
+    "Coving",
     "Protective coating",
     "Separation layer",
     "Protection layer",
+    "Protection",
+    "Termination",
+    "Floor area slope & protection",
     "Curing",
 )
 # T&C library category codes -> the group headings printed in an offer
@@ -147,6 +152,12 @@ class Letterhead(LibraryRow, Base):
     signatory_name: Mapped[str | None] = mapped_column(String(200))
     signatory_designation: Mapped[str | None] = mapped_column(String(200))
     brand: Mapped[str | None] = mapped_column(String(100))  # {brand}: "BRONCO"
+    # image letterheads (EESPL): a band across the top, one across the bottom, a faint logo
+    header_image_path: Mapped[str | None] = mapped_column(String(300))
+    footer_image_path: Mapped[str | None] = mapped_column(String(300))
+    watermark_path: Mapped[str | None] = mapped_column(String(300))  # already faded for the PDF
+    # printing on letterhead stationery: leave the header and footer space blank
+    preprinted: Mapped[bool] = mapped_column(Boolean, server_default="false")
     primary_color: Mapped[str] = mapped_column(String(7), server_default="#0F6E5A")
     accent_color: Mapped[str] = mapped_column(String(7), server_default="#E69F00")
     tc_template_id: Mapped[int | None] = mapped_column(
@@ -191,6 +202,7 @@ class SpecBlock(LibraryRow, Base):
     )
     system_id: Mapped[int | None] = mapped_column(ForeignKey("systems.id", ondelete="SET NULL"))
     option_label: Mapped[str | None] = mapped_column(String(20))  # "1", "2"; none: always
+    subtitle: Mapped[str | None] = mapped_column(Text)  # a line under the item title
     sections: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default="[]")
     images: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default="[]")
 
@@ -284,6 +296,27 @@ class Reference(LibraryRow, Base):
     include: Mapped[bool] = mapped_column(Boolean, server_default="true")
     sort_order: Mapped[int] = mapped_column(Integer, server_default="0")
     source: Mapped[str] = mapped_column(String(10), server_default="manual")
+
+
+class OfferPreset(LibraryRow, Base):
+    """A saved starting point: letterhead, letter, items in order (with their options), the T&C
+    template and whether references go in ("Bungalow - EESPL", "Project - Bronco")."""
+
+    __tablename__ = "offer_presets"
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    letterhead_id: Mapped[int | None] = mapped_column(
+        ForeignKey("letterheads.id", ondelete="SET NULL")
+    )
+    letter_template_id: Mapped[int | None] = mapped_column(
+        ForeignKey("letter_templates.id", ondelete="SET NULL")
+    )
+    tc_template_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tc_templates.id", ondelete="SET NULL")
+    )
+    items: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default="[]")
+    include_references: Mapped[bool] = mapped_column(Boolean, server_default="true")
 
 
 class QuotationSettings(Base):
@@ -448,6 +481,11 @@ class QuotationFile(Base):
     path: Mapped[str] = mapped_column(String(300))
     file_name: Mapped[str] = mapped_column(String(200))
     size_bytes: Mapped[int] = mapped_column(Integer)
+    # a re-issue of the same revision replaces the earlier file (both are kept)
+    replaced_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("quotation_files.id", ondelete="SET NULL")
+    )
+    replaced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )

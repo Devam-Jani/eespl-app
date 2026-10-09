@@ -325,7 +325,7 @@ def run_kylas_discover() -> None:
                 print(f"      stage {stage['id']}  {stage['name']}")
 
 
-def run_import_offer(path: str, again: bool) -> None:
+def run_import_offer(path: str, again: bool, preset: str | None = None) -> None:
     """A hand-made techno-commercial offer (.docx) -> the quotation libraries. A path under data/
     is read from the /data mount (where the company files live in the container)."""
     from pathlib import Path
@@ -340,7 +340,7 @@ def run_import_offer(path: str, again: bool) -> None:
         sys.exit(f"Not found: {path}")
     with SessionLocal() as db:
         try:
-            res = import_offer(db, p, again=again)
+            res = import_offer(db, p, again=again, preset=preset)
         except ValueError as e:
             sys.exit(str(e))
         audit.record(
@@ -432,6 +432,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument(
         "--again", action="store_true", help="Import a second copy (a new letterhead name)"
     )
+    p.add_argument(
+        "--preset", help="Also save the imported items as an offer preset with this name"
+    )
 
     sub.add_parser("make-offer-template", help="Write the default Word template for quotations")
 
@@ -457,7 +460,7 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "seed-demo-analytics":
         run_demo(args.purge, args.sites, args.leads)
     elif args.command == "import-offer":
-        run_import_offer(args.path, args.again)
+        run_import_offer(args.path, args.again, args.preset)
     elif args.command == "make-offer-template":
         run_make_offer_template()
     elif args.command in POWERPLAY:

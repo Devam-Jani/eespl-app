@@ -65,7 +65,7 @@ PER_TEST_TABLES = [
     "quotation_followups", "quotation_files", "quotation_lines", "quotation_items", "quotations",
     "offer_item_lines", "offer_item_specs", "offer_items", "offer_lines", "spec_blocks",
     "quotation_references", "library_versions", "quotation_settings", "letterheads",
-    "letter_templates",
+    "letter_templates", "offer_presets",
 ]  # fmt: skip
 # seeded rows of truncated tables, put back after every test (copied once per run)
 SEED_COPIES = ["finance_settings", "letter_templates", "letterheads", "quotation_settings"]

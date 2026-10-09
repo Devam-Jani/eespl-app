@@ -91,7 +91,7 @@ export default function SiteDetail() {
             {can("survey.view") && (
               <>
                 {" · "}
-                <Link to={`/surveys?site=${site.id}`}>Surveys</Link>
+                <Link to={`/surveys?site=${site.id}`}>Surveys</Link> · <Link to={`/sites/${site.id}/fronts`}>Work fronts</Link>
               </>
             )}
           </p>

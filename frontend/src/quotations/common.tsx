@@ -37,6 +37,7 @@ export type QLine = {
 };
 export type QItem = {
   id: number;
+  checks: string[];
   offer_item_id: number | null;
   sort_order: number;
   name: string;
@@ -61,7 +62,16 @@ export type Ref = {
   sort_order?: number;
 };
 export type FollowUp = { id: number; day: number; due_on: string; overdue: boolean; status: string; note: string | null; code: string };
-export type QFile = { id: number; kind: "docx" | "pdf"; file_name: string; size_bytes: number; created_at: string };
+export type QFile = {
+  id: number;
+  kind: "docx" | "pdf";
+  file_name: string;
+  size_bytes: number;
+  created_at: string;
+  replaced: boolean;
+  replaced_at: string | null;
+  by: string | null;
+};
 export type Quotation = {
   id: number;
   code: string;
@@ -119,6 +129,7 @@ export type Lookups = {
   letterheads: { id: number; name: string; company_name: string }[];
   letters: { id: number; name: string }[];
   offer_items: { id: number; name: string; area_type_id: number | null; option_labels: string[]; needs_check: boolean; lines: number; specs: number }[];
+  presets: { id: number; name: string; items: number }[];
   lost_reasons: string[];
   uoms: { code: string; label: string }[];
   rate_sources: string[];
@@ -191,6 +202,7 @@ export function MarkupField({
   placeholders,
   disabled,
   hint,
+  compact,
 }: {
   label: string;
   value: string;
@@ -199,15 +211,31 @@ export function MarkupField({
   placeholders?: string[];
   disabled?: boolean;
   hint?: string;
+  compact?: boolean;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [picking, setPicking] = useState(false);
+  /** Wrap the selected text in the marks (spaces at its ends stay outside); the wrapped text
+   * stays selected. With nothing selected, the word under the cursor is wrapped. */
   function wrap(mark: string) {
     const el = ref.current;
     if (!el) return;
-    const { selectionStart: a, selectionEnd: b } = el;
-    const sel = value.slice(a, b) || "text";
-    onChange(value.slice(0, a) + mark + sel + mark + value.slice(b));
+    let { selectionStart: a, selectionEnd: b } = el;
+    if (a === b) {
+      while (a > 0 && /\S/.test(value[a - 1])) a -= 1;
+      while (b < value.length && /\S/.test(value[b])) b += 1;
+    }
+    while (a < b && /\s/.test(value[a])) a += 1;
+    while (b > a && /\s/.test(value[b - 1])) b -= 1;
+    if (a === b) return;
+    const sel = value.slice(a, b);
+    const already = sel.startsWith(mark) && sel.endsWith(mark) && sel.length > 2 * mark.length;
+    const next = already ? sel.slice(mark.length, -mark.length) : mark + sel + mark;
+    onChange(value.slice(0, a) + next + value.slice(b));
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(a, a + next.length);
+    });
   }
   function insert(text: string) {
     const el = ref.current;
@@ -215,19 +243,28 @@ export function MarkupField({
     onChange(value.slice(0, at) + text + value.slice(at));
   }
   return (
-    <div className="field markup-field">
-      <span>{label}</span>
+    <div className={`field markup-field ${compact ? "compact" : ""}`}>
+      {label && <span>{label}</span>}
       {!disabled && (
         <div className="markup-tools">
-          <button type="button" className="btn btn-small btn-ghost" onClick={() => wrap("**")} title="Bold (product names)">
+          {/* onMouseDown: keep the text box's selection while the button is pressed */}
+          <button
+            type="button"
+            className="btn btn-small btn-ghost"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => wrap("**")}
+            title="Bold the selected text (product names)"
+          >
             <b>B</b>
           </button>
-          <button type="button" className="btn btn-small btn-ghost" onClick={() => wrap("==")} title="Highlight (notes)">
+          <button type="button" className="btn btn-small btn-ghost" onMouseDown={(e) => e.preventDefault()} onClick={() => wrap("==")} title="Highlight the selected text (notes)">
             <mark>H</mark>
           </button>
-          <button type="button" className="btn btn-small btn-ghost" onClick={() => setPicking(!picking)}>
-            + Product
-          </button>
+          {!compact && (
+            <button type="button" className="btn btn-small btn-ghost" onClick={() => setPicking(!picking)}>
+              + Product
+            </button>
+          )}
           {placeholders?.map((p) => (
             <button key={p} type="button" className="chip" onClick={() => insert(`{${p}}`)}>
               {`{${p}}`}
@@ -237,6 +274,16 @@ export function MarkupField({
       )}
       {picking && <ProductPicker onPick={(name) => (insert(`**${name}**`), setPicking(false))} />}
       <textarea ref={ref} rows={rows} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} />
+      {/^.*(\*\*|==)/s.test(value) && (
+        <div className="markup-preview" aria-label="As it will print">
+          <span className="muted small">Prints as:</span>
+          {value.split("\n").map((line, i) => (
+            <p key={i}>
+              <Markup text={line} />
+            </p>
+          ))}
+        </div>
+      )}
       {hint && <small className="muted">{hint}</small>}
     </div>
   );
@@ -308,7 +355,7 @@ export function SectionsEditor({ sections, onChange, stages, disabled }: { secti
             return (
               <div key={k} className="step-row">
                 <span className="step-n">{n}.</span>
-                <textarea rows={2} value={st.text} onChange={(e) => setStep(i, k, { text: e.target.value })} disabled={disabled} />
+                <MarkupField label="" compact rows={2} value={st.text} onChange={(v) => setStep(i, k, { text: v })} disabled={disabled} />
                 <div className="step-flags">
                   <label className="check small">
                     <input type="checkbox" checked={st.client_scope} onChange={(e) => setStep(i, k, { client_scope: e.target.checked })} disabled={disabled} /> Client's scope

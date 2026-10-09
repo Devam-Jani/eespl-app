@@ -119,6 +119,10 @@ class NodeOut(BaseModel):
     area_sqm: Decimal | None
     meta: dict[str, Any] | None
     progress_percent: Decimal
+    front_ready: bool = False
+    front_ready_by_name: str | None = None
+    front_ready_at: datetime | None = None
+    front_ready_photo: bool = False
 
 
 class NodeIn(BaseModel):

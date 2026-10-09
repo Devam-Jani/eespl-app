@@ -28,6 +28,7 @@ from app.auth.deps import Principal
 from app.crm.models import Lead
 from app.masters.models import Product, System, SystemComponent
 from app.material import service as material
+from app.sites.models import SiteNode
 from app.survey.models import (
     CAMERA_METHODS,
     AreaType,
@@ -277,6 +278,28 @@ def visible_q(scope: str, principal: Principal):
             Survey.tender_id.in_(select(Tender.id).where(Tender.owner_id == me)),
         )
     )
+
+
+def ready_nodes(db: Session, site_id: int | None) -> set[int]:
+    """The site's places with "work front ready": a ticked node and everything under it."""
+    if site_id is None:
+        return set()
+    rows = db.execute(
+        select(SiteNode.id, SiteNode.parent_id, SiteNode.front_ready).where(
+            SiteNode.site_id == site_id
+        )
+    ).all()
+    kids: dict[int | None, list[int]] = {}
+    for nid, parent, _ready in rows:
+        kids.setdefault(parent, []).append(nid)
+    out: set[int] = set()
+    stack = [nid for nid, _p, ready in rows if ready]
+    while stack:
+        n = stack.pop()
+        if n not in out:
+            out.add(n)
+            stack.extend(kids.get(n, []))
+    return out
 
 
 def get_visible(db: Session, survey_id: int, scope: str, principal: Principal) -> Survey:

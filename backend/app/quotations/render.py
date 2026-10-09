@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.config import settings as app_settings
 from app.masters.models import CompanyProfile
 from app.quotations import service as svc
-from app.quotations.markup import fill
+from app.quotations.markup import fill, placeholders_in
 from app.quotations.models import TC_GROUP_LABELS, UOM_LABELS, Letterhead, Quotation
 
 CLIENT_SCOPE = "==Client's Scope=="
@@ -75,6 +75,7 @@ class SpecOut:
     sections: list[Section]
     images: list[dict]
     or_before: bool = False
+    subtitle: str = ""
 
 
 @dataclass
@@ -108,6 +109,10 @@ class Doc:
     footer: str
     company_name: str
     logo: Path | None
+    header_image: Path | None
+    footer_image: Path | None
+    watermark: Path | None
+    preprinted: bool
     header_text: str
     footer_text: str
     primary: str
@@ -183,7 +188,11 @@ def spec_outs(item, n: int) -> list[SpecOut]:
         images = [{**i, "file": _media(i.get("path"))} for i in b.get("images") or []]
         out.append(
             SpecOut(
-                heading, sections, [i for i in images if i["file"]], or_before=bool(prefix and out)
+                heading,
+                sections,
+                [i for i in images if i["file"]],
+                or_before=bool(prefix and out),
+                subtitle=(b.get("subtitle") or "").upper(),
             )
         )
     return out
@@ -244,7 +253,19 @@ def term_groups(terms: list[dict], applicator: str) -> list[TermGroup]:
     return out
 
 
-def build(db: Session, q: Quotation) -> Doc:
+def fill_lines(text: str, values: dict[str, str]) -> list[str]:
+    """The letter lines with their placeholders filled; a line whose placeholders are all empty
+    (no city, no attention) is dropped instead of printed blank."""
+    out = []
+    for line in (text or "").split("\n"):
+        names = placeholders_in(line)
+        if names and not any(str(values.get(n) or "").strip() for n in names):
+            continue
+        out.append(fill(line, values))
+    return out
+
+
+def build(db: Session, q: Quotation, preprinted: bool | None = None) -> Doc:
     head = db.get(Letterhead, q.letterhead_id) if q.letterhead_id else None
     profile = db.get(CompanyProfile, 1)
     applicator = (
@@ -258,13 +279,17 @@ def build(db: Session, q: Quotation) -> Doc:
         footer=f"{q.code} R{q.revision}",
         company_name=company,
         logo=_media(head.logo_path) if head else _media(profile.logo_path if profile else None),
+        header_image=_media(head.header_image_path) if head else None,
+        footer_image=_media(head.footer_image_path) if head else None,
+        watermark=_media(head.watermark_path) if head else None,
+        preprinted=bool(head and head.preprinted) if preprinted is None else preprinted,
         header_text=(head.header_text if head else "") or "",
         footer_text=(head.footer_text if head else "") or "",
         primary=head.primary_color if head else "#0F6E5A",
         accent=head.accent_color if head else "#E69F00",
-        opening=fill(q.opening, values).split("\n") if q.opening else [],
+        opening=fill_lines(q.opening, values),
         subject=fill(q.subject, values),
-        body=fill(q.body, values).split("\n"),
+        body=fill_lines(q.body, values),
         signatory_firm=(head.signatory_firm if head else f"For {applicator.upper()}"),
         signatory_line=" | ".join(x for x in (values["salesperson"], values["designation"]) if x),
         enclosures=[e for e in q.enclosures.split("\n") if e.strip()],

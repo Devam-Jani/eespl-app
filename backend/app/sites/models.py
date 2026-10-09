@@ -155,6 +155,13 @@ class SiteNode(Tracked, Base):
     area_sqm: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     meta: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     progress_percent: Mapped[Decimal] = mapped_column(Percent, server_default="0")  # stored
+    # "work front ready": the place is open for our work (set by the supervisor on site)
+    front_ready: Mapped[bool] = mapped_column(server_default=false())
+    front_ready_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    front_ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    front_ready_photo: Mapped[str | None] = mapped_column(String(300))
 
 
 class StageTemplate(Tracked, Base):
