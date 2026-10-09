@@ -94,6 +94,7 @@ export type Product = {
   category: string | null;
   unit: string;
   pack_size: string | null;
+  pack_unit?: string | null;
   gst_percent: string;
   hsn_code: string | null;
   reorder_level?: string | null;

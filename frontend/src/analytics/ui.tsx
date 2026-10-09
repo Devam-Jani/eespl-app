@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
-import { errorText, inr } from "../format";
+import { errorText, inr, inrCompact } from "../format";
 
 export type Drill = Record<string, string | number> & { kind: string };
 export type Tile = {
@@ -89,7 +89,7 @@ export function change(t: Tile): ReactNode {
   const arrow = diff > 0 ? "▲" : diff < 0 ? "▼" : "=";
   return (
     <span className="tile-change" title={`Previous: ${fmtValue(t.prev, t.unit)}`}>
-      {arrow} {fmtValue(Math.abs(diff), t.unit)} vs {t.prev_label}
+      {arrow} {t.unit === "inr" ? inrCompact(Math.abs(diff)) : fmtValue(Math.abs(diff), t.unit)} vs {t.prev_label}
     </span>
   );
 }
@@ -99,7 +99,9 @@ export function KpiTile({ tile, demo }: { tile: Tile; demo: boolean }) {
   const body = (
     <>
       <span className="kpi-label">{tile.label}</span>
-      <span className="kpi-value">{fmtValue(tile.value, tile.unit)}</span>
+      <span className="kpi-value" title={tile.unit === "inr" ? fmtValue(tile.value, "inr") : undefined}>
+        {tile.unit === "inr" ? inrCompact(tile.value as number) : fmtValue(tile.value, tile.unit)}
+      </span>
       {change(tile)}
       {tile.note && <span className="muted small">{tile.note}</span>}
       {tile.as_of && <span className="kpi-asof">{asOf(tile.as_of)}</span>}

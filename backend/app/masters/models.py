@@ -140,6 +140,8 @@ class Product(Tracked, Base):
     )
     unit: Mapped[str] = mapped_column(ForeignKey("units.code"))
     pack_size: Mapped[Decimal | None] = mapped_column(Numeric(12, 3))
+    # e.g. "bag" for a 20 kg bag (pack_size 20, unit kg); empty: no pack rounding
+    pack_unit: Mapped[str | None] = mapped_column(String(20))
     gst_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), server_default="18")
     hsn_code: Mapped[str | None] = mapped_column(String(8))  # HSN (goods) / SAC (services)
     is_active: Mapped[bool] = mapped_column(server_default=true())

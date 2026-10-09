@@ -544,6 +544,24 @@ def test_forecast_end_from_progress_history(company, db):
     )
     assert rate == D("0.1200")  # under 7 days of history: the average since the start
     assert summary.forecast([], D(100), None, day)[1] == day
+    # too slow, too little history: no date
+    assert summary.forecast([], D(4), day - timedelta(days=100), day) == (
+        D("0.0400"),
+        None,
+    )  # 0.04 % a day
+    assert summary.forecast([], D(5), day - timedelta(days=10), day) == (
+        None,
+        None,
+    )  # started 10 days ago
+    assert summary.forecast_text(None, day, 40) == ("not enough progress to forecast", None)
+    assert summary.forecast_text(day + timedelta(days=800), day, 40) == (
+        "more than 2 years late",
+        None,
+    )
+    assert summary.forecast_text(day + timedelta(days=20), day, 40) == (
+        f"{day + timedelta(days=20):%d %b %Y}",
+        20,
+    )
     # end to end through the nightly snapshots
     s1 = company["sites"][0]
     db.add(ProgressSnapshot(site_id=s1, on_date=day - timedelta(days=30), percent=15))
@@ -1008,3 +1026,32 @@ def test_demo_seed_and_purge_leave_real_data_untouched(company, db, boss):
     assert {t: (before[t], after[t]) for t in tables if before[t] != after[t]} == {}
     assert client.get("/api/dashboard", headers=h).json()["demo_available"] is False
     assert db.scalar(select(func.count()).select_from(SiteSummary).where(SiteSummary.is_demo)) == 0
+
+
+def test_funnel_and_winloss_state_their_basis_also_in_excel(boss, db):
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+
+    client, h = boss
+    make_tenders(db, [("B-1", "builder", "won", 100, "call", 5)])
+    f = client.get("/api/analytics/strategy/funnel", headers=h).json()
+    w = client.get("/api/analytics/strategy/winloss", headers=h).json()
+    assert f["basis"].startswith("Basis: leads created") and w["basis"].startswith(
+        "Basis: tenders decided"
+    )
+    for part, basis in (("funnel", f["basis"]), ("winloss", w["basis"])):
+        r = client.get(f"/api/analytics/strategy/{part}", params={"format": "xlsx"}, headers=h)
+        wb = load_workbook(BytesIO(r.content))
+        assert all(ws["A1"].value == basis for ws in wb.worksheets), part
+
+
+def test_compact_money_for_tiles():
+    from app.analytics.common import inr_compact
+
+    assert [inr_compact(v) for v in (294909829.72, 789420, 72228.4, -4500000)] == [
+        "₹29.49 Cr",
+        "₹7.89 L",
+        "₹72,228",
+        "-₹45.00 L",
+    ]

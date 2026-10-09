@@ -21,6 +21,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.analytics import summary as summary_mod
 from app.analytics.common import (
     ZERO,
     Filters,
@@ -96,7 +97,7 @@ def sites_page(db: Session, principal: Principal, scope: str, f: Filters) -> dic
     ]
     forecast = []
     for s, code, name in rows:
-        slip = (s.forecast_end - s.target_date).days if s.forecast_end and s.target_date else None
+        shown, slip = summary_mod.forecast_text(s.forecast_end, s.target_date, s.progress)
         forecast.append(
             {
                 "id": s.site_id,
@@ -104,7 +105,7 @@ def sites_page(db: Session, principal: Principal, scope: str, f: Filters) -> dic
                 "name": name,
                 "start": s.start_date,
                 "target": s.target_date,
-                "forecast": s.forecast_end,
+                "forecast": shown,
                 "slip_days": slip,
                 "progress": s.progress,
                 "rate": s.rate_per_day,
@@ -112,7 +113,12 @@ def sites_page(db: Session, principal: Principal, scope: str, f: Filters) -> dic
                 "link": f"/sites/{s.site_id}",
             }
         )
-    forecast.sort(key=lambda r: (r["slip_days"] is None, -(r["slip_days"] or 0)))
+    forecast.sort(
+        key=lambda r: (
+            0 if r["forecast"] == summary_mod.TOO_LATE else 1 if r["slip_days"] is not None else 2,
+            -(r["slip_days"] or 0),
+        )
+    )
     ids = [s.site_id for s, _, _ in rows]
     started = func.coalesce(Task.actual_start, Task.planned_start, func.date(Task.created_at))
     stuck = []
@@ -198,14 +204,14 @@ def sites_page(db: Session, principal: Principal, scope: str, f: Filters) -> dic
                     col("name", "Name"),
                     col("start", "Start", "date"),
                     col("target", "Planned end", "date"),
-                    col("forecast", "Forecast end", "date"),
+                    col("forecast", "Forecast end"),
                     col("slip_days", "Slip (days)", "count"),
                     col("progress", "Progress %", "pct"),
                     col("rate", "% per day (30 d)", "num"),
                     col("delay", "Delay"),
                 ],
                 forecast,
-                "Forecast = today + remaining % / the progress rate of the last 30 days (since the start when there is less history).",
+                "Forecast = today + remaining % / the progress rate of the last 30 days; it needs 14 days of history and more than 0.05 % a day.",
             ),
             "bottlenecks": table(
                 "Stage bottlenecks: steps open longest",

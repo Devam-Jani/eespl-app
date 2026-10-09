@@ -109,6 +109,11 @@ export default function LeadDetail() {
                 </option>
               ))}
             </select>
+            {can("survey.view") && (
+              <Link className="btn" to={`/surveys?lead=${lead.id}`}>
+                Surveys
+              </Link>
+            )}
             {!lead.tender_id && can("tender.edit") && (
               <button className="btn" onClick={() => confirm("Create a tender from this lead?") && void run(api<Detail>(`/api/leads/${lead.id}/convert`, { method: "POST" }))}>
                 Convert to tender

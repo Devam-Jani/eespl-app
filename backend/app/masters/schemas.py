@@ -199,6 +199,7 @@ class ProductIn(BaseModel):
     category: str | None = Field(default=None, max_length=100)
     unit: str
     pack_size: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=3)
+    pack_unit: str | None = Field(default=None, max_length=20)  # bag, can, drum
     gst_percent: Percent = Decimal(18)
     hsn_code: str | None = Field(default=None, pattern=r"^[0-9]{4,8}$")
     is_active: bool = True
@@ -214,6 +215,7 @@ class ProductUpdate(BaseModel):
     category: str | None = Field(default=None, max_length=100)
     unit: str | None = None
     pack_size: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=3)
+    pack_unit: str | None = Field(default=None, max_length=20)  # bag, can, drum
     gst_percent: Percent | None = None
     hsn_code: str | None = Field(default=None, pattern=r"^[0-9]{4,8}$")
     is_active: bool | None = None
@@ -235,6 +237,7 @@ class ProductOut(ORM):
     category: str | None
     unit: str
     pack_size: Decimal | None
+    pack_unit: str | None = None
     gst_percent: Decimal
     hsn_code: str | None = None
     is_active: bool

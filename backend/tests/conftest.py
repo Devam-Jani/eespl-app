@@ -61,6 +61,7 @@ PER_TEST_TABLES = [
     "site_portal", "portal_invites", "client_user_sites", "client_users",
     "alert_recipients", "alerts", "site_summaries", "monthly_summaries", "invoice_summaries",
     "progress_snapshots", "kpi_snapshots", "weekly_reports", "demo_rows", "analytics_settings",
+    "ai_calls", "survey_boq_links", "survey_photos", "survey_areas", "surveys", "survey_settings",
 ]  # fmt: skip
 # Tables that also hold seeded rows (unit conversions, categories), or are referenced by them
 # (products), are cleaned with DELETE so the seed survives.
@@ -77,6 +78,8 @@ PER_TEST_DELETES = [
     "INSERT INTO finance_settings SELECT * FROM finance_settings_seed",
     "INSERT INTO company_profile (id) VALUES (1)",
     "INSERT INTO analytics_settings (id) VALUES (1)",
+    "INSERT INTO survey_settings (id) VALUES (1)",
+    "DELETE FROM area_types WHERE created_by IS NOT NULL",  # the seeded ones stay
     "INSERT INTO stores (name, kind) VALUES ('Ethios Godown', 'godown')",
 ]
 

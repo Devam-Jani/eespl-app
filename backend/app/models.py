@@ -49,6 +49,8 @@ class User(Base):
     job_title: Mapped[str | None] = mapped_column(String(100))
     is_active: Mapped[bool] = mapped_column(server_default=true())
     kylas_user_id: Mapped[int | None] = mapped_column(BigInteger)  # owner of their Kylas leads
+    # survey entry: "m" (metres) or "ftin" (feet-inches); sizes are always stored in metres
+    measure_unit: Mapped[str] = mapped_column(String(4), server_default="m")
     # invented analytics demo data (python -m app.cli seed-demo-analytics); never real
     is_demo: Mapped[bool] = mapped_column(server_default=false(), index=True)
     # payroll identifiers (payslips); the bank account is only ever shown masked

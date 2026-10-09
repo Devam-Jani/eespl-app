@@ -402,7 +402,10 @@ def strategy_part(
             after={"part": part, **f.as_dict()},
         )
         db.commit()
-        return _xlsx(reports.xlsx_book(sheets), f"strategy-{part}")
+        return _xlsx(
+            reports.xlsx_book(sheets, data.get("basis") if isinstance(data, dict) else None),
+            f"strategy-{part}",
+        )
     return jsonable_encoder(data | {"filters": f.as_dict()})
 
 

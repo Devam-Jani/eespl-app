@@ -179,6 +179,15 @@ def _steps(leads: list[dict], tenders: list[dict]) -> dict:
     }
 
 
+FUNNEL_BASIS = (
+    "Basis: leads created and tenders received in the range, followed to their outcome so far "
+    "(a tender received in the range and won later counts here)."
+)
+WINLOSS_BASIS = (
+    "Basis: tenders decided (won or lost) in the range, whenever they were received; "
+    "so its counts differ from the funnel for the same range."
+)
+
 DIMENSIONS = ("month", "salesperson", "client_type", "source", "region")
 
 
@@ -186,7 +195,12 @@ def funnel(
     db: Session, principal: Principal, scope: str, f: Filters, group_by: str | None = None
 ) -> dict:
     leads, tenders = lead_rows(db, principal, scope, f), tender_rows(db, principal, scope, f)
-    out = {"total": _steps(leads, tenders), "group_by": group_by, "groups": []}
+    out = {
+        "total": _steps(leads, tenders),
+        "group_by": group_by,
+        "groups": [],
+        "basis": FUNNEL_BASIS,
+    }
     if group_by in DIMENSIONS:
         keys = sorted({x[group_by] for x in leads} | {t[group_by] for t in tenders})
         for k in keys:
@@ -236,6 +250,7 @@ def winloss(db: Session, principal: Principal, scope: str, f: Filters) -> dict:
                 competitors[x["lost_to"].strip()] += 1
     won = sum(1 for r in rows if r["status"] == "won")
     return {
+        "basis": WINLOSS_BASIS,
         "decided": len(rows),
         "won": won,
         "win_rate": pct(won, len(rows)),

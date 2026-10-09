@@ -233,9 +233,17 @@ def invoice_positions(db: Session) -> list[dict]:
 # --- progress and forecast -----------------------------------------------------------------------
 
 
+MIN_HISTORY_DAYS = 14
+MIN_RATE = Decimal("0.05")  # % a day: slower than this is not a forecast
+TOO_LATE_DAYS = 730
+NOT_ENOUGH = "not enough progress to forecast"
+TOO_LATE = "more than 2 years late"
+
+
 def forecast(history: list[tuple[date, Decimal]], current: Decimal, start: date | None, on: date):
     """(rate % per day, forecast end). The rate is the progress made over the last 30 days of
-    snapshots (at least 7 days of history); without that, the average since the start."""
+    snapshots, needing at least 14 days of history (without snapshots: since the start, when that
+    was at least 14 days ago). No forecast end below 0.05 % a day."""
     current = Decimal(current)
     if current >= 100:
         return None, on
@@ -245,13 +253,25 @@ def forecast(history: list[tuple[date, Decimal]], current: Decimal, start: date 
         cutoff = on - timedelta(days=30)
         base = next((x for x in reversed(past) if x[0] <= cutoff), None) or past[0]
         days = (on - base[0]).days
-        if days >= 7:
+        if days >= MIN_HISTORY_DAYS:
             rate = (current - base[1]) / days
-    if rate is None and start and start < on:
+    if rate is None and start and (on - start).days >= MIN_HISTORY_DAYS:
         rate = current / (on - start).days
-    if not rate or rate <= 0:
-        return (Decimal(0) if rate is not None else None), None
-    return rate.quantize(Decimal("0.0001")), on + timedelta(days=math.ceil((100 - current) / rate))
+    if rate is None:
+        return None, None
+    rate = rate.quantize(Decimal("0.0001"))
+    if rate <= MIN_RATE:
+        return rate, None
+    return rate, on + timedelta(days=math.ceil((100 - current) / rate))
+
+
+def forecast_text(end: date | None, target: date | None, progress) -> tuple[str, int | None]:
+    """(what to show for the forecast end, slip in days): a date, or why there is none."""
+    if end is None:
+        return ("done" if Decimal(progress or 0) >= 100 else NOT_ENOUGH), None
+    if target and (end - target).days > TOO_LATE_DAYS:
+        return TOO_LATE, None
+    return f"{end:%d %b %Y}", (end - target).days if target else None
 
 
 def elapsed(start: date | None, target: date | None, on: date) -> Decimal | None:

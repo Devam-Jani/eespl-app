@@ -19,6 +19,12 @@ type Model = { site_id: number; version: string; site_progress: number; nodes: M
 /** Client portal: the model comes from the portal API, read-only (no task panel). */
 export type PortalMode = { modelPath: string; headers?: Record<string, string> };
 type Hover = { x: number; y: number; node: ModelNode } | null;
+type SurveyMap = {
+  nodes: Record<string, "measured" | "camera">;
+  products: Record<string, { product_id: number; name: string; unit: string; qty: number }[]>;
+  unplaced_areas: number;
+};
+const SURVEY_COLORS = { measured: "#009E73", camera: "#E69F00", none: "#d9dedb" } as const;
 
 const POLL_MS = 60_000;
 const GROUP_KINDS = new Set(["tower", "wing", "floor", "basement"]);
@@ -40,7 +46,9 @@ export default function Site3DTab({
   const canUpdate = can("site.update", "site.edit");
   const canEdit = can("site.edit");
   const [model, setModel] = useState<Model | null>(null);
-  const [mode, setMode] = useState<"work" | "real">("work");
+  const [mode, setMode] = useState<"work" | "real" | "survey">("work");
+  const [surveyMap, setSurveyMap] = useState<SurveyMap | null>(null);
+  const canSurvey = !portal && can("survey.view");
   const [cutaway, setCutaway] = useState<number | null>(null);
   const [maxLevel, setMaxLevel] = useState<number | null>(null);
   const [below, setBelow] = useState(false);
@@ -87,6 +95,11 @@ export default function Site3DTab({
     void load();
     if (!portal) api<{ id: number; name: string }[]>("/api/stage-templates").then(setTemplates, () => setTemplates([]));
   }, [load, portal]);
+
+  useEffect(() => {
+    if (mode !== "survey" || !canSurvey) return;
+    api<SurveyMap>(`/api/surveys/site-map/${site.id}`).then(setSurveyMap, (err) => setError(errorText(err)));
+  }, [mode, canSurvey, site.id]);
 
   useEffect(() => {
     const t = setInterval(() => void load(model?.version), POLL_MS);
@@ -199,10 +212,33 @@ export default function Site3DTab({
     [below, maxLevel, cutaway, boxes],
   );
 
+  // survey state per node: its own areas, else rolled up from the places inside it
+  const surveyState = useMemo(() => {
+    const out = new Map<number, "measured" | "camera" | "none">();
+    if (!surveyMap || !model) return out;
+    const kids = new Map<number, number[]>();
+    for (const n of model.nodes) if (n.parent_id !== null) kids.set(n.parent_id, [...(kids.get(n.parent_id) ?? []), n.id]);
+    const walk = (id: number): "measured" | "camera" | "none" => {
+      if (out.has(id)) return out.get(id)!;
+      const own = surveyMap.nodes[String(id)];
+      const below = (kids.get(id) ?? []).map(walk);
+      const all = [own, ...below].filter(Boolean);
+      const v = all.includes("measured") ? "measured" : all.includes("camera") ? "camera" : "none";
+      out.set(id, v);
+      return v;
+    };
+    model.nodes.forEach((n) => walk(n.id));
+    return out;
+  }, [surveyMap, model]);
+
   const look = useCallback(
     (b: Box): { color: string; ghost: boolean; late: boolean } => {
       const n = byId.get(b.node_id);
       if (!n) return { color: "#cccccc", ghost: false, late: false };
+      if (mode === "survey") {
+        const st = surveyState.get(n.id) ?? "none";
+        return { color: SURVEY_COLORS[st], ghost: st === "none" && b.role === "flat", late: false };
+      }
       const leaf = b.role !== "floor" && b.role !== "group";
       const filteredOut =
         leaf && ((templateFilter && !n.status.template_ids.includes(Number(templateFilter))) || (statusFilter && workColor(n.status, false).category !== statusFilter));
@@ -211,7 +247,7 @@ export default function Site3DTab({
       const c = workColor(n.status, workBelow.get(n.id) ?? false);
       return { color: c.color, ghost: c.ghost || b.role === "flat", late: n.status.is_late };
     },
-    [byId, mode, templateFilter, statusFilter, workBelow],
+    [byId, mode, templateFilter, statusFilter, workBelow, surveyState],
   );
 
   useEffect(() => {
@@ -476,6 +512,11 @@ export default function Site3DTab({
               <button className={`tab ${mode === "real" ? "active" : ""}`} onClick={() => setMode("real")}>
                 Realistic
               </button>
+              {canSurvey && (
+                <button className={`tab ${mode === "survey" ? "active" : ""}`} onClick={() => setMode("survey")}>
+                  Survey
+                </button>
+              )}
             </div>
             <button className="btn btn-small" onClick={() => view("reset")}>
               Reset view
@@ -578,7 +619,22 @@ export default function Site3DTab({
           )}
         </div>
         <div className="legend3d">
-          {mode === "work" ? (
+          {mode === "survey" ? (
+            <>
+              <span className="legend-item">
+                <span className="swatch" style={{ background: SURVEY_COLORS.measured }} /> Measured (laser / by hand)
+              </span>
+              <span className="legend-item">
+                <span className="swatch" style={{ background: SURVEY_COLORS.camera }} /> Measured by camera only
+              </span>
+              <span className="legend-item">
+                <span className="swatch" style={{ background: SURVEY_COLORS.none }} /> Not measured
+              </span>
+              <span className="legend-item muted">
+                Approved surveys only{surveyMap?.unplaced_areas ? ` · ${surveyMap.unplaced_areas} area(s) not placed on the structure` : ""}
+              </span>
+            </>
+          ) : mode === "work" ? (
             <>
               {CATEGORIES.map((c) => (
                 <span key={c} className="legend-item">
@@ -598,7 +654,19 @@ export default function Site3DTab({
           </span>
         </div>
       </div>
-      {!portal && selected !== null && byId.get(selected) && (
+      {mode === "survey" && surveyMap && (
+        <SurveyPanel
+          map={surveyMap}
+          nodes={model?.nodes ?? []}
+          focus={selected ?? cutaway}
+          name={byId.get(selected ?? cutaway ?? -1)?.name}
+          onClose={() => {
+            setSelected(null);
+            setCutaway(null);
+          }}
+        />
+      )}
+      {!portal && mode !== "survey" && selected !== null && byId.get(selected) && (
         <NodePanel
           site={site as Site}
           node={byId.get(selected)!}
@@ -743,6 +811,73 @@ function NodePanel({
           }}
         />
       )}
+    </aside>
+  );
+}
+
+const STOREY_KINDS = new Set(["floor", "basement", "terrace", "podium"]);
+
+/** Survey mode: product totals for the chosen tower / floor (or the whole site), floor by floor. */
+function SurveyPanel({ map, nodes, focus, name, onClose }: { map: SurveyMap; nodes: ModelNode[]; focus: number | null; name?: string; onClose: () => void }) {
+  const kids = new Map<number, number[]>();
+  for (const n of nodes) if (n.parent_id !== null) kids.set(n.parent_id, [...(kids.get(n.parent_id) ?? []), n.id]);
+  const byIdLocal = new Map(nodes.map((n) => [n.id, n]));
+  const subtree = (id: number): number[] => [id, ...(kids.get(id) ?? []).flatMap(subtree)];
+  const scope = focus !== null ? subtree(focus) : nodes.map((n) => n.id);
+  // one group per storey (floor, basement, terrace, podium); anything outside a storey goes under "Elsewhere"
+  const storey = (id: number) => STOREY_KINDS.has(byIdLocal.get(id)?.kind ?? "");
+  const inside = (id: number): boolean => {
+    const p = byIdLocal.get(id)?.parent_id ?? null;
+    return p !== null && (storey(p) || inside(p));
+  };
+  const floors = scope.filter((id) => storey(id) && !inside(id));
+  const covered = new Set(floors.flatMap(subtree));
+  const rest = scope.filter((id) => !covered.has(id));
+  const keys = floors.length ? [...floors, ...(rest.some((id) => map.products[String(id)]?.length) ? [-2] : [])] : [focus ?? -1];
+  const groups = keys.map((fid) => {
+    const ids = fid === -1 ? scope : fid === -2 ? rest : subtree(fid);
+    const sum = new Map<number, { name: string; unit: string; qty: number }>();
+    for (const id of ids)
+      for (const p of map.products[String(id)] ?? []) {
+        const cur = sum.get(p.product_id) ?? { name: p.name, unit: p.unit, qty: 0 };
+        cur.qty += Number(p.qty);
+        sum.set(p.product_id, cur);
+      }
+    const label =
+      fid === -1 ? "Whole site" : fid === -2 ? "Elsewhere" : `${byIdLocal.get(byIdLocal.get(fid)?.parent_id ?? -1)?.name ?? ""} ${byIdLocal.get(fid)?.name ?? ""}`.trim();
+    return { id: fid, name: label, products: [...sum.values()].sort((a, b) => a.name.localeCompare(b.name)) };
+  });
+  return (
+    <aside className="card node-panel survey-panel">
+      <div className="toolbar">
+        <h2 className="section-title">Products · {name ?? "whole site"}</h2>
+        {focus !== null && (
+          <button className="btn btn-small btn-ghost" onClick={onClose}>
+            Whole site
+          </button>
+        )}
+      </div>
+      {groups.every((g) => g.products.length === 0) && <p className="muted small">No approved survey quantities here yet.</p>}
+      {groups
+        .filter((g) => g.products.length)
+        .map((g) => (
+          <div key={g.id} className="top-gap">
+            <strong className="small">{g.name}</strong>
+            <table className="table compact">
+              <tbody>
+                {g.products.map((p) => (
+                  <tr key={p.name}>
+                    <td>{p.name}</td>
+                    <td className="num">
+                      {p.qty.toFixed(2)} {p.unit}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      <p className="muted small">Exact quantities; whole packs are rounded on the survey or indent total.</p>
     </aside>
   );
 }

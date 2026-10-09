@@ -24,5 +24,11 @@ class Settings(BaseSettings):
     kylas_api_key: SecretStr | None = None
     kylas_timeout_seconds: float = 20
 
+    # Claude vision for survey photo suggestions (off unless enabled in survey settings). The key
+    # comes from ANTHROPIC_API_KEY in .env only: never stored, logged or returned.
+    anthropic_api_key: SecretStr | None = None
+    anthropic_base_url: str = "https://api.anthropic.com"
+    anthropic_timeout_seconds: float = 60
+
 
 settings = Settings()
