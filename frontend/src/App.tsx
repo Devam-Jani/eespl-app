@@ -40,6 +40,12 @@ const PortalHome = lazy(() => portal().then((m) => ({ default: m.PortalHome })))
 const PortalSitePage = lazy(() => portal().then((m) => ({ default: m.PortalSitePage })));
 const InviteAccept = lazy(() => portal().then((m) => ({ default: m.InviteAccept })));
 const Snags = lazy(() => import("./pages/Snags"));
+// site survey (with its measuring camera) is its own chunk
+const sv = () => import("./survey/SurveyPages");
+const SurveysList = lazy(() => sv().then((m) => ({ default: m.SurveysList })));
+const SurveyDetail = lazy(() => sv().then((m) => ({ default: m.SurveyDetail })));
+const PilotReport = lazy(() => sv().then((m) => ({ default: m.PilotReport })));
+const SurveySettings = lazy(() => sv().then((m) => ({ default: m.SurveySettings })));
 // dashboards and analytics (with their charts) are one chunk
 const Dashboard = lazy(() => import("./analytics/Dashboard"));
 const an = () => import("./analytics/Pages");
@@ -93,6 +99,8 @@ const PAGES: Record<string, JSX.Element> = {
   "/settings/kylas": <KylasSettingsPage />,
   "/sites": <Sites />,
   "/snags": <Snags />,
+  "/surveys": <SurveysList />,
+  "/settings/survey": <SurveySettings />,
   "/dashboard": <Dashboard />,
   "/analytics/sites": <SitesAnalytics />,
   "/analytics/finance": <FinanceAnalytics />,
@@ -164,6 +172,22 @@ export default function App() {
             >
               <Route index element={<Dashboard />} />
               <Route path="/drill" element={<DrillPage />} />
+              <Route
+                path="/surveys/pilot"
+                element={
+                  <RequirePermission perms={["survey.view"]}>
+                    <PilotReport />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="/surveys/:id"
+                element={
+                  <RequirePermission perms={["survey.view"]}>
+                    <SurveyDetail />
+                  </RequirePermission>
+                }
+              />
               {MENU.map((item) => (
                 <Route key={item.to} path={item.to} element={<RequirePermission perms={item.perms}>{PAGES[item.to] ?? <Placeholder title={item.label} />}</RequirePermission>} />
               ))}

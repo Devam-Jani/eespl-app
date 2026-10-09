@@ -185,6 +185,7 @@ function ProductForm({ product, onClose, onSaved }: { product: Product | null; o
     category_id: product?.category_id ? String(product.category_id) : "",
     unit: product?.unit ?? "kg",
     pack_size: product?.pack_size ?? "",
+    pack_unit: product?.pack_unit ?? "",
     gst_percent: product?.gst_percent ?? "18",
     hsn_code: product?.hsn_code ?? "",
     reorder_level: product?.reorder_level ?? "",
@@ -200,6 +201,7 @@ function ProductForm({ product, onClose, onSaved }: { product: Product | null; o
       ...form,
       brand: form.brand || null,
       pack_size: form.pack_size || null,
+      pack_unit: form.pack_unit || null,
       hsn_code: form.hsn_code || null,
       reorder_level: form.reorder_level || null,
       category_id: form.category_id ? Number(form.category_id) : null,
@@ -268,6 +270,10 @@ function ProductForm({ product, onClose, onSaved }: { product: Product | null; o
           <label className="field">
             <span>Pack size</span>
             <input type="number" step="0.001" min="0" value={form.pack_size} onChange={set("pack_size")} />
+          </label>
+          <label className="field">
+            <span>Pack (bag, can, drum)</span>
+            <input value={form.pack_unit} onChange={set("pack_unit")} maxLength={20} placeholder="empty: no pack rounding" />
           </label>
           <label className="field">
             <span>GST %</span>

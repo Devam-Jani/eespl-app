@@ -2325,10 +2325,12 @@ input.full {
 }
 /* the 3D view's controls wrap on a phone in the portal */
 .portal-3d .toolbar,
-.portal-3d .page-actions {
+.portal-3d .page-actions,
+.split-3d .page-actions {
   flex-wrap: wrap;
 }
-.portal-3d .page-actions > * {
+.portal-3d .page-actions > *,
+.split-3d .page-actions > * {
   max-width: 100%;
 }
 .portal-3d select {
@@ -2591,4 +2593,344 @@ li.late a {
 .dash-tabs {
   max-width: 100%;
   flex-wrap: wrap;
+}
+
+/* --- site survey ------------------------------------------------------------------------------- */
+.survey-page {
+  padding-bottom: 90px; /* room for the totals bar */
+}
+.unit-switch {
+  display: inline-flex;
+  gap: 2px;
+}
+.survey-floor {
+  margin-top: 14px;
+}
+.area-card {
+  padding: 10px;
+  margin-bottom: 8px;
+}
+.area-main {
+  display: flex;
+  gap: 10px;
+}
+.area-thumb {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex: none;
+  background: #eef1ef;
+}
+.area-thumb.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  color: #7a8a83;
+}
+.area-thumb.needs {
+  border: 2px dashed #d55e00;
+}
+.area-text {
+  min-width: 0;
+}
+.area-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.ai-box {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: 1px dashed #56b4e9;
+  border-radius: 6px;
+  background: #f2f9fd;
+}
+.survey-totals {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  background: #0f3d2e;
+  color: #fff;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+.survey-totals .muted {
+  color: #cfe3da;
+}
+.totals-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 18px;
+  max-height: 40vh;
+  overflow-y: auto;
+  margin-top: 6px;
+}
+.area-form .row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.size-input {
+  font-size: 1.15rem;
+  letter-spacing: 0.5px;
+}
+.floor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+.text-warn {
+  color: #b86b00;
+}
+.survey-panel {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+@media (min-width: 960px) {
+  .survey-totals {
+    left: 240px;
+  }
+}
+@media (max-width: 480px) {
+  .totals-grid,
+  .area-form .row-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- the measuring camera ---------------------------------------------------------------------- */
+.camera-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #000;
+  color: #fff;
+  overflow: hidden;
+}
+.camera-video,
+.review-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+.camera-guides {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.camera-guides .grid-v,
+.camera-guides .grid-h {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.35);
+}
+.camera-guides .grid-v {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+.camera-guides .grid-h {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+.camera-guides .cross {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  background:
+    linear-gradient(#fff, #fff) center / 2px 100% no-repeat,
+    linear-gradient(#fff, #fff) center / 100% 2px no-repeat;
+  opacity: 0.8;
+}
+.live-markers {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.live-markers polygon {
+  fill: rgba(0, 158, 115, 0.25);
+  stroke: #00e0a2;
+  stroke-width: 0.004;
+}
+.camera-top,
+.camera-status {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+}
+.camera-top {
+  top: 0;
+  background: linear-gradient(rgba(0, 0, 0, 0.6), transparent);
+}
+.camera-title {
+  flex: 1;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.camera-status {
+  top: 48px;
+  font-size: 0.8rem;
+}
+.camera-status > span {
+  background: rgba(0, 0, 0, 0.55);
+  padding: 3px 8px;
+  border-radius: 12px;
+}
+.tilt.ok,
+.marker-state.ok {
+  background: rgba(0, 158, 115, 0.85) !important;
+}
+.tilt.bad {
+  background: rgba(213, 94, 0, 0.85) !important;
+}
+.camera-status .warn {
+  background: rgba(230, 159, 0, 0.85) !important;
+  color: #111;
+}
+.camera-error {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 150px;
+  background: #d55e00;
+  color: #fff;
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+.camera-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 10px 12px 18px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.camera-bottom .camera-error {
+  position: static;
+}
+.mode-switch {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+}
+.ar-why {
+  color: #ddd !important;
+  text-align: center;
+}
+.shutter {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 5px solid #fff;
+  background: rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+}
+.shutter.wide {
+  width: auto;
+  height: 52px;
+  border-radius: 26px;
+  padding: 0 24px;
+  color: #fff;
+  font-weight: 700;
+}
+.review-stage {
+  position: absolute;
+  inset: 0 0 150px 0;
+}
+.review-stage .review-img,
+.review-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.review-svg .mk {
+  fill: rgba(0, 158, 115, 0.2);
+  stroke: #00e0a2;
+  stroke-width: 3;
+}
+.review-svg .area-poly {
+  fill: rgba(230, 159, 0, 0.2);
+  stroke: #e69f00;
+  stroke-width: 4;
+}
+.review-svg .tap {
+  fill: #d55e00;
+  stroke: #fff;
+  stroke-width: 2;
+}
+.review-svg .side {
+  fill: #fff;
+  stroke: #000;
+  stroke-width: 3;
+  paint-order: stroke;
+  font-weight: 700;
+}
+.measured {
+  font-size: 1.1rem;
+  color: #7ff0c8;
+}
+.ar-overlay {
+  display: none;
+}
+.ar-overlay.on {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  pointer-events: none;
+}
+.ar-overlay.on > * {
+  pointer-events: auto;
+}
+.ar-status,
+.ar-readout {
+  margin: 10px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border-radius: 8px;
+}
+.ar-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.ar-buttons {
+  position: fixed;
+  bottom: 20px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.camera-screen .btn-ghost {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.5);
 }

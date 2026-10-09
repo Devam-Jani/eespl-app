@@ -11,6 +11,7 @@ import app.masters.models  # noqa: F401  (registers the master tables)
 import app.material.models  # noqa: F401  (registers the material tables)
 import app.portal.models  # noqa: F401  (registers the portal tables)
 import app.sites.models  # noqa: F401  (registers the site tables)
+import app.survey.models  # noqa: F401  (registers the survey tables)
 import app.tenders.models  # noqa: F401  (registers the tender tables)
 from app.config import settings
 from app.models import Base

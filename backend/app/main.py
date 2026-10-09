@@ -38,6 +38,7 @@ from app.portal import routers as portal
 from app.portal import staff as portal_staff
 from app.routers import audit, permissions, roles, users
 from app.sites import routers as sites
+from app.survey import routers as survey
 from app.tenders import routers as tenders
 
 app = FastAPI(title="EESPL App")
@@ -86,6 +87,7 @@ for _module in (
 ):
     app.include_router(_module.router)
 for _r in (
+    survey.router,
     analytics.dashboard,
     analytics.router,
     portal_staff.router,

@@ -731,6 +731,27 @@ class InvoiceFromRa(BaseModel):
     remark: str | None = None
 
 
+def camera_gate(db, b: RaBill, c: ClientContract) -> None:
+    """While camera sizes are not allowed for billing, a quantity whose BOQ line came from survey
+    areas measured only by the camera needs a laser / manual size, or the client's certification."""
+    from app.survey import service as survey
+
+    if survey.settings(db).camera_billing_allowed or b.certified_by_client:
+        return
+    contract_lines = {cl.id: cl for cl in c.lines}
+    billed = [contract_lines[ln.contract_line_id].boq_line_id for ln in b.lines
+              if Decimal(ln.certified_qty if ln.certified_qty is not None else ln.qty) > 0
+              and contract_lines[ln.contract_line_id].boq_line_id]  # fmt: skip
+    found = survey.camera_only_for_boq_lines(db, billed)
+    if found:
+        names = sorted({a.name for areas in found.values() for a in areas})
+        raise svc.conflict(
+            f"{b.code} bills quantities measured only by the camera ({', '.join(names[:5])}"
+            f"{' …' if len(names) > 5 else ''}): give a laser or manual size, or record the "
+            "client's certified quantity"
+        )
+
+
 @router.post("/ra-bills/{rid}/invoice", status_code=status.HTTP_201_CREATED)
 def invoice_ra(
     rid: int,
@@ -745,6 +766,7 @@ def invoice_ra(
     if b.status != "certified":
         raise svc.conflict(f"{b.code} is {b.status}; a tax invoice is raised on the certified bill")
     c = db.get(ClientContract, b.contract_id)
+    camera_gate(db, b, c)
     if c.client_id is None:
         raise svc.unprocessable("The contract has no client")
     on = body.invoice_date or today()

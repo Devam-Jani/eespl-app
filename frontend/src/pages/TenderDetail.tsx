@@ -80,6 +80,12 @@ export default function TenderDetail() {
             {tender.client_name ?? "No client yet"}
             {tender.channel_name ? ` · via ${tender.channel_name}` : ""}
             {tender.site_city ? ` · ${tender.site_city}` : ""} · due <span className={tender.overdue ? "text-danger" : ""}>{shortDate(tender.due_on)}</span>
+            {can("survey.view") && (
+              <>
+                {" · "}
+                <Link to={`/surveys?tender=${tender.id}`}>Surveys</Link>
+              </>
+            )}
           </p>
         </div>
         <div className="page-actions">

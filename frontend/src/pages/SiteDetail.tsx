@@ -88,6 +88,12 @@ export default function SiteDetail() {
             )}
             {" · target "}
             <span className={site.late ? "text-danger" : ""}>{shortDate(site.target_date)}</span>
+            {can("survey.view") && (
+              <>
+                {" · "}
+                <Link to={`/surveys?site=${site.id}`}>Surveys</Link>
+              </>
+            )}
           </p>
         </div>
         <div className="rate-badge">
