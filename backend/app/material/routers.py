@@ -1224,6 +1224,17 @@ def _po_out(db: Session, po: PurchaseOrder, principal: Principal) -> PoOut:
                 received_qty=ln.received_qty,
                 hsn_code=ln.product.hsn_code,
                 indent_qty=svc.indent_qty_text(db, ln),
+                contract_rate=ln.contract_rate,
+                above_contract_percent=(
+                    (
+                        (Decimal(ln.rate) - Decimal(ln.contract_rate))
+                        / Decimal(ln.contract_rate)
+                        * 100
+                    ).quantize(Decimal("0.1"))
+                    if ln.contract_rate and Decimal(ln.rate) > Decimal(ln.contract_rate)
+                    else None
+                ),
+                rate_reason=ln.rate_reason,
             )
             for ln in po.lines
         ],
@@ -1302,6 +1313,21 @@ def _fill_po(db: Session, po: PurchaseOrder, body: PoIn, principal: Principal) -
             if il is None or il.product_id != product.id:
                 raise unprocessable(f"{product.name}: the indent line is for another product")
         unit = ln.unit or product.unit
+        base_qty = svc.to_base(db, product, ln.qty, unit)
+        # the vendor's rate contract fills the rate; a higher rate needs a reason
+        from app.sitecontrol import service as sitecontrol  # noqa: PLC0415
+
+        rate, contract, contract_rate = sitecontrol.po_line_rate(
+            db,
+            vendor.id,
+            product,
+            unit,
+            ln.qty,
+            base_qty,
+            ln.rate,
+            ln.rate_reason,
+            po.po_date or date.today(),
+        )
         lines.append(
             PoLine(
                 indent_line_id=ln.indent_line_id,
@@ -1309,8 +1335,13 @@ def _fill_po(db: Session, po: PurchaseOrder, body: PoIn, principal: Principal) -
                 product=product,
                 qty=ln.qty,
                 unit=unit,
-                base_qty=svc.to_base(db, product, ln.qty, unit),
-                rate=ln.rate,
+                base_qty=base_qty,
+                rate=rate,
+                contract_id=contract.id if contract else None,
+                contract_rate=contract_rate,
+                rate_reason=(ln.rate_reason or None)
+                if contract_rate is not None and rate > contract_rate
+                else None,
                 discount_percent=ln.discount_percent,
                 gst_percent=ln.gst_percent,
                 amount=ZERO,
@@ -1567,6 +1598,10 @@ def mark_sent(
             "GSTIN not set: add the company GSTIN (Settings > GSTIN addresses) first"
         )
     po.status, po.sent_at = "sent", _now()
+    # a PO going straight to a site gets a delivery note to be confirmed at the site
+    from app.sitecontrol import deliveries  # noqa: PLC0415  (sitecontrol imports this module)
+
+    deliveries.for_po(db, po, principal.user.id)
     return _po_status(db, request, principal, po, "approved")
 
 
@@ -2138,6 +2173,10 @@ def _dispatch(db: Session, t: Transfer, principal: Principal) -> None:
             note=t.code,
         )
     t.status, t.dispatched_at, t.dispatched_by = "dispatched", _now(), principal.user.id
+    # a dispatch to a site store gets a delivery note to be confirmed at the site
+    from app.sitecontrol import deliveries  # noqa: PLC0415  (sitecontrol imports this module)
+
+    deliveries.for_transfer(db, t, principal.user.id)
 
 
 @router.get("/transfers")
@@ -2273,60 +2312,20 @@ def receive_transfer(
     given = {r.line_id: r for r in body.lines}
     if set(given) - {ln.id for ln in t.lines}:
         raise unprocessable("A line is not on this transfer")
+    received = {}
     for ln in t.lines:
         r = given.get(ln.id)
         got = r.qty_received if r else Decimal(ln.qty_sent)
         if got > Decimal(ln.qty_sent):
             raise unprocessable(f"{ln.product.name}: more received than was sent")
-        short = Decimal(ln.qty_sent) - got
-        if short > 0 and not (r and (r.shortage_reason or "").strip()):
+        if Decimal(ln.qty_sent) - got > 0 and not (r and (r.shortage_reason or "").strip()):
             raise unprocessable(f"{ln.product.name}: give the reason for the shortage")
-        ln.qty_received, ln.shortage_qty = got, short
-        ln.shortage_reason = r.shortage_reason if short > 0 else None
-        # all that was sent comes in; what did not arrive is written off in the receiving
-        # store (a 'shortage' entry), so its value is charged to the receiving site
-        svc.post(
-            db,
-            store_id=dst.id,
-            product=ln.product,
-            qty=Decimal(ln.qty_sent),
-            rate=ln.rate or ZERO,
-            ref_type="transfer_in",
-            ref_id=t.id,
-            user_id=principal.user.id,
-            note=t.code,
-        )
-        if short > 0:
-            svc.post(
-                db,
-                store_id=dst.id,
-                product=ln.product,
-                qty=-short,
-                rate=ln.rate or ZERO,
-                ref_type="shortage",
-                ref_id=t.id,
-                user_id=principal.user.id,
-                note=f"{t.code}: {ln.shortage_reason}",
-            )
-    t.status, t.received_at, t.received_by = "received", _now(), principal.user.id
-    if Decimal(t.freight_amount) > 0:
-        src = db.get(Store, t.from_store_id)
-        db.add(
-            FreightEntry(
-                source="transfer",
-                transfer_id=t.id,
-                site_id=dst.site_id,
-                direction="godown_to_site" if dst.site_id else "other",
-                on_date=date.today(),
-                amount=t.freight_amount,
-                transporter=t.transporter,
-                vehicle_no=t.vehicle_no,
-                from_place=src.name,
-                to_place=dst.name,
-                remark=t.code,
-                created_by=principal.user.id,
-            )
-        )
+        received[ln.id] = (got, r.shortage_reason if r else None)
+    svc.receive_transfer(db, t, received, principal.user.id)
+    # a delivery note waiting for this transfer is settled by the store's receipt too
+    from app.sitecontrol import deliveries  # noqa: PLC0415  (sitecontrol imports this module)
+
+    deliveries.settle_by_transfer_receipt(db, t, principal.user.id)
     _record(
         db,
         request,
@@ -2450,6 +2449,13 @@ def create_issue(
         sc = db.get(AreaScope, body.area_scope_id)
         if sc is None or sc.site_id != site.id:
             raise unprocessable("That area scope is not on this site")
+    # issued material is booked on an area of the site's list (or a new area asked for)
+    from app.sitecontrol import service as sitecontrol  # noqa: PLC0415
+
+    if body.kind == "issue":
+        sitecontrol.check_booking(
+            db, site, body.node_id, body.new_area_id, body.area_scope_id or body.task_id
+        )
     issue = SiteIssue(
         code=svc.next_code(db, "ISS"),
         kind=body.kind,
@@ -2457,6 +2463,8 @@ def create_issue(
         site_id=site.id,
         task_id=body.task_id,
         area_scope_id=body.area_scope_id,
+        node_id=body.node_id,
+        new_area_id=body.new_area_id,
         subcontractor_id=body.subcontractor_id,
         issued_on=body.issued_on or date.today(),
         remark=body.remark,

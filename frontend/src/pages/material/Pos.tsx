@@ -99,7 +99,17 @@ export default function Pos() {
   );
 }
 
-type Line = { indent_line_id: number | null; product_id: number | ""; qty: string; unit: string; rate: string; discount_percent: string; gst_percent: string };
+type Line = {
+  indent_line_id: number | null;
+  product_id: number | "";
+  qty: string;
+  unit: string;
+  rate: string;
+  discount_percent: string;
+  gst_percent: string;
+  rate_reason?: string | null;
+};
+type ContractRate = { contract_id: number | null; rate?: string; unit?: string; valid_till?: string };
 type Charge = { kind: ChargeKind; description: string; amount: string; gst_percent: string; add_to_cost: boolean };
 
 type PoHead = { vendor_id: number | ""; store_id: number | ""; from_gstin_id: number | ""; po_date: string; expected_delivery: string; payment_terms: string; remark: string };
@@ -173,6 +183,27 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
   const totals = useMemo(() => poTotals(lines, charges, interstate), [lines, charges, interstate]);
   const limit = Number(lookups.settings.po_approval_limit);
 
+  // the vendor's rate contract per product: a blank rate takes it; above it needs a reason
+  const [contracts, setContracts] = useState<Record<number, ContractRate>>({});
+  const productKey = lines.map((l) => l.product_id).join(",");
+  useEffect(() => {
+    if (!form.vendor_id) return setContracts({});
+    const ids = [...new Set(productKey.split(",").filter(Boolean).map(Number))];
+    void Promise.all(
+      ids.map((pid) =>
+        api<ContractRate>(`/api/sitecontrol/rate-contracts-lookup?vendor_id=${form.vendor_id}&product_id=${pid}`).then(
+          (c) => [pid, c] as const,
+          () => [pid, { contract_id: null }] as const,
+        ),
+      ),
+    ).then((pairs) => setContracts(Object.fromEntries(pairs)));
+  }, [form.vendor_id, productKey]);
+  const contractFor = (l: Line) => (l.product_id ? contracts[l.product_id] : undefined);
+  const aboveContract = (l: Line) => {
+    const c = contractFor(l);
+    return !!c?.rate && l.unit === c.unit && l.rate !== "" && Number(l.rate) > Number(c.rate) * 1.0005;
+  };
+
   const setLine = (i: number, patch: Partial<Line>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   const setCharge = (i: number, patch: Partial<Charge>) => setCharges((cs) => cs.map((c, j) => (j === i ? { ...c, ...patch } : c)));
 
@@ -187,7 +218,7 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
       payment_terms: form.payment_terms || null,
       remark: form.remark || null,
       indent_ids: indentIds,
-      lines: lines.map((l) => ({ ...l, unit: l.unit || null })),
+      lines: lines.map((l) => ({ ...l, unit: l.unit || null, rate: l.rate === "" ? null : l.rate, rate_reason: l.rate_reason || null })),
       charges: charges.map((c) => ({ ...c, description: c.description || null })),
     };
     try {
@@ -297,7 +328,29 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
                   <UnitSelect units={lookups.units} value={l.unit} onChange={(u) => setLine(i, { unit: u })} />
                 </td>
                 <td>
-                  <input className="input-num" required inputMode="decimal" value={l.rate} onChange={(e) => setLine(i, { rate: e.target.value })} />
+                  <input
+                    className="input-num"
+                    required={!contractFor(l)?.contract_id}
+                    inputMode="decimal"
+                    value={l.rate}
+                    placeholder={contractFor(l)?.rate ? "contract" : undefined}
+                    onChange={(e) => setLine(i, { rate: e.target.value })}
+                  />
+                  {contractFor(l)?.rate && (
+                    <div className={`small ${aboveContract(l) ? "text-danger" : "muted"}`}>
+                      contract {inr(contractFor(l)!.rate)}/{contractFor(l)!.unit}
+                      {aboveContract(l) && ` · +${((Number(l.rate) / Number(contractFor(l)!.rate) - 1) * 100).toFixed(1)} %`}
+                    </div>
+                  )}
+                  {aboveContract(l) && (
+                    <input
+                      className="input-reason"
+                      required
+                      placeholder="why above the contract?"
+                      value={l.rate_reason ?? ""}
+                      onChange={(e) => setLine(i, { rate_reason: e.target.value })}
+                    />
+                  )}
                 </td>
                 <td>
                   <input className="input-num" inputMode="decimal" value={l.discount_percent} onChange={(e) => setLine(i, { discount_percent: e.target.value })} />
@@ -646,7 +699,16 @@ export function PoDetail() {
                   {num(l.qty)} {l.unit}
                   {l.indent_qty && <div className="small muted">({l.indent_qty})</div>}
                 </td>
-                <td className="num">{inr(l.rate)}</td>
+                <td className="num">
+                  {inr(l.rate)}
+                  {l.contract_rate && (
+                    <div className={`small ${l.above_contract_percent ? "text-danger" : "muted"}`}>
+                      contract {inr(l.contract_rate)}
+                      {l.above_contract_percent && ` · +${num(l.above_contract_percent)} %`}
+                    </div>
+                  )}
+                  {l.rate_reason && <div className="small muted">“{l.rate_reason}”</div>}
+                </td>
                 <td className="num">{num(l.discount_percent)}%</td>
                 <td className="num">{inr(l.amount)}</td>
                 <td className="num">{num(l.gst_percent)}%</td>

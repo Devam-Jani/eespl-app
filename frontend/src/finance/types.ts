@@ -157,6 +157,11 @@ export type VendorBill = {
   outstanding: Money;
   status: string;
   match_issues: { message: string; kind: string }[];
+  blocked: boolean;
+  blocked_reasons: { message: string; kind: string }[];
+  released_at: string | null;
+  released_by: string | null;
+  release_reason: string | null;
   grns: string[];
   lines: { id: number; description: string; qty: string; unit: string | null; rate: string; amount: Money; gst_percent: string; grn_qty: string | null; po_rate: string | null }[];
 };
@@ -190,6 +195,9 @@ export type SubconBill = {
   status: string;
   vendor_bill_number: string | null;
   retention_held_on_wo: Money;
+  productivity_status: "ok" | "low" | "to_be_set" | "none" | null;
+  productivity: { mandays?: string; sqm?: string; actual?: string | null; expected?: string | null; drop_percent?: string } | null;
+  productivity_override_note: string | null;
 };
 
 export type PettyEntry = {

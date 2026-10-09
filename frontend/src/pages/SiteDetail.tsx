@@ -12,6 +12,7 @@ import TasksTab from "./site/TasksTab";
 // three.js is only downloaded when the 3D tab is opened
 const Site3DTab = lazy(() => import("./site/Site3DTab"));
 const MaterialTab = lazy(() => import("./site/MaterialTab"));
+const SiteControlStrip = lazy(() => import("../sitecontrol/Pages").then((m) => ({ default: m.SiteControlStrip })));
 // the execution tabs are their own chunk too
 const DprTab = lazy(() => import("./site/DprTab"));
 const LabourTab = lazy(() => import("./site/LabourTab"));
@@ -102,6 +103,9 @@ export default function SiteDetail() {
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
+      <Suspense fallback={null}>
+        <SiteControlStrip siteId={site.id} />
+      </Suspense>
       {(() => {
         const tabs = (
           [

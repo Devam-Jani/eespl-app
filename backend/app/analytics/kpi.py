@@ -416,6 +416,8 @@ def management(db: Session, principal: Principal, demo: bool = False) -> dict:
             ],
         },
     ]
+    if not demo:
+        sections.append(site_control_section(db))
     out = {"as_of": as_of, "sections": sections, "margin": None}
     if sees_cost(principal):
         codes = dict(db.execute(select(Site.id, Site.code).where(Site.is_demo == demo)).all())
@@ -687,6 +689,40 @@ def supervisor(db: Session, principal: Principal, scope: str, demo: bool = False
 # --- accounts ------------------------------------------------------------------------------------
 
 
+def site_control_section(db: Session) -> dict:
+    """Site control (9 Oct meeting): deliveries not confirmed at site, work done not billed,
+    new areas waiting for planning."""
+    from app.sitecontrol import service as sc  # noqa: PLC0415  (avoids an import cycle)
+    from app.sitecontrol.models import NewAreaRequest  # noqa: PLC0415
+
+    rows = sc.ready_rows(db)
+    return {
+        "key": "site_control",
+        "title": "Site control",
+        "tiles": [
+            tile(
+                "deliveries_unconfirmed",
+                "Deliveries not confirmed",
+                sc.unconfirmed_count(db),
+                unit="count",
+                note="dispatched, not counted at site yet",
+            ),
+            tile(
+                "work_not_billed",
+                "Work done, not billed",
+                money(sum((r["value"] or ZERO for r in rows), ZERO)),
+                note=f"{len(rows)} finished stage(s)",
+            ),
+            tile(
+                "pending_new_areas",
+                "New areas waiting for planning",
+                db.scalar(select(func.count()).where(NewAreaRequest.status == "pending")),
+                unit="count",
+            ),
+        ],
+    }
+
+
 def accounts(db: Session, principal: Principal, demo: bool = False) -> dict:
     day = today()
     as_of = _as_of(db)
@@ -727,6 +763,7 @@ def accounts(db: Session, principal: Principal, demo: bool = False) -> dict:
             for k, v in buckets.items()
         ],
         "tiles": [
+            *([] if demo else [site_control_section(db)["tiles"][1]]),
             tile(
                 "to_invoice",
                 "Certified RA bills to invoice",
@@ -817,6 +854,7 @@ def purchase(db: Session, principal: Principal, demo: bool = False) -> dict:
     )
     return {
         "tiles": [
+            *([] if demo else [site_control_section(db)["tiles"][0]]),
             tile(
                 "indents_awaiting_po",
                 "Indents awaiting PO",

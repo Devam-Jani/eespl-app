@@ -113,6 +113,11 @@ def _bill_out(db, b: VendorBill) -> dict:
         "outstanding": svc.bill_outstanding(db, b),
         "status": b.status,
         "match_issues": b.match_issues,
+        "blocked_reasons": b.blocked_reasons,
+        "blocked": bool(b.blocked_reasons) and b.released_at is None,
+        "released_at": b.released_at,
+        "released_by": names(db, [b.released_by]).get(b.released_by) if b.released_by else None,
+        "release_reason": b.release_reason,
         "grns": grns,
         "approved_by_name": who.get(b.approved_by),
         "remark": b.remark,
@@ -331,6 +336,9 @@ def create_bill(
     db.flush()
     for g in grns:
         db.add(VendorBillGrn(vendor_bill_id=b.id, grn_id=g.id))
+    from app.sitecontrol import service as sitecontrol  # noqa: PLC0415
+
+    sitecontrol.refresh_block(db, b)
     record(
         db,
         request,
@@ -366,7 +374,10 @@ def approve_bill(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Bill not found")
     if b.status != "draft":
         raise svc.conflict(f"{b.number} is {b.status}")
-    if b.match_issues and not body.accept_differences:
+    from app.sitecontrol import service as sitecontrol  # noqa: PLC0415
+
+    sitecontrol.approval_gate(db, b)  # blocked by the three-way match until released
+    if b.match_issues and not body.accept_differences and b.released_at is None:
         raise svc.unprocessable(
             "The bill does not match the PO / GRN: accept the differences to approve it"
         )
@@ -785,6 +796,9 @@ def _subcon_out(db, b: SubconBill) -> dict:
         "vendor_bill_id": b.vendor_bill_id,
         "vendor_bill_number": vb.number if vb else None,
         "retention_held_on_wo": held - released,
+        "productivity_status": b.productivity_status,
+        "productivity": b.productivity,
+        "productivity_override_note": b.productivity_override_note,
         "remark": b.remark,
         "lines": [
             {
@@ -900,6 +914,10 @@ def create_subcon_bill(
     b.net = gross + b.gst - b.retention - b.tds - b.material_recovery - b.advance_recovery
     if b.net < 0:
         raise svc.unprocessable("Recoveries exceed the bill")
+    from app.sitecontrol import service as sitecontrol  # noqa: PLC0415
+
+    db.flush()
+    sitecontrol.productivity_check(db, b)
     record(
         db,
         request,
@@ -924,6 +942,9 @@ def approve_subcon(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Bill not found")
     if b.status != "draft":
         raise svc.conflict(f"{b.number} is {b.status}")
+    from app.sitecontrol import service as sitecontrol  # noqa: PLC0415
+
+    sitecontrol.productivity_gate(db, b)  # "productivity low" needs labourcheck.override
     wo = db.get(WorkOrder, b.wo_id)
     sub = wo.subcontractor
     section, _pct = svc.tds_for(db, sub)

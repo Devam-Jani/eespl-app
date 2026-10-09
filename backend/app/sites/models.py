@@ -106,6 +106,9 @@ class Site(Tracked, Base):
     site_incharge_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
+    # who may confirm deliveries when the supervisor is away (labour leader, applicator)
+    receiver_name: Mapped[str | None] = mapped_column(String(100))
+    receiver_phone: Mapped[str | None] = mapped_column(String(20))
     notes: Mapped[str | None] = mapped_column(Text)
     source: Mapped[str] = mapped_column(String(10), server_default="app")
     source_ref: Mapped[str | None] = mapped_column(String(50), unique=True)  # Powerplay id

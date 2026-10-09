@@ -199,10 +199,15 @@ def refresh_scope(db: Session, scope: AreaScope) -> None:
     tasks = db.scalars(
         select(Task).where(Task.area_scope_id == scope.id, Task.parent_task_id.is_(None))
     ).all()
+    before = scope.progress_percent
     scope.progress_percent = sum(
         (Decimal(t.step.weight_percent) for t in tasks if t.step and _counts(t)), Decimal(0)
     ).quantize(PCT)
     db.flush()
+    # the stage's last task done: billing gets a "ready to bill" item
+    from app.sitecontrol import service as sitecontrol  # noqa: PLC0415
+
+    sitecontrol.on_scope_refresh(db, scope, before)
     site = db.get(Site, scope.site_id)
     all_nodes = service.nodes(db, scope.site_id)
     refresh_nodes(db, site, all_nodes, service.ancestors(all_nodes, scope.node_id))

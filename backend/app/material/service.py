@@ -272,6 +272,62 @@ def post(
     return row
 
 
+def receive_transfer(db: Session, t, received: dict, user_id) -> None:
+    """Complete a dispatched transfer: {line id: (qty received, shortage reason)}. All that was
+    sent comes into the receiving store; what did not arrive is written off there (a
+    'shortage' entry), so its value is charged to the receiving site. The freight goes to it."""
+    from datetime import UTC, date, datetime  # noqa: PLC0415
+
+    dst = db.get(Store, t.to_store_id)
+    for ln in t.lines:
+        got, reason = received.get(ln.id, (Decimal(ln.qty_sent), None))
+        short = Decimal(ln.qty_sent) - Decimal(got)
+        ln.qty_received, ln.shortage_qty = got, short
+        ln.shortage_reason = reason if short > 0 else None
+        post(
+            db,
+            store_id=dst.id,
+            product=ln.product,
+            qty=Decimal(ln.qty_sent),
+            rate=ln.rate or Decimal(0),
+            ref_type="transfer_in",
+            ref_id=t.id,
+            user_id=user_id,
+            note=t.code,
+        )
+        if short > 0:
+            post(
+                db,
+                store_id=dst.id,
+                product=ln.product,
+                qty=-short,
+                rate=ln.rate or Decimal(0),
+                ref_type="shortage",
+                ref_id=t.id,
+                user_id=user_id,
+                note=f"{t.code}: {ln.shortage_reason}",
+            )
+    t.status, t.received_at, t.received_by = "received", datetime.now(UTC), user_id
+    if Decimal(t.freight_amount) > 0:
+        src = db.get(Store, t.from_store_id)
+        db.add(
+            FreightEntry(
+                source="transfer",
+                transfer_id=t.id,
+                site_id=dst.site_id,
+                direction="godown_to_site" if dst.site_id else "other",
+                on_date=date.today(),
+                amount=t.freight_amount,
+                transporter=t.transporter,
+                vehicle_no=t.vehicle_no,
+                from_place=src.name,
+                to_place=dst.name,
+                remark=t.code,
+                created_by=user_id,
+            )
+        )
+
+
 def take_out(
     db: Session,
     *,

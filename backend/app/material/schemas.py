@@ -232,9 +232,10 @@ class PoLineIn(BaseModel):
     product_id: int
     qty: Decimal = Pos
     unit: str | None = None
-    rate: Decimal = Field(ge=0)
+    rate: Decimal | None = Field(default=None, ge=0)  # none (or 0): the vendor's contract rate
     discount_percent: Decimal = Field(default=Decimal(0), ge=0, le=100)
     gst_percent: Decimal = Field(default=Decimal(18), ge=0, le=28)
+    rate_reason: str | None = Field(default=None, max_length=500)  # above the agreed rate
 
 
 class PoChargeIn(BaseModel):
@@ -274,6 +275,9 @@ class PoLineOut(BaseModel):
     received_qty: Decimal
     hsn_code: str | None = None
     indent_qty: str | None = None  # the qty in the indented unit, e.g. "20 nos"
+    contract_rate: Decimal | None = None  # the agreed rate per this unit (rate contract)
+    above_contract_percent: Decimal | None = None
+    rate_reason: str | None = None
 
 
 class PoChargeOut(BaseModel):
@@ -483,6 +487,8 @@ class IssueIn(BaseModel):
     store_id: int | None = None  # default: the site's store
     task_id: int | None = None
     area_scope_id: int | None = None
+    node_id: int | None = None  # the place on the site's list it was used on
+    new_area_id: int | None = None  # a new area asked for from site, waiting for approval
     subcontractor_id: int | None = None  # handed to a subcontractor (recovered on their RA bill)
     issued_on: date | None = None
     remark: str | None = None
