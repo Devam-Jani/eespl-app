@@ -42,6 +42,7 @@ ALL = [
     "dashboard.company", "dashboard.sales", "dashboard.site", "dashboard.finance",
     "dashboard.purchase", "reports.export",
     "survey.view", "survey.edit", "survey.approve", "survey.ai",
+    "quotation.view", "quotation.edit", "quotation.send", "quotation.template.edit",
 ]  # fmt: skip
 
 
@@ -114,6 +115,10 @@ EXPECTED: dict[str, dict[str, str]] = {
         "survey.edit",
         "survey.approve",
         "survey.ai",
+        "quotation.view",
+        "quotation.edit",
+        "quotation.send",
+        "quotation.template.edit",
     ),  # fmt: skip
     "estimator": _all(
         "clients.view",
@@ -128,6 +133,8 @@ EXPECTED: dict[str, dict[str, str]] = {
         "dashboard.view",
         "survey.view",
         "survey.edit",
+        "quotation.view",
+        "quotation.edit",
     ),  # fmt: skip
     "sales": {
         "clients.view": "all",
@@ -147,6 +154,9 @@ EXPECTED: dict[str, dict[str, str]] = {
         "dashboard.sales": "own",
         "survey.view": "own",
         "survey.edit": "own",
+        "quotation.view": "own",
+        "quotation.edit": "own",
+        "quotation.send": "own",
     },
     "site_supervisor": {
         "site.view": "assigned",

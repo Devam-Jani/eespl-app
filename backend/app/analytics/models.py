@@ -56,6 +56,7 @@ ALERT_RULES: dict[str, dict[str, Any]] = {
     "petty_negative": {"on": True, "roles": ["accounts"]},
     "tender_due": {"on": True, "days": 2, "roles": ["estimator", "office_admin"]},
     "kylas_failing": {"on": True, "hours": 24, "roles": ["super_admin"]},
+    "followup_overdue": {"on": True, "roles": ["office_admin"]},
 }
 RULE_LABELS = {
     "dpr_missing": "DPR missing after 8 pm",
@@ -67,6 +68,7 @@ RULE_LABELS = {
     "petty_negative": "Petty cash balance negative",
     "tender_due": "Tender due, not submitted",
     "kylas_failing": "Kylas sync failing",
+    "followup_overdue": "Quotation follow-up overdue",
 }
 
 

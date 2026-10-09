@@ -373,8 +373,13 @@ def lookups(db: DbSession, principal: CurrentPrincipal, _: View) -> dict:
 
 
 @router.get("/marker-sheet.pdf")
-def marker_sheet(db: DbSession, principal: CurrentPrincipal, _: View):
-    return pdf_response(survey_pdf.marker_sheet(db), "EESPL-measuring-markers")
+def marker_sheet(
+    db: DbSession, principal: CurrentPrincipal, _: View, size: Literal["a4", "a3"] = "a4"
+):
+    """A4: two 150 mm markers. A3: two 250 mm markers, to frame about 2.5 m across."""
+    return pdf_response(
+        survey_pdf.marker_sheet(db, size), f"EESPL-measuring-markers-{size.upper()}"
+    )
 
 
 # --- pilot report (camera vs laser) --------------------------------------------------------------

@@ -738,3 +738,32 @@ def test_marker_sheet_matches_the_detector_dictionary(boss):
     assert format(MARKER_CODES[0], "036b") == "".join(str(b) for row in marker_bits(0) for b in row)
     assert marker_bits(0)[0] == [1, 1, 0, 1, 0, 0]  # 0xd2b63a09d starts 1101 0010 ...
     assert MARKER_CODES[1] == 0x6001134E5
+
+
+def test_a3_marker_sheet_has_two_250_mm_markers_on_a3(boss):
+    import io
+
+    import pdfplumber
+
+    client, h = boss
+    r = client.get("/api/surveys/marker-sheet.pdf?size=a3", headers=h)
+    assert r.status_code == 200
+    with pdfplumber.open(io.BytesIO(r.content)) as pdf:
+        assert len(pdf.pages) == 2
+        # A3 portrait: 297 x 420 mm = 841.9 x 1190.6 pt
+        assert abs(pdf.pages[0].width - 841.9) < 2 and abs(pdf.pages[0].height - 1190.6) < 2
+        text = pdf.pages[0].extract_text()
+        assert "250 mm" in text and "A3" in text
+    assert MARKER_CODES[2] == 0x1206FBE72 and MARKER_CODES[3] == 0xFF8AD6CB4
+    assert client.get("/api/surveys/marker-sheet.pdf?size=a5", headers=h).status_code == 422
+
+
+def test_raft_and_footing_area_types_are_seeded_unconfirmed(db):
+    types = {
+        t.name: t
+        for t in db.scalars(select(AreaType).where(AreaType.name.in_(["Raft", "Footing"])))
+    }
+    assert set(types) == {"Raft", "Footing"}
+    assert types["Raft"].default_wastage_percent == Decimal("7")
+    assert types["Footing"].default_wastage_percent == Decimal("15")
+    assert not types["Raft"].confirmed and not types["Footing"].confirmed

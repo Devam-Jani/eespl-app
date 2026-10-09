@@ -161,7 +161,8 @@ function ManagementView({ demo }: { demo: boolean }) {
   );
 }
 
-type Sales = { scope: string; pipeline: { stage: string; kind: string; count: number; value: string }[]; tiles: Tile[] };
+type FollowUp = { id: number; quotation_id: number; code: string; client_firm: string; project: string; day: number; due_on: string; overdue: boolean; salesperson: string | null };
+type Sales = { scope: string; pipeline: { stage: string; kind: string; count: number; value: string }[]; tiles: Tile[]; quotation_followups: FollowUp[] };
 
 function SalesView({ demo }: { demo: boolean }) {
   const navigate = useNavigate();
@@ -171,6 +172,7 @@ function SalesView({ demo }: { demo: boolean }) {
   return (
     <>
       <Tiles tiles={data.tiles} demo={demo} />
+      {!demo && <QuotationFollowUps rows={data.quotation_followups ?? []} mine={data.scope === "own"} />}
       <section className="dash-section card top-gap">
         <div className="toolbar">
           <h2 className="section-title">{data.scope === "own" ? "My pipeline" : "Pipeline"} by stage</h2>
@@ -196,6 +198,57 @@ function SalesView({ demo }: { demo: boolean }) {
         />
       </section>
     </>
+  );
+}
+
+/** Quotation follow-ups (days 2, 7, 15, 30 after sending), due this week or overdue. */
+function QuotationFollowUps({ rows, mine }: { rows: FollowUp[]; mine: boolean }) {
+  const overdue = rows.filter((r) => r.overdue).length;
+  return (
+    <section className="dash-section card top-gap followups">
+      <div className="toolbar">
+        <h2 className="section-title">
+          {mine ? "My quotation follow-ups" : "Quotation follow-ups"} <span className="muted small">due this week{overdue ? ` · ${overdue} overdue` : ""}</span>
+        </h2>
+        <Link to="/quotations?followups=1" className="small">
+          All quotations →
+        </Link>
+      </div>
+      {rows.length === 0 ? (
+        <p className="muted small">No follow-ups due this week.</p>
+      ) : (
+        <div className="table-wrap">
+          <table className="table compact">
+            <thead>
+              <tr>
+                <th>Due</th>
+                <th>Quotation</th>
+                <th>Client · project</th>
+                <th>Call</th>
+                {!mine && <th>Salesperson</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className={r.overdue ? "row-overdue" : undefined}>
+                  <td>
+                    {new Date(r.due_on).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })} {r.overdue && <span className="badge badge-danger">overdue</span>}
+                  </td>
+                  <td>
+                    <Link to={`/quotations/${r.quotation_id}`}>{r.code}</Link>
+                  </td>
+                  <td>
+                    {r.client_firm} <span className="muted small">· {r.project}</span>
+                  </td>
+                  <td className="small">day {r.day} after sending</td>
+                  {!mine && <td className="small">{r.salesperson ?? "—"}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 

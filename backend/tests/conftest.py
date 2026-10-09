@@ -62,7 +62,13 @@ PER_TEST_TABLES = [
     "alert_recipients", "alerts", "site_summaries", "monthly_summaries", "invoice_summaries",
     "progress_snapshots", "kpi_snapshots", "weekly_reports", "demo_rows", "analytics_settings",
     "ai_calls", "survey_boq_links", "survey_photos", "survey_areas", "surveys", "survey_settings",
+    "quotation_followups", "quotation_files", "quotation_lines", "quotation_items", "quotations",
+    "offer_item_lines", "offer_item_specs", "offer_items", "offer_lines", "spec_blocks",
+    "quotation_references", "library_versions", "quotation_settings", "letterheads",
+    "letter_templates",
 ]  # fmt: skip
+# seeded rows of truncated tables, put back after every test (copied once per run)
+SEED_COPIES = ["finance_settings", "letter_templates", "letterheads", "quotation_settings"]
 # Tables that also hold seeded rows (unit conversions, categories), or are referenced by them
 # (products), are cleaned with DELETE so the seed survives.
 PER_TEST_DELETES = [
@@ -76,6 +82,9 @@ PER_TEST_DELETES = [
     "DELETE FROM checklist_templates WHERE created_by IS NOT NULL",  # the seeded ones stay
     "DELETE FROM expense_categories WHERE created_by IS NOT NULL",  # the seeded ones stay
     "INSERT INTO finance_settings SELECT * FROM finance_settings_seed",
+    "INSERT INTO letter_templates SELECT * FROM letter_templates_seed",
+    "INSERT INTO letterheads SELECT * FROM letterheads_seed",
+    "INSERT INTO quotation_settings SELECT * FROM quotation_settings_seed",
     "INSERT INTO company_profile (id) VALUES (1)",
     "INSERT INTO analytics_settings (id) VALUES (1)",
     "INSERT INTO survey_settings (id) VALUES (1)",
@@ -102,8 +111,9 @@ def test_database() -> Iterator[None]:
     cfg = Config(str(backend_dir / "alembic.ini"))
     cfg.set_main_option("script_location", str(backend_dir / "migrations"))
     command.upgrade(cfg, "head")
-    with engine.begin() as conn:  # the seeded settings row, restored after every test
-        conn.execute(text("CREATE TABLE finance_settings_seed AS SELECT * FROM finance_settings"))
+    with engine.begin() as conn:  # the seeded rows, restored after every test
+        for table in SEED_COPIES:
+            conn.execute(text(f"CREATE TABLE {table}_seed AS SELECT * FROM {table}"))
     yield
     engine.dispose()
 

@@ -46,6 +46,11 @@ const SurveysList = lazy(() => sv().then((m) => ({ default: m.SurveysList })));
 const SurveyDetail = lazy(() => sv().then((m) => ({ default: m.SurveyDetail })));
 const PilotReport = lazy(() => sv().then((m) => ({ default: m.PilotReport })));
 const SurveySettings = lazy(() => sv().then((m) => ({ default: m.SurveySettings })));
+// quotations (editor and library) are their own chunk
+const qp = () => import("./quotations/QuotationPages");
+const QuotationsList = lazy(() => qp().then((m) => ({ default: m.QuotationsList })));
+const QuotationEditor = lazy(() => qp().then((m) => ({ default: m.QuotationEditor })));
+const QuotationLibrary = lazy(() => import("./quotations/LibraryPages").then((m) => ({ default: m.QuotationLibrary })));
 // dashboards and analytics (with their charts) are one chunk
 const Dashboard = lazy(() => import("./analytics/Dashboard"));
 const an = () => import("./analytics/Pages");
@@ -100,6 +105,8 @@ const PAGES: Record<string, JSX.Element> = {
   "/sites": <Sites />,
   "/snags": <Snags />,
   "/surveys": <SurveysList />,
+  "/quotations": <QuotationsList />,
+  "/settings/quotation-library": <QuotationLibrary />,
   "/settings/survey": <SurveySettings />,
   "/dashboard": <Dashboard />,
   "/analytics/sites": <SitesAnalytics />,
@@ -177,6 +184,14 @@ export default function App() {
                 element={
                   <RequirePermission perms={["survey.view"]}>
                     <PilotReport />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="/quotations/:id"
+                element={
+                  <RequirePermission perms={["quotation.view"]}>
+                    <QuotationEditor />
                   </RequirePermission>
                 }
               />

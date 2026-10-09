@@ -25,6 +25,11 @@ type SurveyMap = {
   unplaced_areas: number;
 };
 const SURVEY_COLORS = { measured: "#009E73", camera: "#E69F00", none: "#d9dedb" } as const;
+const SURVEY_LEGEND = [
+  { key: "measured", label: "Measured (laser / by hand)" },
+  { key: "camera", label: "Camera only" },
+  { key: "none", label: "Not measured" },
+] as const;
 
 const POLL_MS = 60_000;
 const GROUP_KINDS = new Set(["tower", "wing", "floor", "basement"]);
@@ -230,6 +235,11 @@ export default function Site3DTab({
     model.nodes.forEach((n) => walk(n.id));
     return out;
   }, [surveyMap, model]);
+  const surveyCounts = useMemo(() => {
+    const c = { measured: 0, camera: 0, none: 0 };
+    for (const n of model?.nodes ?? []) if (!GROUP_KINDS.has(n.kind)) c[surveyState.get(n.id) ?? "none"] += 1;
+    return c;
+  }, [surveyState, model]);
 
   const look = useCallback(
     (b: Box): { color: string; ghost: boolean; late: boolean } => {
@@ -481,7 +491,9 @@ export default function Site3DTab({
             ...CATEGORIES.map((c) => ({ label: CATEGORY_LABEL[c], color: STATUS_COLORS[c], count: legend[c], ghost: c === "none" })),
             { label: "Late", color: LATE_COLOR, count: legend.late, outline: true },
           ]
-        : [];
+        : mode === "survey"
+          ? SURVEY_LEGEND.map((l) => ({ label: l.label, color: SURVEY_COLORS[l.key], count: surveyCounts[l.key], ghost: l.key === "none" }))
+          : [];
     const out = composeSnapshot(source, source.width / w, {
       siteName: site.name,
       siteCode: site.code,
@@ -489,7 +501,12 @@ export default function Site3DTab({
       date: new Date(),
       labels,
       legend: legendItems,
-      note: mode === "work" ? "Floors and towers: rolled-up % (grey → green)" : "Realistic tones: concrete floors, brick flats, tiled wet areas.",
+      note:
+        mode === "work"
+          ? "Floors and towers: rolled-up % (grey → green)"
+          : mode === "survey"
+            ? "Survey: approved surveys only"
+            : "Realistic tones: concrete floors, brick flats, tiled wet areas.",
     });
     const link = document.createElement("a");
     link.href = out.toDataURL("image/png");
@@ -603,6 +620,15 @@ export default function Site3DTab({
               {hover.node.status.next_step && <div>Next: {hover.node.status.next_step}</div>}
               {hover.node.status.waiting_certification && <div>Waiting for certification</div>}
               {hover.node.status.is_late && <div className="text-danger">Late</div>}
+            </div>
+          )}
+          {mode === "survey" && (
+            <div className="legend3d-overlay" aria-label="Survey colours">
+              {SURVEY_LEGEND.map((l) => (
+                <span key={l.key} className="legend-item">
+                  <span className="swatch" style={{ background: SURVEY_COLORS[l.key] }} /> {l.label}
+                </span>
+              ))}
             </div>
           )}
           {!nodes.length && model && (

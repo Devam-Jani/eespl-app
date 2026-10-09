@@ -5,7 +5,7 @@ import { homography } from "./marker";
 import type { H, Pt } from "./marker";
 
 export type Camera = { width: number; height: number; hfovDeg: number; pos: [number, number, number]; pitchDeg: number; yawDeg?: number };
-export type PlacedMarker = { id: number; x: number; y: number; size: number }; // mm, top-left corner on the plane
+export type PlacedMarker = { id: number; x: number; y: number; size: number; rotDeg?: number }; // mm, top-left corner on the plane; turned about its centre
 
 /** World (mm, z up) -> image (px) for points on the floor. */
 export function project(cam: Camera, p: Pt): Pt {
@@ -52,8 +52,12 @@ export function render(
   const data = new Uint8ClampedArray(width * height * 4);
   const shade = (q: Pt): number => {
     for (const m of markers) {
-      const u = ((q.x - m.x) / m.size) * 8;
-      const v = ((m.y + m.size - q.y) / m.size) * 8; // the printed top row lies away from the camera
+      const t = ((m.rotDeg ?? 0) * Math.PI) / 180;
+      const cx = m.x + m.size / 2;
+      const cy = m.y + m.size / 2;
+      const r = { x: cx + (q.x - cx) * Math.cos(t) + (q.y - cy) * Math.sin(t), y: cy - (q.x - cx) * Math.sin(t) + (q.y - cy) * Math.cos(t) };
+      const u = ((r.x - m.x) / m.size) * 8;
+      const v = ((m.y + m.size - r.y) / m.size) * 8; // the printed top row lies away from the camera
       if (u >= -1.2 && u < 9.2 && v >= -1.2 && v < 9.2) {
         if (u < 0 || u >= 8 || v < 0 || v >= 8) return 245; // paper margin
         if (u < 1 || u >= 7 || v < 1 || v >= 7) return 15; // black border

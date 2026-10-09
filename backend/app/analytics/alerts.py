@@ -240,6 +240,26 @@ def _kylas_failing(db: Session, cfg: dict, at: datetime) -> Iterator[Hit]:
         )
 
 
+def _followup_overdue(db: Session, cfg: dict, at: datetime) -> Iterator[Hit]:
+    """Quotation follow-ups past their day, still open (the salesperson gets it)."""
+    from app.quotations.models import Quotation, QuotationFollowUp
+
+    rows = db.execute(
+        select(QuotationFollowUp, Quotation)
+        .join(Quotation, Quotation.id == QuotationFollowUp.quotation_id)
+        .where(QuotationFollowUp.status == "open", QuotationFollowUp.due_on < today())
+    ).all()
+    for f, q in rows:
+        yield Hit(
+            f"followup:{f.id}",
+            f"Follow up {q.code} R{q.revision} {q.client_firm[:60]}: due {f.due_on:%d %b} (day {f.day})",
+            f"/quotations/{q.id}",
+            None,
+            [f.salesperson_id] if f.salesperson_id else [],
+            "warn",
+        )
+
+
 RULES = {
     "dpr_missing": _dpr_missing,
     "behind_schedule": _behind_schedule,
@@ -250,6 +270,7 @@ RULES = {
     "petty_negative": _petty_negative,
     "tender_due": _tender_due,
     "kylas_failing": _kylas_failing,
+    "followup_overdue": _followup_overdue,
 }
 
 

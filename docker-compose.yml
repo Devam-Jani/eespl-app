@@ -66,6 +66,25 @@ services:
     depends_on:
       - api
 
+  # Phone testing over HTTPS on the office network only (camera, WebXR). Off unless asked for:
+  #   LAN_IP=192.168.1.20 docker compose --profile lan-https up -d lan-https
+  # Binds to the PC's LAN address only; see docs/phone-testing.md. Never port-forward it.
+  lan-https:
+    image: caddy:2.8
+    container_name: eespl-lan-https
+    profiles: ["lan-https"]
+    restart: "no"
+    environment:
+      LAN_IP: ${LAN_IP:-127.0.0.1} # loopback unless set: nothing leaves the PC by default
+    ports:
+      - "${LAN_IP:-127.0.0.1}:8443:443"
+      - "${LAN_IP:-127.0.0.1}:8080:80"
+    volumes:
+      - ./deploy/lan-https/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/lan-https:/data
+    depends_on:
+      - web
+
 volumes:
   eespl_pgdata:
     name: eespl_pgdata

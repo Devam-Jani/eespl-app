@@ -9,7 +9,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { api } from "../api";
 import { errorText } from "../format";
 import { arUnavailable, measure as arMeasure, planImage } from "./ar";
-import { calibrate, detectMarkers, lengthM, measure as markerMeasure } from "./marker";
+import { calibrate, detectMarkers, lengthM, liveReach, measure as markerMeasure, TOO_BIG } from "./marker";
 import type { Calibration, Detected, Measurement, Pt } from "./marker";
 import { verdict } from "./quality";
 import type { Quality } from "./quality";
@@ -360,6 +360,16 @@ export default function Camera({ area, onClose, onSaved }: { area: Area; onClose
                 {live.length >= 2 ? "2 markers found" : live.length === 1 ? "1 marker: both must show" : "Looking for the markers…"}
               </span>
             )}
+            {mode === "marker" &&
+              live.length >= 1 &&
+              (() => {
+                const r = liveReach(live);
+                return r ? (
+                  <span className="reach">
+                    {r.set.name} markers: this photo can measure up to about {r.reachM.toFixed(1)} m across
+                  </span>
+                ) : null;
+              })()}
             {dark && <span className="warn">Dark: {torch === null ? "move to the light" : "turn the torch on"}</span>}
             {notes.map((n) => (
               <span key={n} className="warn">
@@ -570,9 +580,16 @@ function MarkerReview({
         {cal?.ok && (
           <p className="small">
             {m ? (
-              <b className="measured">
-                {m.areaSqm.toFixed(2)} sqm · {m.sidesM.map((s) => s.toFixed(2)).join(" × ")} m
-              </b>
+              <>
+                <b className="measured">
+                  {m.areaSqm.toFixed(2)} sqm · {m.sidesM.map((s) => s.toFixed(2)).join(" × ")} m
+                </b>
+                {m.tooBig && (
+                  <span className="too-big">
+                    {TOO_BIG} The area is {m.extentM.toFixed(1)} m across; these {cal.set.name} markers allow about {m.reachM.toFixed(1)} m here.
+                  </span>
+                )}
+              </>
             ) : (
               `Markers found. Tap the corners of the area in order (${taps.length} so far).`
             )}
@@ -587,7 +604,7 @@ function MarkerReview({
               Undo corner
             </button>
           )}
-          <button className="btn btn-primary" disabled={!m || busy} onClick={() => void save()}>
+          <button className="btn btn-primary" disabled={!m || m.tooBig || busy} onClick={() => void save()}>
             Save measurement
           </button>
         </div>
