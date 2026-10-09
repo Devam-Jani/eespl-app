@@ -516,6 +516,36 @@ def sales(db: Session, principal: Principal, scope: str, demo: bool = False) -> 
         .group_by(tenders.c.status)
     )
     d = dict(db.execute(decided).all())
+    # quotations (most work starts as one) count too; a tender made from a won quotation is
+    # the same deal, so it is not counted twice
+    from app.quotations import service as quotes  # noqa: PLC0415  (avoids an import cycle)
+    from app.quotations.models import Quotation  # noqa: PLC0415
+
+    qd: dict[str, int] = {}
+    followups: list[dict] = []
+    if not demo:
+        qq = select(Quotation.status, func.count(func.distinct(Quotation.code))).where(
+            Quotation.is_latest,
+            Quotation.status.in_(("won", "lost")),
+            func.date(func.timezone("Asia/Kolkata", Quotation.decided_at)) >= q0,
+        )
+        if own:
+            qq = qq.where(Quotation.salesperson_id == me)
+        qd = dict(db.execute(qq.group_by(Quotation.status)).all())
+        from_quotes = db.scalar(
+            select(func.count())
+            .select_from(tenders)
+            .where(
+                tenders.c.status == "won",
+                tenders.c.id.in_(select(Quotation.tender_id).where(Quotation.status == "won")),
+                func.date(func.timezone("Asia/Kolkata", tenders.c.decided_at)) >= q0,
+            )
+        )
+        d["won"] = d.get("won", 0) - (from_quotes or 0)
+        followups = quotes.followup_rows(db, me if own else None, upto=day + timedelta(days=7))
+    won = d.get("won", 0) + qd.get("won", 0)
+    lost = d.get("lost", 0) + qd.get("lost", 0)
+    target = quotes.closure_target(db, me if own else None)
     kylas = db.scalar(
         select(func.count()).select_from(leads).where(leads.c.kylas_sync_status == "failed")
     )
@@ -523,6 +553,7 @@ def sales(db: Session, principal: Principal, scope: str, demo: bool = False) -> 
     return {
         "scope": scope,
         "pipeline": pipeline,
+        "quotation_followups": followups,
         "tiles": [
             tile(
                 "followups_today",
@@ -545,14 +576,17 @@ def sales(db: Session, principal: Principal, scope: str, demo: bool = False) -> 
                 unit="count",
                 drill={"kind": "tenders", "filter": "due_week", **who},
             ),
-            tile(
-                "win_rate_quarter",
-                f"Win rate since {q0:%d %b}",
-                pct(d.get("won", 0), d.get("won", 0) + d.get("lost", 0)),
-                unit="pct",
-                note=f"{d.get('won', 0)} won, {d.get('lost', 0)} lost",
-                drill={"kind": "tenders", "filter": "decided_quarter", **who},
-            ),
+            {
+                **tile(
+                    "win_rate_quarter",
+                    f"Win rate since {q0:%d %b}",
+                    pct(won, won + lost),
+                    unit="pct",
+                    note=f"{won} won, {lost} lost (tenders and quotations) · target {float(target):g}%",
+                    drill={"kind": "tenders", "filter": "decided_quarter", **who},
+                ),
+                "target": target,
+            },
             tile(
                 "kylas_errors",
                 "Kylas sync errors",

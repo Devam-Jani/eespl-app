@@ -36,6 +36,7 @@ from app.masters.routers import (
 from app.material import routers as material
 from app.portal import routers as portal
 from app.portal import staff as portal_staff
+from app.quotations import routers as quotations
 from app.routers import audit, permissions, roles, users
 from app.sites import routers as sites
 from app.survey import routers as survey
@@ -88,6 +89,7 @@ for _module in (
     app.include_router(_module.router)
 for _r in (
     survey.router,
+    quotations.router,
     analytics.dashboard,
     analytics.router,
     portal_staff.router,

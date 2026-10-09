@@ -10,6 +10,8 @@
     docker compose exec api python -m app.cli backtest-rates [--set-default]
     docker compose exec api python -m app.cli kylas-discover
     docker compose exec api python -m app.cli import-powerplay-projects /data/powerplay/<file>.xlsx
+    docker compose exec api python -m app.cli import-offer data/samples/offer-ladani.docx
+    docker compose exec api python -m app.cli make-offer-template
 
 The password is prompted for (twice) when run in a terminal. When stdin is not a terminal,
 one line is read from stdin instead, so scripts can pipe it in without it appearing in argv.
@@ -323,6 +325,50 @@ def run_kylas_discover() -> None:
                 print(f"      stage {stage['id']}  {stage['name']}")
 
 
+def run_import_offer(path: str, again: bool) -> None:
+    """A hand-made techno-commercial offer (.docx) -> the quotation libraries. A path under data/
+    is read from the /data mount (where the company files live in the container)."""
+    from pathlib import Path
+
+    import app.main  # noqa: F401  (every model, for the foreign keys)
+    from app.quotations.importer import import_offer
+
+    p = Path(path)
+    if not p.exists() and Path("/" + path).exists():
+        p = Path("/" + path)
+    if not p.exists():
+        sys.exit(f"Not found: {path}")
+    with SessionLocal() as db:
+        try:
+            res = import_offer(db, p, again=again)
+        except ValueError as e:
+            sys.exit(str(e))
+        audit.record(
+            db,
+            "quotation.import_offer",
+            "quotation_library",
+            None,
+            user_id=None,
+            after={**res.counts, "file": p.name},
+        )
+        db.commit()
+    print(f"Imported {p.name} into the quotation libraries (every row marked 'imported, check'):")
+    for k, v in res.counts.items():
+        print(f"  {k}: {v}")
+    print("Typos fixed:")
+    for k, v in res.fixes.items():
+        print(f"  {k}: {v}")
+    for n in res.notes:
+        print(f"Note: {n}")
+
+
+def run_make_offer_template() -> None:
+    from app.quotations.docx_out import TEMPLATE, make_template
+
+    make_template(TEMPLATE)
+    print(f"Wrote the default Word template with the offer styles: {TEMPLATE}")
+
+
 def run_demo(purge: bool, sites: int, leads: int) -> None:
     from app.analytics import demo
 
@@ -379,6 +425,16 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--sites", type=int, default=60)
     p.add_argument("--leads", type=int, default=400)
 
+    p = sub.add_parser(
+        "import-offer", help="Import a techno-commercial offer .docx into the quotation libraries"
+    )
+    p.add_argument("path")
+    p.add_argument(
+        "--again", action="store_true", help="Import a second copy (a new letterhead name)"
+    )
+
+    sub.add_parser("make-offer-template", help="Write the default Word template for quotations")
+
     for command, (_, label) in POWERPLAY.items():
         p = sub.add_parser(command, help=f"Import a Powerplay Excel export: {label}")
         p.add_argument("path")
@@ -400,5 +456,9 @@ def main(argv: list[str] | None = None) -> None:
         run_backtest(args.set_default)
     elif args.command == "seed-demo-analytics":
         run_demo(args.purge, args.sites, args.leads)
+    elif args.command == "import-offer":
+        run_import_offer(args.path, args.again)
+    elif args.command == "make-offer-template":
+        run_make_offer_template()
     elif args.command in POWERPLAY:
         run_import_powerplay(args.command, args.path)

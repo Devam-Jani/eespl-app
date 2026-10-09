@@ -29,7 +29,7 @@ from app.tenders.models import LOST_REASONS
 LEAD_SOURCES = ("website", "call", "referral", "channel", "walk_in", "exhibition", "other")
 LEAD_STATUSES = ("new", "contacted", "site_visit", "quoted", "won", "lost", "junk")
 CLOSED_STATUSES = ("won", "lost", "junk")
-ACTIVITY_TYPES = ("note", "call", "visit", "status_change", "kylas")
+ACTIVITY_TYPES = ("note", "call", "visit", "status_change", "kylas", "quotation")
 SYNC_STATUSES = ("disabled", "pending", "synced", "failed")
 OUTBOX_STATUSES = ("pending", "unknown", "done", "failed")
 
@@ -118,6 +118,10 @@ class LeadActivity(Base):
     text: Mapped[str] = mapped_column(Text)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    # an issued quotation file (.docx / .pdf) attached to the activity
+    quotation_file_id: Mapped[int | None] = mapped_column(
+        ForeignKey("quotation_files.id", ondelete="SET NULL")
+    )
 
     author: Mapped[User | None] = relationship(lazy="joined", foreign_keys=[by])
 

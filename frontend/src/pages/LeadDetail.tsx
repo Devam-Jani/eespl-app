@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api } from "../api";
+import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
 import { errorText, inr, LOST_REASONS } from "../format";
 import Modal from "../components/Modal";
@@ -114,6 +114,16 @@ export default function LeadDetail() {
                 Surveys
               </Link>
             )}
+            {can("quotation.view") && (
+              <Link className="btn" to={`/quotations?lead_id=${lead.id}`}>
+                Quotations
+              </Link>
+            )}
+            {can("quotation.edit") && (
+              <Link className="btn btn-primary" to={`/quotations?lead_id=${lead.id}&new=1`}>
+                New quotation
+              </Link>
+            )}
             {!lead.tender_id && can("tender.edit") && (
               <button className="btn" onClick={() => confirm("Create a tender from this lead?") && void run(api<Detail>(`/api/leads/${lead.id}/convert`, { method: "POST" }))}>
                 Convert to tender
@@ -193,6 +203,11 @@ export default function LeadDetail() {
                 <span className="timeline-icon">{ACTIVITY_ICON[a.type] ?? "•"}</span>
                 <div>
                   <div className="pre-line">{a.text}</div>
+                  {a.file_id && (
+                    <button className="btn btn-small btn-ghost" onClick={() => void downloadFile(`/api/quotations/files/${a.file_id}`)}>
+                      ⤓ Issued quotation (PDF)
+                    </button>
+                  )}
                   <div className="muted small">
                     {new Date(a.at).toLocaleString("en-IN")} {a.by_name ? `· ${a.by_name}` : a.type === "kylas" ? "· Kylas" : ""}
                   </div>

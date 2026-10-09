@@ -813,7 +813,7 @@ export type Lead = {
 };
 
 export type LeadDetail = Lead & {
-  activities: { id: number; type: string; text: string; at: string; by_name: string | null }[];
+  activities: { id: number; type: string; text: string; at: string; by_name: string | null; file_id?: number | null }[];
 };
 
 export type LeadLookups = {

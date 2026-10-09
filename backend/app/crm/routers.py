@@ -122,6 +122,7 @@ class ActivityOut(BaseModel):
     text: str
     at: str
     by_name: str | None
+    file_id: int | None = None  # an issued quotation file: GET /api/quotations/files/{file_id}
 
 
 class DuplicateOut(BaseModel):
@@ -349,6 +350,7 @@ def _detail(db: Session, lead: Lead) -> LeadDetail:
                 text=a.text,
                 at=a.at.isoformat(),
                 by_name=a.author.full_name if a.author else None,
+                file_id=a.quotation_file_id,
             )
             for a in acts
         ],

@@ -12,6 +12,7 @@ import time
 
 from app.analytics import worker as analytics
 from app.crm import worker as kylas
+from app.quotations import worker as quotations
 
 TICK = 60
 _stop = False
@@ -31,7 +32,7 @@ def main() -> None:
     signal.signal(signal.SIGINT, _request_stop)
     last_poll = 0.0
     while True:
-        jobs = [kylas.push_sweep, analytics.run_due]
+        jobs = [kylas.push_sweep, analytics.run_due, quotations.expire_sweep]
         if time.time() - last_poll >= kylas.POLL_EVERY or args.once:
             jobs.append(kylas.poll_sweep)
         for job in jobs:

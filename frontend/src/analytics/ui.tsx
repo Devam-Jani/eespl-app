@@ -16,6 +16,8 @@ export type Tile = {
   drill: Drill | null;
   as_of: string | null;
   note: string | null;
+  /** a goal for this number (the closure target on the win-rate tile) */
+  target?: number | string | null;
 };
 export type Column = { key: string; label: string; unit: string };
 export type Table = { title: string; columns: Column[]; rows: Record<string, unknown>[]; note: string | null };
@@ -103,6 +105,11 @@ export function KpiTile({ tile, demo }: { tile: Tile; demo: boolean }) {
         {tile.unit === "inr" ? inrCompact(tile.value as number) : fmtValue(tile.value, tile.unit)}
       </span>
       {change(tile)}
+      {tile.target != null && tile.value != null && (
+        <span className={`kpi-target ${Number(tile.value) >= Number(tile.target) ? "met" : "below"}`}>
+          {Number(tile.value) >= Number(tile.target) ? "On target" : "Below target"} ({Number(tile.target)}%)
+        </span>
+      )}
       {tile.note && <span className="muted small">{tile.note}</span>}
       {tile.as_of && <span className="kpi-asof">{asOf(tile.as_of)}</span>}
     </>
