@@ -137,6 +137,16 @@ def seeded_max_category(test_database) -> int:
 
 
 @pytest.fixture(autouse=True)
+def media_in_tmp(tmp_path, monkeypatch) -> Path:
+    """Every test writes uploads, PDFs and delivery notes under its own temporary folder, never
+    /media (CI cannot write there). A test's own media_dir monkeypatch still wins: it runs later."""
+    media = tmp_path / "media"
+    media.mkdir()
+    monkeypatch.setattr(settings, "media_dir", str(media))
+    return media
+
+
+@pytest.fixture(autouse=True)
 def clean_state(seeded_role_permissions, seeded_max_category) -> Iterator[None]:
     yield
     with engine.begin() as conn:
