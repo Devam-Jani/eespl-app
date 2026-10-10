@@ -86,6 +86,33 @@ class Dpr(Tracked, Base):
     photos: Mapped[list["DprPhoto"]] = relationship(
         lazy="selectin", cascade="all, delete-orphan", passive_deletes=True, order_by="DprPhoto.id"
     )
+    lines: Mapped[list["DprLine"]] = relationship(
+        lazy="selectin", cascade="all, delete-orphan", passive_deletes=True, order_by="DprLine.id"
+    )
+
+
+class DprLine(Base):
+    """One piece of the day's work and the place it was done on: a place on the site's list
+    (node), a survey area, or a new area waiting for planning. Reports written before places
+    were recorded have no lines (a blank place)."""
+
+    __tablename__ = "dpr_lines"
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    dpr_id: Mapped[int] = mapped_column(ForeignKey("dprs.id", ondelete="CASCADE"), index=True)
+    node_id: Mapped[int | None] = mapped_column(
+        ForeignKey("site_nodes.id", ondelete="SET NULL"), index=True
+    )
+    survey_area_id: Mapped[int | None] = mapped_column(
+        ForeignKey("survey_areas.id", ondelete="SET NULL")
+    )
+    new_area_id: Mapped[int | None] = mapped_column(
+        ForeignKey("new_area_requests.id", ondelete="SET NULL"), index=True
+    )
+    description: Mapped[str] = mapped_column(Text)
+    qty: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    unit: Mapped[str | None] = mapped_column(String(20))
+    labour_count: Mapped[int | None] = mapped_column()
 
 
 class DprPhoto(Tracked, Base):

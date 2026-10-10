@@ -55,7 +55,7 @@ export default function Bell() {
           {data.items.map((n) => (
             <button key={n.id} className={`bell-item ${n.read ? "" : "unread"}`} onClick={() => void go(n)}>
               <span>{n.title}</span>
-              <span className="muted small">{new Date(n.created_at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+              <span className="muted small">{new Date(n.created_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",  day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
             </button>
           ))}
         </div>

@@ -27,6 +27,17 @@ export type Dpr = {
   photos: { id: number; filename: string; caption: string | null }[];
   can_edit: boolean;
   can_acknowledge: boolean;
+  lines: {
+    id: number;
+    description: string;
+    qty: string | null;
+    unit: string | null;
+    labour_count: number | null;
+    node_id: number | null;
+    survey_area_id: number | null;
+    new_area_id: number | null;
+    place: string | null;
+  }[];
 };
 
 export type DprRow = {

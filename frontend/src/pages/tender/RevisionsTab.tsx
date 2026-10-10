@@ -50,7 +50,7 @@ export default function RevisionsTab({ tender, revisions }: { tender: Tender; re
                 <td>
                   <strong>{r.label}</strong>
                   <div className="muted small">
-                    {new Date(r.submitted_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                    {new Date(r.submitted_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",  dateStyle: "medium", timeStyle: "short" })}
                     {r.submitted_by_name ? ` · ${r.submitted_by_name}` : ""}
                   </div>
                   {r.note && <div className="small pre-line">{r.note}</div>}

@@ -152,8 +152,8 @@ function Gantt({ groups, onOpen }: { groups: [string, SiteTask[]][]; onOpen: (t:
   return (
     <div className="gantt">
       <div className="gantt-head muted small">
-        <span>{new Date(min).toLocaleDateString("en-IN")}</span>
-        <span>{new Date(max).toLocaleDateString("en-IN")}</span>
+        <span>{new Date(min).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })}</span>
+        <span>{new Date(max).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })}</span>
       </div>
       {groups.map(([path, list]) => (
         <div key={path}>
@@ -253,7 +253,7 @@ export function TaskDialog({
       <p className="muted small">
         Planned {shortDate(task.planned_start)} – {shortDate(task.planned_end)} · weight {task.weight_percent ? `${num(task.weight_percent, 1)}%` : "—"}
         {task.hold_point && " · hold point: the office certifies it before the next step"}
-        {task.certified_at && ` · certified ${new Date(task.certified_at).toLocaleString("en-IN")}`}
+        {task.certified_at && ` · certified ${new Date(task.certified_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`}
       </p>
       <div className="grid-2">
         <label className="field">

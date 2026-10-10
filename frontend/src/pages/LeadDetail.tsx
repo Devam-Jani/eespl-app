@@ -174,7 +174,7 @@ export default function LeadDetail() {
             <KylasBadge status={lead.kylas_sync_status} phone={lead.phone} />
             {lead.kylas_lead_id && <> Kylas lead {lead.kylas_lead_id}</>}
             {lead.kylas_forecasting && <> · {lead.kylas_forecasting}</>}
-            {lead.kylas_synced_at && <> · sent {new Date(lead.kylas_synced_at).toLocaleString("en-IN")}</>}
+            {lead.kylas_synced_at && <> · sent {new Date(lead.kylas_synced_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</>}
           </p>
           {lead.kylas_last_error && <p className="small text-danger">{lead.kylas_last_error}</p>}
           {canEdit && !lead.kylas_lead_id && lead.phone && (lead.kylas_sync_status === "failed" || lead.kylas_sync_status === "disabled") && (
@@ -209,7 +209,7 @@ export default function LeadDetail() {
                     </button>
                   )}
                   <div className="muted small">
-                    {new Date(a.at).toLocaleString("en-IN")} {a.by_name ? `· ${a.by_name}` : a.type === "kylas" ? "· Kylas" : ""}
+                    {new Date(a.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} {a.by_name ? `· ${a.by_name}` : a.type === "kylas" ? "· Kylas" : ""}
                   </div>
                 </div>
               </li>

@@ -105,7 +105,7 @@ export default function DrawingsTab({ site }: { site: Site }) {
                     <span className="muted small">{(r.size_bytes / 1024).toFixed(0)} KB</span>
                   </td>
                   <td className="muted small">
-                    {r.uploaded_by_name ?? "—"} · {new Date(r.uploaded_at).toLocaleDateString("en-IN")}
+                    {r.uploaded_by_name ?? "—"} · {new Date(r.uploaded_at).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })}
                   </td>
                   <td>
                     <span className={`badge ${REV_BADGE[r.status]}`}>{r.status}</span>

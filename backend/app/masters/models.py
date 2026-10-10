@@ -149,6 +149,8 @@ class Product(Tracked, Base):
     is_demo: Mapped[bool] = mapped_column(server_default=false(), index=True)
     # low-stock alert and the purchase dashboard: total stock below this (base unit)
     reorder_level: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    # other names it goes by in offers ("BRONCO CEMSHIELD HYBRID PU" for "BRONCO HYBRID PU")
+    aliases: Mapped[list[str]] = mapped_column(ARRAY(String(200)), server_default="{}")
 
     category: Mapped["Category | None"] = relationship(lazy="joined")
 

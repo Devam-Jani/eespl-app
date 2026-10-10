@@ -37,6 +37,7 @@ from app.sitecontrol.models import (
     SiteControlSettings,
 )
 from app.sites.models import Site, SiteMember
+from app.timefmt import IST, label
 
 ZERO = Decimal(0)
 
@@ -59,6 +60,12 @@ def now() -> datetime:
 
 def hash_token(raw: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def is_test_link() -> bool:
+    """PUBLIC_BASE_URL still points at this PC: phones at site cannot open the link."""
+    host = app_settings.public_base_url.split("//")[-1].split("/")[0].split(":")[0].lower()
+    return host in ("localhost", "127.0.0.1", "0.0.0.0", "") or host.endswith(".local")
 
 
 def receipt_url(raw: str) -> str:
@@ -104,7 +111,7 @@ def _packs(product: Product, base_qty: Decimal) -> tuple[Decimal | None, str | N
 def _expected(when: date | None) -> datetime:
     """Expected at the site: the PO's delivery date (noon) or the next working hours."""
     if when:
-        return datetime(when.year, when.month, when.day, 12, 0, tzinfo=UTC)
+        return datetime(when.year, when.month, when.day, 12, 0, tzinfo=IST)  # noon in India
     return now() + timedelta(hours=6)
 
 
@@ -127,7 +134,7 @@ def _notify_site(db: Session, dn: DeliveryNote, raw: str, fallback=None) -> None
         db,
         users,
         "delivery",
-        f"{dn.code} on its way to {site.name}: count it at site ({dn.expected_at:%d %b %H:%M}). Receipt link: {receipt_url(raw)}",
+        f"{dn.code} on its way to {site.name}: count it at site ({label(dn.expected_at, '%d %b %H:%M')}). Receipt link: {receipt_url(raw)}",
         link=f"/r/{raw}",
         site_id=site.id,
     )
@@ -232,6 +239,7 @@ def receipt_view(db: Session, dn: DeliveryNote) -> dict:
         "code": dn.code,
         "site": site.name,
         "expected_at": dn.expected_at,
+        "expected_label": label(dn.expected_at),
         "vehicle_no": dn.vehicle_no,
         "driver_name": dn.driver_name,
         "receiver_named": site.receiver_name,

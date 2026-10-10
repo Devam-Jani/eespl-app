@@ -14,7 +14,7 @@ type Dialog =
   | null;
 
 function formatDate(value: string | null) {
-  return value ? new Date(value).toLocaleString() : "—";
+  return value ? new Date(value).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : "—";
 }
 
 export default function Users() {

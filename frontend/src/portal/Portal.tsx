@@ -1195,7 +1195,7 @@ export function Thread({ entityType, entityId, staff = false }: { entityType: st
         <div key={c.id} className={`comment ${c.side} ${c.internal ? "internal" : ""}`}>
           <div className="small muted">
             {c.author ?? "—"} · {c.side === "client" ? "client" : "EESPL"} ·{" "}
-            {new Date(c.created_at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+            {new Date(c.created_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",  day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
             {c.internal && <span className="badge badge-warn">internal</span>}
           </div>
           <div>{c.body}</div>

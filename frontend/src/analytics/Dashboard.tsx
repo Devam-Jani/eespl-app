@@ -232,7 +232,7 @@ function QuotationFollowUps({ rows, mine }: { rows: FollowUp[]; mine: boolean })
               {rows.map((r) => (
                 <tr key={r.id} className={r.overdue ? "row-overdue" : undefined}>
                   <td>
-                    {new Date(r.due_on).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })} {r.overdue && <span className="badge badge-danger">overdue</span>}
+                    {new Date(r.due_on).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata",  day: "2-digit", month: "short" })} {r.overdue && <span className="badge badge-danger">overdue</span>}
                   </td>
                   <td>
                     <Link to={`/quotations/${r.quotation_id}`}>{r.code}</Link>

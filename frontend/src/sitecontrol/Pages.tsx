@@ -9,7 +9,9 @@ import Modal from "../components/Modal";
 import { errorText } from "../format";
 
 const fmt = (d: string | null | undefined, time = true) =>
-  d ? new Date(d).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", ...(time ? { hour: "2-digit", minute: "2-digit" } : {}) }) : "—";
+  d
+    ? new Date(d).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", ...(time ? { hour: "2-digit", minute: "2-digit" } : {}) })
+    : "—";
 const n = (v: string | number | null | undefined, digits = 2) =>
   v === null || v === undefined || v === "" ? "—" : Number(v).toLocaleString("en-IN", { maximumFractionDigits: digits });
 const money = (v: string | number | null | undefined) =>
@@ -54,6 +56,7 @@ type DnRow = {
   vendor: string | null;
   status: "dispatched" | "confirmed" | "short" | "cancelled";
   expected_at: string;
+  expected_label: string;
   confirmed_at: string | null;
   receiver_name: string | null;
   unlisted_receiver: boolean;
@@ -85,6 +88,13 @@ export function Deliveries() {
     setParams(next, { replace: true });
   };
   const open = rows?.filter((r) => r.status === "dispatched").length ?? 0;
+  const [testLink, setTestLink] = useState(false);
+  useEffect(() => {
+    void api<{ test_link: boolean }>("/api/sitecontrol/link-status").then(
+      (r) => setTestLink(r.test_link),
+      () => setTestLink(false),
+    );
+  }, []);
   return (
     <>
       <div className="page-header">
@@ -100,6 +110,12 @@ export function Deliveries() {
           </select>
         </div>
       </div>
+      {testLink && (
+        <div className="alert alert-warn">
+          Test links: the app address (PUBLIC_BASE_URL) is still this PC, so receipt links and QR codes open only on the office PC. Do not send these delivery notes to site until
+          it is set to the public address.
+        </div>
+      )}
       <p className="muted small">
         Every dispatch to a site is counted there: the receipt link on the delivery note (QR) opens its items, two photos, the receiver's name. Stock follows the count.
       </p>
@@ -142,7 +158,7 @@ export function Deliveries() {
                   </td>
                   <td>{r.site}</td>
                   <td className="small">{r.kind === "po" ? r.vendor : "Godown transfer"}</td>
-                  <td className="small">{fmt(r.expected_at)}</td>
+                  <td className="small">{r.expected_label}</td>
                   <td>
                     <span className={`badge ${DN_BADGE[r.status]}`}>{r.status === "dispatched" ? "not confirmed" : r.status}</span>
                     {r.discrepancies > 0 && <span className="badge badge-danger">{r.discrepancies} discrepancy</span>}
@@ -214,7 +230,7 @@ export function DeliveryDetail() {
             {d.code} <span className={`badge ${DN_BADGE[d.status]}`}>{d.status === "dispatched" ? "not confirmed" : d.status}</span>
           </h1>
           <p className="muted small">
-            {d.site} · {d.kind === "po" ? `PO delivery from ${d.vendor}` : "godown transfer"} · expected {fmt(d.expected_at)}
+            {d.site} · {d.kind === "po" ? `PO delivery from ${d.vendor}` : "godown transfer"} · expected {d.expected_label}
             {d.age_hours !== null && d.age_hours > 0 && <b className="text-danger"> · {Math.round(d.age_hours)} h not confirmed</b>}
           </p>
         </div>

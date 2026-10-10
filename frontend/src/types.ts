@@ -98,6 +98,7 @@ export type Product = {
   gst_percent: string;
   hsn_code: string | null;
   reorder_level?: string | null;
+  aliases?: string[];
   is_active: boolean;
   cost: { current_price: Price | null } | null;
 };

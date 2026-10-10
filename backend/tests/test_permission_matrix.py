@@ -52,8 +52,14 @@ def _all(*codes):
     return dict.fromkeys(codes, "all")
 
 
+DIRECTOR_EXCLUDES = {"admin.users", "admin.roles", "admin.settings", "portal.view",
+                     "portal.comment",
+                     "portal.snag", "portal.approve"}  # fmt: skip
+
 EXPECTED: dict[str, dict[str, str]] = {
     "super_admin": _all(*ALL),
+    # sees and decides everything; users, roles and settings stay with office_admin
+    "director": _all(*[c for c in ALL if c not in DIRECTOR_EXCLUDES]),
     "office_admin": _all(
         "admin.users",
         "audit.view",

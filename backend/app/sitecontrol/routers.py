@@ -45,6 +45,7 @@ from app.sitecontrol.models import (
     ReadyToBill,
 )
 from app.sites.models import Site, SiteNode
+from app.timefmt import label
 
 public = APIRouter(prefix="/api/receipt", tags=["receipt"])
 router = APIRouter(prefix="/api/sitecontrol", tags=["sitecontrol"])
@@ -203,7 +204,9 @@ def _dn_row(db, dn: DeliveryNote) -> dict:
         "transfer_id": dn.transfer_id,
         "status": dn.status,
         "expected_at": dn.expected_at,
+        "expected_label": label(dn.expected_at),
         "confirmed_at": dn.confirmed_at,
+        "confirmed_label": label(dn.confirmed_at),
         "receiver_name": dn.receiver_name,
         "unlisted_receiver": dn.unlisted_receiver,
         "age_hours": round(dlv.age_hours(dn), 1) if dn.confirmed_at is None else None,
@@ -232,6 +235,12 @@ def list_deliveries(
     elif state in ("confirmed", "short"):
         q = q.where(DeliveryNote.status == state)
     return jsonable_encoder([_dn_row(db, d) for d in db.scalars(q.limit(500))])
+
+
+@router.get("/link-status")
+def link_status(_: DeliveryView) -> dict:
+    """While PUBLIC_BASE_URL is still this PC, receipt links only open in the office."""
+    return {"test_link": dlv.is_test_link()}
 
 
 @router.get("/deliveries/{dn_id}")
@@ -578,10 +587,7 @@ def match_report(
                 (
                     "Billed, not confirmed",
                     ["Bill", "Delivery", "Expected"],
-                    [
-                        [r["bill"], r["delivery"], r["expected_at"].strftime("%d %b %Y %H:%M")]
-                        for r in unconfirmed
-                    ],
+                    [[r["bill"], r["delivery"], label(r["expected_at"])] for r in unconfirmed],
                 ),
             ],
         )

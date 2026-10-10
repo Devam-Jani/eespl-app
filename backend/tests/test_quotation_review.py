@@ -202,7 +202,7 @@ def test_consistency_warnings():
     text = " | ".join(warn)
     assert "ACME CEMSHIELD HYBRID PU is in the budgetary offer but not in the specification" in text
     assert "ACME HYBRID PU is in the specification but not in the budgetary offer" in text
-    assert "Different gsm: specification 45 gsm, budgetary offer 40 gsm" in text
+    assert "Different gsm (mesh): specification 45 gsm, budgetary offer 40 gsm" in text
     assert "Different coat count: specification 2 coats, budgetary offer 3 coats" in text
     assert "Different consumption" in text
     assert (

@@ -123,7 +123,7 @@ export default function Audit() {
             {items.map((a) => (
               <Fragment key={a.id}>
                 <tr>
-                  <td className="nowrap">{new Date(a.at).toLocaleString()}</td>
+                  <td className="nowrap">{new Date(a.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</td>
                   <td>{a.user_email ?? <span className="muted">—</span>}</td>
                   <td>
                     <code>{a.action}</code>

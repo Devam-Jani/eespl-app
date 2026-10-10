@@ -12,7 +12,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.execution.models import Attendance, Labour, WoLine, WoMeasurement, WorkOrder
+from app.execution.models import Attendance, DprLine, Labour, WoLine, WoMeasurement, WorkOrder
 from app.finance.models import (
     ClientContract,
     ContractLine,
@@ -400,6 +400,9 @@ def approve_area(
     db.execute(
         SiteIssue.__table__.update().where(SiteIssue.new_area_id == r.id).values(node_id=node.id)
     )
+    db.execute(
+        DprLine.__table__.update().where(DprLine.new_area_id == r.id).values(node_id=node.id)
+    )
     survey = db.scalar(
         select(Survey).where(Survey.site_id == r.site_id).order_by(Survey.id.desc()).limit(1)
     )
@@ -440,6 +443,11 @@ def reject_area(db: Session, r: NewAreaRequest, user_id, move_to: int, note: str
     db.execute(
         SiteIssue.__table__.update()
         .where(SiteIssue.new_area_id == r.id)
+        .values(node_id=move_to, new_area_id=None)
+    )
+    db.execute(
+        DprLine.__table__.update()
+        .where(DprLine.new_area_id == r.id)
         .values(node_id=move_to, new_area_id=None)
     )
     r.status, r.decided_by, r.decided_at, r.moved_to_node_id, r.decision_note = (

@@ -37,7 +37,7 @@ export function fmtValue(value: unknown, unit: string): string {
 
 export function asOf(value: string | null | undefined): string {
   if (!value) return "not refreshed yet";
-  return `as of ${new Date(value).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`;
+  return `as of ${new Date(value).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",  day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`;
 }
 
 /** The filters live in the URL, so a filtered view can be shared and the back button works. */

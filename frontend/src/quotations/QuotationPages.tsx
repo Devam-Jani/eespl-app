@@ -27,7 +27,7 @@ type Row = {
   lead_id: number | null;
 };
 
-const fmtDate = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—");
+const fmtDate = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata",  day: "2-digit", month: "short", year: "numeric" }) : "—");
 
 function usePhone(): boolean {
   const q = "(max-width: 760px)";
@@ -1200,8 +1200,8 @@ function FollowPanel({ q, apply }: { q: Quotation; apply: Apply }) {
               </button>{" "}
               {f.replaced && <span className="badge badge-muted">replaced</span>}{" "}
               <span className="muted small">
-                {(f.size_bytes / 1024).toFixed(0)} KB · {f.by ?? "—"} · {new Date(f.created_at).toLocaleString("en-IN")}
-                {f.replaced_at && ` · replaced ${new Date(f.replaced_at).toLocaleString("en-IN")}`}
+                {(f.size_bytes / 1024).toFixed(0)} KB · {f.by ?? "—"} · {new Date(f.created_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}
+                {f.replaced_at && ` · replaced ${new Date(f.replaced_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`}
               </span>
             </li>
           ))}
