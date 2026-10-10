@@ -10,7 +10,7 @@ selling rates.
 """
 
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal
 
@@ -40,6 +40,7 @@ from app.models import RolePermission, User, UserRole
 from app.quotations import docx_out, html_out, render
 from app.quotations import library as lib
 from app.quotations import service as svc
+from app.quotations.checks import library_item_checks, quotation_checks
 from app.quotations.markup import plain
 from app.quotations.models import (
     PLACEHOLDERS,
@@ -54,6 +55,7 @@ from app.quotations.models import (
     OfferItem,
     OfferItemLine,
     OfferLine,
+    OfferPreset,
     Quotation,
     QuotationFile,
     QuotationFollowUp,
@@ -133,6 +135,7 @@ def _q_out(db, q: Quotation, principal) -> dict:
         select(QuotationFile).where(QuotationFile.quotation_id == q.id).order_by(QuotationFile.id)
     ).all()
     t = svc.totals(q)
+    checks = quotation_checks(q)
     can_edit = (
         "quotation.edit" in perms
         and db.scalar(svc.visible_q(perms["quotation.edit"], principal).where(Quotation.id == q.id))
@@ -171,9 +174,11 @@ def _q_out(db, q: Quotation, principal) -> dict:
                 "specs": i.specs,
                 "lines": [_line_out(ln, i, margin) for ln in i.lines],
                 "total": next((x["total"] for x in t["items"] if x["item_id"] == i.id), None),
+                "checks": checks.get(i.id, []),
             }
             for i in q.items
         ],
+        "checks_count": sum(len(v) for v in checks.values()),
         "total": t["total"],
         "total_option_note": t["option_note"],
         "revisions": [
@@ -187,6 +192,9 @@ def _q_out(db, q: Quotation, principal) -> dict:
                 "file_name": f.file_name,
                 "size_bytes": f.size_bytes,
                 "created_at": f.created_at,
+                "replaced": f.replaced_by_id is not None,
+                "replaced_at": f.replaced_at,
+                "by": (db.get(User, f.created_by).full_name if f.created_by else None),
             }
             for f in files
         ],
@@ -257,6 +265,12 @@ def lookups(db: DbSession, principal: CurrentPrincipal, _: View) -> dict:
                 )
             ],
             "offer_items": items,
+            "presets": [
+                {"id": p.id, "name": p.name, "items": len(p.items or [])}
+                for p in db.scalars(
+                    select(OfferPreset).where(OfferPreset.is_active).order_by(OfferPreset.name)
+                )
+            ],
             "lost_reasons": LOST_REASONS,
             "uoms": [{"code": u, "label": UOM_LABELS[u]} for u in UOMS],
             "rate_sources": RATE_SOURCES,
@@ -439,7 +453,7 @@ def download_word_template(db: DbSession, _: View):
 
 # --- the libraries -------------------------------------------------------------------------------
 
-Kind = Literal["letterhead", "letter", "spec", "line", "item", "reference"]
+Kind = Literal["letterhead", "letter", "spec", "line", "item", "reference", "preset"]
 
 
 class StepIn(BaseModel):
@@ -473,6 +487,7 @@ class LetterheadIn(BaseModel):
     tc_template_id: int | None = None
     letter_template_id: int | None = None
     references_state: str | None = None
+    preprinted: bool | None = None
     is_active: bool | None = None
     needs_check: bool | None = None
 
@@ -532,6 +547,22 @@ class ItemIn(BaseModel):
     needs_check: bool | None = None
 
 
+class PresetItemIn(BaseModel):
+    offer_item_id: int
+    options: list[str] = []
+
+
+class PresetIn(BaseModel):
+    name: str | None = Field(None, max_length=100)
+    letterhead_id: int | None = None
+    letter_template_id: int | None = None
+    tc_template_id: int | None = None
+    items: list[PresetItemIn] | None = None
+    include_references: bool | None = None
+    is_active: bool | None = None
+    needs_check: bool | None = None
+
+
 class ReferenceIn(BaseModel):
     client_name: str | None = None
     project: str | None = None
@@ -553,6 +584,7 @@ SCHEMAS = {
     "line": LineIn,
     "item": ItemIn,
     "reference": ReferenceIn,
+    "preset": PresetIn,
 }
 REQUIRED = {
     "letterhead": ("name", "company_name", "signatory_firm"),
@@ -561,6 +593,7 @@ REQUIRED = {
     "line": ("description", "uom"),
     "item": ("name", "budget_title"),
     "reference": ("client_name", "project"),
+    "preset": ("name",),
 }
 
 
@@ -588,6 +621,11 @@ def _lib_out(db, row) -> dict:
             }
             for ln in row.lines
         ]
+        data["checks"] = library_item_checks(row)
+        data["area_type_missing"] = row.area_type_id is None
+    if isinstance(row, OfferPreset):
+        names = dict(db.execute(select(OfferItem.id, OfferItem.name)).all())
+        data["item_names"] = [names.get(x.get("offer_item_id"), "?") for x in row.items or []]
     if getattr(row, "area_type_id", None):
         at = db.get(AreaType, row.area_type_id)
         data["area_type_name"] = at.name if at else None
@@ -810,13 +848,30 @@ async def letterhead_logo(
     principal: CurrentPrincipal,
     _: TemplateEdit,
     file: Annotated[UploadFile, File()],
+    slot: Literal["logo", "header", "footer", "watermark"] = "logo",
 ) -> dict:
+    """The letterhead images: the logo, or for image letterheads the header band, the footer
+    band and the watermark (kept faint for the PDF)."""
     row = db.get(Letterhead, entity_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
     rel, _name = await save_upload(file, "quotations/library")
-    row.logo_path = rel
-    lib.save_version(db, row, "update", principal.user.id, note="new logo")
+    if slot == "watermark":
+        from app.quotations.importer import _faded  # noqa: PLC0415
+
+        p = media(rel)
+        rel = _faded(p.read_bytes(), p.suffix.lstrip("."))
+    setattr(
+        row,
+        {
+            "logo": "logo_path",
+            "header": "header_image_path",
+            "footer": "footer_image_path",
+            "watermark": "watermark_path",
+        }[slot],
+        rel,
+    )
+    lib.save_version(db, row, "update", principal.user.id, note=f"new {slot} image")
     record(db, request, principal, "quotation_library.letterhead.logo", "quotation_library", row.id)
     db.commit()
     return _lib_out(db, row)
@@ -914,6 +969,11 @@ def _preview_quotation(db, kind: str, row) -> Quotation:
         q.items.append(item)
     elif kind == "reference":
         q.references = [{**lib.snapshot(row), "include": True}]
+    elif kind == "preset":
+        for x in row.items or []:
+            offer = db.get(OfferItem, x.get("offer_item_id"))
+            if offer is not None:
+                svc.add_item(db, q, offer, x.get("options") or [], rc)
     return q
 
 
@@ -954,15 +1014,17 @@ class QuotationIn(BaseModel):
     validity_days: int | None = Field(None, ge=1, le=365)
     items: list[ItemPick] = []
     show_amounts: bool = False
+    preset_id: int | None = None  # start from a preset: its letterhead, letter, items, T&C
 
 
-def _terms_for(db, head: Letterhead | None) -> list[dict]:
-    if head is None or head.tc_template_id is None:
+def _terms_for(db, head: Letterhead | None, template_id: int | None = None) -> list[dict]:
+    template_id = template_id or (head.tc_template_id if head else None)
+    if template_id is None:
         return []
     rows = db.execute(
         select(TcClause)
         .join(TcTemplateClause, TcTemplateClause.clause_id == TcClause.id)
-        .where(TcTemplateClause.template_id == head.tc_template_id, TcClause.status == "active")
+        .where(TcTemplateClause.template_id == template_id, TcClause.status == "active")
         .order_by(TcTemplateClause.sort_order)
     ).scalars()
     return [{"clause_id": c.id, "category": c.category, "text": c.text} for c in rows]
@@ -1002,9 +1064,22 @@ def create_quotation(
             .order_by(ClientContact.is_primary.desc(), ClientContact.id)
             .limit(1)
         )
-    head = db.get(Letterhead, body.letterhead_id or s.default_letterhead_id or -1)
+    preset = db.get(OfferPreset, body.preset_id) if body.preset_id else None
+    if body.preset_id and (preset is None or not preset.is_active):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Preset not found")
+    head = db.get(
+        Letterhead,
+        body.letterhead_id
+        or (preset.letterhead_id if preset else None)
+        or s.default_letterhead_id
+        or -1,
+    )
     letter = db.get(
-        LetterTemplate, body.letter_template_id or (head.letter_template_id if head else None) or -1
+        LetterTemplate,
+        body.letter_template_id
+        or (preset.letter_template_id if preset else None)
+        or (head.letter_template_id if head else None)
+        or -1,
     )
     if letter is None:
         letter = db.scalar(
@@ -1056,14 +1131,15 @@ def create_quotation(
         subject=letter.subject if letter else "",
         body=letter.body if letter else "",
         enclosures=letter.enclosures if letter else "",
-        terms=_terms_for(db, head),
-        references=refs,
+        terms=_terms_for(db, head, preset.tc_template_id if preset else None),
+        references=refs if not preset or preset.include_references else [],
         references_title=refs_title,
         created_by=principal.user.id,
     )
     db.add(q)
     rc = svc.RateContext.make(db)
-    for pick in body.items:
+    picks = body.items or ([ItemPick.model_validate(x) for x in preset.items] if preset else [])
+    for pick in picks:
         offer = db.get(OfferItem, pick.offer_item_id)
         if offer is None or not offer.is_active:
             raise HTTPException(
@@ -1319,6 +1395,7 @@ class ItemUpdate(BaseModel):
     options: list[str] | None = None
     specs: list[dict[str, Any]] | None = None
     sort_order: int | None = None
+    area_type_id: int | None = None
 
 
 def _item(db, q: Quotation, item_id: int) -> QuotationItem:
@@ -1658,6 +1735,7 @@ def save_back(
             spec.get("heading_prefix") or row.heading_prefix,
         )
         row.sections, row.images = spec.get("sections") or [], spec.get("images") or []
+        row.subtitle = spec.get("subtitle") or None
         v = lib.save_version(db, row, "save_back", uid, note)
         specs = list(item.specs)
         specs[body.spec_index or 0] = {**spec, "version": row.version}
@@ -1783,7 +1861,8 @@ def _issue(db, q: Quotation, user_id) -> list[QuotationFile]:
     them to the lead's activity."""
     doc = render.build(db, q)
     template = svc.settings(db).word_template_path
-    made = []
+    made: list[QuotationFile] = []
+    replaced: list[str] = []
     for kind, data in (("docx", docx_out.docx(doc, template)), ("pdf", html_out.pdf(doc))):
         n = (
             db.scalar(
@@ -1813,12 +1892,28 @@ def _issue(db, q: Quotation, user_id) -> list[QuotationFile]:
         )
         db.add(f)
         db.flush()
+        # a re-issue: the earlier file of this revision is kept, marked replaced
+        older = db.scalars(
+            select(QuotationFile).where(
+                QuotationFile.quotation_id == q.id,
+                QuotationFile.kind == kind,
+                QuotationFile.id != f.id,
+                QuotationFile.replaced_by_id.is_(None),
+            )
+        ).all()
+        for o in older:
+            o.replaced_by_id, o.replaced_at = f.id, datetime.now(UTC)
+            replaced.append(o.file_name)
         made.append(f)
     pdf_file = next(f for f in made if f.kind == "pdf")
+    who = db.get(User, user_id) if user_id else None
+    verb = "re-issued" if replaced else "issued"
     svc._activity(
         db,
         q,
-        f"Quotation {q.code} R{q.revision} issued ({', '.join(f.file_name for f in made)})",
+        f"Quotation {q.code} R{q.revision} {verb} by {who.full_name if who else '—'} "
+        f"({', '.join(f.file_name for f in made)})"
+        + (f"; replaces {', '.join(replaced)}" if replaced else ""),
         user_id,
         pdf_file.id,
     )
@@ -1908,15 +2003,28 @@ def set_status(
 
 
 @router.get("/{qid}/preview")
-def preview(qid: int, db: DbSession, principal: CurrentPrincipal, scope: View) -> dict:
+def preview(
+    qid: int,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    scope: View,
+    preprinted: bool | None = None,
+) -> dict:
     q = svc.get_visible(db, qid, scope, principal)
-    return {"html": html_out.html(render.build(db, q), for_pdf=False)}
+    return {"html": html_out.html(render.build(db, q, preprinted), for_pdf=False)}
 
 
 @router.get("/{qid}/docx")
-def download_docx(qid: int, db: DbSession, principal: CurrentPrincipal, scope: View):
+def download_docx(
+    qid: int,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    scope: View,
+    preprinted: bool | None = None,
+):
+    """preprinted=true: for printing on letterhead stationery (header and footer left blank)."""
     q = svc.get_visible(db, qid, scope, principal)
-    data = docx_out.docx(render.build(db, q), svc.settings(db).word_template_path)
+    data = docx_out.docx(render.build(db, q, preprinted), svc.settings(db).word_template_path)
     return Response(
         data,
         media_type=DOCX,
@@ -1925,9 +2033,15 @@ def download_docx(qid: int, db: DbSession, principal: CurrentPrincipal, scope: V
 
 
 @router.get("/{qid}/pdf")
-def download_pdf(qid: int, db: DbSession, principal: CurrentPrincipal, scope: View):
+def download_pdf(
+    qid: int,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    scope: View,
+    preprinted: bool | None = None,
+):
     q = svc.get_visible(db, qid, scope, principal)
-    data = html_out.pdf(render.build(db, q))
+    data = html_out.pdf(render.build(db, q, preprinted))
     return Response(
         data,
         media_type="application/pdf",

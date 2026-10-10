@@ -165,20 +165,104 @@ def _cell(cell, text: str, style: str, bold: bool = False, align=None) -> None:
             p.alignment = align
 
 
+def _band_mm(path) -> float:
+    from PIL import Image  # noqa: PLC0415
+
+    with Image.open(path) as im:
+        w, h = im.size
+    return 210 * h / w if w else 0
+
+
+def _full_width(p, sec) -> None:
+    """A header / footer paragraph that runs edge to edge (the band images)."""
+    p.paragraph_format.left_indent = -sec.left_margin
+    p.paragraph_format.right_indent = -sec.right_margin
+    p.paragraph_format.space_before = p.paragraph_format.space_after = Pt(0)
+
+
+def _watermark(header, path) -> None:
+    """The faint logo behind the text on every page (a VML picture, as Word makes it)."""
+    from docx.oxml import parse_xml  # noqa: PLC0415
+    from PIL import Image  # noqa: PLC0415
+
+    rid, _img = header.part.get_or_add_image(str(path))
+    with Image.open(path) as im:
+        w, h = im.size
+    width = 425.0
+    height = width * h / w if w else width
+    xml = (
+        '<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+        'xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<w:r><w:pict><v:shape id="EESPLWatermark" o:spid="_x0000_s2049" type="#_x0000_t75" '
+        f'style="position:absolute;margin-left:0;margin-top:0;width:{width:.0f}pt;height:{height:.0f}pt;'
+        "z-index:-251656192;mso-position-horizontal:center;mso-position-horizontal-relative:margin;"
+        'mso-position-vertical:center;mso-position-vertical-relative:margin" o:allowincell="f">'
+        f'<v:imagedata r:id="{rid}" o:title="watermark"/></v:shape></w:pict></w:r></w:p>'
+    )
+    header._element.append(parse_xml(xml))
+
+
+def _image_header_footer(d, doc: Doc) -> None:
+    """An image letterhead: the header band at the top edge, the footer band at the bottom edge,
+    the watermark behind the text. On pre-printed paper only the space is kept."""
+    sec = d.sections[0]
+    top, bottom = (
+        _band_mm(doc.header_image) if doc.header_image else 25,
+        _band_mm(doc.footer_image) if doc.footer_image else 15,
+    )
+    sec.header_distance = sec.footer_distance = Cm(0)
+    sec.top_margin = Cm((top + 6) / 10)
+    sec.bottom_margin = Cm((bottom + 12) / 10)
+    header, footer = sec.header, sec.footer
+    header.is_linked_to_previous = footer.is_linked_to_previous = False
+    hp = header.paragraphs[0]
+    hp.text = ""
+    _full_width(hp, sec)
+    if not doc.preprinted:
+        if doc.header_image:
+            hp.add_run().add_picture(str(doc.header_image), width=Cm(21.0))
+        if doc.watermark:
+            _watermark(header, doc.watermark)
+    fp = footer.paragraphs[0]
+    fp.text = ""
+    for text in (
+        f"{doc.footer}    ",
+        (doc.footer_text.replace("\n", " ") + "    ") if doc.footer_text else "",
+    ):
+        if text:
+            fp.add_run(text).font.size = Pt(8)
+    fp.add_run("Page ").font.size = Pt(8)
+    _field(fp, "PAGE")
+    fp.add_run(" of ").font.size = Pt(8)
+    _field(fp, "NUMPAGES")
+    fp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    if doc.footer_image and not doc.preprinted:
+        bp = footer.add_paragraph()
+        _full_width(bp, sec)
+        bp.add_run().add_picture(str(doc.footer_image), width=Cm(21.0))
+
+
 def _header_footer(d, doc: Doc) -> None:
+    if doc.header_image or doc.footer_image:
+        _image_header_footer(d, doc)
+        return
     sec = d.sections[0]
     header = sec.header
     header.is_linked_to_previous = False
     hp = header.paragraphs[0]
     hp.text = ""
-    if doc.logo:
+    if doc.preprinted:  # letterhead stationery: the header space stays blank
+        pass
+    elif doc.logo:
         hp.add_run().add_picture(str(doc.logo), height=Cm(1.8))
         hp.add_run("   ")
-    name = hp.add_run(doc.company_name)
-    name.bold = True
-    name.font.size = Pt(12)
-    name.font.color.rgb = RGBColor.from_string(doc.primary.lstrip("#").upper()[:6] or "0F6E5A")
-    if doc.header_text:
+    if not doc.preprinted:
+        name = hp.add_run(doc.company_name)
+        name.bold = True
+        name.font.size = Pt(12)
+        name.font.color.rgb = RGBColor.from_string(doc.primary.lstrip("#").upper()[:6] or "0F6E5A")
+    if doc.header_text and not doc.preprinted:
         hp2 = header.add_paragraph()
         r = hp2.add_run(doc.header_text)
         r.font.size = Pt(8)
@@ -233,6 +317,8 @@ def docx(doc: Doc, template: str | None = None) -> bytes:
             if first:
                 h.paragraph_format.page_break_before = True
                 first = False
+            if spec.subtitle:
+                _para(d, spec.subtitle, s["Offer Stage"], bold=True, keep=True)
             for sec in spec.sections:
                 if sec.or_before:
                     _para(d, "==OR==", s["Offer OR"], keep=True)

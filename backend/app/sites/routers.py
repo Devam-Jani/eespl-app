@@ -33,6 +33,7 @@ from app import audit
 from app.auth.deps import CurrentPrincipal, require_permission
 from app.config import settings
 from app.db import DbSession
+from app.execution.common import save_upload, send_file
 from app.export import EXPORT_ROW_LIMIT, xlsx_response
 from app.masters.models import Category, Channel, Client, System
 from app.masters.routers.common import Limit, Offset, Search, like, paginate, unprocessable
@@ -455,6 +456,12 @@ def _nodes_out(db: Session, site: Site) -> list[NodeOut]:
     all_nodes = service.nodes(db, site.id)
     paths = service.path_names(all_nodes)
     ordered = [n for n in service.descendants(all_nodes, None)]
+    who = {n.front_ready_by for n in ordered if n.front_ready_by}
+    names = (
+        dict(db.execute(select(User.id, User.full_name).where(User.id.in_(who))).all())
+        if who
+        else {}
+    )
     return [
         NodeOut(
             id=n.id,
@@ -467,9 +474,63 @@ def _nodes_out(db: Session, site: Site) -> list[NodeOut]:
             area_sqm=n.area_sqm,
             meta=n.meta,
             progress_percent=n.progress_percent,
+            front_ready=n.front_ready,
+            front_ready_by_name=names.get(n.front_ready_by),
+            front_ready_at=n.front_ready_at,
+            front_ready_photo=bool(n.front_ready_photo),
         )
         for n in ordered
     ]
+
+
+@router.post("/{site_id}/nodes/{node_id}/front-ready")
+async def set_front_ready(
+    site_id: int,
+    node_id: int,
+    request: Request,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    view: ViewScope,
+    update: MaybeUpdate,
+    edit: MaybeEdit,
+    ready: Annotated[bool, Form()] = True,
+    photo: Annotated[UploadFile | None, File()] = None,
+) -> list[NodeOut]:
+    """ "Work front ready": the place is open for our work (the supervisor, from the phone, with
+    an optional photo). Indent drafts from a survey order for ready places by default."""
+    site = _updater(db, site_id, view, update, edit, principal)
+    node = _node(db, site, node_id)
+    before = {"front_ready": node.front_ready}
+    node.front_ready = ready
+    node.front_ready_by = principal.user.id if ready else None
+    node.front_ready_at = datetime.now(UTC) if ready else None
+    if ready and photo is not None and photo.filename:
+        rel, _name = await save_upload(photo, f"sites/{site.id}/fronts")
+        node.front_ready_photo = rel
+    elif not ready:
+        node.front_ready_photo = None
+    _record(
+        db,
+        request,
+        principal,
+        "site.node.front_ready",
+        site,
+        before,
+        {"node": node.id, "front_ready": ready},
+    )
+    db.commit()
+    return _nodes_out(db, site)
+
+
+@router.get("/{site_id}/nodes/{node_id}/front-ready/photo")
+def front_ready_photo(
+    site_id: int, node_id: int, db: DbSession, principal: CurrentPrincipal, view: ViewScope
+):
+    site = service.get_visible(db, site_id, view, principal)
+    node = _node(db, site, node_id)
+    if not node.front_ready_photo:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No photo")
+    return send_file(node.front_ready_photo, f"front-{node.id}.jpg")
 
 
 @router.get("/{site_id}/model")

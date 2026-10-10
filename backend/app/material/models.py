@@ -337,6 +337,13 @@ class PoLine(Tracked, Base):
     gst_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), server_default="18")
     amount: Mapped[Decimal] = mapped_column(Money)  # taxable: qty x rate less discount
     received_qty: Mapped[Decimal] = mapped_column(Qty, server_default="0")  # in `unit`
+    # the vendor's rate contract when one applied: its rate per this line's unit, and why a
+    # higher rate was ordered
+    contract_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rate_contracts.id", ondelete="SET NULL")
+    )
+    contract_rate: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+    rate_reason: Mapped[str | None] = mapped_column(Text)
 
     product: Mapped[Product] = relationship(lazy="joined")
 
@@ -510,6 +517,11 @@ class SiteIssue(Tracked, Base):
     )
     issued_on: Mapped[date] = mapped_column(Date)
     remark: Mapped[str | None] = mapped_column(Text)
+    # the place on the site's list it was used on, or a new area waiting for approval
+    node_id: Mapped[int | None] = mapped_column(ForeignKey("site_nodes.id", ondelete="SET NULL"))
+    new_area_id: Mapped[int | None] = mapped_column(
+        ForeignKey("new_area_requests.id", ondelete="SET NULL")
+    )
 
     lines: Mapped[list["SiteIssueLine"]] = relationship(
         lazy="selectin",

@@ -968,6 +968,14 @@ function Outputs({ survey, onError }: { survey: Survey; onError: (e: string) => 
   const [rates, setRates] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const floorKeys = groupAreas(survey.areas).map(([k]) => k.replace(" · ", " "));
+  const [notReady, setNotReady] = useState(false);
+  const [fronts, setFronts] = useState<Record<string, { areas: number; ready_areas: number }>>({});
+  useEffect(() => {
+    void api<{ floors: { key: string; areas: number; ready_areas: number }[] }>(`/api/surveys/${survey.id}/fronts`).then(
+      (r) => setFronts(Object.fromEntries(r.floors.map((f) => [f.key, f]))),
+      () => setFronts({}),
+    );
+  }, [survey.id]);
   async function boq() {
     try {
       const r = await api<{ tender_id: number; tender_code: string; lines: number; suggested: number }>(`/api/surveys/${survey.id}/boq`, {
@@ -983,7 +991,7 @@ function Outputs({ survey, onError }: { survey: Survey; onError: (e: string) => 
     try {
       const r = await api<{ indent_id: number; code: string; lines: number }>(`/api/surveys/${survey.id}/indent`, {
         method: "POST",
-        json: { floors: floors.length ? floors : null },
+        json: { floors: floors.length ? floors : null, include_not_ready: notReady },
       });
       setMsg(`Draft indent ${r.code} with ${r.lines} product(s).`);
     } catch (err) {
@@ -1016,12 +1024,22 @@ function Outputs({ survey, onError }: { survey: Survey; onError: (e: string) => 
       {can("indent.create") && (
         <div className="card top-gap">
           <h2 className="section-title">Material indent</h2>
+          <p className="small muted">Only places the supervisor marked “work front ready” are ordered, so a block that is not open yet is not ordered early.</p>
+          <label className="check">
+            <input type="checkbox" checked={notReady} onChange={(e) => setNotReady(e.target.checked)} /> Show not ready (planning: order ahead)
+          </label>
           <div className="checks">
-            {floorKeys.map((k) => (
-              <label key={k} className="check">
-                <input type="checkbox" checked={floors.includes(k)} onChange={(e) => setFloors(e.target.checked ? [...floors, k] : floors.filter((x) => x !== k))} /> {k}
-              </label>
-            ))}
+            {floorKeys
+              .filter((k) => notReady || (fronts[k]?.ready_areas ?? 0) > 0)
+              .map((k) => (
+                <label key={k} className="check">
+                  <input type="checkbox" checked={floors.includes(k)} onChange={(e) => setFloors(e.target.checked ? [...floors, k] : floors.filter((x) => x !== k))} /> {k}{" "}
+                  <span className={`badge ${(fronts[k]?.ready_areas ?? 0) > 0 ? "badge-ok" : "badge-muted"}`}>
+                    {fronts[k]?.ready_areas ?? 0}/{fronts[k]?.areas ?? 0} ready
+                  </span>
+                </label>
+              ))}
+            {!notReady && floorKeys.every((k) => (fronts[k]?.ready_areas ?? 0) === 0) && <p className="muted small">No work front is ready yet.</p>}
           </div>
           <button className="btn btn-primary top-gap" onClick={() => void indent()}>
             Create indent draft {floors.length ? `(${floors.length} floor${floors.length > 1 ? "s" : ""})` : "(all floors)"}

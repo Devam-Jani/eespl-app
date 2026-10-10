@@ -43,6 +43,8 @@ ALL = [
     "dashboard.purchase", "reports.export",
     "survey.view", "survey.edit", "survey.approve", "survey.ai",
     "quotation.view", "quotation.edit", "quotation.send", "quotation.template.edit",
+    "delivery.view", "delivery.confirm", "delivery.escalate", "ratecontract.view",
+    "ratecontract.edit", "sitearea.approve", "labourcheck.override",
 ]  # fmt: skip
 
 
@@ -119,6 +121,12 @@ EXPECTED: dict[str, dict[str, str]] = {
         "quotation.edit",
         "quotation.send",
         "quotation.template.edit",
+        "delivery.view",
+        "delivery.confirm",
+        "delivery.escalate",
+        "ratecontract.view",
+        "ratecontract.edit",
+        "sitearea.approve",
     ),  # fmt: skip
     "estimator": _all(
         "clients.view",
@@ -135,6 +143,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "survey.edit",
         "quotation.view",
         "quotation.edit",
+        "ratecontract.view",
     ),  # fmt: skip
     "sales": {
         "clients.view": "all",
@@ -179,6 +188,8 @@ EXPECTED: dict[str, dict[str, str]] = {
         "dashboard.site": "assigned",
         "survey.view": "assigned",
         "survey.edit": "assigned",
+        "delivery.view": "assigned",
+        "delivery.confirm": "assigned",
     },
     "store_purchase": _all(
         "vendors.view",
@@ -198,6 +209,9 @@ EXPECTED: dict[str, dict[str, str]] = {
         "asset.view",
         "asset.edit",
         "dashboard.purchase",
+        "delivery.view",
+        "ratecontract.view",
+        "ratecontract.edit",
     ),  # fmt: skip
     "accounts": _all(
         "clients.view",
@@ -230,6 +244,8 @@ EXPECTED: dict[str, dict[str, str]] = {
         "dashboard.view",
         "dashboard.finance",
         "reports.export",
+        "delivery.view",
+        "ratecontract.view",
     ),  # fmt: skip
     # the client portal only; every staff endpoint stays 403 (tests/test_portal.py)
     "client": dict.fromkeys(

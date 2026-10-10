@@ -270,6 +270,7 @@ def spec_copy(block: SpecBlock) -> dict[str, Any]:
         "title": block.title,
         "heading_prefix": block.heading_prefix,
         "option_label": block.option_label,
+        "subtitle": block.subtitle,
         "sections": block.sections or [],
         "images": block.images or [],
     }
@@ -327,7 +328,8 @@ def refill_rates(db: Session, q: Quotation) -> int:
 def areas_list(q: Quotation) -> str:
     if q.areas_list:
         return q.areas_list
-    names = [i.name.upper() for i in q.items]
+    # system-named items ("Retaining wall - SBS self-adhesive membrane"): the area part only
+    names = list(dict.fromkeys(i.name.split(" - ")[0].strip().upper() for i in q.items))
     if not names:
         return "ALL AREA"
     return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " & " + names[-1]

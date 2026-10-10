@@ -6,6 +6,7 @@ import { errorText, inr, num } from "../../format";
 import { RATE_POLICIES } from "../../types";
 import type { Boq, BoqLine, LineDetail, RateHistory, SuggestResult, Tender } from "../../types";
 import ImportWizard from "./ImportWizard";
+import { useLearned } from "../../sitecontrol/learned";
 
 type Col = {
   key: string;
@@ -363,10 +364,7 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
     }
     const count = boq?.lines.filter((l) => l.status === "suggested" && Number(l.suggestion_score ?? 0) * 100 >= pct).length ?? 0;
     if (!confirm(`Accept ${count} suggestion(s) scoring ${pct}% or more?`)) return;
-    await run(
-      () => api<Boq>(`/api/tenders/${tender.id}/boq/accept`, { method: "POST", json: { min_score: (pct / 100).toFixed(3) } }),
-      `${count} suggestion(s) accepted.`,
-    );
+    await run(() => api<Boq>(`/api/tenders/${tender.id}/boq/accept`, { method: "POST", json: { min_score: (pct / 100).toFixed(3) } }), `${count} suggestion(s) accepted.`);
   }
 
   async function applyMargin() {
@@ -424,8 +422,8 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
           )}
         </div>
         <span className="muted small">
-          {counts.lines ?? boq.lines.length} lines · {counts.priced ?? 0} priced · {counts.suggested ?? 0} suggested · {counts.unpriced ?? 0} unpriced ·{" "}
-          {counts.qro ?? 0} QRO · {counts.not_quoted ?? 0} NQ
+          {counts.lines ?? boq.lines.length} lines · {counts.priced ?? 0} priced · {counts.suggested ?? 0} suggested · {counts.unpriced ?? 0} unpriced · {counts.qro ?? 0} QRO ·{" "}
+          {counts.not_quoted ?? 0} NQ
         </span>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
@@ -457,10 +455,7 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
                         <td className="num nowrap">{inr(r.total)}</td>
                       </tr>
                     ) : (
-                      <tr
-                        key={r.line.id}
-                        className={`${r.line.status === "not_quoted" ? "row-muted" : ""} ${selected === r.line.id ? "row-current" : ""}`}
-                      >
+                      <tr key={r.line.id} className={`${r.line.status === "not_quoted" ? "row-muted" : ""} ${selected === r.line.id ? "row-current" : ""}`}>
                         {columns.map((c, ci) => {
                           const active = cursor.row === ri && cursor.col === ci;
                           const isEditing = active && editing !== null;
@@ -512,9 +507,7 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
               </table>
             </div>
           )}
-          <p className="muted small top-gap">
-            Arrows move · Enter or typing edits · Tab goes to the next cell · Esc cancels. QRO / NQ lines are left out of the totals.
-          </p>
+          <p className="muted small top-gap">Arrows move · Enter or typing edits · Tab goes to the next cell · Esc cancels. QRO / NQ lines are left out of the totals.</p>
           <dl className="totals boq-totals">
             <dt>Subtotal</dt>
             <dd>{inr(boq.totals.subtotal)}</dd>
@@ -533,16 +526,7 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
           </dl>
         </div>
 
-        {selected !== null && (
-          <LinePanel
-            tenderId={tender.id}
-            detail={detail}
-            canEdit={canEdit}
-            onClose={() => setSelected(null)}
-            onChange={applyBoq}
-            run={run}
-          />
-        )}
+        {selected !== null && <LinePanel tenderId={tender.id} detail={detail} canEdit={canEdit} onClose={() => setSelected(null)} onChange={applyBoq} run={run} />}
       </div>
 
       {importing && (
@@ -693,6 +677,7 @@ function LinePanel({
   onChange: (b: Boq) => void;
   run: (action: () => Promise<Boq | void>, message?: string) => Promise<void>;
 }) {
+  const learned = useLearned(detail?.system_breakdown?.system_id ?? null);
   if (!detail) {
     return (
       <aside className="card boq-panel">
@@ -772,9 +757,7 @@ function LinePanel({
             {canEdit && line.status !== "not_quoted" && (
               <button
                 className="btn btn-small"
-                onClick={() =>
-                  void run(() => api<Boq>(`${base}/${line.id}/use-candidate`, { method: "POST", json: { candidate_id: c.id } }), "Rate applied.")
-                }
+                onClick={() => void run(() => api<Boq>(`${base}/${line.id}/use-candidate`, { method: "POST", json: { candidate_id: c.id } }), "Rate applied.")}
               >
                 Use this
               </button>
@@ -832,6 +815,9 @@ function LinePanel({
                     <th className="num">Qty</th>
                     <th className="num">Landed</th>
                     <th className="num">Cost</th>
+                    <th className="num" title="Median actual consumption per unit over completed areas">
+                      Site average
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -841,6 +827,7 @@ function LinePanel({
                       <td className="num">{num(c.qty)}</td>
                       <td className="num">{inr(c.landed_rate)}</td>
                       <td className="num">{inr(c.cost)}</td>
+                      <td className="num muted">{num(learned.find((l) => l.product === c.product)?.site_average)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -869,10 +856,7 @@ function LinePanel({
               Quote this line
             </button>
           ) : (
-            <button
-              className="btn"
-              onClick={() => void run(() => api<Boq>(base, { method: "PATCH", json: { lines: [{ id: line.id, status: "not_quoted" }] } }))}
-            >
+            <button className="btn" onClick={() => void run(() => api<Boq>(base, { method: "PATCH", json: { lines: [{ id: line.id, status: "not_quoted" }] } }))}>
               Mark not quoted
             </button>
           )}
@@ -886,9 +870,11 @@ function LinePanel({
             onClick={() => {
               if (!confirm("Delete this line?")) return;
               onClose();
-              void run(() => api<Boq>(`${base}/delete`, { method: "POST", json: { line_ids: [line.id] } }).then((b) => {
-                onChange(b);
-              }));
+              void run(() =>
+                api<Boq>(`${base}/delete`, { method: "POST", json: { line_ids: [line.id] } }).then((b) => {
+                  onChange(b);
+                }),
+              );
             }}
           >
             Delete line
@@ -958,11 +944,7 @@ function WhyThisRate({ rate, history: h }: { rate: string; history: RateHistory 
           </tbody>
         </table>
       )}
-      {h.sources_total > h.sources.length && (
-        <p className="muted small">
-          and {h.sources_total - h.sources.length} more. The library has no BOQ dates yet.
-        </p>
-      )}
+      {h.sources_total > h.sources.length && <p className="muted small">and {h.sources_total - h.sources.length} more. The library has no BOQ dates yet.</p>}
     </details>
   );
 }

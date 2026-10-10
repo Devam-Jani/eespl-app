@@ -50,6 +50,18 @@ const SurveySettings = lazy(() => sv().then((m) => ({ default: m.SurveySettings 
 const qp = () => import("./quotations/QuotationPages");
 const QuotationsList = lazy(() => qp().then((m) => ({ default: m.QuotationsList })));
 const QuotationEditor = lazy(() => qp().then((m) => ({ default: m.QuotationEditor })));
+const ReceiptPage = lazy(() => import("./receipt/ReceiptPage"));
+const sc = () => import("./sitecontrol/Pages");
+const Deliveries = lazy(() => sc().then((m) => ({ default: m.Deliveries })));
+const DeliveryDetail = lazy(() => sc().then((m) => ({ default: m.DeliveryDetail })));
+const RateContracts = lazy(() => sc().then((m) => ({ default: m.RateContracts })));
+const ReadyToBill = lazy(() => sc().then((m) => ({ default: m.ReadyToBill })));
+const NewAreas = lazy(() => sc().then((m) => ({ default: m.NewAreas })));
+const NewAreaForm = lazy(() => sc().then((m) => ({ default: m.NewAreaForm })));
+const Productivity = lazy(() => sc().then((m) => ({ default: m.Productivity })));
+const Consumption = lazy(() => sc().then((m) => ({ default: m.Consumption })));
+const SiteControlSettings = lazy(() => sc().then((m) => ({ default: m.SiteControlSettings })));
+const WorkFronts = lazy(() => import("./pages/site/WorkFronts"));
 const QuotationLibrary = lazy(() => import("./quotations/LibraryPages").then((m) => ({ default: m.QuotationLibrary })));
 // dashboards and analytics (with their charts) are one chunk
 const Dashboard = lazy(() => import("./analytics/Dashboard"));
@@ -106,6 +118,13 @@ const PAGES: Record<string, JSX.Element> = {
   "/snags": <Snags />,
   "/surveys": <SurveysList />,
   "/quotations": <QuotationsList />,
+  "/deliveries": <Deliveries />,
+  "/rate-contracts": <RateContracts />,
+  "/ready-to-bill": <ReadyToBill />,
+  "/new-areas": <NewAreas />,
+  "/reports/productivity": <Productivity />,
+  "/consumption": <Consumption />,
+  "/settings/site-control": <SiteControlSettings />,
   "/settings/quotation-library": <QuotationLibrary />,
   "/settings/survey": <SurveySettings />,
   "/dashboard": <Dashboard />,
@@ -158,6 +177,8 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/portal/invite/:token" element={<InviteAccept />} />
+            {/* the delivery receipt page: no login, opened from the QR code on the delivery note */}
+            <Route path="/r/:token" element={<ReceiptPage />} />
             <Route
               path="/portal"
               element={
@@ -184,6 +205,30 @@ export default function App() {
                 element={
                   <RequirePermission perms={["survey.view"]}>
                     <PilotReport />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="/deliveries/:id"
+                element={
+                  <RequirePermission perms={["delivery.view"]}>
+                    <DeliveryDetail />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="/sites/:id/new-area"
+                element={
+                  <RequirePermission perms={["site.update", "site.edit"]}>
+                    <NewAreaForm />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="/sites/:id/fronts"
+                element={
+                  <RequirePermission perms={["site.view"]}>
+                    <WorkFronts />
                   </RequirePermission>
                 }
               />

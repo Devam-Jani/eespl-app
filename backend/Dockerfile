@@ -5,9 +5,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Pango and fonts for WeasyPrint (tender PDF export); DejaVu has the rupee sign.
+# Pango and fonts for WeasyPrint (tender PDF export); DejaVu has the rupee sign, Lohit the
+# Gujarati and Hindi lines on the delivery note.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core \
+       fonts-lohit-gujr fonts-lohit-deva \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

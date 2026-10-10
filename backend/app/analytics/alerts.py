@@ -260,6 +260,135 @@ def _followup_overdue(db: Session, cfg: dict, at: datetime) -> Iterator[Hit]:
         )
 
 
+def _planning_users(db: Session) -> list:
+    from app.sitecontrol.deliveries import settings as sc_settings  # noqa: PLC0415
+
+    planner = sc_settings(db).planning_user_id
+    return [planner] if planner else role_users(db, ["office_admin"])
+
+
+def _dn_unconfirmed(db: Session, cfg: dict, at: datetime) -> Iterator[Hit]:
+    """A delivery not confirmed 24 h (setting) after it was expected: the site in-charge."""
+    from app.sitecontrol.deliveries import settings as sc_settings  # noqa: PLC0415
+    from app.sitecontrol.models import DeliveryNote  # noqa: PLC0415
+
+    first = sc_settings(db).escalate_first_hours
+    for dn in db.scalars(
+        select(DeliveryNote).where(
+            DeliveryNote.confirmed_at.is_(None),
+            DeliveryNote.status == "dispatched",
+            DeliveryNote.expected_at <= at - timedelta(hours=first),
+        )
+    ):
+        site = db.get(Site, dn.site_id)
+        hours = int((at - dn.expected_at).total_seconds() // 3600)
+        yield Hit(
+            f"dn:{dn.id}",
+            f"{dn.code} for {site.name} not confirmed at site, {hours} h after it was expected",
+            f"/deliveries/{dn.id}",
+            site.id,
+            [site.site_incharge_id],
+            "warn",
+        )
+
+
+def _dn_escalated(db: Session, cfg: dict, at: datetime) -> Iterator[Hit]:
+    """Still not confirmed 48 h (setting) after it was expected: planning."""
+    from app.sitecontrol.deliveries import settings as sc_settings  # noqa: PLC0415
+    from app.sitecontrol.models import DeliveryNote  # noqa: PLC0415
+
+    second = sc_settings(db).escalate_second_hours
+    planners = _planning_users(db)
+    for dn in db.scalars(
+        select(DeliveryNote).where(
+            DeliveryNote.confirmed_at.is_(None),
+            DeliveryNote.status == "dispatched",
+            DeliveryNote.expected_at <= at - timedelta(hours=second),
+        )
+    ):
+        site = db.get(Site, dn.site_id)
+        hours = int((at - dn.expected_at).total_seconds() // 3600)
+        drop = " (driver's drop-off photo attached)" if dn.drop_photo else ""
+        yield Hit(
+            f"dn:{dn.id}",
+            f"{dn.code} for {site.name} still not confirmed, {hours} h after it was expected{drop}",
+            f"/deliveries/{dn.id}",
+            site.id,
+            planners,
+            "high",
+        )
+
+
+def _contract_expiring(db: Session, cfg: dict, at: datetime) -> Iterator[Hit]:
+    from app.masters.models import Product  # noqa: PLC0415
+    from app.sitecontrol.deliveries import settings as sc_settings  # noqa: PLC0415
+    from app.sitecontrol.models import RateContract  # noqa: PLC0415
+
+    day = today()
+    days = sc_settings(db).contract_expiry_days
+    for c in db.scalars(
+        select(RateContract).where(
+            RateContract.is_active, RateContract.valid_till.between(day, day + timedelta(days=days))
+        )
+    ):
+        v, p = db.get(Vendor, c.vendor_id), db.get(Product, c.product_id)
+        yield Hit(
+            f"rc:{c.id}",
+            f"Rate contract {v.name} · {p.name} ends {c.valid_till:%d %b %Y}: renew it or agree a new rate",
+            "/rate-contracts",
+            None,
+            [],
+            "warn",
+        )
+
+
+def _ready_not_billed(db: Session, cfg: dict, at: datetime) -> Iterator[Hit]:
+    """Work done, not billed within 7 days (setting): billing and the site in-charge."""
+    from app.sitecontrol.deliveries import settings as sc_settings  # noqa: PLC0415
+    from app.sitecontrol.models import ReadyToBill  # noqa: PLC0415
+
+    days = sc_settings(db).bill_alert_days
+    rows = db.execute(
+        select(ReadyToBill.site_id, func.count())
+        .where(ReadyToBill.status == "open", ReadyToBill.created_at <= at - timedelta(days=days))
+        .group_by(ReadyToBill.site_id)
+    ).all()
+    for site_id, n in rows:
+        site = db.get(Site, site_id)
+        yield Hit(
+            f"rtb:{site_id}",
+            f"{site.name}: {n} finished stage(s) not billed for over {days} days",
+            "/ready-to-bill",
+            site_id,
+            [site.site_incharge_id],
+            "warn",
+        )
+
+
+def _consumption_var(db: Session, cfg: dict, at: datetime) -> Iterator[Hit]:
+    """Weekly: sites whose material issued is off the systems' consumption (±15 %, setting)."""
+    from app.sitecontrol import service as sc  # noqa: PLC0415
+
+    week = f"{at.isocalendar().year}-W{at.isocalendar().week:02d}"
+    planners = _planning_users(db)
+    for site in db.scalars(select(Site).where(Site.status == "active", Site.is_demo.is_(False))):
+        key = f"cons:{site.id}:{week}"
+        if db.scalar(
+            select(Alert.id).where(Alert.rule == "consumption_var", Alert.item_key == key)
+        ):
+            continue  # once a week
+        flagged = [r for r in sc.consumption(db, site.id) if r["flag"]]
+        if flagged:
+            yield Hit(
+                key,
+                f"{site.name}: {len(flagged)} material(s) off the system's consumption this week",
+                f"/consumption?site={site.id}",
+                site.id,
+                planners,
+                "warn",
+            )
+
+
 RULES = {
     "dpr_missing": _dpr_missing,
     "behind_schedule": _behind_schedule,
@@ -271,6 +400,11 @@ RULES = {
     "tender_due": _tender_due,
     "kylas_failing": _kylas_failing,
     "followup_overdue": _followup_overdue,
+    "dn_unconfirmed": _dn_unconfirmed,
+    "dn_escalated": _dn_escalated,
+    "contract_expiring": _contract_expiring,
+    "ready_not_billed": _ready_not_billed,
+    "consumption_var": _consumption_var,
 }
 
 

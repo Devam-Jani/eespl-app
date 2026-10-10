@@ -395,6 +395,14 @@ class VendorBill(Tracked, Base):
     payable: Mapped[Decimal] = money_col()  # total less TDS (and recoveries on subcon bills)
     status: Mapped[str] = mapped_column(String(12), server_default="draft", index=True)
     match_issues: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default="[]")
+    # three-way match (PO rate / rate contract, confirmed received qty): blocked from approval
+    # until released with a reason (delivery.escalate)
+    blocked_reasons: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default="[]")
+    released_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    release_reason: Mapped[str | None] = mapped_column(Text)
     approved_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )
@@ -520,6 +528,14 @@ class SubconBill(Tracked, Base):
         ForeignKey("vendor_bills.id", ondelete="SET NULL")
     )
     remark: Mapped[str | None] = mapped_column(Text)
+    # labour productivity check: ok, low, to_be_set (no expected figure) or none (nothing to check)
+    productivity_status: Mapped[str | None] = mapped_column(String(10))
+    productivity: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    productivity_override_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    productivity_override_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    productivity_override_note: Mapped[str | None] = mapped_column(Text)
 
 
 class SubconBillLine(Base):

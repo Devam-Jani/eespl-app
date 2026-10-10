@@ -418,6 +418,20 @@ export default function Payables() {
                         ⚠ {m.message}
                       </div>
                     ))}
+                    {b.blocked_reasons.length > 0 && (
+                      <div className={`match-block ${b.blocked ? "" : "released"}`}>
+                        {b.blocked_reasons.map((m, i) => (
+                          <div key={i} className={`small ${b.blocked ? "text-danger" : "muted"}`}>
+                            ⛔ {m.message}
+                          </div>
+                        ))}
+                        {b.released_at && (
+                          <div className="small muted">
+                            Released by {b.released_by} on {shortDate(b.released_at)}: {b.release_reason}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="num">{inr(b.total)}</td>
                   <td className="num">
@@ -428,9 +442,21 @@ export default function Payables() {
                   <td className="nowrap">{shortDate(b.due_date)}</td>
                   <td>
                     <span className={`badge ${BADGE[b.status]}`}>{b.status.replace("_", " ")}</span>
+                    {b.blocked && <span className="badge badge-danger">blocked: 3-way match</span>}
                   </td>
                   <td className="nowrap">
-                    {b.status === "draft" && edit && (
+                    {b.blocked && can("delivery.escalate") && (
+                      <button
+                        className="btn btn-small"
+                        onClick={() => {
+                          const reason = prompt("Release this bill for approval despite the match: why?");
+                          if (reason && reason.trim().length >= 5) void act(`/api/sitecontrol/vendor-bills/${b.id}/release`, { reason: reason.trim() });
+                        }}
+                      >
+                        Release
+                      </button>
+                    )}
+                    {b.status === "draft" && edit && !b.blocked && (
                       <button
                         className="btn btn-small"
                         onClick={() =>
@@ -590,6 +616,23 @@ export default function Payables() {
                     </td>
                     <td>
                       <span className={`badge ${BADGE[b.status]}`}>{b.status}</span> {b.vendor_bill_number}{" "}
+                      {b.productivity_status === "low" && (
+                        <span className={`badge ${b.productivity_override_note ? "badge-muted" : "badge-danger"}`} title={b.productivity_override_note ?? undefined}>
+                          productivity low: {b.productivity?.actual} / {b.productivity?.expected} sqm per man-day{b.productivity_override_note ? " (overridden)" : ""}
+                        </span>
+                      )}
+                      {b.productivity_status === "to_be_set" && <span className="badge badge-muted">productivity norm to be set</span>}
+                      {b.status === "draft" && b.productivity_status === "low" && !b.productivity_override_note && can("labourcheck.override") && (
+                        <button
+                          className="btn btn-small"
+                          onClick={() => {
+                            const note = prompt("Override the labour check: note");
+                            if (note && note.trim().length >= 5) void act(`/api/sitecontrol/subcon-bills/${b.id}/override`, { note: note.trim() });
+                          }}
+                        >
+                          Override
+                        </button>
+                      )}{" "}
                       {b.status === "draft" && edit && (
                         <button className="btn btn-small btn-primary" onClick={() => void act(`/api/finance/subcon-bills/${b.id}/approve`)}>
                           Approve

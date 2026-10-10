@@ -407,6 +407,8 @@ def test_client_cannot_call_any_staff_endpoint(portal):
             not isinstance(route, APIRoute)
             or route.path.startswith(CLIENT_PATHS)
             or route.path == "/api/health"
+            # public by design: one delivery's items and counts, behind its receipt token
+            or route.path.startswith("/api/receipt/")
         ):
             continue
         path = re.sub(r"\{[^}]*(id|uid)\}", "00000000-0000-0000-0000-000000000001", route.path)

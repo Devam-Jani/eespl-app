@@ -1,0 +1,30 @@
+// Labels of the delivery receipt page in English, Gujarati and Hindi. The team can correct the
+// translations here; each entry is [English, ગુજરાતી, हिन्दी].
+export const S = {
+  title: ["Delivery at site", "સાઇટ પર ડિલિવરી", "साइट पर डिलीवरी"],
+  expected: ["Expected", "અપેક્ષિત", "अपेक्षित"],
+  vehicle: ["Vehicle", "વાહન", "वाहन"],
+  step1: ["1. Count each item as it is unloaded", "1. ઉતારતી વખતે દરેક વસ્તુ ગણો", "1. उतारते समय हर वस्तु गिनें"],
+  sent: ["Sent", "મોકલેલ", "भेजा"],
+  received: ["Received", "મળેલ", "मिला"],
+  damaged: ["Damaged", "નુકસાન", "क्षतिग्रस्त"],
+  notCounted: ["Not counted yet", "હજી ગણ્યું નથી", "अभी गिना नहीं"],
+  step2: ["2. Take two photos", "2. બે ફોટા લો", "2. दो फ़ोटो लें"],
+  photoGoods: ["Material as unloaded", "ઉતારેલો માલ", "उतारा गया माल"],
+  photoChallan: ["Signed challan", "સહી કરેલ ચલણ", "हस्ताक्षरित चालान"],
+  takePhoto: ["Take photo", "ફોટો લો", "फ़ोटो लें"],
+  retake: ["Take again", "ફરી લો", "फिर से लें"],
+  step3: ["3. Who received it", "3. કોણે લીધું", "3. किसने लिया"],
+  name: ["Your name", "તમારું નામ", "आपका नाम"],
+  phone: ["Phone", "ફોન", "फ़ोन"],
+  confirm: ["Confirm delivery", "ડિલિવરી કન્ફર્મ કરો", "डिलीवरी कन्फर्म करें"],
+  sending: ["Sending…", "મોકલી રહ્યા છીએ…", "भेज रहे हैं…"],
+  missing: ["Count every item, take both photos and enter your name.", "દરેક વસ્તુ ગણો, બંને ફોટા લો અને નામ લખો.", "हर वस्तु गिनें, दोनों फ़ोटो लें और नाम लिखें."],
+  done: ["Thank you: the delivery is confirmed.", "આભાર: ડિલિવરી કન્ફર્મ થઈ.", "धन्यवाद: डिलीवरी कन्फर्म हो गई."],
+  already: ["Already confirmed by", "પહેલેથી કન્ફર્મ કર્યું:", "पहले ही कन्फर्म किया:"],
+  short: ["Less than sent: the store is told at once.", "મોકલ્યા કરતાં ઓછું: સ્ટોરને તરત જાણ થાય છે.", "भेजे से कम: स्टोर को तुरंत बताया जाता है."],
+  named: ["May receive when the supervisor is away", "સુપરવાઇઝર ન હોય ત્યારે લઈ શકે", "सुपरवाइज़र न हों तो ले सकते हैं"],
+  location: ["Location is saved when the phone allows it.", "ફોન મંજૂરી આપે તો સ્થાન સાચવાય છે.", "फ़ोन अनुमति दे तो स्थान सहेजा जाता है."],
+} as const;
+
+export type Key = keyof typeof S;

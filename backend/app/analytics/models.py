@@ -57,6 +57,13 @@ ALERT_RULES: dict[str, dict[str, Any]] = {
     "tender_due": {"on": True, "days": 2, "roles": ["estimator", "office_admin"]},
     "kylas_failing": {"on": True, "hours": 24, "roles": ["super_admin"]},
     "followup_overdue": {"on": True, "roles": ["office_admin"]},
+    # site control: delivery not confirmed (in-charge, then planning), rate contract expiring,
+    # work done not billed, consumption variance (weekly)
+    "dn_unconfirmed": {"on": True, "roles": []},
+    "dn_escalated": {"on": True, "roles": []},
+    "contract_expiring": {"on": True, "roles": ["store_purchase"]},
+    "ready_not_billed": {"on": True, "roles": ["accounts"]},
+    "consumption_var": {"on": True, "roles": []},
 }
 RULE_LABELS = {
     "dpr_missing": "DPR missing after 8 pm",
@@ -69,6 +76,11 @@ RULE_LABELS = {
     "tender_due": "Tender due, not submitted",
     "kylas_failing": "Kylas sync failing",
     "followup_overdue": "Quotation follow-up overdue",
+    "dn_unconfirmed": "Delivery not confirmed at site",
+    "dn_escalated": "Delivery still not confirmed (escalated)",
+    "contract_expiring": "Rate contract expiring",
+    "ready_not_billed": "Work done, not billed",
+    "consumption_var": "Material consumption off the system",
 }
 
 

@@ -3276,3 +3276,235 @@ li.late a {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+/* markup preview under text boxes; consistency warnings; work fronts */
+.markup-preview {
+  border-left: 3px solid #cfd8d5;
+  padding: 2px 8px;
+  margin-top: 4px;
+  font-size: 0.85rem;
+}
+.markup-preview p {
+  margin: 0;
+}
+.markup-field.compact .markup-tools {
+  margin-bottom: 2px;
+}
+.alert.checks ul {
+  margin: 4px 0 0 18px;
+  padding: 0;
+}
+.swatch.outline {
+  background: transparent !important;
+  border: 2px solid;
+}
+.fronts {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.fronts li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid #e6ebe9;
+  padding: 10px 8px;
+}
+.fronts li.ready {
+  background: #eef7f3;
+}
+.fronts .btn {
+  min-height: 40px;
+}
+.front-actions {
+  display: flex;
+  gap: 4px;
+}
+.front-photo {
+  max-width: 92vw;
+  max-height: 86vh;
+  margin: 4vh auto;
+  display: block;
+}
+
+/* --- the public delivery receipt page (cheap phones, slow connections) ---------------------------- */
+.receipt {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 12px 14px 40px;
+  background: #fff;
+  min-height: 100vh;
+  font-size: 1rem;
+}
+.receipt header {
+  border-bottom: 3px solid #0f6e5a;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+.receipt h1 {
+  margin: 2px 0;
+  font-size: 1.5rem;
+}
+.receipt h2 {
+  font-size: 1.05rem;
+  margin: 18px 0 8px;
+}
+.receipt .site {
+  font-weight: 600;
+  margin: 0;
+}
+.tri {
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.tri-sub {
+  font-size: 0.78rem;
+  color: #55635f;
+  font-weight: normal;
+}
+.receipt-item {
+  border: 2px solid #dfe5e3;
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+.receipt-item.counted {
+  border-color: #009e73;
+}
+.item-name {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.count-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.counter {
+  display: flex;
+  align-items: stretch;
+}
+.counter button {
+  width: 52px;
+  height: 52px;
+  font-size: 1.6rem;
+  border: 2px solid #0f6e5a;
+  background: #eef7f3;
+  color: #0f6e5a;
+  border-radius: 10px;
+}
+.counter input {
+  width: 74px;
+  height: 52px;
+  margin: 0 6px;
+  font-size: 1.4rem;
+  text-align: center;
+  border: 2px solid #b8c4c0;
+  border-radius: 10px;
+}
+.photo-steps {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.photo-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border: 2px dashed #b8c4c0;
+  border-radius: 10px;
+  padding: 10px 6px;
+  text-align: center;
+  cursor: pointer;
+}
+.photo-step.has {
+  border-style: solid;
+  border-color: #009e73;
+}
+.photo-step img {
+  width: 100%;
+  max-height: 120px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+.photo-icon {
+  font-size: 2.2rem;
+}
+.photo-btn {
+  background: #0f6e5a;
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-weight: 600;
+}
+.receipt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.receipt-field input {
+  height: 48px;
+  font-size: 1.1rem;
+  padding: 0 10px;
+  border: 2px solid #b8c4c0;
+  border-radius: 10px;
+}
+.receipt-submit {
+  width: 100%;
+  min-height: 60px;
+  margin-top: 14px;
+  background: #0f6e5a;
+  color: #fff;
+  border: 0;
+  border-radius: 12px;
+  font-size: 1.15rem;
+}
+.receipt-submit .tri-sub {
+  color: #d9efe8;
+}
+.receipt-warn {
+  background: #fff3e0;
+  border-left: 4px solid #e69f00;
+  padding: 8px;
+}
+.receipt-error {
+  background: #fdecea;
+  border-left: 4px solid #d55e00;
+  padding: 8px;
+}
+.receipt-done {
+  text-align: center;
+  padding: 30px 0;
+}
+.receipt-done .big {
+  font-size: 3rem;
+  color: #009e73;
+  margin: 0;
+}
+
+/* site control: staff pages */
+.thumbs { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0.5rem 0; }
+.thumbs figure { margin: 0; max-width: 160px; }
+.thumb { width: 150px; height: 110px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); display: block; }
+.sc-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.25rem 0 0.75rem; }
+.sc-strip a.badge { text-decoration: none; }
+.area-queue { display: grid; gap: 0.75rem; }
+.area-req { display: flex; gap: 1rem; align-items: flex-start; }
+.area-req h3 { margin: 0 0 0.25rem; }
+.debit-note { margin-top: 0.75rem; padding: 0.5rem 0.75rem; border-left: 3px solid var(--warn); background: var(--warn-soft); }
+.match-block { margin-top: 0.25rem; }
+.input-reason { display: block; width: 100%; min-width: 10rem; margin-top: 0.25rem; font-size: 0.8rem; }
+.phone-form { max-width: 480px; margin: 0 auto; display: grid; gap: 0.5rem; }
+.big-btn { width: 100%; padding: 0.9rem; font-size: 1.05rem; }
+.norm-input { width: 7rem; text-align: right; }
+.norms .inline-form { padding: 0.25rem 0; border-bottom: 1px solid var(--border); }
+.confirm-form { margin-top: 1rem; display: grid; gap: 0.5rem; }
+.confirm-form .inline-form input { width: 6rem; }
+@media (max-width: 640px) {
+  .area-req { flex-direction: column; }
+}

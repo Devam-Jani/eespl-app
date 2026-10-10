@@ -460,12 +460,20 @@ def test_vendor_bill_match_tds_partial_payment_and_approval_limit(boss, world, d
     # 194Q does not apply by default (turnover setting off): no TDS
     assert bill["tds_section"] == "194Q" and D(bill["tds_amount"]) == 0
     assert D(bill["total"]) == 6136 and D(bill["payable"]) == 6136
+    # the three-way match blocks a rate above the PO rate until it is released with a reason
+    assert bill["blocked"] and bill["blocked_reasons"][0]["kind"] == "rate"
     assert (
         client.post(
             f"/api/finance/vendor-bills/{bill['id']}/approve", json={}, headers=h
         ).status_code
-        == 422
+        == 409
     )
+    r = client.post(
+        f"/api/sitecontrol/vendor-bills/{bill['id']}/release",
+        json={"reason": "Invented: rate revised by phone, confirmed by purchase"},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
     bill = client.post(
         f"/api/finance/vendor-bills/{bill['id']}/approve",
         json={"accept_differences": True},
@@ -556,6 +564,7 @@ def test_subcon_bill_material_recovery_retention_and_nothing_twice(boss, world, 
         json={
             "site_id": site,
             "subcontractor_id": sub.id,
+            "area_scope_id": world["scopes"][0],  # booked on an area of the site's list
             "lines": [{"product_id": p.id, "qty": "5"}],
         },
         headers=h,

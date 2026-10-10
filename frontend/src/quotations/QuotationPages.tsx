@@ -148,6 +148,7 @@ function NewQuotation({ leadId, clientId, onClose }: { leadId: string | null; cl
   const [parent, setParent] = useState<string>(leadId ?? clientId ?? "");
   const [form, setForm] = useState({ client_firm: "", client_city: "", attention: "", project: "", letterhead_id: "" });
   const [picked, setPicked] = useState<Record<number, string[] | null>>({});
+  const [preset, setPreset] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -181,8 +182,9 @@ function NewQuotation({ leadId, clientId, onClose }: { leadId: string | null; cl
           client_city: form.client_city || undefined,
           attention: form.attention || undefined,
           project: form.project || undefined,
-          letterhead_id: form.letterhead_id ? Number(form.letterhead_id) : undefined,
+          letterhead_id: form.letterhead_id && !preset ? Number(form.letterhead_id) : undefined,
           items,
+          preset_id: preset ? Number(preset) : undefined,
         },
       });
       navigate(`/quotations/${q.id}`);
@@ -251,6 +253,20 @@ function NewQuotation({ leadId, clientId, onClose }: { leadId: string | null; cl
             </select>
           </label>
         </div>
+        <label className="field">
+          <span>Start from a preset</span>
+          <select value={preset} onChange={(e) => setPreset(e.target.value)}>
+            <option value="">No preset: pick the letterhead and areas below</option>
+            {lookups?.presets.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} ({p.items} areas)
+              </option>
+            ))}
+          </select>
+        </label>
+        {preset && (
+          <p className="muted small">The preset sets the letterhead, the letter, the areas in order, the T&amp;C and the references. Areas ticked below replace its areas.</p>
+        )}
         <h3 className="section-title">Areas to offer</h3>
         <div className="item-picker">
           {lookups?.offer_items.map((it) => {
@@ -388,16 +404,30 @@ export function QuotationEditor() {
         <button className="btn btn-small" onClick={() => void downloadFile(`${base}/pdf`).catch((e) => setError(errorText(e)))}>
           ⤓ PDF
         </button>
+        <button
+          className="btn btn-small btn-ghost"
+          title="Header and footer left blank, for printing on letterhead stationery"
+          onClick={() => void downloadFile(`${base}/pdf?preprinted=true`).catch((e) => setError(errorText(e)))}
+        >
+          ⤓ PDF for letterhead paper
+        </button>
         {q.can_send && (
           <button
             className="btn btn-small"
             onClick={() => void apply(`${base}/issue`, undefined, "POST", "Issued: the Word and PDF files are kept with this revision and attached to the lead.")}
           >
-            Issue files
+            {q.files.length ? "Re-issue files" : "Issue files"}
           </button>
         )}
         {q.can_send && q.is_latest && ["draft", "negotiation"].includes(q.status) && (
-          <button className="btn btn-small btn-primary" onClick={() => void apply(`${base}/status`, { status: "sent" }, "POST", "Sent: follow-ups are scheduled.")}>
+          <button
+            className="btn btn-small btn-primary"
+            onClick={() => {
+              const warn = q.items.flatMap((i) => i.checks.map((c) => `${i.name}: ${c}`));
+              if (warn.length && !window.confirm(`Check before sending (warnings, not blocks):\n\n${warn.join("\n")}\n\nSend anyway?`)) return;
+              void apply(`${base}/status`, { status: "sent" }, "POST", "Sent: follow-ups are scheduled.");
+            }}
+          >
             Mark sent
           </button>
         )}
@@ -461,6 +491,12 @@ export function QuotationEditor() {
             <button key={it.id} className={`outline-row ${sel.kind === "item" && sel.id === it.id ? "on" : ""}`} onClick={() => setSel({ kind: "item", id: it.id })}>
               <span className="muted">{i + 1}.</span> {it.name}
               {it.option_labels.length > 1 && <span className="muted small"> · {(it.options.length ? it.options : it.option_labels).map((o) => `Opt.${o}`).join(", ")}</span>}
+              {it.area_type_id === null && <span className="badge badge-warn">area type missing</span>}
+              {it.checks.length > 0 && (
+                <span className="badge badge-orange" title={it.checks.join("\n")}>
+                  {it.checks.length} check{it.checks.length > 1 ? "s" : ""}
+                </span>
+              )}
             </button>
           ))}
           {q.can_edit && (
@@ -690,6 +726,31 @@ function ItemPanel({ q, item, lookups, apply, onRemoved }: { q: Quotation; item:
   return (
     <div>
       <h2 className="section-title">{item.name}</h2>
+      {item.checks.length > 0 && (
+        <div className="alert alert-warn checks">
+          <b>Specification and budgetary offer do not agree</b> (warnings, not blocks):
+          <ul>
+            {item.checks.map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <label className="field">
+        <span>Area type {item.area_type_id === null && <span className="badge badge-warn">area type missing</span>}</span>
+        <select
+          value={item.area_type_id ?? ""}
+          disabled={ro}
+          onChange={(e) => void apply(`${base}/items/${item.id}`, { area_type_id: e.target.value ? Number(e.target.value) : null }, "PUT", "Area type set for this quotation.")}
+        >
+          <option value="">— pick one (used for survey quantities)</option>
+          {lookups.area_types.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="form-grid two">
         <label className="field">
           <span>Area name</span>
@@ -1137,8 +1198,10 @@ function FollowPanel({ q, apply }: { q: Quotation; apply: Apply }) {
               <button className="btn btn-small btn-ghost" onClick={() => void downloadFile(`/api/quotations/files/${f.id}`)}>
                 ⤓ {f.file_name}
               </button>{" "}
+              {f.replaced && <span className="badge badge-muted">replaced</span>}{" "}
               <span className="muted small">
-                {(f.size_bytes / 1024).toFixed(0)} KB · {new Date(f.created_at).toLocaleString("en-IN")}
+                {(f.size_bytes / 1024).toFixed(0)} KB · {f.by ?? "—"} · {new Date(f.created_at).toLocaleString("en-IN")}
+                {f.replaced_at && ` · replaced ${new Date(f.replaced_at).toLocaleString("en-IN")}`}
               </span>
             </li>
           ))}

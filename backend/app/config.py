@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = None
     anthropic_base_url: str = "https://api.anthropic.com"
     anthropic_timeout_seconds: float = 60
+    # the address phones reach the app on (set at go-live): delivery receipt links and QR codes
+    public_base_url: str = "http://localhost:5174"
 
 
 settings = Settings()

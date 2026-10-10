@@ -18,6 +18,7 @@ from app.quotations.models import (
     OfferItemLine,
     OfferItemSpec,
     OfferLine,
+    OfferPreset,
     Reference,
     SpecBlock,
 )
@@ -29,6 +30,7 @@ MODELS: dict[str, type] = {
     "line": OfferLine,
     "item": OfferItem,
     "reference": Reference,
+    "preset": OfferPreset,
 }
 SKIP = {"id", "created_at", "updated_at", "created_by", "version"}
 

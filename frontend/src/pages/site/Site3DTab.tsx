@@ -23,8 +23,10 @@ type SurveyMap = {
   nodes: Record<string, "measured" | "camera">;
   products: Record<string, { product_id: number; name: string; unit: string; qty: number }[]>;
   unplaced_areas: number;
+  ready?: number[];
 };
 const SURVEY_COLORS = { measured: "#009E73", camera: "#E69F00", none: "#d9dedb" } as const;
+const READY_COLOR = "#0072B2"; // "work front ready": a blue outline in the survey mode
 const SURVEY_LEGEND = [
   { key: "measured", label: "Measured (laser / by hand)" },
   { key: "camera", label: "Camera only" },
@@ -235,6 +237,7 @@ export default function Site3DTab({
     model.nodes.forEach((n) => walk(n.id));
     return out;
   }, [surveyMap, model]);
+  const readySet = useMemo(() => new Set(surveyMap?.ready ?? []), [surveyMap]);
   const surveyCounts = useMemo(() => {
     const c = { measured: 0, camera: 0, none: 0 };
     for (const n of model?.nodes ?? []) if (!GROUP_KINDS.has(n.kind)) c[surveyState.get(n.id) ?? "none"] += 1;
@@ -247,7 +250,7 @@ export default function Site3DTab({
       if (!n) return { color: "#cccccc", ghost: false, late: false };
       if (mode === "survey") {
         const st = surveyState.get(n.id) ?? "none";
-        return { color: SURVEY_COLORS[st], ghost: st === "none" && b.role === "flat", late: false };
+        return { color: SURVEY_COLORS[st], ghost: st === "none" && b.role === "flat", late: readySet.has(n.id) };
       }
       const leaf = b.role !== "floor" && b.role !== "group";
       const filteredOut =
@@ -257,7 +260,7 @@ export default function Site3DTab({
       const c = workColor(n.status, workBelow.get(n.id) ?? false);
       return { color: c.color, ghost: c.ghost || b.role === "flat", late: n.status.is_late };
     },
-    [byId, mode, templateFilter, statusFilter, workBelow, surveyState],
+    [byId, mode, templateFilter, statusFilter, workBelow, surveyState, readySet],
   );
 
   useEffect(() => {
@@ -339,7 +342,7 @@ export default function Site3DTab({
       }
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
-      t.content.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: LATE_COLOR })));
+      t.content.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: mode === "survey" ? READY_COLOR : LATE_COLOR })));
     }
     // ground under everything, hidden when looking below it
     const all = new THREE.Box3();
@@ -629,6 +632,9 @@ export default function Site3DTab({
                   <span className="swatch" style={{ background: SURVEY_COLORS[l.key] }} /> {l.label}
                 </span>
               ))}
+              <span className="legend-item">
+                <span className="swatch outline" style={{ borderColor: READY_COLOR }} /> Work front ready ({readySet.size})
+              </span>
             </div>
           )}
           {!nodes.length && model && (

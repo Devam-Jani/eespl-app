@@ -4,6 +4,7 @@ import { api, ApiError } from "../api";
 import { useAuth } from "../auth";
 import { errorText, inr, num } from "../format";
 import type { Page, Product, RateBreakdown, System } from "../types";
+import { useLearned } from "../sitecontrol/learned";
 
 type Row = { product_id: number; consumption_per_unit: string; wastage_percent: string };
 type Settings = {
@@ -84,17 +85,7 @@ export default function SystemDetail() {
   );
 }
 
-function CostView({
-  system,
-  canEdit,
-  onSaved,
-  onError,
-}: {
-  system: System;
-  canEdit: boolean;
-  onSaved: (msg: string) => Promise<void>;
-  onError: (msg: string | null) => void;
-}) {
+function CostView({ system, canEdit, onSaved, onError }: { system: System; canEdit: boolean; onSaved: (msg: string) => Promise<void>; onError: (msg: string | null) => void }) {
   const cost = system.cost!;
   const [rows, setRows] = useState<Row[]>(
     cost.components.map((c) => ({
@@ -113,6 +104,8 @@ function CostView({
   const [margin, setMargin] = useState(cost.default_margin_percent);
   const [breakdown, setBreakdown] = useState<RateBreakdown | null>(null);
   const [calcError, setCalcError] = useState<string | null>(null);
+  const learned = useLearned(system.id);
+  const siteAverage = (productId: number) => learned.find((l) => l.product_id === productId);
 
   useEffect(() => {
     if (!canEdit) return;
@@ -141,8 +134,7 @@ function CostView({
     return () => clearTimeout(timer);
   }, [margin, system.id, system.rate]);
 
-  const productName = (id: number) =>
-    cost.components.find((c) => c.product_id === id)?.product_name ?? products.find((p) => p.id === id)?.name ?? `#${id}`;
+  const productName = (id: number) => cost.components.find((c) => c.product_id === id)?.product_name ?? products.find((p) => p.id === id)?.name ?? `#${id}`;
 
   const dirty =
     JSON.stringify(rows) !==
@@ -172,8 +164,7 @@ function CostView({
   }
 
   const setRow = (i: number, patch: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
-  const setSetting = (key: keyof Settings) => (e: { target: { value: string } }) =>
-    setSettings((s) => ({ ...s, [key]: e.target.value }));
+  const setSetting = (key: keyof Settings) => (e: { target: { value: string } }) => setSettings((s) => ({ ...s, [key]: e.target.value }));
 
   return (
     <div className="split">
@@ -186,6 +177,9 @@ function CostView({
                 <th>Product</th>
                 <th className="num">Consumption / {system.unit}</th>
                 <th className="num">Wastage %</th>
+                <th className="num" title="Median actual consumption over completed areas (sites)">
+                  Site average
+                </th>
                 {canEdit && <th />}
               </tr>
             </thead>
@@ -222,17 +216,13 @@ function CostView({
                   </td>
                   <td className="num">
                     {canEdit ? (
-                      <input
-                        className="input-num"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={r.wastage_percent}
-                        onChange={(e) => setRow(i, { wastage_percent: e.target.value })}
-                      />
+                      <input className="input-num" type="number" step="0.01" min="0" value={r.wastage_percent} onChange={(e) => setRow(i, { wastage_percent: e.target.value })} />
                     ) : (
                       num(r.wastage_percent, 2)
                     )}
+                  </td>
+                  <td className="num muted">
+                    {siteAverage(r.product_id) ? <span title={`${siteAverage(r.product_id)!.areas} completed area(s)`}>{num(siteAverage(r.product_id)!.site_average)}</span> : "—"}
                   </td>
                   {canEdit && (
                     <td>
@@ -247,10 +237,7 @@ function CostView({
           </table>
         </div>
         {canEdit && (
-          <button
-            className="btn btn-small"
-            onClick={() => setRows((rs) => [...rs, { product_id: 0, consumption_per_unit: "1", wastage_percent: "0" }])}
-          >
+          <button className="btn btn-small" onClick={() => setRows((rs) => [...rs, { product_id: 0, consumption_per_unit: "1", wastage_percent: "0" }])}>
             + Add product
           </button>
         )}

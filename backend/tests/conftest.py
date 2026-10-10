@@ -65,7 +65,10 @@ PER_TEST_TABLES = [
     "quotation_followups", "quotation_files", "quotation_lines", "quotation_items", "quotations",
     "offer_item_lines", "offer_item_specs", "offer_items", "offer_lines", "spec_blocks",
     "quotation_references", "library_versions", "quotation_settings", "letterheads",
-    "letter_templates",
+    "letter_templates", "offer_presets",
+    "delivery_discrepancies", "delivery_note_lines", "debit_notes", "delivery_notes",
+    "rate_contract_versions", "rate_contracts", "ready_to_bill", "new_area_requests",
+    "productivity_norms", "sitecontrol_settings",
 ]  # fmt: skip
 # seeded rows of truncated tables, put back after every test (copied once per run)
 SEED_COPIES = ["finance_settings", "letter_templates", "letterheads", "quotation_settings"]
@@ -87,6 +90,7 @@ PER_TEST_DELETES = [
     "INSERT INTO quotation_settings SELECT * FROM quotation_settings_seed",
     "INSERT INTO company_profile (id) VALUES (1)",
     "INSERT INTO analytics_settings (id) VALUES (1)",
+    "INSERT INTO sitecontrol_settings (id) VALUES (1)",
     "INSERT INTO survey_settings (id) VALUES (1)",
     "DELETE FROM area_types WHERE created_by IS NOT NULL",  # the seeded ones stay
     "INSERT INTO stores (name, kind) VALUES ('Ethios Godown', 'godown')",
@@ -130,6 +134,16 @@ def seeded_role_permissions(test_database) -> list[tuple]:
 def seeded_max_category(test_database) -> int:
     with engine.connect() as conn:
         return conn.execute(text("SELECT coalesce(max(id), 0) FROM categories")).scalar_one()
+
+
+@pytest.fixture(autouse=True)
+def media_in_tmp(tmp_path, monkeypatch) -> Path:
+    """Every test writes uploads, PDFs and delivery notes under its own temporary folder, never
+    /media (CI cannot write there). A test's own media_dir monkeypatch still wins: it runs later."""
+    media = tmp_path / "media"
+    media.mkdir()
+    monkeypatch.setattr(settings, "media_dir", str(media))
+    return media
 
 
 @pytest.fixture(autouse=True)

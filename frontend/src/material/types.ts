@@ -154,6 +154,9 @@ export type PoLine = {
   received_qty: string;
   hsn_code: string | null;
   indent_qty: string | null;
+  contract_rate: string | null;
+  above_contract_percent: string | null;
+  rate_reason: string | null;
 };
 
 export type ChargeKind = "freight" | "loading" | "unloading" | "packing" | "other";
