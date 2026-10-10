@@ -529,6 +529,8 @@ GRANTS = {
         "expense.create": "own",
     },
     "sales": {"sitevisit.log": "own", "scorecard.view": "own"},
+    # Settings > Roles: office_admin adjusts a role later without a developer
+    "office_admin": {"admin.roles": "all"},
 }  # fmt: skip
 
 OLD_RULES = (

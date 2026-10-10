@@ -65,6 +65,7 @@ EXPECTED: dict[str, dict[str, str]] = {
     "director": _all(*[c for c in ALL if c not in DIRECTOR_EXCLUDES]),
     "office_admin": _all(
         "admin.users",
+        "admin.roles",
         "audit.view",
         "clients.view",
         "clients.edit",
