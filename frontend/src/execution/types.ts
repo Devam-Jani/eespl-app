@@ -19,7 +19,7 @@ export type Dpr = {
   work_done: string | null;
   hindrances: string | null;
   next_day_plan: string | null;
-  status: "new" | "draft" | "submitted" | "acknowledged";
+  status: "new" | "draft" | "submitted" | "acknowledged" | "returned";
   submitted_by_name: string | null;
   submitted_at: string | null;
   acknowledged_by_name: string | null;
@@ -38,6 +38,8 @@ export type Dpr = {
     new_area_id: number | null;
     place: string | null;
   }[];
+  return_comment?: string | null;
+  returned_by_name?: string | null;
 };
 
 export type DprRow = {

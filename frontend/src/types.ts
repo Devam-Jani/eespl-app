@@ -3,7 +3,7 @@ import type { Scope } from "./api";
 export type RoleRef = { id: number; code: string; name: string };
 
 export type Me = {
-  user: { id: string; email: string | null; full_name: string; phone: string | null };
+  user: { id: string; email: string | null; full_name: string; phone: string | null; job_title?: string | null };
   roles: RoleRef[];
   permissions: Record<string, Scope>;
 };
@@ -363,6 +363,7 @@ export type Tender = {
   lost_reason: string | null;
   lost_to: string | null;
   lost_note?: string | null;
+  guarantee_years?: number | null;
   decided_at?: string | null;
   quoted_total: string;
   tc_template_id: number | null;
@@ -420,6 +421,7 @@ export type BoqLine = {
   amount: string | null;
   our_remarks: string | null;
   our_product: string | null;
+  manufacturer?: string | null;
   status: LineStatus;
   suggestion_score: string | null;
   // only with tender.margin

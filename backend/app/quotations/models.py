@@ -381,6 +381,7 @@ class Quotation(Tracked, Base):
     areas_list: Mapped[str | None] = mapped_column(String(300))  # {areas_list}; empty: from items
     quote_date: Mapped[date] = mapped_column(Date)
     validity_days: Mapped[int] = mapped_column(Integer, server_default="30")
+    guarantee_years: Mapped[int | None] = mapped_column(Integer)  # the send checklist
     status: Mapped[str] = mapped_column(String(12), server_default="draft", index=True)
     lost_reason: Mapped[str | None] = mapped_column(String(20))
     lost_note: Mapped[str | None] = mapped_column(Text)

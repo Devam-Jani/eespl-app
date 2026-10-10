@@ -67,10 +67,12 @@ class DprOut(BaseModel):
     work_done: str | None
     hindrances: str | None
     next_day_plan: str | None
-    status: Literal["new", "draft", "submitted", "acknowledged"]
+    status: Literal["new", "draft", "submitted", "acknowledged", "returned"]
     submitted_by_name: str | None
     submitted_at: str | None
     acknowledged_by_name: str | None
+    return_comment: str | None = None
+    returned_by_name: str | None = None
     auto: dict
     lines: list[dict]
     photos: list[dict]
@@ -81,9 +83,9 @@ class DprOut(BaseModel):
 def _out(db, site: Site, day: date, d: Dpr | None, principal) -> DprOut:
     edit = principal.permissions.get("dpr.edit")
     can_edit = material.covers_site(db, edit, principal, site.id, site.created_by) and (
-        d is None or d.status == "draft"
+        d is None or d.status in ("draft", "returned")
     )
-    who = names(db, [d.submitted_by, d.acknowledged_by] if d else [])
+    who = names(db, [d.submitted_by, d.acknowledged_by, d.returned_by] if d else [])
     return DprOut(
         id=d.id if d else None,
         site_id=site.id,
@@ -98,6 +100,8 @@ def _out(db, site: Site, day: date, d: Dpr | None, principal) -> DprOut:
         submitted_by_name=who.get(d.submitted_by) if d else None,
         submitted_at=d.submitted_at.isoformat() if d and d.submitted_at else None,
         acknowledged_by_name=who.get(d.acknowledged_by) if d else None,
+        return_comment=d.return_comment if d else None,
+        returned_by_name=who.get(d.returned_by) if d and d.returned_by else None,
         # frozen at submission; live while a draft
         auto=d.auto if d and d.status != "draft" and d.auto else svc.day_activity(db, site.id, day),
         lines=_lines_out(db, d) if d else [],
@@ -105,7 +109,7 @@ def _out(db, site: Site, day: date, d: Dpr | None, principal) -> DprOut:
         if d
         else [],
         can_edit=can_edit,
-        can_acknowledge=bool(d and d.status == "submitted" and edit == "all"),
+        can_acknowledge=bool(d and d.status == "submitted" and can_approve(db, principal, site)),
     )
 
 
@@ -169,6 +173,15 @@ def _set_lines(db, site: Site, d: Dpr, lines: list[DprLineIn]) -> None:
                 new_area_id=ln.new_area_id,
             )
         )
+
+
+def can_approve(db, principal, site: Site) -> bool:
+    """The site engineer approves (dpr.approve on their sites); the office still can (dpr.edit
+    for every site)."""
+    scope = principal.permissions.get("dpr.approve")
+    if scope and material.covers_site(db, scope, principal, site.id, site.created_by):
+        return True
+    return principal.permissions.get("dpr.edit") == "all"
 
 
 def _get(db, site_id, day) -> Dpr | None:
@@ -267,7 +280,7 @@ def save_dpr(
     if d is None:
         d = Dpr(site_id=site.id, on_date=day, created_by=principal.user.id)
         db.add(d)
-    elif d.status != "draft":
+    elif d.status not in ("draft", "returned"):
         raise svc.conflict(f"The DPR of {day:%d %b} is already {d.status}")
     for k in ("weather", "work_done", "hindrances", "next_day_plan"):
         setattr(d, k, getattr(body, k))
@@ -309,12 +322,50 @@ def acknowledge(
     dpr_id: int, request: Request, db: DbSession, principal: CurrentPrincipal, _: DprView
 ) -> DprOut:
     d, site = _visible(db, dpr_id, principal)
-    if principal.permissions.get("dpr.edit") != "all":
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "The office acknowledges DPRs")
+    if not can_approve(db, principal, site):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "The site engineer approves daily reports")
     if d.status != "submitted":
         raise svc.conflict(f"The DPR is {d.status}")
     d.status, d.acknowledged_by, d.acknowledged_at = "acknowledged", principal.user.id, svc.now()
+    d.return_comment = None
     record(db, request, principal, "dpr.acknowledge", "dpr", d.id)
+    db.commit()
+    return _out(db, site, d.on_date, d, principal)
+
+
+class ReturnIn(BaseModel):
+    comment: str = Field(min_length=3, max_length=2000)
+
+
+@router.post("/dprs/{dpr_id}/return")
+def return_dpr(
+    dpr_id: int,
+    body: ReturnIn,
+    request: Request,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    _: DprView,
+) -> DprOut:
+    """Back to the supervisor with a comment: it is on their to-do until corrected and sent
+    again."""
+    from app.portal.service import notify  # noqa: PLC0415
+
+    d, site = _visible(db, dpr_id, principal)
+    if not can_approve(db, principal, site):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "The site engineer returns daily reports")
+    if d.status != "submitted":
+        raise svc.conflict(f"The DPR is {d.status}")
+    d.status, d.return_comment = "returned", body.comment.strip()
+    d.returned_by, d.returned_at = principal.user.id, svc.now()
+    notify(
+        db,
+        [d.submitted_by],
+        "dpr_returned",
+        f"Daily report of {d.on_date:%d %b} returned: {d.return_comment}",
+        link=f"/sites/{site.id}?tab=dpr&day={d.on_date}",
+        site_id=site.id,
+    )
+    record(db, request, principal, "dpr.return", "dpr", d.id, after={"comment": d.return_comment})
     db.commit()
     return _out(db, site, d.on_date, d, principal)
 

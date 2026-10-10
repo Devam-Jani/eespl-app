@@ -43,6 +43,7 @@ class MeUser(BaseModel):
     email: str | None
     full_name: str
     phone: str | None
+    job_title: str | None = None  # printed on letters and signatures
 
 
 class MeOut(BaseModel):

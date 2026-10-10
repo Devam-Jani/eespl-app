@@ -47,6 +47,7 @@ class TenderOut(BaseModel):
     lost_to: str | None
     lost_note: str | None = None
     decided_at: datetime | None = None
+    guarantee_years: int | None = None
     quoted_total: Decimal
     tc_template_id: int | None
     notes: str | None
@@ -100,6 +101,9 @@ class TenderUpdate(BaseModel):
     lost_to: str | None = Field(default=None, max_length=200)  # the competitor, if known
     lost_note: str | None = None
     notes: str | None = None
+    guarantee_years: int | None = Field(default=None, ge=0, le=50)
+    # the send checklist: sending past it needs sendcheck.override and a reason (logged)
+    override_reason: str | None = Field(default=None, max_length=1000)
 
     @model_validator(mode="after")
     def _reason(self):
@@ -140,6 +144,7 @@ class LineOut(BaseModel):
     amount: Decimal | None
     our_remarks: str | None
     our_product: str | None
+    manufacturer: str | None = None
     status: str
     suggestion_score: Decimal | None
 
@@ -250,6 +255,7 @@ class LineUpdate(BaseModel):
     client_remarks: str | None = None
     our_remarks: str | None = None
     our_product: str | None = None
+    manufacturer: str | None = Field(default=None, max_length=100)
     rate: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=2)
     margin_percent: Percent | None = None
     status: Literal["unpriced", "not_quoted"] | None = None
@@ -386,6 +392,8 @@ class TenderTcIn(BaseModel):
 
 class SubmitIn(BaseModel):
     note: str | None = Field(default=None, max_length=2000)
+    # the send checklist: sending past it needs sendcheck.override and a reason (logged)
+    override_reason: str | None = Field(default=None, max_length=1000)
 
 
 class RevisionOut(BaseModel):

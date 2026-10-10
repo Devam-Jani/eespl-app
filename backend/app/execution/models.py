@@ -34,7 +34,7 @@ Qty = Numeric(14, 3)
 Money = Numeric(14, 2)
 Rate = Numeric(14, 4)
 
-DPR_STATUSES = ("draft", "submitted", "acknowledged")
+DPR_STATUSES = ("draft", "submitted", "acknowledged", "returned")
 TRADES = ("applicator", "helper", "mason", "supervisor", "other")
 LABOUR_TYPES = ("own", "subcontractor")
 ATTENDANCE = ("present", "half_day", "absent")
@@ -81,6 +81,12 @@ class Dpr(Tracked, Base):
         ForeignKey("users.id", ondelete="SET NULL")
     )
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # returned by the site engineer with a comment: back on the supervisor's to-do
+    return_comment: Mapped[str | None] = mapped_column(Text)
+    returned_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    returned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     auto: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
     photos: Mapped[list["DprPhoto"]] = relationship(

@@ -99,6 +99,7 @@ export type Quotation = {
   quote_date: string;
   valid_until: string;
   validity_days: number;
+  guarantee_years?: number | null;
   status: "draft" | "sent" | "negotiation" | "won" | "lost" | "expired";
   lost_reason: string | null;
   lost_note: string | null;

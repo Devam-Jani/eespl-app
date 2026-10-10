@@ -1116,6 +1116,30 @@ def _task(db: Session, site: Site, task_id: int) -> Task:
     return t
 
 
+def _check_stage_checklists(db: Session, task: Task) -> None:
+    """The stage is done when its last step is: the engineer completes the quality checklist of
+    every checklist step in it first (a certified step already passed its inspection)."""
+    if not task.area_scope_id:
+        return
+    from app.execution.inspections import passed_inspection  # noqa: PLC0415
+    from app.execution.models import ChecklistTemplate  # noqa: PLC0415
+
+    steps = db.scalars(
+        select(Task).where(Task.area_scope_id == task.area_scope_id, Task.parent_task_id.is_(None))
+    ).all()
+    if any(t.id != task.id and t.status not in ("done", "certified") for t in steps):
+        return  # not the last step: the stage is not done yet
+    for t in steps:
+        if t.status == "certified" or not (t.step and t.step.checklist_template_id):
+            continue
+        if not passed_inspection(db, t):
+            tpl = db.get(ChecklistTemplate, t.step.checklist_template_id)
+            raise unprocessable(
+                f"Complete the quality checklist '{tpl.name if tpl else 'checklist'}' for "
+                f"'{t.name}' before the stage is marked done"
+            )
+
+
 def _check_predecessors(db: Session, task: Task) -> None:
     for dep_id in task.depends_on or []:
         dep = db.get(Task, dep_id)
@@ -1185,6 +1209,7 @@ def update_task(
                 items = task.inspection or []
                 if not items or not all(i.get("passed") for i in items):
                     raise unprocessable("Every inspection item must pass before this step is done")
+            _check_stage_checklists(db, task)
             task.progress_percent = Decimal(100)
             task.actual_end = date.today()
         if new in ("in_progress", "done") and task.actual_start is None:

@@ -139,7 +139,26 @@ def contract(client, h, w, **terms):
     }
     r = client.post(f"/api/finance/sites/{w['site']}/contract", json=body, headers=h)
     assert r.status_code == 201, r.text
+    measure_done(client, h, w["site"], r.json())
     return r.json()
+
+
+def measure_done(client, h, site_id, c):
+    """RA bills take their quantities only from the measurement book: the work done so far is
+    measured (invented laser readings equal to the progress)."""
+    for ln in c["lines"]:
+        if Decimal(str(ln.get("done_qty") or 0)) > 0:
+            r = client.post(
+                "/api/team/measurements",
+                json={
+                    "site_id": site_id,
+                    "contract_line_id": ln["id"],
+                    "qty": str(ln["done_qty"]),
+                    "source": "laser",
+                },
+                headers=h,
+            )
+            assert r.status_code == 201, r.text
 
 
 def lines_by_desc(bill):
@@ -217,9 +236,21 @@ def test_ra_bill_from_progress_with_previous_cumulative_extra_and_deductions(
         and D(ra["net"]) == 29325
     )
 
-    # bill 2: progress moved on; previous = certified 65, so 35 is suggested
+    # bill 2: progress moved on and the extra 30 sqm is measured (the book, not progress, feeds
+    # the bill); previous = certified 65, so 35 is suggested
     db.get(AreaScope, world["scopes"][0]).progress_percent = 100
     db.commit()
+    pu_line = next(x for x in c["lines"] if x["description"] == "PU coating")
+    client.post(
+        "/api/team/measurements",
+        json={
+            "site_id": world["site"],
+            "contract_line_id": pu_line["id"],
+            "qty": "30",
+            "source": "laser",
+        },
+        headers=h,
+    )
     ra2 = client.post(f"/api/finance/contracts/{c['id']}/ra-bills", json={}, headers=h).json()
     pu = lines_by_desc(ra2)["PU coating"]
     assert (
@@ -263,6 +294,16 @@ def test_ra_bill_from_progress_with_previous_cumulative_extra_and_deductions(
     assert (
         client.post(f"/api/finance/contract-lines/{extra['id']}/approve", headers=h).status_code
         == 200
+    )
+    client.post(
+        "/api/team/measurements",
+        json={
+            "site_id": world["site"],
+            "contract_line_id": extra["id"],
+            "qty": "10",
+            "source": "manual",
+        },
+        headers=h,
     )
     ra2 = client.put(f"/api/finance/ra-bills/{ra2['id']}", json=body, headers=h).json()
     assert D(ra2["gross"]) == 20500  # 35 x 500 + 10 x 300

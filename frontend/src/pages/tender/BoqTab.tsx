@@ -50,6 +50,10 @@ function cellText(line: BoqLine, key: string): string {
       return line.amount ?? "";
     case "our_remarks":
       return line.our_remarks ?? "";
+    case "our_product":
+      return line.our_product ?? "";
+    case "manufacturer":
+      return line.manufacturer ?? "";
     case "client_remarks":
       return line.client_remarks ?? "";
     case "cost_rate":
@@ -96,6 +100,10 @@ function cellUpdate(line: BoqLine, key: string, raw: string): Record<string, unk
     }
     case "our_remarks":
       return { our_remarks: value || null };
+    case "our_product":
+      return { our_product: value || null };
+    case "manufacturer":
+      return { manufacturer: value || null };
     default:
       return "This cell cannot be edited";
   }
@@ -136,6 +144,8 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
     }
     cols.push(
       { key: "client_remarks", label: "Client remarks", editable: () => false, width: "10rem", muted: true },
+      { key: "our_product", label: "Our product", editable, width: "10rem" },
+      { key: "manufacturer", label: "Make", editable, width: "7rem" },
       { key: "our_remarks", label: "Our remarks", editable, width: "11rem" },
       { key: "status", label: "Status", editable: () => false, width: "7rem" },
     );

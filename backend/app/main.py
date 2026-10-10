@@ -41,6 +41,7 @@ from app.routers import audit, permissions, roles, users
 from app.sitecontrol import routers as sitecontrol
 from app.sites import routers as sites
 from app.survey import routers as survey
+from app.team import routers as team
 from app.tenders import routers as tenders
 
 app = FastAPI(title="EESPL App")
@@ -93,6 +94,7 @@ for _r in (
     quotations.router,
     sitecontrol.router,
     sitecontrol.public,
+    team.router,
     analytics.dashboard,
     analytics.router,
     portal_staff.router,

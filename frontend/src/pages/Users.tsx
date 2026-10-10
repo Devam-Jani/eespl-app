@@ -7,11 +7,7 @@ import Modal from "../components/Modal";
 import { canGrant } from "../scopes";
 import type { Role, User } from "../types";
 
-type Dialog =
-  | { kind: "create" }
-  | { kind: "edit"; user: User }
-  | { kind: "password"; user: User }
-  | null;
+type Dialog = { kind: "create" } | { kind: "edit"; user: User } | { kind: "password"; user: User } | null;
 
 function formatDate(value: string | null) {
   return value ? new Date(value).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : "—";
@@ -58,21 +54,14 @@ export default function Users() {
   }
 
   const q = filter.trim().toLowerCase();
-  const shown = q
-    ? users.filter((u) => u.full_name.toLowerCase().includes(q) || (u.email ?? "").includes(q))
-    : users;
+  const shown = q ? users.filter((u) => u.full_name.toLowerCase().includes(q) || (u.email ?? "").includes(q)) : users;
 
   return (
     <>
       <div className="page-header">
         <h1>Users</h1>
         <div className="page-actions">
-          <input
-            className="search"
-            placeholder="Search name or email"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-          />
+          <input className="search" placeholder="Search name or email" value={filter} onChange={(e) => setFilter(e.target.value)} />
           <ExportButton path="/api/users/export" />
           <button className="btn btn-primary" onClick={() => setDialog({ kind: "create" })}>
             Add user
@@ -131,10 +120,7 @@ export default function Users() {
                     <button className="btn btn-small" onClick={() => setDialog({ kind: "edit", user: u })}>
                       Edit
                     </button>
-                    <button
-                      className="btn btn-small"
-                      onClick={() => setDialog({ kind: "password", user: u })}
-                    >
+                    <button className="btn btn-small" onClick={() => setDialog({ kind: "password", user: u })}>
                       Reset password
                     </button>
                     {u.id !== me?.user.id && (
@@ -184,21 +170,12 @@ export default function Users() {
   );
 }
 
-function UserForm({
-  user,
-  roles,
-  onClose,
-  onSaved,
-}: {
-  user: User | null;
-  roles: Role[];
-  onClose: () => void;
-  onSaved: (message: string) => Promise<void>;
-}) {
+function UserForm({ user, roles, onClose, onSaved }: { user: User | null; roles: Role[]; onClose: () => void; onSaved: (message: string) => Promise<void> }) {
   const { me } = useAuth();
   const [email, setEmail] = useState(user?.email ?? "");
   const [fullName, setFullName] = useState(user?.full_name ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
+  const [jobTitle, setJobTitle] = useState(user?.job_title ?? "");
   const [kylasUserId, setKylasUserId] = useState(user?.kylas_user_id?.toString() ?? "");
   const canKylas = !!me && "admin.settings" in me.permissions;
   const [password, setPassword] = useState("");
@@ -222,6 +199,7 @@ function UserForm({
             email,
             full_name: fullName,
             phone: phone || null,
+            job_title: jobTitle || null,
             ...(canKylas ? { kylas_user_id: kylasUserId ? Number(kylasUserId) : null } : {}),
           },
         });
@@ -231,10 +209,11 @@ function UserForm({
         }
         await onSaved(`${fullName} updated.`);
       } else {
-        await api("/api/users", {
+        const created = await api<{ id: string }>("/api/users", {
           method: "POST",
           json: { email, full_name: fullName, phone: phone || null, password, role_ids: roleIds },
         });
+        if (jobTitle) await api(`/api/users/${created.id}`, { method: "PATCH", json: { job_title: jobTitle } });
         await onSaved(`${fullName} added.`);
       }
     } catch (err) {
@@ -260,6 +239,10 @@ function UserForm({
           <span>Phone</span>
           <input value={phone} onChange={(e) => setPhone(e.target.value)} />
         </label>
+        <label className="field">
+          <span>Job title (printed on letters and bills, e.g. Assistant Manager Billing)</span>
+          <input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} maxLength={100} />
+        </label>
         {user && canKylas && (
           <label className="field">
             <span>Kylas user id (owner of the Kylas leads this person enters)</span>
@@ -269,14 +252,7 @@ function UserForm({
         {!user && (
           <label className="field">
             <span>Password (at least 10 characters)</span>
-            <input
-              type="password"
-              autoComplete="new-password"
-              minLength={10}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            <input type="password" autoComplete="new-password" minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} required />
           </label>
         )}
         <fieldset className="field">
@@ -285,17 +261,8 @@ function UserForm({
             {roles.map((r) => {
               const allowed = !!me && canGrant(me.permissions, r.permissions);
               return (
-                <label
-                  key={r.id}
-                  className={`check ${allowed ? "" : "disabled"}`}
-                  title={allowed ? r.description ?? "" : "This role has permissions you do not hold"}
-                >
-                  <input
-                    type="checkbox"
-                    checked={roleIds.includes(r.id)}
-                    disabled={!allowed && !roleIds.includes(r.id)}
-                    onChange={() => toggleRole(r.id)}
-                  />
+                <label key={r.id} className={`check ${allowed ? "" : "disabled"}`} title={allowed ? (r.description ?? "") : "This role has permissions you do not hold"}>
+                  <input type="checkbox" checked={roleIds.includes(r.id)} disabled={!allowed && !roleIds.includes(r.id)} onChange={() => toggleRole(r.id)} />
                   {r.name}
                 </label>
               );
@@ -315,15 +282,7 @@ function UserForm({
   );
 }
 
-function PasswordForm({
-  user,
-  onClose,
-  onSaved,
-}: {
-  user: User;
-  onClose: () => void;
-  onSaved: (message: string) => void;
-}) {
+function PasswordForm({ user, onClose, onSaved }: { user: User; onClose: () => void; onSaved: (message: string) => void }) {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -353,25 +312,11 @@ function PasswordForm({
         {error && <div className="alert alert-error">{error}</div>}
         <label className="field">
           <span>New password (at least 10 characters)</span>
-          <input
-            type="password"
-            autoComplete="new-password"
-            minLength={10}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoFocus
-          />
+          <input type="password" autoComplete="new-password" minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} required autoFocus />
         </label>
         <label className="field">
           <span>Repeat password</span>
-          <input
-            type="password"
-            autoComplete="new-password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-          />
+          <input type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
         </label>
         <div className="form-actions">
           <button type="button" className="btn" onClick={onClose}>

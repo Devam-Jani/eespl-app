@@ -45,6 +45,9 @@ ALL = [
     "quotation.view", "quotation.edit", "quotation.send", "quotation.template.edit",
     "delivery.view", "delivery.confirm", "delivery.escalate", "ratecontract.view",
     "ratecontract.edit", "sitearea.approve", "labourcheck.override",
+    "leads.allocate", "jobs.assign", "planning.view", "planning.edit", "measurement.view",
+    "measurement.edit", "dpr.approve", "labourcheck.check", "sendcheck.override",
+    "scorecard.view", "sitevisit.log", "grants.manage",
 ]  # fmt: skip
 
 
@@ -151,6 +154,35 @@ EXPECTED: dict[str, dict[str, str]] = {
         "quotation.edit",
         "ratecontract.view",
     ),  # fmt: skip
+    # Mr. Sunil, Hardeep (Sr Engineer Billing & Planning): enquiries, the status board, material
+    # planning, new areas, escalations; costs only if the director allows the person
+    "planning": _all(
+        "leads.view", "leads.edit", "leads.allocate", "clients.view", "clients.edit",
+        "tender.view", "quotation.view", "survey.view", "library.view", "vendors.view",
+        "site.view", "site.update", "planning.view", "planning.edit", "indent.view",
+        "indent.create", "store.view", "po.view", "grn.view", "dpr.view", "labour.view",
+        "inspection.view", "sitearea.approve", "delivery.view", "ratecontract.view",
+        "measurement.view", "dashboard.view", "dashboard.site",
+    ),  # fmt: skip
+    # Jr Engineer Billing, Assistant Manager Billing: no vendor payables, no payroll
+    "billing": _all(
+        "billing.view", "billing.edit", "measurement.view", "measurement.edit", "survey.view",
+        "survey.edit", "site.view", "dpr.view", "labour.view", "subcon.view", "inspection.view",
+        "labourcheck.check", "clients.view", "tender.view", "library.view", "dashboard.view",
+    ),  # fmt: skip
+    # Sr / Jr Engineer Site, Project Manager: their sites only
+    "site_engineer": {
+        **dict.fromkeys(
+            ["site.view", "site.update", "survey.view", "survey.edit", "dpr.view", "dpr.edit",
+             "dpr.approve", "inspection.view", "inspection.edit", "indent.view", "indent.create",
+             "delivery.view", "delivery.confirm", "labour.view", "attendance.manage", "store.view",
+             "grn.view", "measurement.view", "measurement.edit", "sitevisit.log", "asset.view",
+             "portal.manage", "dashboard.site"],
+            "assigned",
+        ),
+        "library.view": "all",
+        "expense.create": "own",
+    },  # fmt: skip
     "sales": {
         "clients.view": "all",
         "clients.edit": "own",
@@ -172,6 +204,8 @@ EXPECTED: dict[str, dict[str, str]] = {
         "quotation.view": "own",
         "quotation.edit": "own",
         "quotation.send": "own",
+        "sitevisit.log": "own",
+        "scorecard.view": "own",
     },
     "site_supervisor": {
         "site.view": "assigned",

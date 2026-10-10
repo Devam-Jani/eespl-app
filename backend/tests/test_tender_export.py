@@ -385,8 +385,32 @@ def test_client_format_needs_a_rate_column(boss):
 # --- revisions -----------------------------------------------------------------------------------
 
 
+def ready_to_send(db, tid: int) -> None:
+    """The send checklist: our product and its manufacturer on every line, the guarantee years,
+    and our scope and the client's scope from the T&C library (invented)."""
+    from app.masters.models import TcClause  # noqa: PLC0415
+    from app.tenders.models import BoqLine, Tender, TenderTc  # noqa: PLC0415
+
+    for ln in db.scalars(select(BoqLine).where(BoqLine.tender_id == tid)):
+        ln.our_product = ln.our_product or "Invented coating"
+        ln.manufacturer = ln.manufacturer or "Invented Make"
+    db.get(Tender, tid).guarantee_years = 10
+    for i, (text, cat) in enumerate(
+        (
+            ("Invented: we supply and apply", "our_scope"),
+            ("Invented: water by the client", "client_scope"),
+        )
+    ):
+        c = TcClause(text=text, category=cat)
+        db.add(c)
+        db.flush()
+        db.add(TenderTc(tender_id=tid, clause_id=c.id, sort_order=90 + i))
+    db.commit()
+
+
 def test_revisions_submit_edit_compare_and_export(priced, db):
     client, headers, tid = priced
+    ready_to_send(db, tid)
     data = boq(client, headers, tid)
     crystal = line(data, "Crystalline coating")
     r = client.post(f"/api/tenders/{tid}/submit", json={"note": "First offer"}, headers=headers)

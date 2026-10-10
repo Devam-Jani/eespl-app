@@ -283,6 +283,10 @@ def on_scope_refresh(db: Session, scope: AreaScope, before: Decimal) -> ReadyToB
         note=note if cl else (note or "No contract line maps to this BOQ line yet"),
     )
     db.add(item)
+    db.flush()
+    from app.team.service import book_from_ready  # noqa: PLC0415
+
+    book_from_ready(db, item)  # the measurement book: what RA bills take their quantities from
     return item
 
 

@@ -5,6 +5,7 @@ from typing import Annotated
 import jwt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 
 from app.auth.rbac import effective_permissions, widest
 from app.auth.security import decode_access_token
@@ -52,6 +53,11 @@ def get_principal(
         raise _unauthorized("Invalid or expired token")
     # Permissions are read from the database on every request, so role changes apply at once.
     permissions = effective_permissions(user.roles)
+    # what the director allowed this person on top of their roles (costs, deciding won jobs)
+    from app.team.models import UserGrant  # noqa: PLC0415
+
+    for code in db.scalars(select(UserGrant.permission_code).where(UserGrant.user_id == user.id)):
+        permissions[code] = "all"
     if is_client_login(permissions) and not request.url.path.startswith(CLIENT_PATHS):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Client logins can only use the portal")
     return Principal(user=user, permissions=permissions)

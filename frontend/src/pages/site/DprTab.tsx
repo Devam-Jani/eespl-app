@@ -15,7 +15,8 @@ type Place = { value: string; label: string };
 const emptyLine = (): Line => ({ description: "", qty: "", unit: "sqm", labour_count: "", place: "" });
 
 const WEATHER = ["Sunny", "Cloudy", "Light rain", "Heavy rain", "Hot", "Windy"];
-const STATUS_BADGE: Record<string, string> = { new: "badge-muted", draft: "badge-warn", submitted: "badge-info", acknowledged: "badge-ok" };
+const STATUS_BADGE: Record<string, string> = { new: "badge-muted", draft: "badge-warn", submitted: "badge-info", acknowledged: "badge-ok", returned: "badge-danger" };
+const STATUS_LABEL: Record<string, string> = { new: "Not started", acknowledged: "approved" };
 
 /** The day's report: what was recorded on site is pulled in; the supervisor adds the story. */
 export default function DprTab({ site }: { site: Site }) {
@@ -112,6 +113,17 @@ export default function DprTab({ site }: { site: Site }) {
     }
   }
 
+  async function returnIt() {
+    if (!dpr?.id) return;
+    const comment = prompt("Return to the supervisor: what needs correcting?");
+    if (!comment || comment.trim().length < 3) return;
+    try {
+      show(await api<Dpr>(`/api/execution/dprs/${dpr.id}/return`, { method: "POST", json: { comment: comment.trim() } }));
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }
+
   async function acknowledge() {
     if (!dpr?.id) return;
     try {
@@ -129,20 +141,30 @@ export default function DprTab({ site }: { site: Site }) {
     <div className="daily">
       <div className="daily-head">
         <input type="date" value={day} max={localToday()} onChange={(e) => setDay(e.target.value)} aria-label="Day" className="tap-input" />
-        {dpr && <span className={`badge ${STATUS_BADGE[dpr.status]}`}>{dpr.status === "new" ? "Not started" : dpr.status}</span>}
+        {dpr && <span className={`badge ${STATUS_BADGE[dpr.status]}`}>{STATUS_LABEL[dpr.status] ?? dpr.status}</span>}
         {dpr?.id && dpr.status !== "draft" && (
           <button className="btn" onClick={() => void downloadFile(`/api/execution/dprs/${dpr.id}/pdf`).catch((err) => setError(errorText(err)))}>
             PDF
           </button>
         )}
         {dpr?.can_acknowledge && (
-          <button className="btn" onClick={() => void acknowledge()}>
-            Acknowledge
-          </button>
+          <>
+            <button className="btn btn-primary" onClick={() => void acknowledge()}>
+              Approve
+            </button>
+            <button className="btn" onClick={() => void returnIt()}>
+              Return
+            </button>
+          </>
         )}
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {message && <div className="alert alert-ok">{message}</div>}
+      {dpr?.status === "returned" && dpr.return_comment && (
+        <div className="alert alert-warn">
+          Returned by {dpr.returned_by_name ?? "the site engineer"}: {dpr.return_comment}. Correct it and submit again.
+        </div>
+      )}
       {dpr && a && (
         <>
           <div className="card daily-card">
@@ -285,7 +307,7 @@ export default function DprTab({ site }: { site: Site }) {
               dpr.submitted_by_name && (
                 <p className="muted small">
                   Submitted by {dpr.submitted_by_name}
-                  {dpr.acknowledged_by_name && ` · acknowledged by ${dpr.acknowledged_by_name}`}
+                  {dpr.acknowledged_by_name && ` · approved by ${dpr.acknowledged_by_name}`}
                 </p>
               )
             )}

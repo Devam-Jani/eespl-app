@@ -25,6 +25,18 @@ export const S = {
   short: ["Less than sent: the store is told at once.", "મોકલ્યા કરતાં ઓછું: સ્ટોરને તરત જાણ થાય છે.", "भेजे से कम: स्टोर को तुरंत बताया जाता है."],
   named: ["May receive when the supervisor is away", "સુપરવાઇઝર ન હોય ત્યારે લઈ શકે", "सुपरवाइज़र न हों तो ले सकते हैं"],
   location: ["Location is saved when the phone allows it.", "ફોન મંજૂરી આપે તો સ્થાન સાચવાય છે.", "फ़ोन अनुमति दे तो स्थान सहेजा जाता है."],
+  // the site supervisor's day, in this order (My site)
+  mySite: ["My site today", "આજે મારી સાઇટ", "आज मेरी साइट"],
+  stepAttendance: ["1. Attendance", "1. હાજરી", "1. हाज़िरी"],
+  stepDeliveries: ["2. Deliveries", "2. ડિલિવરી", "2. डिलीवरी"],
+  stepIssue: ["3. Issue material to areas", "3. વિસ્તારોમાં માલ આપો", "3. क्षेत्रों को माल दें"],
+  stepWork: ["4. Work done, with photos", "4. કરેલું કામ, ફોટા સાથે", "4. किया गया काम, फ़ोटो के साथ"],
+  stepSnags: ["5. Snags", "5. ખામીઓ", "5. कमियाँ"],
+  stepDone: ["Done", "થઈ ગયું", "हो गया"],
+  pending: ["To do", "બાકી", "बाकी"],
+  open: ["Open", "ખોલો", "खोलें"],
+  toConfirm: ["to confirm", "કન્ફર્મ કરવાની", "कन्फर्म करनी"],
+  returnedDpr: ["Returned by the engineer", "એન્જિનિયરે પાછો મોકલ્યો", "इंजीनियर ने लौटाया"],
 } as const;
 
 export type Key = keyof typeof S;

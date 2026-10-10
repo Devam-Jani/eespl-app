@@ -35,6 +35,7 @@ from app.material import service as material
 from app.models import User
 from app.portal import service as portal
 from app.sites.models import Site
+from app.team import service as team
 from app.tenders.models import BoqLine, Tender
 
 router = APIRouter(prefix="/api/finance", tags=["finance"])
@@ -476,9 +477,10 @@ def _set_lines(db, b: RaBill, c: ClientContract, given: dict[int, Decimal] | Non
                 )
             continue
         prev = svc.billed_before(db, cl.id, b)
-        suggested = max(
-            ZERO, (svc.done_qty(db, cl.boq_line_id) if not cl.is_extra else ZERO) - prev
-        )
+        # quantities come only from the measurement book (laser, manual, camera, client
+        # certified, AutoCAD), never straight from progress
+        measured = team.book_total(db, cl.id)
+        suggested = max(ZERO, measured - prev)
         suggested = min(suggested, max(ZERO, Decimal(cl.qty) - prev))
         ln = existing.get(cl.id) or RaBillLine(contract_line_id=cl.id, rate=cl.rate, qty=ZERO)
         ln.previous_qty, ln.suggested_qty, ln.rate = prev, suggested, cl.rate
@@ -492,6 +494,11 @@ def _set_lines(db, b: RaBill, c: ClientContract, given: dict[int, Decimal] | Non
                 f"'{cl.description[:40]}': {prev + qty:f} {cl.unit} is beyond the BOQ qty "
                 f"{Decimal(cl.qty):f}; "
                 "bill the excess as an extra item (approved with billing.approve)"
+            )
+        if qty > 0 and prev + qty > measured:
+            raise svc.unprocessable(
+                f"'{cl.description[:40]}': {prev + qty:f} {cl.unit} is more than the measurement "
+                f"book ({measured:f}); add the measurement first"
             )
         ln.qty = qty
         keep.append(ln)

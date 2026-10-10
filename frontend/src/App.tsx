@@ -62,6 +62,18 @@ const Productivity = lazy(() => sc().then((m) => ({ default: m.Productivity })))
 const Consumption = lazy(() => sc().then((m) => ({ default: m.Consumption })));
 const SiteControlSettings = lazy(() => sc().then((m) => ({ default: m.SiteControlSettings })));
 const WorkFronts = lazy(() => import("./pages/site/WorkFronts"));
+const tm = () => import("./team/Pages");
+const MyWork = lazy(() => tm().then((m) => ({ default: m.MyWork })));
+const Enquiries = lazy(() => tm().then((m) => ({ default: m.Enquiries })));
+const AssignmentPage = lazy(() => tm().then((m) => ({ default: m.AssignmentPage })));
+const StatusBoard = lazy(() => tm().then((m) => ({ default: m.StatusBoard })));
+const MaterialPlan = lazy(() => tm().then((m) => ({ default: m.MaterialPlan })));
+const MeasurementBook = lazy(() => tm().then((m) => ({ default: m.MeasurementBook })));
+const BillTracking = lazy(() => tm().then((m) => ({ default: m.BillTracking })));
+const LabourCheck = lazy(() => tm().then((m) => ({ default: m.LabourCheck })));
+const Scorecard = lazy(() => tm().then((m) => ({ default: m.Scorecard })));
+const SupervisorDay = lazy(() => tm().then((m) => ({ default: m.SupervisorDay })));
+const TeamSettings = lazy(() => tm().then((m) => ({ default: m.TeamSettings })));
 const QuotationLibrary = lazy(() => import("./quotations/LibraryPages").then((m) => ({ default: m.QuotationLibrary })));
 // dashboards and analytics (with their charts) are one chunk
 const Dashboard = lazy(() => import("./analytics/Dashboard"));
@@ -118,6 +130,14 @@ const PAGES: Record<string, JSX.Element> = {
   "/snags": <Snags />,
   "/surveys": <SurveysList />,
   "/quotations": <QuotationsList />,
+  "/my-work": <MyWork />,
+  "/enquiries": <Enquiries />,
+  "/planning/board": <StatusBoard />,
+  "/measurements": <MeasurementBook />,
+  "/bill-tracking": <BillTracking />,
+  "/labour-check": <LabourCheck />,
+  "/scorecard": <Scorecard />,
+  "/settings/team": <TeamSettings />,
   "/deliveries": <Deliveries />,
   "/rate-contracts": <RateContracts />,
   "/ready-to-bill": <ReadyToBill />,
@@ -198,7 +218,7 @@ export default function App() {
                 </RequireAuth>
               }
             >
-              <Route index element={<Dashboard />} />
+              <Route index element={<MyWork />} />
               <Route path="/drill" element={<DrillPage />} />
               <Route
                 path="/surveys/pilot"
@@ -286,6 +306,9 @@ export default function App() {
               {(
                 [
                   ["/rfqs/:id", ["po.view"], <RfqDetail />],
+                  ["/assignments/:id", ["jobs.assign", "planning.view"], <AssignmentPage />],
+                  ["/sites/:id/material-plan", ["planning.view", "indent.view"], <MaterialPlan />],
+                  ["/my-site/:id", ["site.view"], <SupervisorDay />],
                   ["/purchase-orders/new", ["po.edit"], <NewPo />],
                   ["/purchase-orders/:id", ["po.view"], <PoDetail />],
                   ["/stores/:id", ["store.view"], <StoreDetail />],

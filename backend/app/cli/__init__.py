@@ -437,6 +437,10 @@ def main(argv: list[str] | None = None) -> None:
     )
 
     sub.add_parser("make-offer-template", help="Write the default Word template for quotations")
+    sub.add_parser(
+        "seed-demo-team",
+        help="One invented demo user per role (password from DEMO_USER_PASSWORD in .env)",
+    )
 
     for command, (_, label) in POWERPLAY.items():
         p = sub.add_parser(command, help=f"Import a Powerplay Excel export: {label}")
@@ -463,5 +467,12 @@ def main(argv: list[str] | None = None) -> None:
         run_import_offer(args.path, args.again, args.preset)
     elif args.command == "make-offer-template":
         run_make_offer_template()
+    elif args.command == "seed-demo-team":
+        from app.team.demo import seed  # noqa: PLC0415
+
+        with SessionLocal() as db:
+            for line in seed(db):
+                print(line)
+        print("Password: DEMO_USER_PASSWORD from .env (not shown).")
     elif args.command in POWERPLAY:
         run_import_powerplay(args.command, args.path)

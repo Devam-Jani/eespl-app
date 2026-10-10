@@ -6,6 +6,7 @@ import type { FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile, fetchObjectUrl } from "../api";
 import { useAuth } from "../auth";
+import { NegotiationLog } from "../team/Pages";
 import Modal from "../components/Modal";
 import { errorText } from "../format";
 import { loadLookups, MarkupField, money, plain, SectionsEditor, STATUS_BADGE, useLookups } from "./common";
@@ -27,7 +28,8 @@ type Row = {
   lead_id: number | null;
 };
 
-const fmtDate = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata",  day: "2-digit", month: "short", year: "numeric" }) : "—");
+const fmtDate = (d: string | null | undefined) =>
+  d ? new Date(d).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric" }) : "—";
 
 function usePhone(): boolean {
   const q = "(max-width: 760px)";
@@ -318,6 +320,7 @@ export function QuotationEditor() {
   const { id } = useParams();
   const navigate = useNavigate();
   const phone = usePhone();
+  const { can } = useAuth();
   const lookups = useLookups();
   const [q, setQ] = useState<Quotation | null>(null);
   const [html, setHtml] = useState("");
@@ -356,6 +359,7 @@ export function QuotationEditor() {
   if (error && !q) return <div className="alert alert-error">{error}</div>;
   if (!q || !lookups) return <p className="muted">Loading…</p>;
   const base = `/api/quotations/${q.id}`;
+  const canOverride = can("sendcheck.override");
   const header = (
     <div className="page-header q-header">
       <div>
@@ -425,7 +429,26 @@ export function QuotationEditor() {
             onClick={() => {
               const warn = q.items.flatMap((i) => i.checks.map((c) => `${i.name}: ${c}`));
               if (warn.length && !window.confirm(`Check before sending (warnings, not blocks):\n\n${warn.join("\n")}\n\nSend anyway?`)) return;
-              void apply(`${base}/status`, { status: "sent" }, "POST", "Sent: follow-ups are scheduled.");
+              void (async () => {
+                try {
+                  const r = await api<Quotation>(`${base}/status`, { method: "POST", json: { status: "sent" } });
+                  setQ(r);
+                  refreshPreview();
+                  setNote("Sent: follow-ups are scheduled.");
+                } catch (e) {
+                  // the send checklist: the director may send anyway, with a reason (logged)
+                  const text = errorText(e);
+                  const reason =
+                    text.includes("cannot be sent yet") && canOverride
+                      ? window.prompt(`${text}
+
+Send anyway? Give the reason:`)
+                      : null;
+                  if (reason && reason.trim().length >= 5)
+                    void apply(`${base}/status`, { status: "sent", override_reason: reason.trim() }, "POST", "Sent past the checklist (logged).");
+                  else setError(text);
+                }
+              })();
             }}
           >
             Mark sent
@@ -595,6 +618,7 @@ function LetterPanel({ q, lookups, apply }: { q: Quotation; lookups: Lookups; ap
     areas_list: q.areas_list ?? "",
     quote_date: q.quote_date,
     validity_days: String(q.validity_days),
+    guarantee_years: q.guarantee_years ? String(q.guarantee_years) : "",
     letterhead_id: q.letterhead_id ? String(q.letterhead_id) : "",
     salesperson_id: q.salesperson_id ?? "",
     signatory_name: q.signatory_name ?? "",
@@ -616,6 +640,7 @@ function LetterPanel({ q, lookups, apply }: { q: Quotation; lookups: Lookups; ap
           {
             ...f,
             validity_days: Number(f.validity_days),
+            guarantee_years: f.guarantee_years ? Number(f.guarantee_years) : null,
             letterhead_id: f.letterhead_id ? Number(f.letterhead_id) : null,
             salesperson_id: f.salesperson_id || undefined,
             areas_list: f.areas_list || null,
@@ -660,6 +685,10 @@ function LetterPanel({ q, lookups, apply }: { q: Quotation; lookups: Lookups; ap
         <label className="field">
           <span>Valid for (days)</span>
           <input type="number" min={1} max={365} value={f.validity_days} onChange={set("validity_days")} disabled={ro} />
+        </label>
+        <label className="field">
+          <span>Guarantee (years)</span>
+          <input type="number" min={0} max={50} value={f.guarantee_years} onChange={set("guarantee_years")} disabled={ro} placeholder="needed to send" />
         </label>
         <label className="field">
           <span>Letterhead</span>
@@ -1160,7 +1189,8 @@ function FollowPanel({ q, apply }: { q: Quotation; apply: Apply }) {
   }
   return (
     <div>
-      <h2 className="section-title">Follow-ups</h2>
+      <NegotiationLog quotationId={q.id} revisions={q.revisions.filter((r) => r.id !== q.id).map((r) => ({ id: r.id, label: `R${r.revision}` }))} />
+      <h2 className="section-title top-gap">Follow-ups</h2>
       {q.followups.length === 0 ? (
         <p className="muted small">Follow-ups are scheduled when the quotation is sent (days 2, 7, 15 and 30).</p>
       ) : (

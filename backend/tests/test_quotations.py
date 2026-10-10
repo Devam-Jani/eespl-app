@@ -475,6 +475,21 @@ def new_quotation(client, h, lib, items=None, **extra):
     }
     r = client.post("/api/quotations", json=body, headers=h)
     assert r.status_code == 201, r.text
+    q = r.json()
+    # ready for the send checklist: guarantee years, our scope and the client's scope
+    r = client.put(
+        f"/api/quotations/{q['id']}",
+        json={
+            "guarantee_years": 10,
+            "terms": [
+                *q["terms"],
+                {"category": "our_scope", "text": "Invented: we supply and apply."},
+                {"category": "client_scope", "text": "Invented: water and power by the client."},
+            ],
+        },
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
     return r.json()
 
 

@@ -170,6 +170,7 @@ def _tender_out(db: Session, tender: Tender, with_cost: bool) -> TenderOut:
         lost_to=tender.lost_to,
         lost_note=tender.lost_note,
         decided_at=tender.decided_at,
+        guarantee_years=tender.guarantee_years,
         quoted_total=tender.quoted_total,
         tc_template_id=tender.tc_template_id,
         notes=tender.notes,
@@ -460,7 +461,7 @@ def update_tender(
 ) -> TenderOut | TenderCostOut:
     tender = _editable(db, tender_id, view, edit, principal)
     before = _snapshot(tender)
-    changes = body.model_dump(exclude_unset=True, exclude={"member_ids"})
+    changes = body.model_dump(exclude_unset=True, exclude={"member_ids", "override_reason"})
     if changes.get("client_id") is not None and db.get(Client, changes["client_id"]) is None:
         raise unprocessable("Unknown client")
     if changes.get("channel_id") is not None and db.get(Channel, changes["channel_id"]) is None:
@@ -472,6 +473,16 @@ def update_tender(
     if changes.get("owner_id"):
         _check_users(db, [changes["owner_id"]])
     submitting = body.status == "submitted" and tender.status != "submitted"
+    winning = body.status == "won" and tender.status != "won"
+    send_override = None
+    if submitting:
+        from app.team import service as team  # noqa: PLC0415
+
+        if "guarantee_years" in changes:
+            tender.guarantee_years = changes["guarantee_years"]
+        send_override = team.enforce_send_check(
+            db, principal, team.tender_send_check(db, tender), body.override_reason, tender.code
+        )
     for field, value in changes.items():
         if field in ("name", "status") and value is None:
             continue
@@ -492,6 +503,18 @@ def update_tender(
             for uid in dict.fromkeys(body.member_ids)
         ]
     db.flush()
+    if send_override:
+        _record(db, request, principal, "tender.sendcheck_override", tender, after=send_override)
+    if winning:
+        from app.sites.models import Site  # noqa: PLC0415
+        from app.team import service as team  # noqa: PLC0415
+
+        team.on_win(
+            db,
+            tender,
+            db.scalar(select(Site).where(Site.tender_id == tender.id)),
+            principal.user.id,
+        )
     if submitting:
         revision = revisions.submit(db, tender, principal.user.id, None)
         _record(
@@ -747,6 +770,7 @@ def update_lines(
             "client_remarks",
             "our_remarks",
             "our_product",
+            "manufacturer",
         ):
             if name in fields and (fields[name] is not None or name != "sort_order"):
                 setattr(line, name, fields[name])
@@ -1414,6 +1438,13 @@ def submit_tender(
     """Freeze the current revision (R0, R1 ...) and mark the tender submitted."""
     tender = _editable(db, tender_id, view, edit, principal)
     before = tender.status
+    from app.team import service as team  # noqa: PLC0415
+
+    override = team.enforce_send_check(
+        db, principal, team.tender_send_check(db, tender), body.override_reason, tender.code
+    )
+    if override:
+        _record(db, request, principal, "tender.sendcheck_override", tender, after=override)
     revision = revisions.submit(db, tender, principal.user.id, body.note)
     _record(
         db,

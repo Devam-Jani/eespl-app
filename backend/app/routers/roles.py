@@ -6,6 +6,8 @@ from app import audit
 from app.auth.deps import CurrentPrincipal, require_any_permission, require_permission
 from app.auth.rbac import (
     CLIENT_ROLE_CODE,
+    FLOOR_ROLES,
+    SCOPE_RANK,
     client_forbidden,
     permissions_locked,
     ungrantable,
@@ -170,6 +172,19 @@ def set_role_permissions(
             status.HTTP_409_CONFLICT, "This role always has every permission and cannot be edited"
         )
     _validate_grants(db, principal, role, body.permissions)
+    if role.code in FLOOR_ROLES:
+        current = {rp.permission_code: rp.scope for rp in role.permissions}
+        reduced = sorted(
+            code
+            for code, scope in current.items()
+            if code not in body.permissions
+            or SCOPE_RANK[body.permissions[code]] < SCOPE_RANK[scope]
+        )
+        if reduced:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"The {role.name} role cannot lose permissions: {', '.join(reduced)}",
+            )
     before = audit.role_snapshot(role)
     current = {rp.permission_code: rp for rp in role.permissions}
     for code, rp in current.items():

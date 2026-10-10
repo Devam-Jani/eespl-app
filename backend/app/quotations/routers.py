@@ -152,7 +152,7 @@ def _q_out(db, q: Quotation, principal) -> dict:
             for c in (
                 "id code revision is_latest previous_id lead_id client_id survey_id tender_id site_id letterhead_id "
                 "salesperson_id client_firm client_city client_state attention project brand areas_list quote_date "
-                "validity_days status lost_reason lost_note sent_at decided_at show_amounts letter_template_id opening "
+                "validity_days guarantee_years status lost_reason lost_note sent_at decided_at show_amounts letter_template_id opening "
                 "subject body enclosures signatory_name signatory_designation terms references references_title notes"
             ).split()
         },
@@ -1299,6 +1299,7 @@ class QuotationUpdate(BaseModel):
     areas_list: str | None = None
     quote_date: date | None = None
     validity_days: int | None = Field(None, ge=1, le=365)
+    guarantee_years: int | None = Field(None, ge=0, le=50)
     show_amounts: bool | None = None
     opening: str | None = None
     subject: str | None = None
@@ -1854,6 +1855,8 @@ class StatusIn(BaseModel):
     lost_note: str | None = None
     site_id: int | None = None
     choices: dict[int, str] | None = None  # item id -> the option the client chose
+    # the send checklist: sending past it needs sendcheck.override and a reason (logged)
+    override_reason: str | None = Field(None, max_length=1000)
 
 
 def _issue(db, q: Quotation, user_id) -> list[QuotationFile]:
@@ -1964,6 +1967,21 @@ def set_status(
     else:
         _send_scope(db, q, principal)
         if body.status == "sent":
+            from app.team import service as team  # noqa: PLC0415
+
+            override = team.enforce_send_check(
+                db, principal, team.quotation_send_check(q), body.override_reason, q.code
+            )
+            if override:
+                record(
+                    db,
+                    request,
+                    principal,
+                    "quotation.sendcheck_override",
+                    "quotation",
+                    q.id,
+                    after=override,
+                )
             has_files = db.scalar(select(func.count()).where(QuotationFile.quotation_id == q.id))
             if not has_files:
                 _issue(db, q, principal.user.id)

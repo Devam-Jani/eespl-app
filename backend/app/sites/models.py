@@ -109,6 +109,12 @@ class Site(Tracked, Base):
     # who may confirm deliveries when the supervisor is away (labour leader, applicator)
     receiver_name: Mapped[str | None] = mapped_column(String(100))
     receiver_phone: Mapped[str | None] = mapped_column(String(20))
+    # the site status board (planning): upcoming, ongoing, completed_to_bill; empty: not on it
+    board_status: Mapped[str | None] = mapped_column(String(20))
+    board_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    board_updated_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
     notes: Mapped[str | None] = mapped_column(Text)
     source: Mapped[str] = mapped_column(String(10), server_default="app")
     source_ref: Mapped[str | None] = mapped_column(String(50), unique=True)  # Powerplay id

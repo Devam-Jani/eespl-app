@@ -398,6 +398,7 @@ def copy_quotation(db: Session, q: Quotation, user_id) -> Quotation:
         for c in (
             "code lead_id client_id survey_id tender_id letterhead_id salesperson_id client_firm "
             "client_city client_state attention project brand areas_list validity_days "
+            "guarantee_years "
             "show_amounts "
             "letter_template_id opening subject body enclosures signatory_name "
             "signatory_designation terms references references_title notes"
@@ -675,6 +676,9 @@ def mark_won(
     _activity(
         db, q, f"Quotation {q.code} R{q.revision} won: {tender.code}, site {site.code}", user_id
     )
+    from app.team import service as team  # noqa: PLC0415
+
+    team.on_win(db, tender, site, user_id, quotation=q)
     return tender, site
 
 

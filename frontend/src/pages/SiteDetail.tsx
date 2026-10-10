@@ -12,6 +12,7 @@ import TasksTab from "./site/TasksTab";
 // three.js is only downloaded when the 3D tab is opened
 const Site3DTab = lazy(() => import("./site/Site3DTab"));
 const MaterialTab = lazy(() => import("./site/MaterialTab"));
+const SiteVisits = lazy(() => import("../team/Pages").then((m) => ({ default: m.SiteVisits })));
 const SiteControlStrip = lazy(() => import("../sitecontrol/Pages").then((m) => ({ default: m.SiteControlStrip })));
 // the execution tabs are their own chunk too
 const DprTab = lazy(() => import("./site/DprTab"));
@@ -95,6 +96,24 @@ export default function SiteDetail() {
                 <Link to={`/surveys?site=${site.id}`}>Surveys</Link> · <Link to={`/sites/${site.id}/fronts`}>Work fronts</Link>
               </>
             )}
+            {can("planning.view", "indent.view") && (
+              <>
+                {" · "}
+                <Link to={`/sites/${site.id}/material-plan`}>Material plan</Link>
+              </>
+            )}
+            {can("measurement.view") && (
+              <>
+                {" · "}
+                <Link to={`/measurements?site=${site.id}`}>Measurement book</Link>
+              </>
+            )}
+            {can("site.update") && (
+              <>
+                {" · "}
+                <Link to={`/my-site/${site.id}`}>My site today</Link>
+              </>
+            )}
           </p>
         </div>
         <div className="rate-badge">
@@ -105,6 +124,7 @@ export default function SiteDetail() {
       {error && <div className="alert alert-error">{error}</div>}
       <Suspense fallback={null}>
         <SiteControlStrip siteId={site.id} />
+        <SiteVisits siteId={site.id} />
       </Suspense>
       {(() => {
         const tabs = (
