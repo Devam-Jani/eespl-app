@@ -36,6 +36,7 @@ from app.masters.routers import (
 from app.material import routers as material
 from app.portal import routers as portal
 from app.portal import staff as portal_staff
+from app.process import routers as process
 from app.quotations import routers as quotations
 from app.routers import audit, permissions, roles, users
 from app.sitecontrol import routers as sitecontrol
@@ -95,6 +96,7 @@ for _r in (
     sitecontrol.router,
     sitecontrol.public,
     team.router,
+    process.router,
     analytics.dashboard,
     analytics.router,
     portal_staff.router,

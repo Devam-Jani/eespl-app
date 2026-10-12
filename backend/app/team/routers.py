@@ -204,6 +204,9 @@ def create_enquiry(
         )
     )
     record(db, request, principal, "lead.create", "lead", lead.id, after={"unassigned": True})
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.enquiry_unassigned(db, lead, principal.user.id)  # planning: allocate a salesperson
     db.commit()
     return {"id": lead.id, "code": lead.code}
 
@@ -253,7 +256,6 @@ def allocate(
     _: Allocate,
 ) -> dict:
     from app.crm.models import Lead, LeadActivity  # noqa: PLC0415
-    from app.portal.service import notify  # noqa: PLC0415
 
     lead = db.get(Lead, lead_id)
     if lead is None:
@@ -270,13 +272,10 @@ def allocate(
             by=principal.user.id,
         )
     )
-    notify(
-        db,
-        [owner.id],
-        "lead_allocated",
-        f"New enquiry {lead.code} {lead.contact_name}: contact the client",
-        link=f"/leads/{lead.id}",
-    )
+    from app.process import hooks  # noqa: PLC0415
+
+    db.flush()
+    hooks.lead_allocated(db, lead, principal.user.id)  # the salesperson: prepare the quotation
     record(
         db, request, principal, "lead.allocate", "lead", lead.id, after={"owner": owner.full_name}
     )
@@ -472,6 +471,9 @@ async def log_visit(
         v.id,
         after={"site": site_id, "lead": lead_id},
     )
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.site_visit_logged(db, v, principal.user.id)
     db.commit()
     return _visit_out(db, v)
 
@@ -672,16 +674,20 @@ def material_plan(
     principal: CurrentPrincipal,
     scope: Annotated[str, Depends(require_any_permission("planning.view", "indent.view"))],
     by: str = "stage",
+    node: int | None = None,
 ) -> dict:
     site = _site(
         db, site_id, "all" if "planning.view" in principal.permissions else scope, principal
     )
-    return jsonable_encoder(team.material_plan(db, site, "month" if by == "month" else "stage"))
+    return jsonable_encoder(
+        team.material_plan(db, site, "month" if by == "month" else "stage", node)
+    )
 
 
 class PlanIndentIn(BaseModel):
     lines: list[dict] = Field(min_length=1)  # [{product_id, qty}]
     submit: bool = True
+    node_ids: list[int] = []  # the ready work fronts it is for (closes their material to-dos)
 
 
 @router.post("/material-plan/{site_id}/indent", status_code=status.HTTP_201_CREATED)
@@ -711,6 +717,12 @@ def plan_indent(
         principal,
         scope,
     )
+    if body.node_ids:
+        from app.material.models import Indent  # noqa: PLC0415
+        from app.process import hooks  # noqa: PLC0415
+
+        hooks.indent_created(db, db.get(Indent, out.id), body.node_ids, principal.user.id)
+        db.commit()
     return {"id": out.id, "code": out.code}
 
 
@@ -958,6 +970,11 @@ def diff_reason(
         ln.id,
         after={"reason": body.reason},
     )
+    from app.finance.models import RaBill  # noqa: PLC0415
+    from app.process import hooks  # noqa: PLC0415
+
+    ra = db.get(RaBill, ln.ra_bill_id)
+    hooks.diff_reason_given(db, ra.id, ra.site_id, principal.user.id)
     db.commit()
     return {"id": ln.id, "reason": ln.client_diff_reason}
 
@@ -1013,6 +1030,9 @@ def mark_checked(
     if b is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Bill not found")
     b.billing_checked_by, b.billing_checked_at = principal.user.id, team.now()
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.labour_checked(db, b, principal.user.id)
     record(
         db,
         request,
@@ -1118,6 +1138,9 @@ def add_negotiation(
     db.add(n)
     db.flush()
     record(db, request, principal, "negotiation.add", "negotiation", n.id, after=body.model_dump())
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.negotiation_logged(db, n, principal.user.id)  # estimator and salesperson: revise
     db.commit()
     return _neg_out(db, n)
 
@@ -1461,6 +1484,9 @@ async def client_certification(
             "via": "staff",
         },
     )
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.bill_certified(db, b, principal.user.id)  # less than billed: the reason is asked
     db.commit()
     return jsonable_encoder(
         {

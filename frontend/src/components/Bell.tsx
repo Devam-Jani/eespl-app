@@ -7,7 +7,7 @@ type Note = { id: number; kind: string; title: string; link: string | null; site
 const POLL_MS = 60_000;
 
 /** The in-app notifications (both the staff app and the client portal). */
-export default function Bell() {
+export default function Bell({ allLink }: { allLink?: string } = {}) {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<{ unread: number; items: Note[] }>({ unread: 0, items: [] });
   const navigate = useNavigate();
@@ -52,10 +52,17 @@ export default function Bell() {
             )}
           </div>
           {data.items.length === 0 && <p className="muted small">Nothing yet.</p>}
+          {allLink && (
+            <button className="btn btn-small btn-ghost" onClick={() => (setOpen(false), navigate(allLink))}>
+              See all, with filters →
+            </button>
+          )}
           {data.items.map((n) => (
             <button key={n.id} className={`bell-item ${n.read ? "" : "unread"}`} onClick={() => void go(n)}>
               <span>{n.title}</span>
-              <span className="muted small">{new Date(n.created_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",  day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+              <span className="muted small">
+                {new Date(n.created_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+              </span>
             </button>
           ))}
         </div>

@@ -610,6 +610,9 @@ def submit_ra(
         f"{b.code} submitted for certification",
         f"/portal/sites/{b.site_id}?tab=billing",
     )
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.bill_sent(db, b, principal.user.id)  # the salesperson: follow up for certification
     db.commit()
     return _ra_out(db, b)
 
@@ -654,6 +657,9 @@ def certify_ra(
         b.id,
         after={"certified_gross": str(b.certified_gross), "by": body.certified_by_client},
     )
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.bill_certified(db, b, principal.user.id)
     db.commit()
     return _ra_out(db, b)
 
@@ -691,6 +697,9 @@ def confirm_client(
         f"{b.code}: your certification was confirmed",
         f"/portal/sites/{b.site_id}?tab=billing",
     )
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.bill_certified(db, b, principal.user.id)  # the client verified in the portal
     db.commit()
     return _ra_out(db, b)
 
@@ -1212,6 +1221,9 @@ def create_receipt(
         r.id,
         after=body.model_dump(mode="json"),
     )
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.payment_received(db, r, r.site_id, db.get(Client, body.client_id).name)
     db.commit()
     return _receipt_out(db, r)
 

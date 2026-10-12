@@ -1193,6 +1193,45 @@ SECTIONS: dict[str, tuple[str, Callable[[Session, Principal], list[Item]]]] = {
 ALIASES = {"super_admin": "director"}
 
 
+def process_items(db: Session, p: Principal) -> list[Item]:
+    """The open to-dos the process rules gave this person: each closes by itself when its action
+    is done (or with "done")."""
+    from app.portal.models import Notification  # noqa: PLC0415
+    from app.process.models import ProcessRule  # noqa: PLC0415
+
+    titles = dict(db.execute(select(ProcessRule.code, ProcessRule.title)).all())
+    out = []
+    for n in db.scalars(
+        select(Notification)
+        .where(
+            Notification.user_id == p.user.id,
+            Notification.needs_action,
+            Notification.closed_at.is_(None),
+            Notification.rule_code.is_not(None),
+        )
+        .order_by(Notification.created_at)
+    ):
+        why = (
+            titles.get(n.rule_code, n.rule_code)
+            + (" · escalated" if n.escalated else "")
+            + (f" · {n.note}" if n.note else "")
+        )
+        it = item(
+            f"process:{n.rule_code}",
+            str(n.id),
+            n.title,
+            why,
+            n.link or "/notifications",
+            n.action_label or "Open",
+            n.created_at,
+            "danger" if n.escalated else "warn",
+            "/notifications",
+        )
+        it["notification_id"] = n.id
+        out.append(it)
+    return out
+
+
 def build(db: Session, p: Principal) -> dict:
     codes = []
     for r in p.user.roles:
@@ -1210,6 +1249,14 @@ def build(db: Session, p: Principal) -> dict:
         sections.append({"role": code, "title": title, "items": items})
         for i in items:
             counts[i["menu"]] = counts.get(i["menu"], 0) + 1
+    # a process to-do already on the role's list (same link) is not shown twice
+    links = {i["link"] for s in sections for i in s["items"]}
+    process = [i for i in process_items(db, p) if i["link"] not in links]
+    if process:
+        sections.insert(
+            0, {"role": "process", "title": "From the process (to do until done)", "items": process}
+        )
+        counts["/notifications"] = counts.get("/notifications", 0) + len(process)
     total = sum(len(s["items"]) for s in sections)
     counts["/my-work"] = total
     return {"sections": sections, "counts": counts, "total": total}

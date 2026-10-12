@@ -1,5 +1,6 @@
-"""The background worker (compose service `worker`): the Kylas push / poll sweeps and the scheduled
-analytics jobs (alerts every hour, summary tables nightly, the Monday management summary).
+"""The background worker (compose service `worker`): the Kylas push / poll sweeps, the scheduled
+analytics jobs (alerts every hour, summary tables nightly, the Monday management summary) and
+the process clock (escalations, emails, the daily summary) every minute.
 
     python -m app.worker          # loop
     python -m app.worker --once   # one round of everything that is due, then exit
@@ -12,6 +13,7 @@ import time
 
 from app.analytics import worker as analytics
 from app.crm import worker as kylas
+from app.process import worker as process
 from app.quotations import worker as quotations
 
 TICK = 60
@@ -32,7 +34,7 @@ def main() -> None:
     signal.signal(signal.SIGINT, _request_stop)
     last_poll = 0.0
     while True:
-        jobs = [kylas.push_sweep, analytics.run_due, quotations.expire_sweep]
+        jobs = [kylas.push_sweep, analytics.run_due, quotations.expire_sweep, process.process_sweep]
         if time.time() - last_poll >= kylas.POLL_EVERY or args.once:
             jobs.append(kylas.poll_sweep)
         for job in jobs:

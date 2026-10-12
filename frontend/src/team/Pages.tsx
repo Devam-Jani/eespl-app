@@ -54,6 +54,7 @@ export type WorkItem = {
   action: string;
   severity: "normal" | "warn" | "danger";
   menu: string;
+  notification_id?: number;
 };
 export type MyWorkData = { sections: { role: string; title: string; items: WorkItem[] }[]; counts: Record<string, number>; total: number };
 
@@ -106,9 +107,16 @@ export function MyWork() {
                   <span className={`mywork-age ${i.age_days !== null && i.age_days > 7 ? "text-danger" : "muted"}`}>
                     {i.age_days === null ? "" : i.age_days === 0 ? "today" : `${i.age_days} d`}
                   </span>
-                  <Link className="btn btn-small btn-primary mywork-action" to={i.link}>
-                    {i.action}
-                  </Link>
+                  <span className="mywork-action">
+                    <Link className="btn btn-small btn-primary" to={i.link}>
+                      {i.action}
+                    </Link>
+                    {i.notification_id && (
+                      <button className="btn btn-small" onClick={() => void api(`/api/process/notifications/${i.notification_id}/done`, { method: "POST" }).then(reload)}>
+                        Done
+                      </button>
+                    )}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -481,12 +489,17 @@ export function StatusBoard() {
 type PlanRow = { product_id: number; product: string; unit: string; planned: string; ready: string };
 type Plan = {
   by: string;
+  node_id: number | null;
+  area: string | null;
+  wastage: { application: string; min: number; max: number; used: number } | null;
   groups: { key: string; label: string; rows: PlanRow[] }[];
   products: (PlanRow & { indented: string; delivered: string; issued: string; balance: string; to_indent: string })[];
 };
 
 export function MaterialPlan() {
   const { id } = useParams();
+  const [search] = useSearchParams();
+  const node = search.get("node");
   const { can } = useAuth();
   const navigate = useNavigate();
   const [by, setBy] = useState("stage");
@@ -494,16 +507,16 @@ export function MaterialPlan() {
   const [qty, setQty] = useState<Record<number, string>>({});
   const [error, setError] = useState("");
   useEffect(() => {
-    api<Plan>(`/api/team/material-plan/${id}?by=${by}`).then(
+    api<Plan>(`/api/team/material-plan/${id}?by=${by}${node ? `&node=${node}` : ""}`).then(
       (p) => (setPlan(p), setQty(Object.fromEntries(p.products.filter((x) => Number(x.to_indent) > 0).map((x) => [x.product_id, String(Number(x.to_indent))])))),
       (e) => setError(errorText(e)),
     );
-  }, [id, by]);
+  }, [id, by, node]);
   async function indent() {
     try {
       const r = await api<{ id: number; code: string }>(`/api/team/material-plan/${id}/indent`, {
         method: "POST",
-        json: { lines: Object.entries(qty).map(([product_id, q]) => ({ product_id: Number(product_id), qty: q })), submit: true },
+        json: { lines: Object.entries(qty).map(([product_id, q]) => ({ product_id: Number(product_id), qty: q })), submit: true, node_ids: node ? [Number(node)] : [] },
       });
       navigate(`/indents/${r.id}`);
     } catch (e) {
@@ -532,6 +545,14 @@ export function MaterialPlan() {
         From the survey quantities and the systems' consumption (with wastage). "Ready" is the part on work fronts marked ready; "to indent" is what of that is not indented yet.
       </p>
       {error && <div className="alert alert-error">{error}</div>}
+      {plan?.area && (
+        <div className="alert alert-ok">
+          For the ready work front <b>{plan.area}</b>
+          {plan.wastage
+            ? ` · wastage for ${plan.wastage.application}: ${plan.wastage.min}–${plan.wastage.max}% (planned at ${plan.wastage.used}%)`
+            : " · wastage from the system"}. <Link to={`/sites/${id}/material-plan`}>Whole site</Link>
+        </div>
+      )}
       {plan && (
         <>
           <div className="table-wrap card">

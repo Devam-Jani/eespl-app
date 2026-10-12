@@ -67,7 +67,6 @@ def role_users(db: Session, *codes: str) -> list[uuid.UUID]:
 def on_win(db: Session, tender: Tender, site: Site | None, user_id, quotation=None) -> None:
     """A won quotation or tender: a decision for the director (or planning, when allowed) to pick
     its salesperson and site engineer. One per tender."""
-    from app.portal.service import notify  # noqa: PLC0415
 
     if db.scalar(select(JobAssignment.id).where(JobAssignment.tender_id == tender.id)):
         return
@@ -83,21 +82,15 @@ def on_win(db: Session, tender: Tender, site: Site | None, user_id, quotation=No
     )
     db.add(a)
     db.flush()
-    notify(
-        db,
-        holders(db, "jobs.assign"),
-        "job_won",
-        f"Won: {a.title}. Pick the salesperson and the site engineer",
-        link="/my-work",
-        site_id=a.site_id,
-    )
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.job_won(db, a)  # the director: assign the team (escalates to office_admin)
 
 
 def decide(db: Session, a: JobAssignment, salesperson_id, engineer_id, user_id) -> JobAssignment:
     """The site is made or linked, both become its members (the engineer as in-charge), it goes on
     the status board as upcoming, and the salesperson gets the first site visit to do."""
     from app.material import service as material  # noqa: PLC0415
-    from app.portal.service import notify  # noqa: PLC0415
     from app.sites import service as site_service  # noqa: PLC0415
 
     if a.status != "pending":
@@ -145,22 +138,9 @@ def decide(db: Session, a: JobAssignment, salesperson_id, engineer_id, user_id) 
     a.salesperson_id, a.engineer_id = salesperson_id, engineer_id
     a.status, a.decided_by, a.decided_at = "done", user_id, now()
     db.flush()
-    notify(
-        db,
-        [salesperson_id],
-        "first_visit",
-        f"{site.code} {site.name} is yours: log the first site visit",
-        link=f"/sites/{site.id}?visit=1",
-        site_id=site.id,
-    )
-    notify(
-        db,
-        [engineer_id],
-        "site_assigned",
-        f"You are the site engineer of {site.code} {site.name}",
-        link=f"/sites/{site.id}",
-        site_id=site.id,
-    )
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.job_assigned(db, a, user_id)  # first visit, AutoCAD and survey, upcoming on the board
     return a
 
 
@@ -213,14 +193,26 @@ def quotation_send_check(q) -> list[str]:
 
 
 def enforce_send_check(
-    db: Session, principal: Principal, missing: list[str], override_reason: str | None, what: str
+    db: Session,
+    principal: Principal,
+    missing: list[str],
+    override_reason: str | None,
+    what: str,
+    subject: str | None = None,
+    link: str | None = None,
+    site_id: int | None = None,
 ) -> dict | None:
     """Missing items block sending; the director (sendcheck.override) can send anyway with a
-    reason, which is logged. Returns the override record for the audit log."""
+    reason, which is logged. Returns the override record for the audit log. A block tells the
+    author what is missing (process rule 3)."""
     if not missing:
         return None
     reason = (override_reason or "").strip()
     if not reason:
+        if subject:
+            from app.process import hooks  # noqa: PLC0415
+
+            hooks.send_blocked(principal, what, subject, link or "/my-work", missing, site_id)
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             f"{what} cannot be sent yet: " + "; ".join(missing),
@@ -340,10 +332,13 @@ def book_from_ready(db: Session, ready, user_id=None) -> Measurement | None:
 # --- material plan -------------------------------------------------------------------------------
 
 
-def material_plan(db: Session, site: Site, by: str = "stage") -> dict:
+def material_plan(db: Session, site: Site, by: str = "stage", node_id: int | None = None) -> dict:
     """Per stage (BOQ item) or month: the planned quantity of each product from the survey
     quantities (area scopes) and the system's consumption, and what of it is on ready work
-    fronts; per product: indented, delivered, issued, the balance and what to indent."""
+    fronts; per product: indented, delivered, issued, the balance and what to indent. For one
+    area (a ready work front) the wastage of its application is used (raft 5-7 %, footing
+    12-15 %: the upper figure, from Settings > Process rules)."""
+    from app.masters.models import SystemComponent  # noqa: PLC0415
     from app.material.models import (
         Indent,
         IndentLine,
@@ -352,19 +347,31 @@ def material_plan(db: Session, site: Site, by: str = "stage") -> dict:
         StockLedger,
         Store,  # noqa: PLC0415
     )
-    from app.sitecontrol.service import _expected_per_sqm  # noqa: PLC0415
+    from app.process.engine import wastage_for  # noqa: PLC0415
+    from app.sitecontrol.service import node_label  # noqa: PLC0415
 
     groups: dict[str, dict] = {}
     totals: dict[int, dict] = {}
+    applied: dict[int, tuple[str, dict]] = {}
     for sc, boq in db.execute(
         select(AreaScope, BoqLine)
         .join(BoqLine, BoqLine.id == AreaScope.boq_line_id)
         .where(AreaScope.site_id == site.id)
     ).all():
-        if not boq.system_id:
+        if not boq.system_id or (node_id and sc.node_id != node_id):
             continue
         node = db.get(SiteNode, sc.node_id)
         ready = bool(node and node.front_ready)
+        app_w = wastage_for(db, f"{node_label(db, node)} {node.kind}") if node else None
+        if app_w:
+            applied[node.id] = app_w
+        per_sqm = {
+            c.product_id: Decimal(c.consumption_per_unit)
+            * (1 + Decimal(str(app_w[1]["max"] if app_w else (c.wastage_percent or 0))) / 100)
+            for c in db.scalars(
+                select(SystemComponent).where(SystemComponent.system_id == boq.system_id)
+            )
+        }
         if by == "month":
             start = db.scalar(
                 select(func.min(Task.planned_start)).where(Task.area_scope_id == sc.id)
@@ -374,7 +381,7 @@ def material_plan(db: Session, site: Site, by: str = "stage") -> dict:
         else:
             key, label = f"boq{boq.id}", (boq.client_item_no or "") + " " + boq.description[:80]
         g = groups.setdefault(key, {"key": key, "label": label.strip(), "rows": {}})
-        for product_id, per in _expected_per_sqm(db, boq.system_id).items():
+        for product_id, per in per_sqm.items():
             qty = Decimal(sc.qty) * per
             r = g["rows"].setdefault(product_id, {"planned": ZERO, "ready": ZERO})
             r["planned"] += qty
@@ -452,7 +459,19 @@ def material_plan(db: Session, site: Site, by: str = "stage") -> dict:
                 ],
             }
         )
-    return {"site_id": site.id, "by": by, "groups": out_groups, "products": products}
+    wastage = None
+    if node_id and node_id in applied:
+        name, w = applied[node_id]
+        wastage = {"application": name, "min": w["min"], "max": w["max"], "used": w["max"]}
+    return {
+        "site_id": site.id,
+        "by": by,
+        "node_id": node_id,
+        "area": node_label(db, db.get(SiteNode, node_id)) if node_id else None,
+        "wastage": wastage,
+        "groups": out_groups,
+        "products": products,
+    }
 
 
 # --- the closure scorecard -----------------------------------------------------------------------

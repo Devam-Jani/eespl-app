@@ -518,6 +518,10 @@ async def set_front_ready(
         before,
         {"node": node.id, "front_ready": ready},
     )
+    if ready:
+        from app.process import hooks  # noqa: PLC0415
+
+        hooks.front_ready(db, node, principal.user.id)  # planning: the material plan for it
     db.commit()
     return _nodes_out(db, site)
 

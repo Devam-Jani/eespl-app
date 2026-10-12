@@ -671,6 +671,9 @@ def submit(
 
     s.status, s.submitted_at = "submitted", now()
     record(db, request, principal, "survey.submit", "survey", s.id)
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.survey_done(db, s, principal.user.id)  # closes the engineer's survey to-do
     db.commit()
     return _out(db, s, principal)
 

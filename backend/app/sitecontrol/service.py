@@ -287,6 +287,9 @@ def on_scope_refresh(db: Session, scope: AreaScope, before: Decimal) -> ReadyToB
     from app.team.service import book_from_ready  # noqa: PLC0415
 
     book_from_ready(db, item)  # the measurement book: what RA bills take their quantities from
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.stage_done(db, item)  # billing: make the stage bill (director after 7 days)
     return item
 
 

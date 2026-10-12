@@ -1043,6 +1043,9 @@ def approve_new_area(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unknown kind of place")
     node = sc.approve_area(db, r, principal.user.id, body.parent_node_id, body.kind)
     record(db, request, principal, "new_area.approve", "new_area", r.id, after={"node": node.id})
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.new_area_decided(db, r, principal.user.id)
     db.commit()
     return jsonable_encoder(_area_out(db, r))
 
@@ -1074,6 +1077,9 @@ def reject_new_area(
         r.id,
         after={"moved_to": body.move_to_node_id},
     )
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.new_area_decided(db, r, principal.user.id)
     db.commit()
     return jsonable_encoder(_area_out(db, r))
 
@@ -1172,6 +1178,9 @@ def override_productivity(
         b.id,
         after={"note": body.note, "check": b.productivity},
     )
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.labour_decided(db, b, principal.user.id)
     db.commit()
     return jsonable_encoder(
         {

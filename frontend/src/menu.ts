@@ -13,6 +13,8 @@ const STAFF = ["dashboard.view", "site.view", "leads.view", "tender.view", "bill
 
 export const MENU: MenuItem[] = [
   { to: "/my-work", label: "My work", perms: STAFF, section: "Modules" },
+  { to: "/notifications", label: "Notifications", perms: STAFF, section: "Modules" },
+  { to: "/escalated", label: "Escalated (all sites)", perms: ["process.escalations", "process.rules"], section: "Modules" },
   { to: "/enquiries", label: "Enquiries to allocate", perms: ["leads.allocate"], section: "Modules" },
   { to: "/planning/board", label: "Site status board", perms: ["planning.view", "site.view"], section: "Modules" },
   { to: "/measurements", label: "Measurement book", perms: ["measurement.view"], section: "Modules" },
@@ -20,6 +22,8 @@ export const MENU: MenuItem[] = [
   { to: "/labour-check", label: "Labour bill check", perms: ["labourcheck.check"], section: "Modules" },
   { to: "/scorecard", label: "Closure scorecard", perms: ["scorecard.view"], section: "Analytics" },
   { to: "/settings/team", label: "Team", perms: ["planning.edit", "settings.company", "grants.manage"], section: "Settings" },
+  { to: "/settings/process", label: "Process rules", perms: ["process.rules"], section: "Settings" },
+  { to: "/my-notifications", label: "My notifications", perms: STAFF, section: "Settings" },
   { to: "/dashboard", label: "Dashboard", perms: ["dashboard.company", "dashboard.sales", "dashboard.site", "dashboard.finance", "dashboard.purchase"], section: "Modules" },
   { to: "/analytics/sites", label: "Sites", perms: ["dashboard.company", "dashboard.site"], section: "Analytics" },
   { to: "/analytics/finance", label: "Finance", perms: ["dashboard.company", "dashboard.finance"], section: "Analytics" },

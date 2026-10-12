@@ -62,6 +62,11 @@ const Productivity = lazy(() => sc().then((m) => ({ default: m.Productivity })))
 const Consumption = lazy(() => sc().then((m) => ({ default: m.Consumption })));
 const SiteControlSettings = lazy(() => sc().then((m) => ({ default: m.SiteControlSettings })));
 const WorkFronts = lazy(() => import("./pages/site/WorkFronts"));
+const pr = () => import("./process/Pages");
+const Notifications = lazy(() => pr().then((m) => ({ default: m.Notifications })));
+const Escalated = lazy(() => pr().then((m) => ({ default: m.Escalated })));
+const ProcessRules = lazy(() => pr().then((m) => ({ default: m.ProcessRules })));
+const MyNotificationSettings = lazy(() => pr().then((m) => ({ default: m.MyNotificationSettings })));
 const tm = () => import("./team/Pages");
 const MyWork = lazy(() => tm().then((m) => ({ default: m.MyWork })));
 const Enquiries = lazy(() => tm().then((m) => ({ default: m.Enquiries })));
@@ -131,6 +136,10 @@ const PAGES: Record<string, JSX.Element> = {
   "/surveys": <SurveysList />,
   "/quotations": <QuotationsList />,
   "/my-work": <MyWork />,
+  "/notifications": <Notifications />,
+  "/escalated": <Escalated />,
+  "/settings/process": <ProcessRules />,
+  "/my-notifications": <MyNotificationSettings />,
   "/enquiries": <Enquiries />,
   "/planning/board": <StatusBoard />,
   "/measurements": <MeasurementBook />,

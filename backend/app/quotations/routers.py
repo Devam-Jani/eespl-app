@@ -1156,6 +1156,9 @@ def create_quotation(
         q.id,
         after={"code": q.code, "items": len(q.items)},
     )
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.quotation_created(db, q, principal.user.id)
     db.commit()
     return _q_out(db, q, principal)
 
@@ -1264,6 +1267,9 @@ def followup_done(
     record(
         db, request, principal, "quotation.followup", "quotation", q.id, after={"followup": f.id}
     )
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.followup_done(db, f, principal.user.id)
     db.commit()
     return {"ok": True}
 
@@ -1816,6 +1822,10 @@ def new_revision(
     if q.status == "won":
         raise HTTPException(status.HTTP_409_CONFLICT, "A won quotation is not revised")
     new = svc.copy_quotation(db, q, principal.user.id)
+    from app.process import hooks  # noqa: PLC0415
+
+    db.flush()
+    hooks.quotation_revised(db, q, new, principal.user.id)
     if q.status in svc.OPEN_STATUSES:
         q.status = "negotiation" if q.status == "sent" else q.status
     record(
@@ -1970,7 +1980,14 @@ def set_status(
             from app.team import service as team  # noqa: PLC0415
 
             override = team.enforce_send_check(
-                db, principal, team.quotation_send_check(q), body.override_reason, q.code
+                db,
+                principal,
+                team.quotation_send_check(q),
+                body.override_reason,
+                q.code,
+                subject=f"quotation:{q.code}",
+                link=f"/quotations/{q.id}",
+                site_id=q.site_id,
             )
             if override:
                 record(

@@ -59,7 +59,7 @@ export default function Layout() {
             <strong>{me?.user.full_name}</strong>
             <span className="muted">{me?.roles.map((r) => r.name).join(", ") || "No role"}</span>
           </div>
-          <Bell />
+          <Bell allLink="/notifications" />
           <button className="btn btn-ghost" onClick={() => void logout()}>
             Sign out
           </button>

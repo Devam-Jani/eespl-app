@@ -135,6 +135,9 @@ def poll_leads(db: Session, client: KylasClient, report: PollReport) -> None:
             lead.quotation_requested_at = now()
             _note(db, lead, "Kylas moved the lead to the quotation stage: make the quotation")
             report.quotation_requested += 1
+            from app.process import hooks  # noqa: PLC0415
+
+            hooks.kylas_quotation(db, lead)  # the salesperson (planning if none): make it
         outcome, reason = classify(body, p.kylas_junk_reasons if p else [])
         if outcome == "converted" and lead.kylas_converted_at is None:
             lead.kylas_converted_at = now()

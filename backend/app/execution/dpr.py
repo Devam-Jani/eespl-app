@@ -327,6 +327,9 @@ def save_dpr(
         d.status, d.submitted_by, d.submitted_at = "submitted", principal.user.id, svc.now()
         d.auto = svc.day_activity(db, site.id, day)
         db.flush()
+        from app.process import hooks  # noqa: PLC0415
+
+        hooks.dpr_submitted(db, d, principal.user.id)  # the engineer: approve or return
     db.flush()
     record(
         db,
@@ -365,6 +368,9 @@ def acknowledge(
     d.status, d.acknowledged_by, d.acknowledged_at = "acknowledged", principal.user.id, svc.now()
     d.return_comment = None
     apply_lines(db, d)
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.dpr_reviewed(db, d, principal.user.id)
     record(db, request, principal, "dpr.acknowledge", "dpr", d.id)
     db.commit()
     return _out(db, site, d.on_date, d, principal)
@@ -394,6 +400,9 @@ def return_dpr(
         raise svc.conflict(f"The DPR is {d.status}")
     d.status, d.return_comment = "returned", body.comment.strip()
     d.returned_by, d.returned_at = principal.user.id, svc.now()
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.dpr_reviewed(db, d, principal.user.id)
     notify(
         db,
         [d.submitted_by],
