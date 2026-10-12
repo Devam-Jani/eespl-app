@@ -119,6 +119,11 @@ class DprLine(Base):
     qty: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
     unit: Mapped[str | None] = mapped_column(String(20))
     labour_count: Mapped[int | None] = mapped_column()
+    # the scope (BOQ item on the place) the quantity counts for; set when the report is approved
+    area_scope_id: Mapped[int | None] = mapped_column(
+        ForeignKey("area_scopes.id", ondelete="SET NULL")
+    )
+    applied: Mapped[bool] = mapped_column(Boolean, server_default="false")
 
 
 class DprPhoto(Tracked, Base):

@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     kylas_api_key: SecretStr | None = None
     # demo users (seed-demo-team), read from .env and never printed
     demo_user_password: SecretStr | None = None
+    # the director (Ankur Sir): his user is made only when DIRECTOR_EMAIL is set in .env
+    director_email: str | None = None
+    director_name: str = "Ankur Shah"
     kylas_timeout_seconds: float = 20
 
     # Claude vision for survey photo suggestions (off unless enabled in survey settings). The key

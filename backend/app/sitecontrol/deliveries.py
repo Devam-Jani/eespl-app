@@ -276,7 +276,7 @@ def is_listed(
     if user is not None and (
         user.id == site.site_incharge_id
         or db.scalar(
-            select(SiteMember.id).where(
+            select(SiteMember.site_id).where(
                 SiteMember.site_id == site.id, SiteMember.user_id == user.id
             )
         )

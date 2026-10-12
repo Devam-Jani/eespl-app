@@ -18,7 +18,7 @@ type Management = {
 type Alert = { id: number; rule_label: string; title: string; link: string | null; severity: string; created_at: string };
 
 /** The page after login: the dashboards the user's roles give, the first one open. */
-export default function Dashboard() {
+export default function Dashboard({ embedded = false }: { embedded?: boolean } = {}) {
   const { data: home, error, reload } = useData<Home>("/api/dashboard");
   const [params, setParams] = useSearchParams();
   const { demo, set } = useFilters();
@@ -26,7 +26,7 @@ export default function Dashboard() {
   const [msg, setMsg] = useState<string | null>(null);
   if (error) return <div className="alert alert-error">{error}</div>;
   if (!home) return <p className="muted">Loading…</p>;
-  if (home.dashboards.length === 0) return <Modules />;
+  if (home.dashboards.length === 0) return embedded ? null : <Modules />;
   const view = params.get("view") ?? home.dashboards[0].key;
   const current = home.dashboards.find((d) => d.key === view) ?? home.dashboards[0];
 
@@ -232,7 +232,8 @@ function QuotationFollowUps({ rows, mine }: { rows: FollowUp[]; mine: boolean })
               {rows.map((r) => (
                 <tr key={r.id} className={r.overdue ? "row-overdue" : undefined}>
                   <td>
-                    {new Date(r.due_on).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata",  day: "2-digit", month: "short" })} {r.overdue && <span className="badge badge-danger">overdue</span>}
+                    {new Date(r.due_on).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short" })}{" "}
+                    {r.overdue && <span className="badge badge-danger">overdue</span>}
                   </td>
                   <td>
                     <Link to={`/quotations/${r.quotation_id}`}>{r.code}</Link>

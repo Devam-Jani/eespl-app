@@ -262,6 +262,8 @@ def put_settings(
 class AreaTypeIn(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     default_system_id: int | None = None
+    # other systems that suit the area type: offered next to the default (no fixed product)
+    suitable_system_ids: list[int] = Field(default_factory=list, max_length=20)
     default_upturn_mm: Decimal = Field(default=Decimal(0), ge=0, le=3000)
     default_wastage_percent: Decimal | None = Field(default=None, ge=0, le=100)
     includes_walls: bool = False
@@ -764,6 +766,10 @@ def _apply(db, a: SurveyArea, body: AreaIn, survey: Survey) -> None:
         data["upturn_mm"] = t.default_upturn_mm if t else Decimal(0)
     for k, v in data.items():
         setattr(a, k, v)
+    if body.system_id and body.area_type_id:  # the client's choice, offered first next time
+        from app.team.service import remember_system  # noqa: PLC0415
+
+        remember_system(db, svc.client_of(db, survey), body.area_type_id, body.system_id)
     a.floor_no = svc.floor_number(a.floor_label)
     svc.compute(a, t)
 

@@ -180,6 +180,15 @@ class RaBill(Tracked, Base):
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     certified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     certified_by_client: Mapped[str | None] = mapped_column(String(200))
+    # the client's certification recorded by our billing or salesperson for them (date, who at
+    # the client approved it, the signed copy or email); "portal" when the client verified it
+    client_cert_on: Mapped[date | None] = mapped_column(Date)
+    client_cert_amount: Mapped[Decimal | None] = mapped_column(Money)
+    client_cert_doc: Mapped[str | None] = mapped_column(String(400))
+    client_cert_recorded_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    client_cert_via: Mapped[str | None] = mapped_column(String(10))
     # the client's own certification / rejection in the portal (staff then confirm)
     client_remark: Mapped[str | None] = mapped_column(Text)
     client_acted_by: Mapped[uuid.UUID | None] = mapped_column(

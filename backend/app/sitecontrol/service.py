@@ -497,6 +497,32 @@ def mandays(db: Session, site_id: int, subcontractor_id: int, start: date, end: 
     return sum((Decimal(n) * (Decimal("0.5") if s == "half_day" else 1) for s, n in rows), ZERO)
 
 
+def dpr_mandays(db: Session, wo: WorkOrder, start: date, end: date) -> Decimal:
+    """People on approved daily report lines for the work order's places in the period."""
+    from app.execution.models import Dpr, DprLine  # noqa: PLC0415
+
+    nodes = [
+        n
+        for n in db.scalars(
+            select(AreaScope.node_id)
+            .join(WoLine, WoLine.area_scope_id == AreaScope.id)
+            .where(WoLine.wo_id == wo.id)
+        )
+        if n
+    ]
+    total = db.scalar(
+        select(func.coalesce(func.sum(DprLine.labour_count), 0))
+        .join(Dpr, Dpr.id == DprLine.dpr_id)
+        .where(
+            Dpr.site_id == wo.site_id,
+            Dpr.status == "acknowledged",
+            Dpr.on_date.between(start, end),
+            DprLine.node_id.in_(nodes or [-1]),
+        )
+    )
+    return Decimal(total or 0)
+
+
 def productivity_check(db: Session, bill: SubconBill) -> str:
     """Man-days from attendance in the bill period against the sqm done on this contractor's
     work in that period. More than 20 % (setting) below the expected sqm per man-day: low."""
@@ -532,6 +558,9 @@ def productivity_check(db: Session, bill: SubconBill) -> str:
         return "none"
     start, end = min(days), max(days)
     md = mandays(db, wo.site_id, wo.subcontractor_id, start, end)
+    md_source = "attendance"
+    if not md:  # no attendance: the head count on approved daily reports for the same places
+        md, md_source = dpr_mandays(db, wo, start, end), "daily reports"
     system_id = max(systems, key=systems.get) if systems else None
     area_type_id = max(area_types, key=area_types.get) if area_types else None
     expected, _has = _norm(db, system_id, area_type_id)
@@ -541,6 +570,7 @@ def productivity_check(db: Session, bill: SubconBill) -> str:
         "period_from": start.isoformat(),
         "period_to": end.isoformat(),
         "mandays": str(md),
+        "mandays_from": md_source,
         "sqm": str(sqm.quantize(Decimal("0.01"))),
         "actual": str(actual) if actual is not None else None,
         "expected": str(expected) if expected is not None else None,

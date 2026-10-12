@@ -288,6 +288,8 @@ EXPECTED: dict[str, dict[str, str]] = {
         "delivery.view",
         "ratecontract.view",
     ),  # fmt: skip
+    # the applicator's person or our supervisor: confirms deliveries on their sites, nothing else
+    "site_receiver": {"delivery.view": "assigned", "delivery.confirm": "assigned"},
     # the client portal only; every staff endpoint stays 403 (tests/test_portal.py)
     "client": dict.fromkeys(
         ["portal.view", "portal.comment", "portal.snag", "portal.approve"], "own"

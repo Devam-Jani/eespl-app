@@ -582,6 +582,8 @@ class CompanyProfile(Tracked, Base):
     kylas_default_owner_id: Mapped[int | None] = mapped_column(BigInteger)
     kylas_deal_pipeline_id: Mapped[int | None] = mapped_column(BigInteger)
     kylas_won_stage_id: Mapped[int | None] = mapped_column(BigInteger)
+    # the Kylas lead pipeline stage that asks for a quotation (a "Make quotation" to-do)
+    kylas_quotation_stage_id: Mapped[int | None] = mapped_column(BigInteger)
     kylas_lead_code_field: Mapped[str] = mapped_column(String(60), server_default="cfInquiryType")
     kylas_category_field: Mapped[str] = mapped_column(
         String(60), server_default="cfCustomerCategrory"

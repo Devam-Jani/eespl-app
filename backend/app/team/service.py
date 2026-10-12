@@ -529,3 +529,30 @@ def scorecard(db: Session, user_ids: list[uuid.UUID] | None = None) -> list[dict
             }
         )
     return out
+
+
+def remember_system(
+    db: Session,
+    client_id: int | None,
+    area_type_id: int | None,
+    system_id: int | None,
+    user_id=None,
+) -> None:
+    """The client's last system for an area type: the next survey or quotation offers it first."""
+    from app.team.models import ClientSystemChoice  # noqa: PLC0415
+
+    if not (client_id and area_type_id and system_id):
+        return
+    c = db.get(ClientSystemChoice, (client_id, area_type_id))
+    if c is None:
+        db.add(
+            ClientSystemChoice(
+                client_id=client_id,
+                area_type_id=area_type_id,
+                system_id=system_id,
+                chosen_by=user_id,
+            )
+        )
+    else:
+        c.system_id, c.chosen_by, c.chosen_at = system_id, user_id, now()
+    db.flush()

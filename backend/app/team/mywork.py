@@ -57,6 +57,34 @@ def item(
     }
 
 
+def make_quotation(db: Session, owner_id) -> list[Item]:
+    """Kylas moved the lead to the quotation stage and no quotation exists yet (the salesperson's
+    to-do; planning's when the lead has no salesperson). The quotation is made in our app."""
+    from app.crm.models import Lead  # noqa: PLC0415
+    from app.quotations.models import Quotation  # noqa: PLC0415
+
+    q = select(Lead).where(
+        Lead.quotation_requested_at.is_not(None),
+        Lead.status.notin_(("won", "lost", "junk")),
+        Lead.id.notin_(select(Quotation.lead_id).where(Quotation.lead_id.is_not(None))),
+    )
+    q = q.where(Lead.owner_id.is_(None)) if owner_id is None else q.where(Lead.owner_id == owner_id)
+    return [
+        item(
+            "make_quotation",
+            str(lead.id),
+            f"{lead.code} {lead.contact_name}",
+            "Kylas: the lead is at the quotation stage; make the quotation (pick the items here)",
+            f"/quotations?new=1&lead={lead.id}",
+            "Make quotation",
+            lead.quotation_requested_at,
+            "warn",
+            "/quotations",
+        )
+        for lead in db.scalars(q)
+    ]
+
+
 def my_sites(db: Session, user_id: uuid.UUID) -> list[int]:
     """Sites where the person is the in-charge or a member (the site roles' scope)."""
     return list(
@@ -221,7 +249,7 @@ def planning(db: Session, p: Principal) -> list[Item]:
     from app.sitecontrol.models import DeliveryNote, NewAreaRequest  # noqa: PLC0415
     from app.tenders.models import Tender, TenderRevision  # noqa: PLC0415
 
-    out = []
+    out = make_quotation(db, None)
     for lead in db.scalars(
         select(Lead).where(
             Lead.owner_id.is_(None), Lead.status.in_(("new", "contacted")), Lead.is_demo.is_(False)
@@ -582,7 +610,7 @@ def sales(db: Session, p: Principal) -> list[Item]:
     from app.quotations.models import Quotation, QuotationFollowUp  # noqa: PLC0415
 
     me = p.user.id
-    out = []
+    out = make_quotation(db, me)
     t = today()
     for f, q in db.execute(
         select(QuotationFollowUp, Quotation)
@@ -1098,6 +1126,31 @@ def store_purchase(db: Session, p: Principal) -> list[Item]:
     return out
 
 
+def site_receiver(db: Session, p: Principal) -> list[Item]:
+    """The applicator's person (or our supervisor) who confirms deliveries on their sites only."""
+    from app.sitecontrol.models import DeliveryNote  # noqa: PLC0415
+
+    sites = my_sites(db, p.user.id)
+    return [
+        item(
+            "delivery",
+            str(dn.id),
+            f"Delivery {dn.code}",
+            "Count it as it is unloaded and confirm",
+            f"/deliveries/{dn.id}",
+            "Confirm",
+            dn.expected_at,
+            "warn" if (_age(dn.expected_at) or 0) >= 1 else "normal",
+            "/deliveries",
+        )
+        for dn in db.scalars(
+            select(DeliveryNote)
+            .where(DeliveryNote.site_id.in_(sites or [-1]), DeliveryNote.status == "dispatched")
+            .order_by(DeliveryNote.expected_at)
+        )
+    ]
+
+
 def office_admin(db: Session, p: Principal) -> list[Item]:
     from app.models import User, UserRole  # noqa: PLC0415
 
@@ -1133,6 +1186,7 @@ SECTIONS: dict[str, tuple[str, Callable[[Session, Principal], list[Item]]]] = {
     "site_engineer": ("My sites", site_engineer),
     "site_supervisor": ("Today on site", site_supervisor),
     "store_purchase": ("Store and purchase", store_purchase),
+    "site_receiver": ("Deliveries to confirm", site_receiver),
     "office_admin": ("Office", office_admin),
 }
 # the technical owner sees the director's decisions

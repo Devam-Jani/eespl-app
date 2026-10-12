@@ -21,6 +21,7 @@ export default function KylasSettingsPage() {
       default_owner_id: s.default_owner_id?.toString() ?? "",
       deal_pipeline_id: s.deal_pipeline_id?.toString() ?? "",
       won_stage_id: s.won_stage_id?.toString() ?? "",
+      quotation_stage_id: s.quotation_stage_id?.toString() ?? "",
       lead_code_field: s.lead_code_field,
       category_field: s.category_field,
       junk_reasons: s.junk_reasons.join("\n"),
@@ -47,6 +48,7 @@ export default function KylasSettingsPage() {
             default_owner_id: num(form.default_owner_id),
             deal_pipeline_id: num(form.deal_pipeline_id),
             won_stage_id: num(form.won_stage_id),
+            quotation_stage_id: num(form.quotation_stage_id),
             lead_code_field: form.lead_code_field,
             category_field: form.category_field,
             junk_reasons: form.junk_reasons.split("\n").map((r) => r.trim()).filter(Boolean),
@@ -105,6 +107,7 @@ export default function KylasSettingsPage() {
               {field("default_owner_id", "Default owner (Kylas user id)")}
               {field("deal_pipeline_id", "Deal pipeline id (optional)", "empty = deal poll off")}
               {field("won_stage_id", "Won stage id (optional)", "empty = deal poll off")}
+              {field("quotation_stage_id", "Lead quotation stage id (optional)", "a \"Make quotation\" to-do; empty = off")}
               {field("lead_code_field", "Custom field for our lead code")}
               {field("category_field", "Custom field for the category")}
             </div>

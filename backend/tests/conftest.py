@@ -72,7 +72,7 @@ PER_TEST_TABLES = [
     "rate_contract_versions", "rate_contracts", "ready_to_bill", "new_area_requests",
     "productivity_norms", "sitecontrol_settings",
     "user_grants", "job_assignments", "site_visits", "negotiations", "measurements",
-    "tender_bidders", "team_settings",
+    "tender_bidders", "team_settings", "client_system_choices",
 ]  # fmt: skip
 # seeded rows of truncated tables, put back after every test (copied once per run)
 SEED_COPIES = ["finance_settings", "letter_templates", "letterheads", "quotation_settings"]

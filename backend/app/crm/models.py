@@ -83,6 +83,9 @@ class Lead(Tracked, Base):
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
     next_follow_up: Mapped[date | None] = mapped_column(Date, index=True)
+    # Kylas lead pipeline stage (read-only poll); the quotation stage asks for a quotation
+    kylas_stage_id: Mapped[int | None] = mapped_column(BigInteger)
+    quotation_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     tender_id: Mapped[int | None] = mapped_column(
         ForeignKey("tenders.id", ondelete="SET NULL"), index=True
     )

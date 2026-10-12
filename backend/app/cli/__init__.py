@@ -74,6 +74,29 @@ def create_admin(email: str, name: str, phone: str | None) -> None:
         print(f"Created super admin {email} ({user.id}).")
 
 
+def create_director() -> None:
+    """Ankur Sir's user with the director role, only when DIRECTOR_EMAIL is set in .env. It can
+    log in once a password is set (python -m app.cli set-password <email>)."""
+    from app.config import settings  # noqa: PLC0415
+
+    email = (settings.director_email or "").strip().lower()
+    if not email:
+        print("DIRECTOR_EMAIL is not set in .env: the director role stays unassigned.")
+        return
+    with SessionLocal() as db:
+        role = db.scalar(select(Role).where(Role.code == "director"))
+        user = db.scalar(select(User).where(User.email == email))
+        if user is None:
+            user = User(email=email, full_name=settings.director_name, job_title="Director")
+            db.add(user)
+        if role not in user.roles:
+            user.roles = [*user.roles, role]
+        db.flush()
+        audit.record(db, "user.director", "user", user.id, after={"via": "cli"})
+        db.commit()
+        print(f"Director: {user.full_name} <{email}>. Set the password with set-password.")
+
+
 def set_password(email: str) -> None:
     email = email.strip().lower()
     with SessionLocal() as db:
@@ -438,6 +461,10 @@ def main(argv: list[str] | None = None) -> None:
 
     sub.add_parser("make-offer-template", help="Write the default Word template for quotations")
     sub.add_parser(
+        "create-director",
+        help="The director's user from DIRECTOR_EMAIL in .env (set the password with set-password)",
+    )
+    sub.add_parser(
         "seed-demo-team",
         help="One invented demo user per role (password from DEMO_USER_PASSWORD in .env)",
     )
@@ -467,6 +494,8 @@ def main(argv: list[str] | None = None) -> None:
         run_import_offer(args.path, args.again, args.preset)
     elif args.command == "make-offer-template":
         run_make_offer_template()
+    elif args.command == "create-director":
+        create_director()
     elif args.command == "seed-demo-team":
         from app.team.demo import seed  # noqa: PLC0415
 

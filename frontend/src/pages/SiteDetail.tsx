@@ -199,7 +199,7 @@ export default function SiteDetail() {
   );
 }
 
-const ROLES = ["incharge", "supervisor", "sales", "office", "viewer"];
+const ROLES = ["incharge", "supervisor", "sales", "office", "viewer", "receiver"];
 
 type ExecOverview = {
   dpr_missing: { count: number; days: string[] } | null;

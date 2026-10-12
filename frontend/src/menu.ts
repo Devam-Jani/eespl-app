@@ -9,7 +9,7 @@ export type MenuItem = {
 };
 
 // every staff role holds at least one of these: My work is everyone's home
-const STAFF = ["dashboard.view", "site.view", "leads.view", "tender.view", "billing.view", "payables.view", "po.view", "admin.users", "store.view"];
+const STAFF = ["dashboard.view", "site.view", "leads.view", "tender.view", "billing.view", "payables.view", "po.view", "admin.users", "store.view", "delivery.view"];
 
 export const MENU: MenuItem[] = [
   { to: "/my-work", label: "My work", perms: STAFF, section: "Modules" },

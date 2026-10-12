@@ -188,6 +188,7 @@ class KylasSettingsOut(BaseModel):
     default_owner_id: int | None
     deal_pipeline_id: int | None
     won_stage_id: int | None
+    quotation_stage_id: int | None = None
     lead_code_field: str
     category_field: str
     junk_reasons: list[str]
@@ -200,6 +201,8 @@ class KylasSettingsIn(BaseModel):
     default_owner_id: int | None = Field(default=None, gt=0)
     deal_pipeline_id: int | None = Field(default=None, gt=0)
     won_stage_id: int | None = Field(default=None, gt=0)
+    # the lead pipeline stage that asks for a quotation: a "Make quotation" to-do
+    quotation_stage_id: int | None = Field(default=None, gt=0)
     lead_code_field: str = Field(default="cfInquiryType", pattern=r"^[A-Za-z][A-Za-z0-9_]{1,59}$")
     category_field: str = Field(
         default="cfCustomerCategrory", pattern=r"^[A-Za-z][A-Za-z0-9_]{1,59}$"
@@ -722,6 +725,7 @@ def _settings_out(db: Session) -> KylasSettingsOut:
         default_owner_id=p.kylas_default_owner_id,
         deal_pipeline_id=p.kylas_deal_pipeline_id,
         won_stage_id=p.kylas_won_stage_id,
+        quotation_stage_id=p.kylas_quotation_stage_id,
         lead_code_field=p.kylas_lead_code_field or "cfInquiryType",
         category_field=p.kylas_category_field or "cfCustomerCategrory",
         junk_reasons=list(p.kylas_junk_reasons or []),
@@ -772,6 +776,7 @@ def set_kylas_settings(
     p.kylas_source_id, p.kylas_owner_rule = body.source_id, body.owner_rule
     p.kylas_default_owner_id = body.default_owner_id
     p.kylas_deal_pipeline_id, p.kylas_won_stage_id = body.deal_pipeline_id, body.won_stage_id
+    p.kylas_quotation_stage_id = body.quotation_stage_id
     p.kylas_lead_code_field, p.kylas_category_field = body.lead_code_field, body.category_field
     p.kylas_junk_reasons = list(dict.fromkeys(reasons))
     db.flush()
