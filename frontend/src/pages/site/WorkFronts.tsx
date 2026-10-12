@@ -72,7 +72,7 @@ export default function WorkFronts() {
                 {n.front_ready && (
                   <div className="small">
                     ✓ ready · {n.front_ready_by_name ?? "—"} ·{" "}
-                    {n.front_ready_at ? new Date(n.front_ready_at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
+                    {n.front_ready_at ? new Date(n.front_ready_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",  day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
                     {n.front_ready_photo && (
                       <button className="btn btn-small btn-ghost" onClick={() => void show(n)}>
                         photo

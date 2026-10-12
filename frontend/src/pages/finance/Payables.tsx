@@ -443,6 +443,7 @@ export default function Payables() {
                   <td>
                     <span className={`badge ${BADGE[b.status]}`}>{b.status.replace("_", " ")}</span>
                     {b.blocked && <span className="badge badge-danger">blocked: 3-way match</span>}
+                    {b.blocked && !can("delivery.escalate") && <span className="badge badge-warn">waiting for director</span>}
                   </td>
                   <td className="nowrap">
                     {b.blocked && can("delivery.escalate") && (

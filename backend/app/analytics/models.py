@@ -64,6 +64,9 @@ ALERT_RULES: dict[str, dict[str, Any]] = {
     "contract_expiring": {"on": True, "roles": ["store_purchase"]},
     "ready_not_billed": {"on": True, "roles": ["accounts"]},
     "consumption_var": {"on": True, "roles": []},
+    # team roles: awaiting award follow-up (salesperson and planning), monthly RA bill (billing)
+    "award_followup": {"on": True, "roles": ["planning"]},
+    "ra_monthly": {"on": True, "roles": ["billing"]},
 }
 RULE_LABELS = {
     "dpr_missing": "DPR missing after 8 pm",
@@ -81,6 +84,8 @@ RULE_LABELS = {
     "contract_expiring": "Rate contract expiring",
     "ready_not_billed": "Work done, not billed",
     "consumption_var": "Material consumption off the system",
+    "award_followup": "Tender awaiting award: follow up",
+    "ra_monthly": "Monthly RA bill due",
 }
 
 

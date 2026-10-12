@@ -18,7 +18,7 @@ export type SnapOptions = {
 };
 
 export function headerLines(o: Pick<SnapOptions, "siteName" | "siteCode" | "percent" | "date">): [string, string] {
-  const day = o.date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  const day = o.date.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata",  day: "2-digit", month: "short", year: "numeric" });
   return [`${o.siteName} (${o.siteCode})`, `${day} · overall ${Math.round(o.percent)}% done`];
 }
 

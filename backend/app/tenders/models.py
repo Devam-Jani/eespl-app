@@ -91,6 +91,10 @@ class Tender(Tracked, Base):
     # next edit after that starts revision + 1.
     revision: Mapped[int] = mapped_column(Integer, server_default="0")
     lost_note: Mapped[str | None] = mapped_column(Text)
+    guarantee_years: Mapped[int | None] = mapped_column(Integer)  # the send checklist
+    # awaiting award: the last follow-up reminder; the lead made for the contractor who won
+    award_followup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    winner_lead_id: Mapped[int | None] = mapped_column(ForeignKey("leads.id", ondelete="SET NULL"))
     # when it was won, lost or dropped (win rate by period)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # invented analytics demo data (python -m app.cli seed-demo-analytics); never real
@@ -166,6 +170,7 @@ class BoqLine(Tracked, Base):
     suggestion_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
     our_remarks: Mapped[str | None] = mapped_column(Text)
     our_product: Mapped[str | None] = mapped_column(Text)
+    manufacturer: Mapped[str | None] = mapped_column(String(100))  # the send checklist
     status: Mapped[str] = mapped_column(String(12), server_default="unpriced")
     # Row (1-based) of the client's sheet that holds this item's quantity: where "client format"
     # export writes our rate. None for lines added by hand.

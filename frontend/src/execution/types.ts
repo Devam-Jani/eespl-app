@@ -19,7 +19,7 @@ export type Dpr = {
   work_done: string | null;
   hindrances: string | null;
   next_day_plan: string | null;
-  status: "new" | "draft" | "submitted" | "acknowledged";
+  status: "new" | "draft" | "submitted" | "acknowledged" | "returned";
   submitted_by_name: string | null;
   submitted_at: string | null;
   acknowledged_by_name: string | null;
@@ -27,6 +27,19 @@ export type Dpr = {
   photos: { id: number; filename: string; caption: string | null }[];
   can_edit: boolean;
   can_acknowledge: boolean;
+  lines: {
+    id: number;
+    description: string;
+    qty: string | null;
+    unit: string | null;
+    labour_count: number | null;
+    node_id: number | null;
+    survey_area_id: number | null;
+    new_area_id: number | null;
+    place: string | null;
+  }[];
+  return_comment?: string | null;
+  returned_by_name?: string | null;
 };
 
 export type DprRow = {

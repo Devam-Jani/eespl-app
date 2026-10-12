@@ -414,7 +414,7 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
                       {ver.note && <span className="muted"> · {ver.note}</span>}
                     </td>
                     <td className="small">
-                      {ver.by ?? "import"} · {new Date(ver.at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                      {ver.by ?? "import"} · {new Date(ver.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",  day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                     </td>
                     <td>
                       {edit && ver.version !== row.version && (

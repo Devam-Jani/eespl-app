@@ -6,6 +6,11 @@ coat count or consumption (kg per m2) between the two.
 The bungalow sample shows why: the terrace spec says 45 gsm mesh and 2 coats while its offer
 line says 40 gsm and 3 coats; the garden primer covers 5-6 sqm per kg in the spec (0.17-0.20
 kg/m2) but the offer line says 0.25 kg/m2.
+
+Product names go through the products master: a name and its aliases are one product ("BRONCO
+CEMSHIELD HYBRID PU" in the offer is "BRONCO HYBRID PU" in the specification). A gsm is compared
+only with the same layer on the other side (the reinforcement mesh with the mesh, not with the
+120 gsm separation layer).
 """
 
 import re
@@ -45,6 +50,51 @@ def products(text: str) -> set[str]:
 
 def gsm(text: str) -> set[Decimal]:
     return {Decimal(x) for x in GSM.findall(text or "")}
+
+
+# the layer a gsm figure belongs to, from the nearest word around it
+LAYERS = {
+    "mesh": re.compile(r"mesh|fabric|reinforc|scrim|glass\s*fib", re.I),
+    "separation layer": re.compile(r"geo\s*-?\s*textile|separat|felt|non[\s-]*woven|filter", re.I),
+    "membrane": re.compile(r"membrane", re.I),
+}
+
+
+def gsm_layers(text: str) -> dict[str, set[Decimal]]:
+    """{layer: gsm figures}; a figure with no layer word within 60 characters is "other"."""
+    text = text or ""
+    out: dict[str, set[Decimal]] = {}
+    for m in GSM.finditer(text):
+        lo, hi = max(0, m.start() - 60), min(len(text), m.end() + 60)
+        best, dist = "other", None
+        for layer, rx in LAYERS.items():
+            for k in rx.finditer(text, lo, hi):
+                d = k.start() - m.end() if k.start() >= m.end() else m.start() - k.end()
+                if dist is None or d < dist:
+                    best, dist = layer, d
+        out.setdefault(best, set()).add(Decimal(m.group(1)))
+    return out
+
+
+def norm_name(name: str) -> str:
+    return re.sub(r"\s+", " ", (name or "").replace("®", "")).strip().upper()
+
+
+def alias_map(db) -> dict[str, str]:
+    """Upper-cased product name or alias -> the product's name (the products master)."""
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from app.masters.models import Product  # noqa: PLC0415
+
+    out: dict[str, str] = {}
+    if db is None:
+        return out
+    for name, aliases in db.execute(select(Product.name, Product.aliases)).all():
+        canon = norm_name(name)
+        out.setdefault(canon, canon)
+        for a in aliases or []:
+            out[norm_name(a)] = canon
+    return out
 
 
 def coats(text: str) -> int | None:
@@ -87,24 +137,29 @@ def spec_text(specs: list[dict]) -> str:
     )
 
 
-def check(specs: list[dict], lines: list[str]) -> list[str]:
+def check(specs: list[dict], lines: list[str], aliases: dict[str, str] | None = None) -> list[str]:
     """Warnings for one item: its specs (the JSON copies) against its offer line texts."""
     spec = spec_text(specs)
     offer = "\n".join(lines)
     if not spec.strip() or not offer.strip():
         return []
     warn = []
-    sp, op = products(spec), products(offer)
-    for p in sorted(op - sp):
-        warn.append(f"{p} is in the budgetary offer but not in the specification")
-    for p in sorted(sp - op):
-        warn.append(f"{p} is in the specification but not in the budgetary offer")
-    sg, og = gsm(spec), gsm(offer)
-    if sg and og and sg != og:
-        only_s, only_o = sorted(sg - og), sorted(og - sg)
-        if only_s or only_o:
+    aliases = aliases or {}
+
+    def canon(names: set[str]) -> dict[str, str]:
+        return {aliases.get(norm_name(n), norm_name(n)): n for n in sorted(names)}
+
+    sp, op = canon(products(spec)), canon(products(offer))
+    for key in sorted(set(op) - set(sp)):
+        warn.append(f"{op[key]} is in the budgetary offer but not in the specification")
+    for key in sorted(set(sp) - set(op)):
+        warn.append(f"{sp[key]} is in the specification but not in the budgetary offer")
+    sl, ol = gsm_layers(spec), gsm_layers(offer)
+    for layer in [x for x in (*LAYERS, "other") if x in sl and x in ol]:
+        sg, og = sl[layer], ol[layer]
+        if sg != og:
             warn.append(
-                "Different gsm: specification "
+                f"Different gsm{'' if layer == 'other' else f' ({layer})'}: specification "
                 + ", ".join(f"{g.normalize():f}" for g in sorted(sg))
                 + " gsm, budgetary offer "
                 + ", ".join(f"{g.normalize():f}" for g in sorted(og))
@@ -130,20 +185,25 @@ def check(specs: list[dict], lines: list[str]) -> list[str]:
 
 def quotation_checks(q) -> dict[int, list[str]]:
     """{quotation item id: warnings} over the offered specs and lines."""
+    from sqlalchemy.orm import object_session  # noqa: PLC0415
+
     from app.quotations import (
         service as svc,  # noqa: PLC0415  (service imports this module's callers)
     )
 
+    aliases = alias_map(object_session(q))
     out = {}
     for item in q.items:
         specs = [s for s in item.specs if svc.is_offered(item, s.get("option_label"))]
         lines = [ln.description for ln in item.lines if svc.is_offered(item, ln.option)]
-        w = check(specs, lines)
+        w = check(specs, lines, aliases)
         if w:
             out[item.id] = w
     return out
 
 
 def library_item_checks(item) -> list[str]:
+    from sqlalchemy.orm import object_session  # noqa: PLC0415
+
     specs = [{"sections": s.spec.sections or []} for s in item.specs]
-    return check(specs, [ln.line.description for ln in item.lines])
+    return check(specs, [ln.line.description for ln in item.lines], alias_map(object_session(item)))

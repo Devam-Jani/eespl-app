@@ -11,6 +11,7 @@ type View = {
   code: string;
   site: string;
   expected_at: string;
+  expected_label: string;
   vehicle_no: string | null;
   receiver_named: string | null;
   status: string;
@@ -142,7 +143,7 @@ export default function ReceiptPage() {
         <h1>{view.code}</h1>
         <p className="site">{view.site}</p>
         <p className="small">
-          {S.expected[0]}: {new Date(view.expected_at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+          {S.expected[0]}: {view.expected_label}
           {view.vehicle_no && ` · ${S.vehicle[0]}: ${view.vehicle_no}`}
         </p>
         {view.receiver_named && (
@@ -157,7 +158,7 @@ export default function ReceiptPage() {
           <p>
             {justDone ? <L k="done" strong /> : <L k="already" />} <b>{view.confirmed_by}</b>
           </p>
-          <p className="small">{view.confirmed_at && new Date(view.confirmed_at).toLocaleString("en-IN")}</p>
+          <p className="small">{view.confirmed_at && new Date(view.confirmed_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</p>
         </section>
       ) : (
         <>

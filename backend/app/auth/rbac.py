@@ -14,6 +14,8 @@ SCOPE_RANK = {"own": 1, "assigned": 2, "all": 3}
 SUPER_ADMIN_ROLE_CODE = "super_admin"
 CLIENT_ROLE_CODE = "client"
 CLIENT_FORBIDDEN_CODES = frozenset({"tender.margin", "finance.edit"})
+# roles whose permissions can be added to in the grid but never reduced (super_admin is locked)
+FLOOR_ROLES = frozenset({"director", SUPER_ADMIN_ROLE_CODE})
 
 
 def widest(a: str | None, b: str | None) -> str | None:

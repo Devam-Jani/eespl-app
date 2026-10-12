@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     kylas_enabled: bool = False
     kylas_base_url: str = "https://api.kylas.io/v1"
     kylas_api_key: SecretStr | None = None
+    # demo users (seed-demo-team), read from .env and never printed
+    demo_user_password: SecretStr | None = None
     kylas_timeout_seconds: float = 20
 
     # Claude vision for survey photo suggestions (off unless enabled in survey settings). The key

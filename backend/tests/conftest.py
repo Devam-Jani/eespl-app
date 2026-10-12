@@ -48,7 +48,9 @@ PER_TEST_TABLES = [
     "transfer_lines", "transfers", "grn_photos", "grn_lines", "grns", "po_charges", "po_lines",
     "po_indents", "purchase_orders", "rfq_quotes", "rfq_vendors", "rfq_lines", "rfq_indents",
     "rfqs", "indent_lines", "indents", "stores", "company_profile",
-    "dpr_photos", "dprs", "attendance", "staff_attendance", "labour", "wo_measurements", "wo_lines",
+    "dpr_lines", "dpr_photos", "dprs", "attendance", "staff_attendance", "labour",
+    "wo_measurements",
+    "wo_lines",
     "work_orders", "inspections", "mom_points", "moms", "equipment_usage", "asset_movements",
     "assets", "site_budgets", "site_costs",
     "tally_exports", "labour_advances", "labour_wage_payments", "staff_advances", "payslips",
@@ -69,6 +71,8 @@ PER_TEST_TABLES = [
     "delivery_discrepancies", "delivery_note_lines", "debit_notes", "delivery_notes",
     "rate_contract_versions", "rate_contracts", "ready_to_bill", "new_area_requests",
     "productivity_norms", "sitecontrol_settings",
+    "user_grants", "job_assignments", "site_visits", "negotiations", "measurements",
+    "tender_bidders", "team_settings",
 ]  # fmt: skip
 # seeded rows of truncated tables, put back after every test (copied once per run)
 SEED_COPIES = ["finance_settings", "letter_templates", "letterheads", "quotation_settings"]
@@ -91,6 +95,7 @@ PER_TEST_DELETES = [
     "INSERT INTO company_profile (id) VALUES (1)",
     "INSERT INTO analytics_settings (id) VALUES (1)",
     "INSERT INTO sitecontrol_settings (id) VALUES (1)",
+    "INSERT INTO team_settings (id) VALUES (1)",
     "INSERT INTO survey_settings (id) VALUES (1)",
     "DELETE FROM area_types WHERE created_by IS NOT NULL",  # the seeded ones stay
     "INSERT INTO stores (name, kind) VALUES ('Ethios Godown', 'godown')",
@@ -126,7 +131,12 @@ def test_database() -> Iterator[None]:
 def seeded_role_permissions(test_database) -> list[tuple]:
     with engine.connect() as conn:
         return conn.execute(
-            text("SELECT role_id, permission_code, scope FROM role_permissions")
+            # by role code: a migration test that downgrades and upgrades again re-creates the
+            # later roles (director, planning...) with new ids
+            text(
+                "SELECT r.code, rp.permission_code, rp.scope FROM role_permissions rp "
+                "JOIN roles r ON r.id = rp.role_id"
+            )
         ).all()
 
 
@@ -159,7 +169,10 @@ def clean_state(seeded_role_permissions, seeded_max_category) -> Iterator[None]:
         conn.execute(text("DELETE FROM roles WHERE NOT is_system"))
         conn.execute(text("DELETE FROM role_permissions"))
         conn.execute(
-            text("INSERT INTO role_permissions VALUES (:r, :p, :s)"),
+            text(
+                "INSERT INTO role_permissions (role_id, permission_code, scope) "
+                "SELECT id, :p, :s FROM roles WHERE code = :r"
+            ),
             [{"r": r, "p": p, "s": s} for r, p, s in seeded_role_permissions],
         )
 

@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
@@ -10,6 +11,7 @@ from sqlalchemy import (
     Identity,
     Index,
     MetaData,
+    Numeric,
     String,
     Text,
     false,
@@ -51,6 +53,8 @@ class User(Base):
     kylas_user_id: Mapped[int | None] = mapped_column(BigInteger)  # owner of their Kylas leads
     # survey entry: "m" (metres) or "ftin" (feet-inches); sizes are always stored in metres
     measure_unit: Mapped[str] = mapped_column(String(4), server_default="m")
+    # sales: closure rate target (percent); empty: the team setting
+    closure_target_percent: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     # invented analytics demo data (python -m app.cli seed-demo-analytics); never real
     is_demo: Mapped[bool] = mapped_column(server_default=false(), index=True)
     # payroll identifiers (payslips); the bank account is only ever shown masked

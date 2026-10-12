@@ -189,6 +189,7 @@ function ProductForm({ product, onClose, onSaved }: { product: Product | null; o
     gst_percent: product?.gst_percent ?? "18",
     hsn_code: product?.hsn_code ?? "",
     reorder_level: product?.reorder_level ?? "",
+    aliases: (product?.aliases ?? []).join("; "),
     is_active: product?.is_active ?? true,
   });
   const [error, setError] = useState<string | null>(null);
@@ -204,6 +205,10 @@ function ProductForm({ product, onClose, onSaved }: { product: Product | null; o
       pack_unit: form.pack_unit || null,
       hsn_code: form.hsn_code || null,
       reorder_level: form.reorder_level || null,
+      aliases: form.aliases
+        .split(";")
+        .map((a) => a.trim())
+        .filter(Boolean),
       category_id: form.category_id ? Number(form.category_id) : null,
     };
     try {
@@ -288,6 +293,10 @@ function ProductForm({ product, onClose, onSaved }: { product: Product | null; o
             <input type="number" step="0.001" min="0" value={form.reorder_level} onChange={set("reorder_level")} placeholder="Alert below this stock" />
           </label>
         </div>
+        <label className="field">
+          <span>Also known as (other names in offers and specifications, separated by ;)</span>
+          <input value={form.aliases} onChange={set("aliases")} placeholder="e.g. BRONCO CEMSHIELD HYBRID PU" />
+        </label>
         <label className="check">
           <input type="checkbox" checked={form.is_active} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))} />
           Active
@@ -367,7 +376,7 @@ function PriceHistory({ product, canAdd, onClose }: { product: Product; canAdd: 
           <tbody>
             {prices.map((p) => (
               <tr key={p.id} className={p.id === currentId ? "row-current" : ""}>
-                <td>{new Date(p.effective_from).toLocaleDateString("en-IN")}</td>
+                <td>{new Date(p.effective_from).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })}</td>
                 <td className="num">{inr(p.purchase_rate)}</td>
                 <td className="num">{inr(p.freight_per_unit)}</td>
                 <td className="num">{inr(Number(p.purchase_rate) + Number(p.freight_per_unit))}</td>

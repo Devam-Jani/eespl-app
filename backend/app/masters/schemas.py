@@ -3,7 +3,15 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 from app.masters.models import (
     CATEGORY_KINDS,
@@ -190,6 +198,9 @@ class PriceOut(ORM):
     created_at: datetime
 
 
+Aliased = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=200)]
+
+
 class ProductIn(BaseModel):
     code: str = Field(min_length=1, max_length=50)
     name: Name
@@ -205,6 +216,8 @@ class ProductIn(BaseModel):
     is_active: bool = True
     # low-stock alert below this total stock (product unit)
     reorder_level: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=3)
+    # other names the same product goes by in offers and specifications (consistency checks)
+    aliases: list[Aliased] = Field(default_factory=list, max_length=20)
 
 
 class ProductUpdate(BaseModel):
@@ -220,6 +233,7 @@ class ProductUpdate(BaseModel):
     hsn_code: str | None = Field(default=None, pattern=r"^[0-9]{4,8}$")
     is_active: bool | None = None
     reorder_level: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=3)
+    aliases: list[Aliased] | None = Field(default=None, max_length=20)
 
 
 class ProductCost(BaseModel):
@@ -242,6 +256,7 @@ class ProductOut(ORM):
     hsn_code: str | None = None
     is_active: bool
     reorder_level: Decimal | None = None
+    aliases: list[str] = []
     cost: ProductCost | None = None
 
     @field_validator("category", mode="before")

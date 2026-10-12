@@ -14,6 +14,7 @@ from app.masters.models import Product
 from app.sitecontrol.models import DeliveryNote
 from app.sites.models import Site
 from app.tenders.export import company
+from app.timefmt import label
 
 
 def qr_svg(text: str, size: int = 160) -> str:
@@ -39,7 +40,7 @@ def _data_uri(svg: str) -> str:
 
 
 def html(db: Session, dn: DeliveryNote, raw: str) -> str:
-    from app.sitecontrol.deliveries import receipt_url, vendor_name  # noqa: PLC0415
+    from app.sitecontrol.deliveries import is_test_link, receipt_url, vendor_name  # noqa: PLC0415
 
     c = company(db)
     site = db.get(Site, dn.site_id)
@@ -79,17 +80,18 @@ td.num {{ text-align: right; white-space: nowrap; }} td.count {{ width: 30mm; }}
 .how {{ margin-top: 10px; font-size: 9pt; border: 1px dashed #999; padding: 6px; }}
 .sign {{ margin-top: 18px; display: flex; justify-content: space-between; }}
 .small {{ font-size: 8pt; color: #555; }}
+.testlink {{ font-size: 8.5pt; color: #b42318; font-weight: bold; margin-top: 2mm; }}
 </style></head><body>
 <div class="head"><div>{logo}</div><div class="company">{escape(c.name)}</div></div>
 <h1>Delivery note {escape(dn.code)}</h1>
 <div class="grid"><div class="facts">
 <p><b>Site:</b> {escape(site.name)} ({escape(site.code)}){" · " + escape(site.city) if site.city else ""}</p>
 <p><b>{source}</b>{f" · PO {escape(str(dn.po_id))}" if dn.po_id else ""}</p>
-<p><b>Expected at site:</b> {dn.expected_at:%d %b %Y, %H:%M}</p>
+<p><b>Expected at site:</b> {label(dn.expected_at)}</p>
 <p><b>Vehicle:</b> {escape(dn.vehicle_no or "—")} · <b>Driver:</b> {escape(dn.driver_name or "—")} {escape(dn.driver_phone or "")}</p>
 <p><b>Who may receive when the supervisor is away:</b> {receiver}</p>
 </div><div class="qr"><img src="{_data_uri(qr_svg(url))}" alt="QR"><div class="link">{escape(url)}</div>
-<div class="small">Scan at site to count and confirm</div></div></div>
+<div class="small">Scan at site to count and confirm</div>{'<div class="testlink">Test link, works only on the office PC</div>' if is_test_link() else ""}</div></div>
 <table><thead><tr><th>#</th><th>Item</th><th>Packs</th><th>Quantity</th><th>Counted at site</th></tr></thead><tbody>{rows}</tbody></table>
 <div class="how"><b>At site:</b> scan the QR code, count every item as it is unloaded, note anything damaged, and take two photos (the material as unloaded, and this signed note).
 <br>સાઇટ પર: QR સ્કેન કરો, દરેક વસ્તુ ગણો, બે ફોટા લો. · साइट पर: QR स्कैन करें, हर वस्तु गिनें, दो फ़ोटो लें.</div>

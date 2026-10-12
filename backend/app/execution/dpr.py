@@ -5,6 +5,7 @@ acknowledging (the office has read it) needs dpr.edit with scope all.
 """
 
 from datetime import date, timedelta
+from decimal import Decimal
 from typing import Annotated, Literal
 
 from fastapi import (
@@ -26,12 +27,25 @@ from app.db import DbSession
 from app.execution import pdf
 from app.execution import service as svc
 from app.execution.common import names, pdf_response, record, save_upload, send_file
-from app.execution.models import Dpr, DprPhoto
+from app.execution.models import Dpr, DprLine, DprPhoto
 from app.material import service as material
-from app.sites.models import Site
+from app.sites.models import Site, SiteNode
 
 router = APIRouter(prefix="/api/execution", tags=["execution"])
 DprView = Annotated[str, Depends(require_permission("dpr.view"))]
+
+
+class DprLineIn(BaseModel):
+    """A piece of the day's work on a place: a node of the site's list, a survey area, or a new
+    area asked for from site (waiting for planning)."""
+
+    description: str = Field(min_length=1, max_length=2000)
+    qty: Decimal | None = Field(default=None, ge=0)
+    unit: str | None = Field(default=None, max_length=20)
+    labour_count: int | None = Field(default=None, ge=0, le=1000)
+    node_id: int | None = None
+    survey_area_id: int | None = None
+    new_area_id: int | None = None
 
 
 class DprIn(BaseModel):
@@ -39,6 +53,7 @@ class DprIn(BaseModel):
     work_done: str | None = None
     hindrances: str | None = None
     next_day_plan: str | None = None
+    lines: list[DprLineIn] | None = None  # None: keep the lines as they are
     submit: bool = False
 
 
@@ -52,11 +67,14 @@ class DprOut(BaseModel):
     work_done: str | None
     hindrances: str | None
     next_day_plan: str | None
-    status: Literal["new", "draft", "submitted", "acknowledged"]
+    status: Literal["new", "draft", "submitted", "acknowledged", "returned"]
     submitted_by_name: str | None
     submitted_at: str | None
     acknowledged_by_name: str | None
+    return_comment: str | None = None
+    returned_by_name: str | None = None
     auto: dict
+    lines: list[dict]
     photos: list[dict]
     can_edit: bool
     can_acknowledge: bool
@@ -65,9 +83,9 @@ class DprOut(BaseModel):
 def _out(db, site: Site, day: date, d: Dpr | None, principal) -> DprOut:
     edit = principal.permissions.get("dpr.edit")
     can_edit = material.covers_site(db, edit, principal, site.id, site.created_by) and (
-        d is None or d.status == "draft"
+        d is None or d.status in ("draft", "returned")
     )
-    who = names(db, [d.submitted_by, d.acknowledged_by] if d else [])
+    who = names(db, [d.submitted_by, d.acknowledged_by, d.returned_by] if d else [])
     return DprOut(
         id=d.id if d else None,
         site_id=site.id,
@@ -82,14 +100,88 @@ def _out(db, site: Site, day: date, d: Dpr | None, principal) -> DprOut:
         submitted_by_name=who.get(d.submitted_by) if d else None,
         submitted_at=d.submitted_at.isoformat() if d and d.submitted_at else None,
         acknowledged_by_name=who.get(d.acknowledged_by) if d else None,
+        return_comment=d.return_comment if d else None,
+        returned_by_name=who.get(d.returned_by) if d and d.returned_by else None,
         # frozen at submission; live while a draft
         auto=d.auto if d and d.status != "draft" and d.auto else svc.day_activity(db, site.id, day),
+        lines=_lines_out(db, d) if d else [],
         photos=[{"id": p.id, "filename": p.filename, "caption": p.caption} for p in d.photos]
         if d
         else [],
         can_edit=can_edit,
-        can_acknowledge=bool(d and d.status == "submitted" and edit == "all"),
+        can_acknowledge=bool(d and d.status == "submitted" and can_approve(db, principal, site)),
     )
+
+
+def _lines_out(db, d: Dpr) -> list[dict]:
+    from app.sitecontrol.models import NewAreaRequest  # noqa: PLC0415
+    from app.sitecontrol.service import node_label  # noqa: PLC0415
+    from app.survey.models import SurveyArea  # noqa: PLC0415
+
+    out = []
+    for ln in d.lines:
+        if ln.node_id:
+            place = node_label(db, db.get(SiteNode, ln.node_id))
+        elif ln.survey_area_id:
+            a = db.get(SurveyArea, ln.survey_area_id)
+            place = a.name if a else None
+        elif ln.new_area_id:
+            r = db.get(NewAreaRequest, ln.new_area_id)
+            place = f"{r.name} (new area, {r.status})" if r else None
+        else:
+            place = None
+        out.append(
+            {
+                "id": ln.id,
+                "description": ln.description,
+                "qty": ln.qty,
+                "unit": ln.unit,
+                "labour_count": ln.labour_count,
+                "node_id": ln.node_id,
+                "survey_area_id": ln.survey_area_id,
+                "new_area_id": ln.new_area_id,
+                "place": place,
+            }
+        )
+    return out
+
+
+def _set_lines(db, site: Site, d: Dpr, lines: list[DprLineIn]) -> None:
+    """Every line names a place on the site's list (or a new area waiting for planning): the same
+    places material, ready-to-bill and the labour check use."""
+    from app.sitecontrol.service import check_booking  # noqa: PLC0415
+    from app.survey.models import Survey, SurveyArea  # noqa: PLC0415
+
+    d.lines.clear()
+    for ln in lines:
+        node_id = ln.node_id
+        if ln.survey_area_id:
+            a = db.get(SurveyArea, ln.survey_area_id)
+            sv = db.get(Survey, a.survey_id) if a else None
+            if a is None or sv is None or sv.site_id != site.id:
+                raise svc.unprocessable("That survey area is not on this site")
+            node_id = node_id or a.node_id
+        check_booking(db, site, node_id, ln.new_area_id, None)
+        d.lines.append(
+            DprLine(
+                description=ln.description.strip(),
+                qty=ln.qty,
+                unit=ln.unit,
+                labour_count=ln.labour_count,
+                node_id=node_id,
+                survey_area_id=ln.survey_area_id,
+                new_area_id=ln.new_area_id,
+            )
+        )
+
+
+def can_approve(db, principal, site: Site) -> bool:
+    """The site engineer approves (dpr.approve on their sites); the office still can (dpr.edit
+    for every site)."""
+    scope = principal.permissions.get("dpr.approve")
+    if scope and material.covers_site(db, scope, principal, site.id, site.created_by):
+        return True
+    return principal.permissions.get("dpr.edit") == "all"
 
 
 def _get(db, site_id, day) -> Dpr | None:
@@ -188,10 +280,12 @@ def save_dpr(
     if d is None:
         d = Dpr(site_id=site.id, on_date=day, created_by=principal.user.id)
         db.add(d)
-    elif d.status != "draft":
+    elif d.status not in ("draft", "returned"):
         raise svc.conflict(f"The DPR of {day:%d %b} is already {d.status}")
     for k in ("weather", "work_done", "hindrances", "next_day_plan"):
         setattr(d, k, getattr(body, k))
+    if body.lines is not None:
+        _set_lines(db, site, d, body.lines)
     if body.submit:
         if not (body.work_done or "").strip():
             raise svc.unprocessable("Write the work done before submitting")
@@ -228,12 +322,50 @@ def acknowledge(
     dpr_id: int, request: Request, db: DbSession, principal: CurrentPrincipal, _: DprView
 ) -> DprOut:
     d, site = _visible(db, dpr_id, principal)
-    if principal.permissions.get("dpr.edit") != "all":
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "The office acknowledges DPRs")
+    if not can_approve(db, principal, site):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "The site engineer approves daily reports")
     if d.status != "submitted":
         raise svc.conflict(f"The DPR is {d.status}")
     d.status, d.acknowledged_by, d.acknowledged_at = "acknowledged", principal.user.id, svc.now()
+    d.return_comment = None
     record(db, request, principal, "dpr.acknowledge", "dpr", d.id)
+    db.commit()
+    return _out(db, site, d.on_date, d, principal)
+
+
+class ReturnIn(BaseModel):
+    comment: str = Field(min_length=3, max_length=2000)
+
+
+@router.post("/dprs/{dpr_id}/return")
+def return_dpr(
+    dpr_id: int,
+    body: ReturnIn,
+    request: Request,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    _: DprView,
+) -> DprOut:
+    """Back to the supervisor with a comment: it is on their to-do until corrected and sent
+    again."""
+    from app.portal.service import notify  # noqa: PLC0415
+
+    d, site = _visible(db, dpr_id, principal)
+    if not can_approve(db, principal, site):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "The site engineer returns daily reports")
+    if d.status != "submitted":
+        raise svc.conflict(f"The DPR is {d.status}")
+    d.status, d.return_comment = "returned", body.comment.strip()
+    d.returned_by, d.returned_at = principal.user.id, svc.now()
+    notify(
+        db,
+        [d.submitted_by],
+        "dpr_returned",
+        f"Daily report of {d.on_date:%d %b} returned: {d.return_comment}",
+        link=f"/sites/{site.id}?tab=dpr&day={d.on_date}",
+        site_id=site.id,
+    )
+    record(db, request, principal, "dpr.return", "dpr", d.id, after={"comment": d.return_comment})
     db.commit()
     return _out(db, site, d.on_date, d, principal)
 

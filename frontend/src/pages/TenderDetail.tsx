@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, downloadFile, queryString } from "../api";
@@ -10,7 +10,9 @@ import BoqTab from "./tender/BoqTab";
 import RevisionsTab from "./tender/RevisionsTab";
 import { shortDate, StatusBadge, TenderForm } from "./Tenders";
 
-type Tab = "details" | "boq" | "terms" | "revisions";
+const TenderAward = lazy(() => import("../team/Pages").then((m) => ({ default: m.TenderAward })));
+
+type Tab = "details" | "boq" | "terms" | "revisions" | "award";
 
 export default function TenderDetail() {
   const { id } = useParams();
@@ -51,7 +53,23 @@ export default function TenderDetail() {
     try {
       setTender(await api<Tender>(`/api/tenders/${tender.id}/submit`, { method: "POST", json: { note } }));
     } catch (err) {
-      setError(errorText(err));
+      // the send checklist: the director may send anyway, with a reason (logged)
+      const text = errorText(err);
+      if (text.includes("cannot be sent yet") && can("sendcheck.override")) {
+        const reason = prompt(`${text}
+
+Send anyway? Give the reason:`);
+        if (reason && reason.trim().length >= 5) {
+          try {
+            setTender(await api<Tender>(`/api/tenders/${tender.id}/submit`, { method: "POST", json: { note, override_reason: reason.trim() } }));
+            return;
+          } catch (err2) {
+            setError(errorText(err2));
+            return;
+          }
+        }
+      }
+      setError(text);
     }
   }
 
@@ -132,6 +150,7 @@ export default function TenderDetail() {
             ["boq", "BOQ"],
             ["terms", "Terms"],
             ["revisions", `Revisions (${revs.length})`],
+            ["award", tender.status === "submitted" ? "Awaiting award" : "Award & bidders"],
           ] as [Tab, string][]
         ).map(([key, label]) => (
           <button key={key} className={`tab ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>
@@ -144,6 +163,11 @@ export default function TenderDetail() {
         {tab === "boq" && <BoqTab tender={tender} canEdit={canEdit} onTotalChange={load} />}
         {tab === "terms" && <TermsTab tender={tender} canEdit={canEdit} onSaved={load} />}
         {tab === "revisions" && <RevisionsTab tender={tender} revisions={revs} />}
+        {tab === "award" && (
+          <Suspense fallback={<p className="muted">Loading…</p>}>
+            <TenderAward tenderId={tender.id} />
+          </Suspense>
+        )}
       </div>
     </>
   );
@@ -187,7 +211,21 @@ function DetailsTab({ tender, canEdit, onChange }: { tender: Tender; canEdit: bo
   async function setStatus(status: TenderStatus, extra: Record<string, string | null> = {}) {
     setError(null);
     try {
-      const updated = await api<Tender>(`/api/tenders/${tender.id}`, { method: "PATCH", json: { status, ...extra } });
+      let updated: Tender;
+      try {
+        updated = await api<Tender>(`/api/tenders/${tender.id}`, { method: "PATCH", json: { status, ...extra } });
+      } catch (err) {
+        // the send checklist: the director may send anyway, with a reason (logged)
+        const text = errorText(err);
+        const reason =
+          text.includes("cannot be sent yet") && can("sendcheck.override")
+            ? prompt(`${text}
+
+Send anyway? Give the reason:`)
+            : null;
+        if (!reason || reason.trim().length < 5) throw err;
+        updated = await api<Tender>(`/api/tenders/${tender.id}`, { method: "PATCH", json: { status, ...extra, override_reason: reason.trim() } });
+      }
       onChange(updated);
       setClosing(null);
       if (status === "won" && !updated.site_id && can("site.edit") && confirm("Tender won. Create the site now?")) await createSiteFor(updated);
@@ -206,6 +244,7 @@ function DetailsTab({ tender, canEdit, onChange }: { tender: Tender; canEdit: bo
     ["Owner", tender.owner_name ?? "—"],
     ["Team", tender.members.map((m) => m.full_name).join(", ") || "—"],
     ["Quoted total", inr(tender.quoted_total)],
+    ["Guarantee", tender.guarantee_years ? `${tender.guarantee_years} years` : "not filled (send checklist)"],
   ];
   if (tender.cost_total !== undefined) {
     rows.push(["Cost of system-priced lines", inr(tender.cost_total)], ["Margin on them", inr(tender.margin_amount)]);
@@ -235,6 +274,16 @@ function DetailsTab({ tender, canEdit, onChange }: { tender: Tender; canEdit: bo
         <h2 className="section-title">Tender details</h2>
         {canEdit && (
           <div className="page-actions">
+            <button
+              className="btn"
+              onClick={() => {
+                const v = prompt("Guarantee (years)", String(tender.guarantee_years ?? ""));
+                if (v !== null)
+                  void api<Tender>(`/api/tenders/${tender.id}`, { method: "PATCH", json: { guarantee_years: v ? Number(v) : null } }).then(onChange, (e) => setError(errorText(e)));
+              }}
+            >
+              Guarantee years
+            </button>
             {tender.status === "draft" && (
               <button className="btn" onClick={() => void setStatus("submitted")}>
                 Mark submitted

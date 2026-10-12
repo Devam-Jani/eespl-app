@@ -389,6 +389,75 @@ def _consumption_var(db: Session, cfg: dict, at: datetime) -> Iterator[Hit]:
             )
 
 
+def _award_followup(db: Session, cfg: dict, at: datetime) -> Iterator[Hit]:
+    """A tender awaiting award: a follow-up reminder every 60 days (setting) to its salesperson
+    and planning, until it is won or lost."""
+    from app.team.service import settings as team_settings  # noqa: PLC0415
+    from app.tenders.models import TenderRevision  # noqa: PLC0415
+
+    days = team_settings(db).award_followup_days
+    for t in db.scalars(
+        select(Tender).where(Tender.status == "submitted", Tender.is_demo.is_(False))
+    ):
+        submitted = db.scalar(
+            select(func.max(TenderRevision.submitted_at)).where(TenderRevision.tender_id == t.id)
+        )
+        last = t.award_followup_at or submitted
+        if last is None or (at - last).days < days:
+            continue
+        yield Hit(
+            f"award:{t.id}:{(at - last).days // days}",
+            f"{t.code} {t.name}: awaiting award for {(at - last).days} days, follow up",
+            f"/tenders/{t.id}?tab=award",
+            None,
+            [t.owner_id],
+            "warn",
+        )
+
+
+def _ra_monthly(db: Session, cfg: dict, at: datetime) -> Iterator[Hit]:
+    """On the billing day each month (setting, the 25th): an RA bill to raise for every ongoing
+    site with measured work not billed and no RA bill this month."""
+    from app.finance import service as fsvc  # noqa: PLC0415
+    from app.finance.models import ClientContract, ContractLine, RaBill  # noqa: PLC0415
+    from app.team.service import book_total  # noqa: PLC0415
+    from app.team.service import settings as team_settings  # noqa: PLC0415
+
+    day = ist_day(at)
+    if day.day < team_settings(db).billing_day:
+        return
+    month_start = datetime(day.year, day.month, 1, tzinfo=ex.IST)
+    for c in db.scalars(select(ClientContract)):
+        site = db.get(Site, c.site_id)
+        if (
+            site is None
+            or site.is_demo
+            or (site.status != "active" and site.board_status != "ongoing")
+        ):
+            continue
+        unbilled = sum(
+            (
+                max(Decimal(0), book_total(db, cl.id) - fsvc.billed_before(db, cl.id, None))
+                for cl in db.scalars(select(ContractLine).where(ContractLine.contract_id == c.id))
+            ),
+            Decimal(0),
+        )
+        if unbilled <= 0 or db.scalar(
+            select(RaBill.id)
+            .where(RaBill.contract_id == c.id, RaBill.created_at >= month_start)
+            .limit(1)
+        ):
+            continue
+        yield Hit(
+            f"ra:{site.id}:{day:%Y-%m}",
+            f"{site.name}: monthly RA bill due (measured work not billed)",
+            f"/sites/{site.id}?tab=finance",
+            site.id,
+            [site.site_incharge_id],
+            "warn",
+        )
+
+
 RULES = {
     "dpr_missing": _dpr_missing,
     "behind_schedule": _behind_schedule,
@@ -405,6 +474,8 @@ RULES = {
     "contract_expiring": _contract_expiring,
     "ready_not_billed": _ready_not_billed,
     "consumption_var": _consumption_var,
+    "award_followup": _award_followup,
+    "ra_monthly": _ra_monthly,
 }
 
 

@@ -10,8 +10,13 @@ export const localToday = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
+type Line = { description: string; qty: string; unit: string; labour_count: string; place: string };
+type Place = { value: string; label: string };
+const emptyLine = (): Line => ({ description: "", qty: "", unit: "sqm", labour_count: "", place: "" });
+
 const WEATHER = ["Sunny", "Cloudy", "Light rain", "Heavy rain", "Hot", "Windy"];
-const STATUS_BADGE: Record<string, string> = { new: "badge-muted", draft: "badge-warn", submitted: "badge-info", acknowledged: "badge-ok" };
+const STATUS_BADGE: Record<string, string> = { new: "badge-muted", draft: "badge-warn", submitted: "badge-info", acknowledged: "badge-ok", returned: "badge-danger" };
+const STATUS_LABEL: Record<string, string> = { new: "Not started", acknowledged: "approved" };
 
 /** The day's report: what was recorded on site is pulled in; the supervisor adds the story. */
 export default function DprTab({ site }: { site: Site }) {
@@ -23,10 +28,33 @@ export default function DprTab({ site }: { site: Site }) {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [allTasks, setAllTasks] = useState(false);
+  const [lines, setLines] = useState<Line[]>([]);
+  const [places, setPlaces] = useState<Place[]>([]);
+
+  useEffect(() => {
+    void Promise.all([
+      api<{ id: number; path: string }[]>(`/api/sites/${site.id}/nodes`).catch(() => []),
+      api<{ id: number; site_id: number; name: string }[]>("/api/sitecontrol/new-areas?state=pending").catch(() => []),
+    ]).then(([nodes, areas]) =>
+      setPlaces([
+        ...nodes.map((n) => ({ value: `n:${n.id}`, label: n.path })),
+        ...areas.filter((a) => a.site_id === site.id).map((a) => ({ value: `a:${a.id}`, label: `${a.name} (new area, waiting)` })),
+      ]),
+    );
+  }, [site.id]);
 
   const show = (d: Dpr) => {
     setDpr(d);
     setForm({ weather: d.weather ?? "", work_done: d.work_done ?? "", hindrances: d.hindrances ?? "", next_day_plan: d.next_day_plan ?? "" });
+    setLines(
+      d.lines.map((l) => ({
+        description: l.description,
+        qty: l.qty ?? "",
+        unit: l.unit ?? "",
+        labour_count: l.labour_count === null ? "" : String(l.labour_count),
+        place: l.node_id ? `n:${l.node_id}` : l.new_area_id ? `a:${l.new_area_id}` : "",
+      })),
+    );
   };
 
   const load = useCallback(async () => {
@@ -48,7 +76,7 @@ export default function DprTab({ site }: { site: Site }) {
     setError(null);
     setMessage(null);
     try {
-      show(await api<Dpr>(`/api/execution/sites/${site.id}/dprs/${day}`, { method: "PUT", json: { ...form, weather: form.weather || null, submit } }));
+      show(await api<Dpr>(`/api/execution/sites/${site.id}/dprs/${day}`, { method: "PUT", json: { ...form, weather: form.weather || null, lines: linesOut(), submit } }));
       setMessage(submit ? "Submitted." : "Saved as draft.");
       setRecent(await api<DprRow[]>(`/api/execution/dprs?site_id=${site.id}&days=31`));
     } catch (err) {
@@ -57,6 +85,19 @@ export default function DprTab({ site }: { site: Site }) {
       setBusy(false);
     }
   }
+
+  const linesOut = () =>
+    lines
+      .filter((l) => l.description.trim())
+      .map((l) => ({
+        description: l.description.trim(),
+        qty: l.qty || null,
+        unit: l.unit || null,
+        labour_count: l.labour_count ? Number(l.labour_count) : null,
+        node_id: l.place.startsWith("n:") ? Number(l.place.slice(2)) : null,
+        new_area_id: l.place.startsWith("a:") ? Number(l.place.slice(2)) : null,
+      }));
+  const setLine = (i: number, patch: Partial<Line>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
 
   async function addPhotos(files: FileList | null) {
     if (!files) return;
@@ -67,6 +108,17 @@ export default function DprTab({ site }: { site: Site }) {
         body.append("file", f);
         show(await api<Dpr>(`/api/execution/sites/${site.id}/dprs/${day}/photos`, { method: "POST", form: body }));
       }
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }
+
+  async function returnIt() {
+    if (!dpr?.id) return;
+    const comment = prompt("Return to the supervisor: what needs correcting?");
+    if (!comment || comment.trim().length < 3) return;
+    try {
+      show(await api<Dpr>(`/api/execution/dprs/${dpr.id}/return`, { method: "POST", json: { comment: comment.trim() } }));
     } catch (err) {
       setError(errorText(err));
     }
@@ -89,20 +141,30 @@ export default function DprTab({ site }: { site: Site }) {
     <div className="daily">
       <div className="daily-head">
         <input type="date" value={day} max={localToday()} onChange={(e) => setDay(e.target.value)} aria-label="Day" className="tap-input" />
-        {dpr && <span className={`badge ${STATUS_BADGE[dpr.status]}`}>{dpr.status === "new" ? "Not started" : dpr.status}</span>}
+        {dpr && <span className={`badge ${STATUS_BADGE[dpr.status]}`}>{STATUS_LABEL[dpr.status] ?? dpr.status}</span>}
         {dpr?.id && dpr.status !== "draft" && (
           <button className="btn" onClick={() => void downloadFile(`/api/execution/dprs/${dpr.id}/pdf`).catch((err) => setError(errorText(err)))}>
             PDF
           </button>
         )}
         {dpr?.can_acknowledge && (
-          <button className="btn" onClick={() => void acknowledge()}>
-            Acknowledge
-          </button>
+          <>
+            <button className="btn btn-primary" onClick={() => void acknowledge()}>
+              Approve
+            </button>
+            <button className="btn" onClick={() => void returnIt()}>
+              Return
+            </button>
+          </>
         )}
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {message && <div className="alert alert-ok">{message}</div>}
+      {dpr?.status === "returned" && dpr.return_comment && (
+        <div className="alert alert-warn">
+          Returned by {dpr.returned_by_name ?? "the site engineer"}: {dpr.return_comment}. Correct it and submit again.
+        </div>
+      )}
       {dpr && a && (
         <>
           <div className="card daily-card">
@@ -173,6 +235,43 @@ export default function DprTab({ site }: { site: Site }) {
               <span>Work done today *</span>
               <textarea rows={4} disabled={!edit} value={form.work_done} onChange={set("work_done")} placeholder="Where, what, how much" />
             </label>
+            <div className="field">
+              <span>Work by place (the place on the site's list, or a new area waiting for planning)</span>
+              {lines.map((l, i) => (
+                <div key={i} className="dpr-line">
+                  <select disabled={!edit} value={l.place} onChange={(e) => setLine(i, { place: e.target.value })} aria-label="Place">
+                    <option value="">Place…</option>
+                    {places.map((p) => (
+                      <option key={p.value} value={p.value}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                  <input disabled={!edit} value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} placeholder="What was done" />
+                  <input disabled={!edit} className="input-num" inputMode="decimal" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} placeholder="Qty" />
+                  <input disabled={!edit} className="input-unit" value={l.unit} onChange={(e) => setLine(i, { unit: e.target.value })} placeholder="Unit" />
+                  <input
+                    disabled={!edit}
+                    className="input-num"
+                    inputMode="numeric"
+                    value={l.labour_count}
+                    onChange={(e) => setLine(i, { labour_count: e.target.value })}
+                    placeholder="People"
+                  />
+                  {edit && (
+                    <button type="button" className="btn btn-ghost btn-icon" aria-label="Remove" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+              {edit && (
+                <button type="button" className="btn btn-small" onClick={() => setLines((ls) => [...ls, emptyLine()])}>
+                  + Add work on a place
+                </button>
+              )}
+              {!edit && lines.length === 0 && <span className="muted small">No place recorded.</span>}
+            </div>
             <label className="field">
               <span>Hindrances</span>
               <textarea rows={2} disabled={!edit} value={form.hindrances} onChange={set("hindrances")} placeholder="Rain, material short, area not handed over…" />
@@ -208,7 +307,7 @@ export default function DprTab({ site }: { site: Site }) {
               dpr.submitted_by_name && (
                 <p className="muted small">
                   Submitted by {dpr.submitted_by_name}
-                  {dpr.acknowledged_by_name && ` · acknowledged by ${dpr.acknowledged_by_name}`}
+                  {dpr.acknowledged_by_name && ` · approved by ${dpr.acknowledged_by_name}`}
                 </p>
               )
             )}

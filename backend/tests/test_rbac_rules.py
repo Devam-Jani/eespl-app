@@ -30,22 +30,31 @@ def test_office_admin_cannot_assign_super_admin(login_as, make_user, db):
 
     r = c.post("/api/users", json=_create_user_body("x@example.com", sa), headers=h)
     assert r.status_code == 403
-    assert "admin.roles" in r.json()["detail"]
+    assert "admin.settings" in r.json()["detail"]
 
     target = make_user("est@example.com", "estimator")
     r = c.put(f"/api/users/{target.id}/roles", json={"role_ids": [sa]}, headers=h)
     assert r.status_code == 403
 
 
-def test_office_admin_cannot_edit_roles(login_as, db):
+def test_office_admin_edits_roles_only_within_their_own_permissions(login_as, db):
+    """Settings > Roles: office_admin adjusts a role without a developer, but never hands out a
+    permission they do not hold themselves (the director decides overrides)."""
     c, h = login_as("office_admin")
+    estimator = c.get("/api/roles", headers=h).json()
+    perms = next(r for r in estimator if r["code"] == "estimator")["permissions"]
     r = c.put(
         f"/api/roles/{role_id(db, 'estimator')}/permissions",
-        json={"permissions": {"library.view": "all"}},
+        json={"permissions": {**perms, "reports.export": "all"}},
         headers=h,
     )
-    assert r.status_code == 403
-    assert c.post("/api/roles", json={"code": "x_role", "name": "X"}, headers=h).status_code == 403
+    assert r.status_code == 200
+    r = c.put(
+        f"/api/roles/{role_id(db, 'estimator')}/permissions",
+        json={"permissions": {**perms, "labourcheck.override": "all"}},
+        headers=h,
+    )
+    assert r.status_code == 403 and "labourcheck.override" in r.json()["detail"]
 
 
 def test_office_admin_cannot_manage_a_super_admin(login_as, make_user):

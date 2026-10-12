@@ -214,6 +214,7 @@ class RaBillLine(Base):
     amount: Mapped[Decimal] = money_col()
     certified_amount: Mapped[Decimal | None] = mapped_column(Money)
     client_qty: Mapped[Decimal | None] = mapped_column(Qty)  # what the client certified
+    client_diff_reason: Mapped[str | None] = mapped_column(Text)  # certified differs from billed
 
 
 class TaxInvoice(Tracked, Base):
@@ -536,6 +537,11 @@ class SubconBill(Tracked, Base):
     )
     productivity_override_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     productivity_override_note: Mapped[str | None] = mapped_column(Text)
+    # billing checked the labour bill against the work done
+    billing_checked_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    billing_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class SubconBillLine(Base):

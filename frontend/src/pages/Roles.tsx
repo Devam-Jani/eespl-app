@@ -94,9 +94,8 @@ export default function Roles() {
         </div>
       </div>
       <p className="muted">
-        Scope: <strong>all</strong> = every record, <strong>assigned</strong> = only sites/tenders the user is
-        assigned to, <strong>own</strong> = only records the user created. A user with several roles gets the
-        widest scope.
+        Scope: <strong>all</strong> = every record, <strong>assigned</strong> = only sites/tenders the user is assigned to, <strong>own</strong> = only records the user created. A
+        user with several roles gets the widest scope.
       </p>
       {error && <div className="alert alert-error">{error}</div>}
       {notice && <div className="alert alert-ok">{notice}</div>}
@@ -136,9 +135,13 @@ export default function Roles() {
                   <tr key={p.code}>
                     <td className="sticky-col" title={p.description ?? ""}>
                       <code>{p.code}</code>
+                      {p.description && <div className="perm-desc">{p.description}</div>}
                     </td>
                     {roles.map((r) => {
                       const value = draft[r.id]?.[p.code] ?? "";
+                      // the director can be given more, never less (super_admin is locked)
+                      const floor = r.code === "director" ? r.permissions[p.code] : undefined;
+                      const rank = { own: 1, assigned: 2, all: 3 } as Record<string, number>;
                       return (
                         <td key={r.id} className="cell">
                           <select
@@ -148,9 +151,11 @@ export default function Roles() {
                             onChange={(e) => setCell(r.id, p.code, e.target.value as Scope | "")}
                             aria-label={`${r.name}: ${p.code}`}
                           >
-                            <option value="">—</option>
+                            <option value="" disabled={!!floor}>
+                              —
+                            </option>
                             {SCOPES.map((s) => (
-                              <option key={s} value={s}>
+                              <option key={s} value={s} disabled={!!floor && rank[s] < rank[floor]}>
                                 {s}
                               </option>
                             ))}
@@ -172,20 +177,15 @@ export default function Roles() {
                   <td key={r.id} className="cell">
                     {r.permissions_locked ? (
                       <span className="muted small">Always all</span>
+                    ) : r.code === "director" && !dirty ? (
+                      <span className="muted small">Can be added to, never reduced</span>
                     ) : (
                       <div className="col-actions">
-                        <button
-                          className="btn btn-small btn-primary"
-                          disabled={!dirty || saving === r.id}
-                          onClick={() => void save(r)}
-                        >
+                        <button className="btn btn-small btn-primary" disabled={!dirty || saving === r.id} onClick={() => void save(r)}>
                           {saving === r.id ? "Saving…" : "Save"}
                         </button>
                         {dirty && (
-                          <button
-                            className="btn btn-small"
-                            onClick={() => setDraft((d) => ({ ...d, [r.id]: { ...r.permissions } }))}
-                          >
+                          <button className="btn btn-small" onClick={() => setDraft((d) => ({ ...d, [r.id]: { ...r.permissions } }))}>
                             Undo
                           </button>
                         )}
@@ -248,7 +248,12 @@ function NewRole({ onClose, onCreated }: { onClose: () => void; onCreated: (role
             value={name}
             onChange={(e) => {
               setName(e.target.value);
-              setCode(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, ""));
+              setCode(
+                e.target.value
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]+/g, "_")
+                  .replace(/^_+|_+$/g, ""),
+              );
             }}
             required
             autoFocus
