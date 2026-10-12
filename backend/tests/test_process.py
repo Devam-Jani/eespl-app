@@ -126,6 +126,10 @@ SAMPLE_DATA = {
     "flags": 2,
     "flagged": True,
     "author_id": None,
+    "promised_by": "Invented PMC",
+    "promised": "02 Oct 2026",
+    "target": "20 Oct 2026",
+    "received": "05 Oct 2026",
 }
 
 

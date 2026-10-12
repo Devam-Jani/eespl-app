@@ -155,13 +155,19 @@ class Product(Tracked, Base):
     category: Mapped["Category | None"] = relationship(lazy="joined")
 
 
+PRICE_SOURCES = ("vendor_quote", "rate_contract", "po", "manual")
+
+
 class ProductPrice(Tracked, Base):
-    """Append-only price history. The current price is the latest effective_from <= today."""
+    """Append-only price history (the master price list). The current price is the newest one in
+    force (the latest effective_from <= today). Who entered it is created_by; where it came from
+    is the source (a vendor quote, a rate contract, a PO, typed by hand) with its reference."""
 
     __tablename__ = "product_prices"
     __table_args__ = (
         CheckConstraint("purchase_rate >= 0", name="purchase_rate_nonnegative"),
         CheckConstraint("freight_per_unit >= 0", name="freight_nonnegative"),
+        CheckConstraint(_in("source", PRICE_SOURCES), name="source_valid"),
         Index("ix_product_prices_product_id_effective_from", "product_id", "effective_from"),
     )
 
@@ -171,6 +177,10 @@ class ProductPrice(Tracked, Base):
     freight_per_unit: Mapped[Decimal] = mapped_column(Money, server_default="0")
     effective_from: Mapped[date] = mapped_column(Date)
     note: Mapped[str | None] = mapped_column(Text)
+    unit: Mapped[str | None] = mapped_column(String(20))  # the product's unit when blank
+    source: Mapped[str] = mapped_column(String(16), server_default="manual")
+    vendor_id: Mapped[int | None] = mapped_column(ForeignKey("vendors.id", ondelete="SET NULL"))
+    ref: Mapped[str | None] = mapped_column(String(60))  # PO-2026-0003, RC 12, the quote's no.
 
 
 class System(Tracked, Base):

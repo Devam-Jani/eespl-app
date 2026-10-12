@@ -74,6 +74,10 @@ PER_TEST_TABLES = [
     "user_grants", "job_assignments", "site_visits", "negotiations", "measurements",
     "tender_bidders", "team_settings", "client_system_choices",
     "process_preferences", "process_events", "process_rules", "process_settings",
+    "rate_group_lines", "rate_group_products", "rate_groups", "rate_workings", "freight_rates",
+    "labour_bill_lines", "labour_bills", "labour_rate_cards", "costing_settings",
+    "material_lot_lines", "material_lots", "project_plan_lines", "site_stage_days",
+    "product_prices",
 ]  # fmt: skip
 # seeded rows of truncated tables, put back after every test (copied once per run)
 SEED_COPIES = ["finance_settings", "letter_templates", "letterheads", "quotation_settings"]
@@ -100,6 +104,7 @@ PER_TEST_DELETES = [
     "INSERT INTO process_settings (id, wastage) VALUES "
     """(1, '{"raft": {"min": 5, "max": 7}, "footing": {"min": 12, "max": 15}}')""",
     "INSERT INTO survey_settings (id) VALUES (1)",
+    "INSERT INTO costing_settings (id) VALUES (1)",
     "DELETE FROM area_types WHERE created_by IS NOT NULL",  # the seeded ones stay
     "INSERT INTO stores (name, kind) VALUES ('Ethios Godown', 'godown')",
 ]

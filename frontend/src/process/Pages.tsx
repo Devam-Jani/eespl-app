@@ -1,6 +1,6 @@
 // The process chain in the app: notifications with filters, a site's Process tab, the director's
 // escalated list, Settings > Process rules and each person's channels per rule.
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
@@ -26,6 +26,9 @@ type Note = {
   closed_reason: string | null;
   email: string | null;
 };
+
+const DelaysCard = lazy(() => import("../schedule/Pages").then((m) => ({ default: m.DelaysCard })));
+const CostingSettingsCard = lazy(() => import("../costing/Pages").then((m) => ({ default: m.CostingSettingsCard })));
 
 const waited = (h: number | null) => (h === null ? "" : h >= 48 ? `${Math.floor(h / 24)} d` : `${h} h`);
 
@@ -211,6 +214,9 @@ export function Escalated() {
       </div>
       <p className="muted small">Every escalated item across sites, oldest first. Each closes by itself when the action is done.</p>
       {error && <div className="alert alert-error">{error}</div>}
+      <Suspense fallback={null}>
+        <DelaysCard />
+      </Suspense>
       <div className="table-wrap card">
         <table className="table">
           <thead>
@@ -320,6 +326,9 @@ export function ProcessRules() {
       </p>
       {msg && <div className="alert alert-ok">{msg}</div>}
       {error && <div className="alert alert-error">{error}</div>}
+      <Suspense fallback={null}>
+        <CostingSettingsCard />
+      </Suspense>
       <div className="card settings-card">
         <h2 className="section-title">Defaults</h2>
         <div className="form-grid two">

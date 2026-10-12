@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LastPrice } from "../../components/LastPrice";
 import type { FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile, queryString } from "../../api";
@@ -336,6 +337,9 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
                     placeholder={contractFor(l)?.rate ? "contract" : undefined}
                     onChange={(e) => setLine(i, { rate: e.target.value })}
                   />
+                  <div>
+                    <LastPrice productId={l.product_id ? Number(l.product_id) : null} rate={l.rate} />
+                  </div>
                   {contractFor(l)?.rate && (
                     <div className={`small ${aboveContract(l) ? "text-danger" : "muted"}`}>
                       contract {inr(contractFor(l)!.rate)}/{contractFor(l)!.unit}

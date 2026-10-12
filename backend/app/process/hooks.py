@@ -601,7 +601,8 @@ def labour_decided(db: Session, b, actor_id) -> None:
 
 def timed_events(db: Session, at: datetime) -> int:
     """Follow-ups due (the quotation schedule), the monthly RA day per ongoing site with
-    measured work not billed, and the week's consumption flags per site."""
+    measured work not billed, the week's consumption flags per site, a promised handover
+    passed and not confirmed, a target finish passed."""
     from app.finance import service as fsvc  # noqa: PLC0415
     from app.finance.models import ClientContract, ContractLine, RaBill  # noqa: PLC0415
     from app.quotations.models import Quotation, QuotationFollowUp  # noqa: PLC0415
@@ -683,4 +684,7 @@ def timed_events(db: Session, at: datetime) -> int:
                     data={"flags": flags},
                 )
             )
+    from app.schedule import service as schedule  # noqa: PLC0415  (handover and target finish)
+
+    n += schedule.timed_events(db, at)
     return n

@@ -51,6 +51,11 @@ const qp = () => import("./quotations/QuotationPages");
 const QuotationsList = lazy(() => qp().then((m) => ({ default: m.QuotationsList })));
 const QuotationEditor = lazy(() => qp().then((m) => ({ default: m.QuotationEditor })));
 const ReceiptPage = lazy(() => import("./receipt/ReceiptPage"));
+// rate working, the master price list and labour rates (the director's review, 12 Oct)
+const cp = () => import("./costing/Pages");
+const QuotationWorking = lazy(() => cp().then((m) => ({ default: m.QuotationWorking })));
+const ProductPrices = lazy(() => cp().then((m) => ({ default: m.ProductPrices })));
+const LabourRates = lazy(() => cp().then((m) => ({ default: m.LabourRates })));
 const sc = () => import("./sitecontrol/Pages");
 const Deliveries = lazy(() => sc().then((m) => ({ default: m.Deliveries })));
 const DeliveryDetail = lazy(() => sc().then((m) => ({ default: m.DeliveryDetail })));
@@ -139,6 +144,7 @@ const PAGES: Record<string, JSX.Element> = {
   "/notifications": <Notifications />,
   "/escalated": <Escalated />,
   "/settings/process": <ProcessRules />,
+  "/labour-rates": <LabourRates />,
   "/my-notifications": <MyNotificationSettings />,
   "/enquiries": <Enquiries />,
   "/planning/board": <StatusBoard />,
@@ -315,6 +321,8 @@ export default function App() {
               {(
                 [
                   ["/rfqs/:id", ["po.view"], <RfqDetail />],
+                  ["/quotations/:id/working", ["quotation.view"], <QuotationWorking />],
+                  ["/prices/:id", ["tender.margin"], <ProductPrices />],
                   ["/assignments/:id", ["jobs.assign", "planning.view"], <AssignmentPage />],
                   ["/sites/:id/material-plan", ["planning.view", "indent.view"], <MaterialPlan />],
                   ["/my-site/:id", ["site.view"], <SupervisorDay />],

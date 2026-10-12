@@ -1604,6 +1604,15 @@ def mark_sent(
             "GSTIN not set: add the company GSTIN (Settings > GSTIN addresses) first"
         )
     po.status, po.sent_at = "sent", _now()
+    # the master price list: the price per base unit this PO used, from this vendor
+    from app.costing import prices as price_list  # noqa: PLC0415
+
+    for ln in po.lines:
+        if ln.base_qty and Decimal(ln.base_qty) > 0:
+            price_list.record_price(
+                db, ln.product_id, Decimal(ln.amount) / Decimal(ln.base_qty), source="po",
+                user_id=principal.user.id, ref=po.code, vendor_id=po.vendor_id,
+            )  # fmt: skip
     # a PO going straight to a site gets a delivery note to be confirmed at the site
     from app.sitecontrol import deliveries  # noqa: PLC0415  (sitecontrol imports this module)
 

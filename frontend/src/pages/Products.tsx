@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import type { FormEvent } from "react";
 import { api, queryString } from "../api";
 import { useAuth } from "../auth";
@@ -122,7 +123,13 @@ export default function Products() {
                   <td>{p.unit}</td>
                   <td className="num">{num(p.pack_size, 3)}</td>
                   <td className="num">{num(p.gst_percent, 2)}</td>
-                  {seesCost && <td className="num">{price ? inr(price.purchase_rate) : <span className="muted">no price</span>}</td>}
+                  {seesCost && (
+                    <td className="num">
+                      <Link to={`/prices/${p.id}`} title="Price history">
+                        {price ? inr(price.purchase_rate) : "no price"}
+                      </Link>
+                    </td>
+                  )}
                   {seesCost && <td className="num">{price ? inr(price.freight_per_unit) : "—"}</td>}
                   <td className="row-actions">
                     {seesCost && (

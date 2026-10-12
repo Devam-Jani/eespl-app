@@ -201,6 +201,18 @@ class Mark(BaseModel):
     in_time: time | None = None
     out_time: time | None = None
     ot_hours: Decimal = Field(default=Decimal(0), ge=0, le=16)
+    # hours on this site that day (a gang paid by attendance); default: from in and out times
+    hours: Decimal | None = Field(default=None, ge=0, le=16)
+
+
+def _hours(m: "Mark") -> Decimal | None:
+    """The hours between in and out (same day), when both are given."""
+    if m.status == "absent":
+        return Decimal(0)
+    if m.in_time and m.out_time and m.out_time > m.in_time:
+        mins = (m.out_time.hour * 60 + m.out_time.minute) - (m.in_time.hour * 60 + m.in_time.minute)
+        return (Decimal(mins) / 60).quantize(Decimal("0.1"))
+    return None
 
 
 class MarksIn(BaseModel):
@@ -243,6 +255,7 @@ def _day_sheet(db, site: Site, day: date) -> dict:
                 "subcontractor_name": w.subcontractor.name if w.subcontractor else None,
                 "status": a.status if a else None,
                 "ot_hours": str(a.ot_hours) if a else "0",
+                "hours": str(a.hours) if a and a.hours is not None else None,
                 "in_time": a.in_time.isoformat() if a and a.in_time else None,
                 "out_time": a.out_time.isoformat() if a and a.out_time else None,
                 "elsewhere": elsewhere.get(w.id),
@@ -306,6 +319,7 @@ def mark(
         if m.status == "absent" and m.ot_hours:
             raise svc.unprocessable(f"{w.name}: no overtime on an absent day")
         a.status, a.in_time, a.out_time, a.ot_hours = m.status, m.in_time, m.out_time, m.ot_hours
+        a.hours = m.hours if m.hours is not None else _hours(m)
         a.daily_wage, a.ot_rate_per_hour = w.daily_wage, w.ot_rate_per_hour
         a.marked_by, a.lat, a.lng = principal.user.id, body.lat, body.lng
     db.flush()

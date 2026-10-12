@@ -421,6 +421,9 @@ def actuals(db: Session, site_id: int) -> dict[str, Decimal]:
         .where(WorkOrder.site_id == site_id, WoMeasurement.status == "verified")
     ):
         out["subcontract"] += Decimal(m.qty) * Decimal(rate)
+    from app.costing.labour import bill_lines_cost  # noqa: PLC0415  (piece-rate and gang bills)
+
+    out["labour"] += bill_lines_cost(db, site_id)
     out["equipment"] += Decimal(
         db.scalar(
             select(func.coalesce(func.sum(EquipmentUsage.amount), 0)).where(

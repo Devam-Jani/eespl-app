@@ -1,6 +1,7 @@
 // Site control (9 Oct meeting): deliveries confirmed at site, rate contracts, ready to bill,
 // new areas, labour productivity, consumption variance and their settings.
 import { useCallback, useEffect, useState } from "react";
+import { LastPrice } from "../components/LastPrice";
 import type { FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile, fetchObjectUrl } from "../api";
@@ -627,6 +628,7 @@ function ContractForm({ c, onClose, onSaved }: { c: Contract | null; onClose: ()
         <label className="field">
           <span>Rate per {unit ?? "base unit"} (₹)</span>
           <input inputMode="decimal" value={f.rate} onChange={(e) => setF({ ...f, rate: e.target.value })} />
+          <LastPrice productId={f.product_id ? Number(f.product_id) : null} rate={f.rate} />
         </label>
         <label className="field">
           <span>Freight terms</span>

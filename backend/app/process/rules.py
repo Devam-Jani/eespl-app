@@ -253,6 +253,25 @@ DEFAULT_RULES: list[dict] = [
         "recipients": [{"role": "salesperson", "message": "Kylas: {lead} {name} is at the quotation stage. Make the quotation (pick the items here).", "action": "Make quotation"}],
         "link": "/quotations?new=1&lead={lead_id}", "closed_by": ["quotation_created"], "escalations": [],
     },
+    # the schedule (director's review, 12 Oct): the client's handover date and our target finish
+    {
+        "code": "handover_overdue", "number": 25, "event": "handover_overdue",
+        "short": "Handover date passed", "ref": "{area}",
+        "title": "Promised handover date passed and not confirmed",
+        "recipients": [
+            {"role": "site_engineer", "message": "{site}: {promised_by} promised to hand over {area} by {promised}; the supervisor has not confirmed it. Follow it up with the client.", "action": "Follow up"},
+            {"role": "planning", "message": "{site}: {area} was promised by {promised} and is not handed over yet (client delay).", "action": "Replan"},
+        ],
+        "link": "/sites/{site_id}?tab=handover", "closed_by": ["handover_received"], "escalations": [],
+    },
+    {
+        "code": "finish_overdue", "number": 26, "event": "finish_overdue",
+        "short": "Target finish passed", "ref": "{area}",
+        "title": "Target finish passed (our delay)",
+        "recipients": [{"role": "site_engineer", "message": "{site}: {area} was due to finish by {target} (handed over {received}); it is not finished.", "action": "Finish the area"}],
+        "link": "/sites/{site_id}?tab=handover", "closed_by": ["area_finished"],
+        "escalations": [{"after_hours": 3 * D, "to": ["director"]}],
+    },
 ]  # fmt: skip
 
 # the order of the chain on a site's Process tab

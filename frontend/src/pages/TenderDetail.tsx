@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile, queryString } from "../api";
 import { useAuth } from "../auth";
 import Modal from "../components/Modal";
@@ -12,14 +12,16 @@ import { shortDate, StatusBadge, TenderForm } from "./Tenders";
 
 const TenderAward = lazy(() => import("../team/Pages").then((m) => ({ default: m.TenderAward })));
 
-type Tab = "details" | "boq" | "terms" | "revisions" | "award";
+type Tab = "details" | "boq" | "working" | "terms" | "revisions" | "award";
+const RateWorkingView = lazy(() => import("../costing/Pages").then((m) => ({ default: m.RateWorkingView })));
 
 export default function TenderDetail() {
   const { id } = useParams();
   const { can } = useAuth();
   const canEdit = can("tender.edit");
   const [tender, setTender] = useState<Tender | null>(null);
-  const [tab, setTab] = useState<Tab>("boq");
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<Tab>((params.get("tab") as Tab | null) ?? "boq");
   const [error, setError] = useState<string | null>(null);
   const [revs, setRevs] = useState<Revision[]>([]);
   const [exportRev, setExportRev] = useState("");
@@ -148,6 +150,7 @@ Send anyway? Give the reason:`);
           [
             ["details", "Details"],
             ["boq", "BOQ"],
+            ["working", "Rate working"],
             ["terms", "Terms"],
             ["revisions", `Revisions (${revs.length})`],
             ["award", tender.status === "submitted" ? "Awaiting award" : "Award & bidders"],
@@ -161,6 +164,11 @@ Send anyway? Give the reason:`);
       <div className="top-gap">
         {tab === "details" && <DetailsTab tender={tender} canEdit={canEdit} onChange={setTender} />}
         {tab === "boq" && <BoqTab tender={tender} canEdit={canEdit} onTotalChange={load} />}
+        {tab === "working" && (
+          <Suspense fallback={<p className="muted">Loading…</p>}>
+            <RateWorkingView tenderId={tender.id} />
+          </Suspense>
+        )}
         {tab === "terms" && <TermsTab tender={tender} canEdit={canEdit} onSaved={load} />}
         {tab === "revisions" && <RevisionsTab tender={tender} revisions={revs} />}
         {tab === "award" && (

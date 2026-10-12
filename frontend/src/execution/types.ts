@@ -79,6 +79,7 @@ export type SheetRow = {
   subcontractor_name: string | null;
   status: AttendanceStatus | null;
   ot_hours: string;
+  hours: string | null;
   in_time: string | null;
   out_time: string | null;
   elsewhere: string | null;

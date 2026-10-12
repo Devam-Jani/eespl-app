@@ -10,6 +10,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.analytics import routers as analytics
 from app.auth.router import router as auth_router
 from app.config import settings
+from app.costing import labour as labour_rates
+from app.costing import prices as price_list
+from app.costing import working_routes as rate_working
 from app.crm import routers as crm
 from app.db import get_engine
 from app.execution import assets as ex_assets
@@ -39,6 +42,7 @@ from app.portal import staff as portal_staff
 from app.process import routers as process
 from app.quotations import routers as quotations
 from app.routers import audit, permissions, roles, users
+from app.schedule import routes as schedule
 from app.sitecontrol import routers as sitecontrol
 from app.sites import routers as sites
 from app.survey import routers as survey
@@ -97,6 +101,10 @@ for _r in (
     sitecontrol.public,
     team.router,
     process.router,
+    price_list.router,
+    rate_working.router,
+    labour_rates.router,
+    schedule.router,
     analytics.dashboard,
     analytics.router,
     portal_staff.router,

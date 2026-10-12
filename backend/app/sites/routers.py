@@ -520,7 +520,12 @@ async def set_front_ready(
     )
     if ready:
         from app.process import hooks  # noqa: PLC0415
+        from app.schedule import service as schedule  # noqa: PLC0415
 
+        # the supervisor's tick is the handover, received today (the schedule's clock starts);
+        # anyone else's marks the front ready for material only
+        if node.handover_status != "received" and schedule.is_supervisor(db, principal, site.id):
+            schedule.confirm_handover(db, node, principal.user.id, True, None)
         hooks.front_ready(db, node, principal.user.id)  # planning: the material plan for it
     db.commit()
     return _nodes_out(db, site)

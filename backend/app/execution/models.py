@@ -189,6 +189,8 @@ class Attendance(Tracked, Base):
     in_time: Mapped[time | None] = mapped_column(Time)
     out_time: Mapped[time | None] = mapped_column(Time)
     ot_hours: Mapped[Decimal] = mapped_column(Numeric(4, 1), server_default="0")
+    # hours worked on this site that day (a gang paid by attendance: the month splits by site)
+    hours: Mapped[Decimal | None] = mapped_column(Numeric(4, 1))
     # wage and OT rate on the day, so a later wage change does not rewrite past muster rolls
     daily_wage: Mapped[Decimal] = mapped_column(Money, server_default="0")
     ot_rate_per_hour: Mapped[Decimal] = mapped_column(Money, server_default="0")

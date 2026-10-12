@@ -31,7 +31,7 @@ TENDER_STATUSES = ("draft", "submitted", "won", "lost", "dropped")
 # why a tender or lead was lost (a pick-list; details go in lost_note)
 LOST_REASONS = ("price", "competitor", "timing", "spec", "relationship", "other")
 LINE_STATUSES = ("unpriced", "suggested", "priced", "not_quoted")
-PRICE_SOURCES = ("system", "library", "manual")
+PRICE_SOURCES = ("system", "library", "manual", "working")  # working: the rate working sheet
 QTY_NOTES = ("QRO", "NQ")
 
 Money = Numeric(14, 2)

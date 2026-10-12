@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { api } from "../../api";
 import { useAuth } from "../../auth";
 import { errorText, inr, num } from "../../format";
 import type { Budget } from "../../execution/types";
 import type { Site } from "../../types";
+
+const LabourPerSqm = lazy(() => import("../../costing/Pages").then((m) => ({ default: m.LabourPerSqm })));
 
 const HEAD: Record<string, [string, string]> = {
   material: ["Material", "site issues less returns, plus transfer shortages"],
@@ -54,6 +56,9 @@ export default function BudgetTab({ site }: { site: Site }) {
     <>
       {error && <div className="alert alert-error">{error}</div>}
       {b.cost_hidden && <div className="alert alert-warn">The budget from the tender's cost is hidden: it needs the tender margin permission.</div>}
+      <Suspense fallback={null}>
+        <LabourPerSqm siteId={site.id} />
+      </Suspense>
       <div className="card table-wrap">
         <table className="table budget">
           <thead>
