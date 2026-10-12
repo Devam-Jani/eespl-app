@@ -270,8 +270,11 @@ class ProductOut(ORM):
 
 class ComponentIn(BaseModel):
     product_id: int
-    consumption_per_unit: NonNegative
+    consumption_per_unit: NonNegative | None = None  # blank: to confirm (never guessed)
     wastage_percent: Percent = Decimal(0)
+    coats: int | None = Field(default=None, ge=1, le=20)
+    to_confirm: bool = False
+    note: str | None = None
 
 
 class SystemFields(BaseModel):
@@ -281,6 +284,8 @@ class SystemFields(BaseModel):
     labour_unit: LabourUnit | None = None
     default_margin_percent: Percent | None = None
     is_active: bool | None = None
+    to_confirm: bool | None = None
+    note: str | None = None
 
 
 class SystemIn(SystemFields):
@@ -303,10 +308,13 @@ class ComponentPublic(BaseModel):
     product_name: str
     brand: str | None
     unit: str
+    coats: int | None = None
+    to_confirm: bool = False
+    note: str | None = None
 
 
 class ComponentCostOut(ComponentPublic):
-    consumption_per_unit: Decimal
+    consumption_per_unit: Decimal | None
     wastage_percent: Decimal
 
 
@@ -327,6 +335,8 @@ class SystemOut(BaseModel):
     description: str | None
     unit: str
     is_active: bool
+    to_confirm: bool = False
+    note: str | None = None
     rate: Decimal | None  # final selling rate at the default margin, today's prices
     rate_error: str | None = None
     components: list[ComponentPublic]

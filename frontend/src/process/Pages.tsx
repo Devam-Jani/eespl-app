@@ -4,11 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
+import { DoneButton } from "../components/DoneButton";
 import { errorText } from "../format";
 
 type Note = {
   id: number;
   title: string;
+  lines: string[];
   link: string | null;
   site_id: number | null;
   rule: string | null;
@@ -21,6 +23,7 @@ type Note = {
   waiting_hours: number | null;
   closed_label: string | null;
   closed_by: string | null;
+  closed_reason: string | null;
   email: string | null;
 };
 
@@ -39,14 +42,6 @@ export function Notifications() {
   async function open(n: Note) {
     if (!n.read) await api(`/api/notifications/${n.id}/read`, { method: "POST" }).catch(() => undefined);
     if (n.link) navigate(n.link);
-  }
-  async function done(n: Note) {
-    try {
-      await api(`/api/process/notifications/${n.id}/done`, { method: "POST" });
-      void load();
-    } catch (e) {
-      setError(errorText(e));
-    }
   }
   return (
     <>
@@ -82,13 +77,18 @@ export function Notifications() {
               <li key={n.id} className={`note-row ${n.read ? "" : "unread"} ${n.escalated ? "sev-danger" : n.needs_action && !n.closed_label ? "sev-warn" : ""}`}>
                 <button className="note-open" onClick={() => void open(n)}>
                   <b>{n.title}</b>
+                  {n.lines.map((l) => (
+                    <span key={l} className="note-line">
+                      {l}
+                    </span>
+                  ))}
                   <span className="small muted">
                     {n.created_label}
                     {n.escalated && " · escalated"}
                     {n.note && ` · ${n.note}`}
                     {n.email && ` · email ${n.email}`}
                     {n.closed_label
-                      ? ` · done ${n.closed_label}${n.closed_by ? ` by ${n.closed_by}` : ""}`
+                      ? ` · done ${n.closed_label}${n.closed_by ? ` by ${n.closed_by}` : ""}${n.closed_reason ? `: ${n.closed_reason}` : ""}`
                       : n.waiting_hours !== null
                         ? ` · waiting ${waited(n.waiting_hours)}`
                         : ""}
@@ -99,9 +99,7 @@ export function Notifications() {
                     <button className="btn btn-small btn-primary" onClick={() => void open(n)}>
                       {n.action ?? "Open"}
                     </button>
-                    <button className="btn btn-small" onClick={() => void done(n)}>
-                      Done
-                    </button>
+                    <DoneButton id={n.id} action={n.action} onDone={() => void load()} />
                   </span>
                 ) : (
                   <span className="badge badge-muted">{n.needs_action ? "done" : "info"}</span>
@@ -128,6 +126,7 @@ type Step = {
   waiting_on: string | null;
   waiting_hours: number | null;
   escalated: boolean;
+  reasons: { by: string | null; at: string; reason: string }[];
 };
 
 export function ProcessTab({ siteId }: { siteId: number }) {
@@ -171,6 +170,11 @@ export function ProcessTab({ siteId }: { siteId: number }) {
                   </>
                 )}
               </div>
+              {s.reasons.map((r, i) => (
+                <div key={i} className="small tl-reason">
+                  Closed without the action by {r.by ?? "—"} on {r.at}: “{r.reason}”
+                </div>
+              ))}
             </div>
           </li>
         ))}

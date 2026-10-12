@@ -5,6 +5,7 @@ the action is done; the escalation runs on a clock and stops the moment the to-d
 goes to our own staff only, from a background job, and never blocks the step that caused it."""
 
 import logging
+import re
 import uuid
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
@@ -22,6 +23,9 @@ from app.timefmt import IST, label
 
 log = logging.getLogger(__name__)
 SITE_ROLES = {"planning", "billing", "accounts", "store_purchase", "estimator"}
+SUBJECT_MAX = 80
+RULE_TEXT = {r["code"]: r for r in DEFAULT_RULES}  # short subject and place reference per rule
+DEMO_WORD = re.compile(r"\bDEMO\b")
 
 
 def now() -> datetime:
@@ -205,6 +209,77 @@ def is_staff(db: Session, user: User) -> bool:
     return not is_client_login(effective_permissions(user.roles))
 
 
+def is_demo_user(user: User) -> bool:
+    """The invented demo team (Prompt 19): @demo.invalid addresses, names starting "DEMO"."""
+    return (user.email or "").lower().endswith("@demo.invalid") or (
+        user.full_name or ""
+    ).startswith("DEMO")
+
+
+def _has_demo(value: Any) -> bool:
+    if isinstance(value, str):
+        return bool(DEMO_WORD.search(value))
+    if isinstance(value, dict):
+        return any(_has_demo(v) for k, v in value.items() if not str(k).startswith("_"))
+    if isinstance(value, list | tuple):
+        return any(_has_demo(v) for v in value)
+    return False
+
+
+def is_demo_event(db: Session, ev: ProcessEvent) -> bool:
+    """A step on demo data: a demo site, a demo person did it, or the record is marked DEMO
+    (demo data is always marked so). Its notifications go to DEMO users only."""
+    from app.sites.models import Site  # noqa: PLC0415
+
+    site = db.get(Site, ev.site_id) if ev.site_id else None
+    if site is not None and site.is_demo:
+        return True
+    actor = db.get(User, ev.actor_id) if ev.actor_id else None
+    if actor is not None and is_demo_user(actor):
+        return True
+    return _has_demo(ev.data)
+
+
+def place_lines(data: dict | None) -> str | None:
+    """The places an event is about, one per line with its own quantity."""
+    rows = []
+    for p in (data or {}).get("places") or []:
+        qty = " ".join(str(x) for x in (p.get("qty"), p.get("unit")) if x not in (None, ""))
+        rows.append(f"{p.get('place') or '—'}: {qty}" if qty else str(p.get("place") or "—"))
+    return "\n".join(rows) or None
+
+
+def _short_place(text: str) -> str:
+    """ "DEMO Block A raft (HDPE line)" -> "DEMO Block A raft": no brackets, one line."""
+    text = re.sub(r"\s*\([^)]*\)", "", text or "").replace("—", "")
+    return " ".join(text.split())
+
+
+def email_subject(db: Session, n) -> str:
+    """At most 80 characters: "[EESPL] <what> · <site code> <short place>"."""
+    from app.sites.models import Site  # noqa: PLC0415
+
+    meta = RULE_TEXT.get(n.rule_code or "")
+    if meta is None:
+        out = "[EESPL] " + " ".join((n.title or "").split())
+        return out if len(out) <= SUBJECT_MAX else out[: SUBJECT_MAX - 1].rstrip() + "…"
+    ev = db.get(ProcessEvent, n.event_id) if n.event_id else None
+    data = (ev.data if ev else None) or {}
+    site_code = data.get("site_code")
+    if not site_code and n.site_id:
+        site = db.get(Site, n.site_id)
+        site_code = site.code if site else None
+    try:
+        fields = _Fields({k: v for k, v in data.items() if v is not None})
+        ref = (meta.get("ref") or "").format_map(fields)
+    except (ValueError, IndexError):
+        ref = ""
+    head = f"[EESPL] {'Escalated: ' if n.escalated else ''}{meta['short']}"
+    tail = " ".join(x for x in (site_code, _short_place(ref)) if x)
+    out = f"{head} · {tail}" if tail else head
+    return out if len(out) <= SUBJECT_MAX else out[: SUBJECT_MAX - 1].rstrip() + "…"
+
+
 # --- events --------------------------------------------------------------------------------------
 
 
@@ -233,6 +308,7 @@ def emit(
         if site is not None:
             data["site"] = f"{site.code} {site.name}"
             data.setdefault("site_id", site.id)
+            data.setdefault("site_code", site.code)
     data = {k: (str(v) if isinstance(v, uuid.UUID) else v) for k, v in data.items()}
     ev = ProcessEvent(
         type=type_,
@@ -268,6 +344,8 @@ def _notify_rule(
         else [{"role": r, "message": None, "action": "Act now"} for r in roles]
     )
     made = 0
+    demo = is_demo_event(db, ev)
+    body = place_lines(ev.data)
     for entry in entries:
         if entry.get("when") == "flagged" and not (ev.data or {}).get("flagged"):
             continue
@@ -277,6 +355,8 @@ def _notify_rule(
             user = db.get(User, uid)
             if user is None or not user.is_active or not is_staff(db, user):
                 continue
+            if demo and not is_demo_user(user):
+                continue  # demo data never reaches a real person
             perms = perms_of(db, user)
             if level == 0:
                 title = render(entry["message"], ev.data, perms)
@@ -290,6 +370,7 @@ def _notify_rule(
                 site_id=ev.site_id,
                 kind=f"process:{rule.code}"[:30],
                 title=title,
+                body=body,
                 link=link,
                 event_id=ev.id,
                 rule_code=rule.code,
@@ -366,6 +447,7 @@ def close(
     actor_id=None,
     at: datetime | None = None,
     rule_code: str | None = None,
+    reason: str | None = None,
 ) -> int:
     """Close the open to-dos on this subject that this event completes (or, with rule_code and no
     event type, every open one of that rule: "done" pressed). Escalations stop with them."""
@@ -382,15 +464,18 @@ def close(
     for note in db.scalars(q):
         if event_type is None or event_type in (note.close_on or []):
             note.closed_at, note.closed_by = at or now(), actor_id
+            note.closed_reason = reason
             n += 1
     if n:
         db.flush()
     return n
 
 
-def done(db: Session, note, user_id) -> int:
-    """The person did it: their to-do and its escalations close."""
-    return close(db, None, note.subject, user_id, rule_code=note.rule_code)
+def done(db: Session, note, user_id, reason: str | None = None) -> int:
+    """Closed by hand: the to-do and its escalations close. The action itself was not done in
+    the app (doing it closes the to-do by itself), so an action item carries the reason, shown
+    on the site's process timeline."""
+    return close(db, None, note.subject, user_id, rule_code=note.rule_code, reason=reason)
 
 
 # --- the clock: escalations ----------------------------------------------------------------------
@@ -452,13 +537,19 @@ def _email_body(db: Session, n, user: User) -> tuple[str, str, str]:
     site = db.get(Site, n.site_id) if n.site_id else None
     base = app_settings.public_base_url.rstrip("/")
     link = f"{base}{n.link}" if n.link and n.link.startswith("/") else (n.link or base)
-    subject = f"[EESPL] {n.title}"[:200]  # an escalation's title says so already
+    subject = email_subject(db, n)
     action = n.action_label or "Open in the app"
-    text = f"{n.title}\n{('Site: ' + site.code + ' ' + site.name) if site else ''}\n{action}: {link}\n\nEESPL App, sent to {user.full_name}."
+    lines = n.body.split("\n") if n.body else []
+    text = (
+        f"{n.title}\n"
+        + "".join(f"- {x}\n" for x in lines)
+        + f"{('Site: ' + site.code + ' ' + site.name) if site else ''}\n{action}: {link}\n\nEESPL App, sent to {user.full_name}."
+    )
     html = (
         '<div style="font-family:Arial,sans-serif;max-width:560px">'
         '<div style="background:#0F6B5C;color:#fff;padding:10px 14px;font-weight:bold">EESPL</div>'
         f'<p style="font-size:15px">{_esc(n.title)}</p>'
+        + "".join(f'<p style="margin:4px 0;font-weight:bold">{_esc(x)}</p>' for x in lines)
         + (f'<p style="color:#555">Site: {_esc(site.code)} {_esc(site.name)}</p>' if site else "")
         + (f'<p style="color:#b42318">{_esc(n.note)}</p>' if n.note else "")
         + f'<p><a href="{_esc(link)}" style="background:#0F6B5C;color:#fff;padding:8px 14px;text-decoration:none;border-radius:4px">{_esc(action)}</a></p>'

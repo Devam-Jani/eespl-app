@@ -439,6 +439,8 @@ def stage_done(db: Session, item) -> None:
     from app.sites.models import AreaScope, SiteNode, StageTemplate  # noqa: PLC0415
 
     st = db.get(StageTemplate, item.stage_template_id) if item.stage_template_id else None
+    area = node_label(db, db.get(SiteNode, item.node_id))
+    unit = item.unit or _boq_unit(db, item.boq_line_id)
     emit(
         db,
         "stage_done",
@@ -446,11 +448,13 @@ def stage_done(db: Session, item) -> None:
         site_id=item.site_id,
         data={
             "ready_id": item.id,
-            "area": node_label(db, db.get(SiteNode, item.node_id)),
+            "area": area,
             "stage": st.name if st else "the stage",
             "qty": _n(item.qty),
-            "unit": item.unit or _boq_unit(db, item.boq_line_id),
+            "unit": unit,
             "date": label(item.created_at or datetime.now(UTC), "%d %b %Y"),
+            # one place per line, with its own quantity (never joined into the message)
+            "places": [{"place": area, "qty": _n(item.qty), "unit": unit}],
         },
     )
     # the last stage of the site: the final bill

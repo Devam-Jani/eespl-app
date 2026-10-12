@@ -210,7 +210,7 @@ def test_stage_done_tells_billing_then_the_director_after_7_days_until_the_bill_
     got = [n for n in notes(db, billing) if n.rule_code == "stage_done"]
     assert (
         len(got) == 1
-        and f"{Decimal(scope.qty).normalize():f} sqm" in got[0].title
+        and f"{Decimal(scope.qty).normalize():f} sqm" in (got[0].body or "")  # one place per line
         and got[0].link.startswith("/ready-to-bill")
     )
     assert got[0].action_label == "Start bill"

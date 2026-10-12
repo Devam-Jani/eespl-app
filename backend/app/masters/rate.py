@@ -31,6 +31,14 @@ class MissingPriceError(ValueError):
         super().__init__(f"No current price for: {', '.join(products)}")
 
 
+class MissingConsumptionError(MissingPriceError):
+    """A component's consumption is still "to confirm": no rate until it is filled."""
+
+    def __init__(self, products: list[str]):
+        self.products = products
+        ValueError.__init__(self, f"Consumption to confirm for: {', '.join(products)}")
+
+
 @dataclass(frozen=True)
 class ComponentInput:
     product_id: int
@@ -148,7 +156,11 @@ def current_prices(
 def system_rate(
     db: Session, system: System, margin_percent: Decimal | None = None, on: date | None = None
 ) -> RateBreakdown:
-    """Build up the rate for a stored system using today's prices. Raises MissingPriceError."""
+    """Build up the rate for a stored system using today's prices. Raises MissingPriceError
+    (or MissingConsumptionError when a consumption is still to confirm)."""
+    blank = [c.product.name for c in system.components if c.consumption_per_unit is None]
+    if blank:
+        raise MissingConsumptionError(blank)
     prices = current_prices(db, [c.product_id for c in system.components], on)
     missing = [c.product.name for c in system.components if c.product_id not in prices]
     if missing:

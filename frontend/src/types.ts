@@ -109,9 +109,12 @@ export type ComponentPublic = {
   product_name: string;
   brand: string | null;
   unit: string;
+  coats: number | null;
+  to_confirm: boolean;
+  note: string | null;
 };
 
-export type ComponentCost = ComponentPublic & { consumption_per_unit: string; wastage_percent: string };
+export type ComponentCost = ComponentPublic & { consumption_per_unit: string | null; wastage_percent: string };
 
 export type System = {
   id: number;
@@ -120,6 +123,8 @@ export type System = {
   description: string | null;
   unit: string;
   is_active: boolean;
+  to_confirm: boolean;
+  note: string | null;
   rate: string | null;
   rate_error: string | null;
   components: ComponentPublic[];

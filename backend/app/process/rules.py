@@ -10,7 +10,12 @@ accounts, store_purchase, estimator (the site's member holding the role, else th
 user), director, office_admin (everyone holding the role), author (who made the record).
 
 Message fields come from the event's data ({site}, {area}, {qty} ...); {amount} is shown only to
-roles that may see amounts, {cost} only to roles that may see costs.
+roles that may see amounts, {cost} only to roles that may see costs. The places an event is about
+(data "places": [{place, qty, unit}]) go one per line under the message, never joined into it.
+
+"short" and "ref" make the email subject, at most 80 characters:
+"[EESPL] <short> · <site code> <ref>", e.g. "[EESPL] Work done, make the bill · S-2026-0001
+Block A raft"; the full message stays in the body.
 """
 
 H = 1  # hours
@@ -19,6 +24,7 @@ D = 24  # a day in hours
 DEFAULT_RULES: list[dict] = [
     {
         "code": "enquiry_unassigned", "number": 1, "event": "enquiry_unassigned",
+        "short": "Allocate a salesperson", "ref": "{lead} {name}",
         "title": "Enquiry entered without a salesperson",
         "recipients": [{"role": "planning", "message": "Enquiry {lead}: {name}, {city}. Allocate a salesperson.", "action": "Allocate"}],
         "link": "/enquiries?lead={lead_id}", "closed_by": ["lead_allocated"],
@@ -26,6 +32,7 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "lead_allocated", "number": 2, "event": "lead_allocated",
+        "short": "Enquiry allocated to you", "ref": "{lead} {name}",
         "title": "Salesperson allocated",
         "recipients": [{"role": "salesperson", "message": "Enquiry {lead} allocated to you: {name}, {city}, {phone}. {requirement}. Prepare the quotation.", "action": "Prepare quotation"}],
         "link": "/leads/{lead_id}", "closed_by": ["quotation_created"],
@@ -33,18 +40,21 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "send_blocked", "number": 3, "event": "send_blocked",
+        "short": "Cannot be sent yet", "ref": "{what}",
         "title": "Quotation or tender BOQ blocked by the send checklist",
         "recipients": [{"role": "author", "message": "{what} cannot be sent yet: {missing}", "action": "Fix"}],
         "link": "{link}", "closed_by": ["quotation_sent", "tender_submitted"], "escalations": [],
     },
     {
         "code": "quotation_sent", "number": 4, "event": "quotation_sent",
+        "short": "Quotation sent", "ref": "{quotation}",
         "title": "Quotation sent: follow-ups on the schedule",
         "recipients": [{"role": "salesperson", "message": "{quotation} sent to {client}: follow-ups on day 2, 7, 15 and 30.", "info": True}],
         "link": "/quotations/{quotation_id}", "closed_by": [], "escalations": [],
     },
     {
         "code": "followup_due", "number": 4.1, "event": "followup_due",
+        "short": "Follow up the quotation", "ref": "{quotation}",
         "title": "Quotation follow-up due (the schedule of rule 4)",
         "recipients": [{"role": "salesperson", "message": "Follow up {quotation} with {client} (day {day} after sending).", "action": "Follow up"}],
         "link": "/quotations/{quotation_id}", "closed_by": ["followup_done"],
@@ -52,6 +62,7 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "negotiation_logged", "number": 5, "event": "negotiation_logged",
+        "short": "Rate change asked", "ref": "{what}",
         "title": "Negotiation logged: the client asks for a rate change",
         "recipients": [
             {"role": "estimator", "message": "{what}: the client asked \"{asked}\". Revise the offer.", "action": "Revise the offer"},
@@ -62,6 +73,7 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "tender_submitted", "number": 6, "event": "tender_submitted",
+        "short": "Tender submitted", "ref": "{tender}",
         "title": "Tender submitted: awaiting award",
         "recipients": [
             {"role": "salesperson", "message": "Tender {tender} submitted: awaiting award; a follow-up every 60 days until won or lost.", "info": True},
@@ -71,6 +83,7 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "job_won", "number": 7, "event": "job_won",
+        "short": "Won, assign the team", "ref": "{title}",
         "title": "Quotation or tender won",
         "recipients": [{"role": "director", "message": "Won: {title}. Assign the salesperson and the site engineer.", "action": "Assign"}],
         "link": "/assignments/{assignment_id}", "closed_by": ["job_assigned"],
@@ -78,6 +91,7 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "job_assigned", "number": 8, "event": "job_assigned",
+        "short": "Team assigned", "ref": "",
         "title": "Team assigned",
         "recipients": [
             {"role": "salesperson", "message": "{site}: make the first site visit.", "action": "Log the visit", "link": "/sites/{site_id}?visit=1", "closed_by": ["site_visit_logged"]},
@@ -89,6 +103,7 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "front_ready", "number": 9, "event": "front_ready",
+        "short": "Front ready, plan material", "ref": "{area}",
         "title": "Work front ready",
         "recipients": [{"role": "planning", "message": "{site}: {area} ready ({qty} {unit}). Material plan for this area (wastage {wastage}).", "action": "Plan material"}],
         "link": "/sites/{site_id}/material-plan?node={node_id}", "closed_by": ["indent_created"],
@@ -96,6 +111,7 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "indent_approved", "number": 10, "event": "indent_approved",
+        "short": "Indent approved, place the PO", "ref": "{indent}",
         "title": "Indent approved",
         "recipients": [{"role": "store_purchase", "message": "Indent {indent} for {site} approved: place the PO at the contract rate.", "action": "Place the PO"}],
         "link": "/indents/{indent_id}", "closed_by": ["po_created"],
@@ -103,6 +119,7 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "dn_created", "number": 11, "event": "dn_created",
+        "short": "Material on the way", "ref": "{dn}",
         "title": "PO sent and delivery note made",
         "recipients": [
             {"role": "site_engineer", "message": "Material on the way to {site}: {items}, expected {expected}. Prepare the surface (cleaning, grinding) before it arrives.", "info": True},
@@ -112,6 +129,7 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "delivery_confirmed", "number": 12, "event": "delivery_confirmed",
+        "short": "Delivery confirmed", "ref": "{dn}",
         "title": "Delivery confirmed at site",
         "recipients": [
             {"role": "site_engineer", "message": "{dn}: material at {site}, work can start on this area.", "info": True},
@@ -121,12 +139,14 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "first_dpr_on_area", "number": 13, "event": "first_dpr_on_area",
+        "short": "Work started", "ref": "{area}",
         "title": "First daily report on an area",
         "recipients": [{"role": "planning", "message": "{site}: work started on {area}; the site is now ongoing on the status board.", "info": True}],
         "link": "/planning/board", "closed_by": [], "escalations": [],
     },
     {
         "code": "dpr_submitted", "number": 14, "event": "dpr_submitted",
+        "short": "Daily report to approve", "ref": "{date}",
         "title": "Daily report submitted",
         "recipients": [{"role": "site_engineer", "message": "Daily report of {date} for {site}: approve or return.", "action": "Approve or return"}],
         "link": "/sites/{site_id}?tab=dpr&day={day}", "closed_by": ["dpr_reviewed"],
@@ -134,6 +154,7 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "dpr_new_area", "number": 15, "event": "dpr_new_area",
+        "short": "Area not in the quotation", "ref": "{area}",
         "title": "Area in a daily report that is not in the quotation",
         "recipients": [
             {"role": "planning", "message": "{site}: work on {area}, which is not in the quotation. Quote or approve this area.", "action": "Quote or approve"},
@@ -144,16 +165,18 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "stage_done", "number": 16, "event": "stage_done",
+        "short": "Work done, make the bill", "ref": "{area}",
         "title": "Stage done: make the stage bill",
         "recipients": [
-            {"role": "billing", "message": "Work done: {site}, {area}, {stage}, {qty} {unit} on {date}. Make the stage bill (measurement book entry attached).", "action": "Start bill"},
-            {"role": "salesperson", "message": "Work done: {site}, {area}, {stage}, {qty} {unit} on {date}. Billing makes the stage bill.", "info": True},
+            {"role": "billing", "message": "Work done on {date}: make the stage bill (measurement book entry attached).", "action": "Start bill"},
+            {"role": "salesperson", "message": "Work done on {date}: billing makes the stage bill.", "info": True},
         ],
         "link": "/ready-to-bill?item={ready_id}", "closed_by": ["stage_billed"],
         "escalations": [{"after_hours": 7 * D, "to": ["director"]}],
     },
     {
         "code": "monthly_ra_due", "number": 17, "event": "monthly_ra_due",
+        "short": "Monthly RA bill due", "ref": "",
         "title": "Monthly cycle day: RA bill to raise",
         "recipients": [{"role": "billing", "message": "{site}: the monthly RA bill is due (measured work not billed).", "action": "Raise RA bill"}],
         "link": "/sites/{site_id}?tab=finance", "closed_by": ["site_billed"],
@@ -161,6 +184,7 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "bill_sent", "number": 18, "event": "bill_sent",
+        "short": "Bill sent, follow up", "ref": "{bill}",
         "title": "Bill sent to the client",
         "recipients": [
             {"role": "salesperson", "message": "{bill} for {site} sent to the client: follow up for certification.", "action": "Follow up"},
@@ -171,6 +195,7 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "cert_differs", "number": 19, "event": "cert_differs",
+        "short": "Certified less than billed", "ref": "{bill}",
         "title": "Client certified less than billed",
         "recipients": [
             {"role": "billing", "message": "{bill} for {site}: the client certified {certified} against {billed} billed. Give the reason.", "action": "Give the reason"},
@@ -181,6 +206,7 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "payment_received", "number": 20, "event": "payment_received",
+        "short": "Payment received", "ref": "{client}",
         "title": "Payment received",
         "recipients": [
             {"role": "salesperson", "message": "Payment received from {client} for {site}: {amount}.", "info": True},
@@ -190,6 +216,7 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "labour_bill_entered", "number": 21, "event": "labour_bill_entered",
+        "short": "Labour bill to check", "ref": "{bill}",
         "title": "Labour bill entered",
         "recipients": [
             {"role": "billing", "message": "Labour bill {bill} of {contractor} for {site}: check it against the work done ({check}).", "action": "Check"},
@@ -199,6 +226,7 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "consumption_high", "number": 22, "event": "consumption_high",
+        "short": "Consumption off the range", "ref": "",
         "title": "Consumption above the learned range on an area",
         "recipients": [
             {"role": "planning", "message": "{site}: {flags} material(s) used outside the range on the areas. Review.", "action": "Review"},
@@ -209,6 +237,7 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "last_stage_done", "number": 23, "event": "last_stage_done",
+        "short": "Last stage done, final bill", "ref": "",
         "title": "Last stage of the site done",
         "recipients": [
             {"role": "billing", "message": "{site}: the last stage is done. Make the final bill.", "action": "Final bill"},
@@ -219,6 +248,7 @@ DEFAULT_RULES: list[dict] = [
     },
     {
         "code": "kylas_quotation", "number": 24, "event": "kylas_quotation",
+        "short": "Make the quotation", "ref": "{lead} {name}",
         "title": "Kylas lead at the quotation stage",
         "recipients": [{"role": "salesperson", "message": "Kylas: {lead} {name} is at the quotation stage. Make the quotation (pick the items here).", "action": "Make quotation"}],
         "link": "/quotations?new=1&lead={lead_id}", "closed_by": ["quotation_created"], "escalations": [],

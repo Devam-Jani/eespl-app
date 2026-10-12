@@ -7,6 +7,7 @@ import type { FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
+import { DoneButton } from "../components/DoneButton";
 import Modal from "../components/Modal";
 import { errorText } from "../format";
 import { S } from "../receipt/strings";
@@ -55,6 +56,7 @@ export type WorkItem = {
   severity: "normal" | "warn" | "danger";
   menu: string;
   notification_id?: number;
+  lines?: string[];
 };
 export type MyWorkData = { sections: { role: string; title: string; items: WorkItem[] }[]; counts: Record<string, number>; total: number };
 
@@ -102,6 +104,11 @@ export function MyWork() {
                 <li key={i.key} className={`mywork-item sev-${i.severity}`}>
                   <div className="mywork-text">
                     <b>{i.title}</b>
+                    {(i.lines ?? []).map((l) => (
+                      <span key={l} className="note-line">
+                        {l}
+                      </span>
+                    ))}
                     <span className="small">{i.why}</span>
                   </div>
                   <span className={`mywork-age ${i.age_days !== null && i.age_days > 7 ? "text-danger" : "muted"}`}>
@@ -111,11 +118,7 @@ export function MyWork() {
                     <Link className="btn btn-small btn-primary" to={i.link}>
                       {i.action}
                     </Link>
-                    {i.notification_id && (
-                      <button className="btn btn-small" onClick={() => void api(`/api/process/notifications/${i.notification_id}/done`, { method: "POST" }).then(reload)}>
-                        Done
-                      </button>
-                    )}
+                    {i.notification_id && <DoneButton id={i.notification_id} action={i.action} onDone={() => void reload()} />}
                   </span>
                 </li>
               ))}

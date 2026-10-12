@@ -189,6 +189,9 @@ class System(Tracked, Base):
     labour_unit: Mapped[str] = mapped_column(String(10), server_default="sqm")
     default_margin_percent: Mapped[Decimal] = mapped_column(Numeric(6, 2), server_default="30")
     is_active: Mapped[bool] = mapped_column(server_default=true())
+    # products, consumption or coats our data does not give yet: left blank, never guessed
+    to_confirm: Mapped[bool] = mapped_column(server_default=false())
+    note: Mapped[str | None] = mapped_column(Text)
 
     components: Mapped[list["SystemComponent"]] = relationship(
         lazy="selectin",
@@ -208,8 +211,12 @@ class SystemComponent(Tracked, Base):
     id: Mapped[int] = mapped_column(Identity(), primary_key=True)
     system_id: Mapped[int] = mapped_column(ForeignKey("systems.id", ondelete="CASCADE"), index=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"))
-    consumption_per_unit: Mapped[Decimal] = mapped_column(Numeric(12, 4))
+    # blank: "to confirm" (our data does not say it); a rate cannot be built until it is filled
+    consumption_per_unit: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
     wastage_percent: Mapped[Decimal] = mapped_column(Numeric(6, 2), server_default="0")
+    coats: Mapped[int | None] = mapped_column(Integer)
+    to_confirm: Mapped[bool] = mapped_column(server_default=false())
+    note: Mapped[str | None] = mapped_column(Text)  # where the figures come from, or what is open
 
     product: Mapped[Product] = relationship(lazy="joined")
 

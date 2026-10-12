@@ -1228,6 +1228,7 @@ def process_items(db: Session, p: Principal) -> list[Item]:
             "/notifications",
         )
         it["notification_id"] = n.id
+        it["lines"] = n.body.split("\n") if n.body else []
         out.append(it)
     return out
 
