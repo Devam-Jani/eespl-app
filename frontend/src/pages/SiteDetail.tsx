@@ -12,6 +12,7 @@ import TasksTab from "./site/TasksTab";
 // three.js is only downloaded when the 3D tab is opened
 const Site3DTab = lazy(() => import("./site/Site3DTab"));
 const MaterialTab = lazy(() => import("./site/MaterialTab"));
+const ProcessTab = lazy(() => import("../process/Pages").then((m) => ({ default: m.ProcessTab })));
 const SiteVisits = lazy(() => import("../team/Pages").then((m) => ({ default: m.SiteVisits })));
 const SiteControlStrip = lazy(() => import("../sitecontrol/Pages").then((m) => ({ default: m.SiteControlStrip })));
 // the execution tabs are their own chunk too
@@ -44,7 +45,8 @@ type Tab =
   | "assets"
   | "budget"
   | "finance"
-  | "portal";
+  | "portal"
+  | "process";
 
 export default function SiteDetail() {
   const { id } = useParams();
@@ -130,6 +132,7 @@ export default function SiteDetail() {
         const tabs = (
           [
             ["overview", "Overview", true],
+            ["process", "Process", true],
             ["dpr", "DPR", can("dpr.view")],
             ["tasks", "Tasks", true],
             ["labour", "Labour", can("labour.view")],
@@ -189,6 +192,11 @@ export default function SiteDetail() {
           {tab === "finance" && <FinanceTab site={site} />}
           {tab === "portal" && <PortalTab site={site} />}
         </Suspense>
+        {tab === "process" && (
+          <Suspense fallback={<p className="muted">Loading…</p>}>
+            <ProcessTab siteId={site.id} />
+          </Suspense>
+        )}
         {tab === "3d" && (
           <Suspense fallback={<p className="muted">Loading the 3D view…</p>}>
             <Site3DTab site={site} onChange={load} onOpenStructure={() => setTab("structure")} />
@@ -199,7 +207,7 @@ export default function SiteDetail() {
   );
 }
 
-const ROLES = ["incharge", "supervisor", "sales", "office", "viewer"];
+const ROLES = ["incharge", "supervisor", "sales", "office", "viewer", "receiver"];
 
 type ExecOverview = {
   dpr_missing: { count: number; days: string[] } | null;

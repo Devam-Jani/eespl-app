@@ -66,6 +66,17 @@ services:
     depends_on:
       - api
 
+  # Development email: every email the app sends lands here, nothing leaves the PC. SMTP and the
+  # inbox are on this PC only (127.0.0.1): http://127.0.0.1:8026. Real sending is switched on
+  # only at go-live (EMAIL_ENABLED=true and the SMTP settings in .env).
+  mailpit:
+    image: axllent/mailpit:v1.20
+    container_name: eespl-mailpit
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1026:1025"
+      - "127.0.0.1:8026:8025"
+
   # Phone testing over HTTPS on the office network only (camera, WebXR). Off unless asked for:
   #   LAN_IP=192.168.1.20 docker compose --profile lan-https up -d lan-https
   # Binds to the PC's LAN address only; see docs/phone-testing.md. Never port-forward it.

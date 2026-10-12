@@ -295,16 +295,16 @@ def get_delivery(
         grn_id=dn.grn_id,
         can_confirm=dn.confirmed_at is None
         and dn.status == "dispatched"
-        and _may(principal, "delivery.confirm", dn.site_id),
+        and _may(db, principal, "delivery.confirm", dn.site_id),
     )
     return jsonable_encoder(out)
 
 
-def _may(principal, code: str, site_id: int) -> bool:
+def _may(db, principal, code: str, site_id: int) -> bool:
     scope = principal.permissions.get(code)
     if scope is None:
         return False
-    return scope == "all" or site_id in set(material.assigned_sites(principal))
+    return scope == "all" or site_id in material.site_ids(db, principal)
 
 
 @router.get("/deliveries/{dn_id}/pdf")
@@ -342,7 +342,7 @@ async def confirm_delivery(
 ) -> dict:
     """A logged-in supervisor confirms the same way (their name is filled in)."""
     dn = _dn(db, dn_id, scope, principal)
-    if not _may(principal, "delivery.confirm", dn.site_id):
+    if not _may(db, principal, "delivery.confirm", dn.site_id):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, "You cannot confirm deliveries for this site"
         )
@@ -926,7 +926,9 @@ async def ask_new_area(
 ) -> dict:
     """From the phone: a place not on the site's list (name, area type, approximate size, a
     photo). Planning approves it; work can be booked on it meanwhile."""
-    if not _may(principal, "site.update", site_id) and not _may(principal, "site.edit", site_id):
+    if not _may(db, principal, "site.update", site_id) and not _may(
+        db, principal, "site.edit", site_id
+    ):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot ask for areas on this site")
     if (
         parent_node_id
@@ -1041,6 +1043,9 @@ def approve_new_area(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unknown kind of place")
     node = sc.approve_area(db, r, principal.user.id, body.parent_node_id, body.kind)
     record(db, request, principal, "new_area.approve", "new_area", r.id, after={"node": node.id})
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.new_area_decided(db, r, principal.user.id)
     db.commit()
     return jsonable_encoder(_area_out(db, r))
 
@@ -1072,6 +1077,9 @@ def reject_new_area(
         r.id,
         after={"moved_to": body.move_to_node_id},
     )
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.new_area_decided(db, r, principal.user.id)
     db.commit()
     return jsonable_encoder(_area_out(db, r))
 
@@ -1170,6 +1178,9 @@ def override_productivity(
         b.id,
         after={"note": body.note, "check": b.productivity},
     )
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.labour_decided(db, b, principal.user.id)
     db.commit()
     return jsonable_encoder(
         {
@@ -1343,7 +1354,7 @@ def set_receiver(
     _: SiteView,
 ) -> dict:
     """Who may confirm deliveries when the supervisor is away (labour leader, applicator)."""
-    if not _may(principal, "site.edit", site_id):
+    if not _may(db, principal, "site.edit", site_id):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot change this site")
     site = db.get(Site, site_id)
     site.receiver_name, site.receiver_phone = (

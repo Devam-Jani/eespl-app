@@ -21,11 +21,13 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 import app.finance.models  # noqa: F401  (RA bills, invoices)
+import app.process.models  # noqa: F401  (notifications point at process events)
 from app.masters.models import Tracked
 from app.models import Base
 
@@ -171,9 +173,24 @@ class Comment(Base):
 
 
 class Notification(Base):
-    """An in-app notification (the bell)."""
+    """An in-app notification (the bell). One made by a process rule is also a to-do: it stays
+    open on the person's My work until its action is done (an event of the rule's closed_by
+    list for the same subject, or "done"), then closes with who and when."""
 
     __tablename__ = "notifications"
+    __table_args__ = (
+        Index(
+            "uq_notifications_event_user_level",
+            "event_id",
+            "user_id",
+            "escalation_level",
+            unique=True,
+            postgresql_where=text("event_id IS NOT NULL"),
+        ),
+        Index(
+            "ix_notifications_subject_open", "subject", postgresql_where=text("closed_at IS NULL")
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Identity(), primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -187,6 +204,22 @@ class Notification(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
+    # the process layer: which event and rule made it, what it is about, the one-tap action
+    event_id: Mapped[int | None] = mapped_column(
+        ForeignKey("process_events.id", ondelete="SET NULL"), index=True
+    )
+    rule_code: Mapped[str | None] = mapped_column(String(40))
+    subject: Mapped[str | None] = mapped_column(String(60))
+    action_label: Mapped[str | None] = mapped_column(String(60))
+    needs_action: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    close_on: Mapped[list[str] | None] = mapped_column(JSONB)
+    escalated: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    escalation_level: Mapped[int] = mapped_column(server_default="0")
+    escalation_step: Mapped[int] = mapped_column(server_default="0")  # steps already fired
+    note: Mapped[str | None] = mapped_column(String(200))  # e.g. "no one assigned on this site"
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    email_status: Mapped[str | None] = mapped_column(String(10))  # queued, sent, failed, summary
 
 
 class NotificationOutbox(Base):
@@ -196,7 +229,7 @@ class NotificationOutbox(Base):
     __tablename__ = "notification_outbox"
     __table_args__ = (
         CheckConstraint("channel IN ('in_app', 'email', 'sms', 'whatsapp')", name="channel_valid"),
-        CheckConstraint("status IN ('pending', 'sent', 'failed')", name="status_valid"),
+        CheckConstraint("status IN ('pending', 'sent', 'failed', 'summary')", name="status_valid"),
     )
 
     id: Mapped[int] = mapped_column(Identity(), primary_key=True)
@@ -208,3 +241,4 @@ class NotificationOutbox(Base):
     attempts: Mapped[int] = mapped_column(server_default="0")
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error: Mapped[str | None] = mapped_column(Text)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

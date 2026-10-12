@@ -794,6 +794,9 @@ def approve_indent(
         _approver(db, principal, ind)
         ind.status, ind.approved_by, ind.approved_at = "approved", principal.user.id, _now()
         ind.reject_reason = None
+        from app.process import hooks  # noqa: PLC0415
+
+        hooks.indent_approved(db, ind, principal.user.id)  # store: place the PO
 
     return _indent_action(db, request, principal, scope, indent_id, act)
 
@@ -1450,6 +1453,9 @@ def create_po(
         po.id,
         after=audit.model_snapshot(po, "lines", "charges"),
     )
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.po_created(db, po, list(body.indent_ids or []), principal.user.id)
     db.commit()
     return _po_out(db, db.get(PurchaseOrder, po.id), principal)
 

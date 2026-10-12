@@ -170,6 +170,23 @@ def wastage(area: SurveyArea, area_type: AreaType | None, component: SystemCompo
     return Decimal(component.wastage_percent or 0)
 
 
+def client_of(db: Session, survey) -> int | None:
+    """The survey's client: its site's, tender's or lead's."""
+    from app.crm.models import Lead  # noqa: PLC0415
+    from app.sites.models import Site  # noqa: PLC0415
+
+    if survey.site_id:
+        site = db.get(Site, survey.site_id)
+        return site.client_id if site else None
+    if survey.tender_id:
+        from app.tenders.models import Tender  # noqa: PLC0415
+
+        t = db.get(Tender, survey.tender_id)
+        return t.client_id if t else None
+    lead = db.get(Lead, survey.lead_id) if survey.lead_id else None
+    return lead.client_id if lead else None
+
+
 def area_system_id(area: SurveyArea, area_type: AreaType | None) -> int | None:
     return area.system_id or (area_type.default_system_id if area_type else None)
 

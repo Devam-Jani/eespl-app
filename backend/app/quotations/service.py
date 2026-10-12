@@ -554,6 +554,10 @@ def mark_sent(db: Session, q: Quotation, user_id) -> None:
         if lead and lead.status in ("new", "contacted", "site_visit"):
             lead.status = "quoted"
     _activity(db, q, f"Quotation {q.code} R{q.revision} sent", user_id)
+    from app.process import hooks  # noqa: PLC0415
+
+    db.flush()
+    hooks.quotation_sent(db, q, user_id)
 
 
 def mark_lost(db: Session, q: Quotation, reason: str | None, note: str | None, user_id) -> None:

@@ -1,0 +1,243 @@
+# ruff: noqa: E501  (rule texts read better unwrapped)
+"""The process chain Mr. Sunil described in the 9 Oct meeting (enquiry to payment): one rule per
+step. Each rule turns an event into notifications: who is told (by role, resolved from the
+event's site), the message and the one-tap action, which events close it, and the escalation
+(after how many hours, to whom). All of it is editable in Settings > Process rules; these are the
+seeds.
+
+Recipient roles: salesperson, site_engineer, supervisor (the site's people), planning, billing,
+accounts, store_purchase, estimator (the site's member holding the role, else the role's default
+user), director, office_admin (everyone holding the role), author (who made the record).
+
+Message fields come from the event's data ({site}, {area}, {qty} ...); {amount} is shown only to
+roles that may see amounts, {cost} only to roles that may see costs.
+"""
+
+H = 1  # hours
+D = 24  # a day in hours
+
+DEFAULT_RULES: list[dict] = [
+    {
+        "code": "enquiry_unassigned", "number": 1, "event": "enquiry_unassigned",
+        "title": "Enquiry entered without a salesperson",
+        "recipients": [{"role": "planning", "message": "Enquiry {lead}: {name}, {city}. Allocate a salesperson.", "action": "Allocate"}],
+        "link": "/enquiries?lead={lead_id}", "closed_by": ["lead_allocated"],
+        "escalations": [{"after_hours": 24 * H, "to": ["director"]}],
+    },
+    {
+        "code": "lead_allocated", "number": 2, "event": "lead_allocated",
+        "title": "Salesperson allocated",
+        "recipients": [{"role": "salesperson", "message": "Enquiry {lead} allocated to you: {name}, {city}, {phone}. {requirement}. Prepare the quotation.", "action": "Prepare quotation"}],
+        "link": "/leads/{lead_id}", "closed_by": ["quotation_created"],
+        "escalations": [{"after_hours": 3 * D, "to": ["planning"]}],
+    },
+    {
+        "code": "send_blocked", "number": 3, "event": "send_blocked",
+        "title": "Quotation or tender BOQ blocked by the send checklist",
+        "recipients": [{"role": "author", "message": "{what} cannot be sent yet: {missing}", "action": "Fix"}],
+        "link": "{link}", "closed_by": ["quotation_sent", "tender_submitted"], "escalations": [],
+    },
+    {
+        "code": "quotation_sent", "number": 4, "event": "quotation_sent",
+        "title": "Quotation sent: follow-ups on the schedule",
+        "recipients": [{"role": "salesperson", "message": "{quotation} sent to {client}: follow-ups on day 2, 7, 15 and 30.", "info": True}],
+        "link": "/quotations/{quotation_id}", "closed_by": [], "escalations": [],
+    },
+    {
+        "code": "followup_due", "number": 4.1, "event": "followup_due",
+        "title": "Quotation follow-up due (the schedule of rule 4)",
+        "recipients": [{"role": "salesperson", "message": "Follow up {quotation} with {client} (day {day} after sending).", "action": "Follow up"}],
+        "link": "/quotations/{quotation_id}", "closed_by": ["followup_done"],
+        "escalations": [{"after_hours": 2 * D, "to": ["planning"]}],
+    },
+    {
+        "code": "negotiation_logged", "number": 5, "event": "negotiation_logged",
+        "title": "Negotiation logged: the client asks for a rate change",
+        "recipients": [
+            {"role": "estimator", "message": "{what}: the client asked \"{asked}\". Revise the offer.", "action": "Revise the offer"},
+            {"role": "salesperson", "message": "{what}: the client asked \"{asked}\". Revise the offer.", "action": "Revise the offer"},
+        ],
+        "link": "{link}", "closed_by": ["quotation_revised", "tender_submitted"],
+        "escalations": [{"after_hours": 2 * D, "to": ["director"]}],
+    },
+    {
+        "code": "tender_submitted", "number": 6, "event": "tender_submitted",
+        "title": "Tender submitted: awaiting award",
+        "recipients": [
+            {"role": "salesperson", "message": "Tender {tender} submitted: awaiting award; a follow-up every 60 days until won or lost.", "info": True},
+            {"role": "planning", "message": "Tender {tender} submitted: awaiting award.", "info": True},
+        ],
+        "link": "/tenders/{tender_id}?tab=award", "closed_by": [], "escalations": [],
+    },
+    {
+        "code": "job_won", "number": 7, "event": "job_won",
+        "title": "Quotation or tender won",
+        "recipients": [{"role": "director", "message": "Won: {title}. Assign the salesperson and the site engineer.", "action": "Assign"}],
+        "link": "/assignments/{assignment_id}", "closed_by": ["job_assigned"],
+        "escalations": [{"after_hours": 24 * H, "to": ["director"]}, {"after_hours": 48 * H, "to": ["office_admin"]}],
+    },
+    {
+        "code": "job_assigned", "number": 8, "event": "job_assigned",
+        "title": "Team assigned",
+        "recipients": [
+            {"role": "salesperson", "message": "{site}: make the first site visit.", "action": "Log the visit", "link": "/sites/{site_id}?visit=1", "closed_by": ["site_visit_logged"]},
+            {"role": "site_engineer", "message": "{site}: get the AutoCAD drawing from the client and finish the site survey.", "action": "Open the survey", "link": "/surveys?site={site_id}", "closed_by": ["survey_done"]},
+            {"role": "planning", "message": "{site} added as upcoming on the status board.", "info": True},
+        ],
+        "link": "/sites/{site_id}", "closed_by": [],
+        "escalations": [{"after_hours": 3 * D, "to": ["planning"]}],
+    },
+    {
+        "code": "front_ready", "number": 9, "event": "front_ready",
+        "title": "Work front ready",
+        "recipients": [{"role": "planning", "message": "{site}: {area} ready ({qty} {unit}). Material plan for this area (wastage {wastage}).", "action": "Plan material"}],
+        "link": "/sites/{site_id}/material-plan?node={node_id}", "closed_by": ["indent_created"],
+        "escalations": [{"after_hours": 24 * H, "to": ["director"]}],
+    },
+    {
+        "code": "indent_approved", "number": 10, "event": "indent_approved",
+        "title": "Indent approved",
+        "recipients": [{"role": "store_purchase", "message": "Indent {indent} for {site} approved: place the PO at the contract rate.", "action": "Place the PO"}],
+        "link": "/indents/{indent_id}", "closed_by": ["po_created"],
+        "escalations": [{"after_hours": 24 * H, "to": ["planning"]}],
+    },
+    {
+        "code": "dn_created", "number": 11, "event": "dn_created",
+        "title": "PO sent and delivery note made",
+        "recipients": [
+            {"role": "site_engineer", "message": "Material on the way to {site}: {items}, expected {expected}. Prepare the surface (cleaning, grinding) before it arrives.", "info": True},
+            {"role": "supervisor", "message": "Material on the way to {site}: {items}, expected {expected}. Prepare the surface (cleaning, grinding) before it arrives.", "info": True},
+        ],
+        "link": "/deliveries/{dn_id}", "closed_by": [], "escalations": [],
+    },
+    {
+        "code": "delivery_confirmed", "number": 12, "event": "delivery_confirmed",
+        "title": "Delivery confirmed at site",
+        "recipients": [
+            {"role": "site_engineer", "message": "{dn}: material at {site}, work can start on this area.", "info": True},
+            {"role": "planning", "message": "{dn}: material at {site}, work can start on this area.", "info": True},
+        ],
+        "link": "/deliveries/{dn_id}", "closed_by": [], "escalations": [],
+    },
+    {
+        "code": "first_dpr_on_area", "number": 13, "event": "first_dpr_on_area",
+        "title": "First daily report on an area",
+        "recipients": [{"role": "planning", "message": "{site}: work started on {area}; the site is now ongoing on the status board.", "info": True}],
+        "link": "/planning/board", "closed_by": [], "escalations": [],
+    },
+    {
+        "code": "dpr_submitted", "number": 14, "event": "dpr_submitted",
+        "title": "Daily report submitted",
+        "recipients": [{"role": "site_engineer", "message": "Daily report of {date} for {site}: approve or return.", "action": "Approve or return"}],
+        "link": "/sites/{site_id}?tab=dpr&day={day}", "closed_by": ["dpr_reviewed"],
+        "escalations": [{"after_hours": 24 * H, "to": ["planning"]}],
+    },
+    {
+        "code": "dpr_new_area", "number": 15, "event": "dpr_new_area",
+        "title": "Area in a daily report that is not in the quotation",
+        "recipients": [
+            {"role": "planning", "message": "{site}: work on {area}, which is not in the quotation. Quote or approve this area.", "action": "Quote or approve"},
+            {"role": "salesperson", "message": "{site}: work on {area}, which is not in the quotation. Quote or approve this area.", "action": "Quote or approve"},
+        ],
+        "link": "/new-areas", "closed_by": ["new_area_decided"],
+        "escalations": [{"after_hours": 48 * H, "to": ["director"]}],
+    },
+    {
+        "code": "stage_done", "number": 16, "event": "stage_done",
+        "title": "Stage done: make the stage bill",
+        "recipients": [
+            {"role": "billing", "message": "Work done: {site}, {area}, {stage}, {qty} {unit} on {date}. Make the stage bill (measurement book entry attached).", "action": "Start bill"},
+            {"role": "salesperson", "message": "Work done: {site}, {area}, {stage}, {qty} {unit} on {date}. Billing makes the stage bill.", "info": True},
+        ],
+        "link": "/ready-to-bill?item={ready_id}", "closed_by": ["stage_billed"],
+        "escalations": [{"after_hours": 7 * D, "to": ["director"]}],
+    },
+    {
+        "code": "monthly_ra_due", "number": 17, "event": "monthly_ra_due",
+        "title": "Monthly cycle day: RA bill to raise",
+        "recipients": [{"role": "billing", "message": "{site}: the monthly RA bill is due (measured work not billed).", "action": "Raise RA bill"}],
+        "link": "/sites/{site_id}?tab=finance", "closed_by": ["site_billed"],
+        "escalations": [{"after_hours": 5 * D, "to": ["director"]}],
+    },
+    {
+        "code": "bill_sent", "number": 18, "event": "bill_sent",
+        "title": "Bill sent to the client",
+        "recipients": [
+            {"role": "salesperson", "message": "{bill} for {site} sent to the client: follow up for certification.", "action": "Follow up"},
+            {"role": "accounts", "message": "{bill} for {site} sent: receipt expected ({amount}).", "info": True},
+        ],
+        "link": "/bill-tracking?site={site_id}", "closed_by": ["bill_certified"],
+        "escalations": [{"after_hours": 15 * D, "to": ["salesperson"]}],
+    },
+    {
+        "code": "cert_differs", "number": 19, "event": "cert_differs",
+        "title": "Client certified less than billed",
+        "recipients": [
+            {"role": "billing", "message": "{bill} for {site}: the client certified {certified} against {billed} billed. Give the reason.", "action": "Give the reason"},
+            {"role": "salesperson", "message": "{bill} for {site}: the client certified {certified} against {billed} billed. Give the reason.", "action": "Give the reason"},
+        ],
+        "link": "/bill-tracking?site={site_id}", "closed_by": ["diff_reason_given"],
+        "escalations": [{"after_hours": 3 * D, "to": ["director"]}],
+    },
+    {
+        "code": "payment_received", "number": 20, "event": "payment_received",
+        "title": "Payment received",
+        "recipients": [
+            {"role": "salesperson", "message": "Payment received from {client} for {site}: {amount}.", "info": True},
+            {"role": "director", "message": "Payment received from {client} for {site}: {amount}.", "info": True},
+        ],
+        "link": "/receivables", "closed_by": [], "escalations": [],
+    },
+    {
+        "code": "labour_bill_entered", "number": 21, "event": "labour_bill_entered",
+        "title": "Labour bill entered",
+        "recipients": [
+            {"role": "billing", "message": "Labour bill {bill} of {contractor} for {site}: check it against the work done ({check}).", "action": "Check"},
+            {"role": "director", "when": "flagged", "message": "Labour bill {bill} of {contractor} for {site}: productivity low ({check}). Decide.", "action": "Decide", "link": "/payables?tab=subcon", "closed_by": ["labour_decided"]},
+        ],
+        "link": "/labour-check", "closed_by": ["labour_checked"], "escalations": [],
+    },
+    {
+        "code": "consumption_high", "number": 22, "event": "consumption_high",
+        "title": "Consumption above the learned range on an area",
+        "recipients": [
+            {"role": "planning", "message": "{site}: {flags} material(s) used outside the range on the areas. Review.", "action": "Review"},
+            {"role": "site_engineer", "message": "{site}: {flags} material(s) used outside the range on the areas. Review.", "action": "Review"},
+        ],
+        "link": "/consumption?site={site_id}", "closed_by": ["consumption_reviewed"],
+        "escalations": [{"after_hours": 3 * D, "to": ["director"]}],
+    },
+    {
+        "code": "last_stage_done", "number": 23, "event": "last_stage_done",
+        "title": "Last stage of the site done",
+        "recipients": [
+            {"role": "billing", "message": "{site}: the last stage is done. Make the final bill.", "action": "Final bill"},
+            {"role": "planning", "message": "{site}: all work done; moved to completed, to bill.", "info": True},
+        ],
+        "link": "/sites/{site_id}?tab=finance", "closed_by": ["site_billed"],
+        "escalations": [{"after_hours": 7 * D, "to": ["director"]}],
+    },
+    {
+        "code": "kylas_quotation", "number": 24, "event": "kylas_quotation",
+        "title": "Kylas lead at the quotation stage",
+        "recipients": [{"role": "salesperson", "message": "Kylas: {lead} {name} is at the quotation stage. Make the quotation (pick the items here).", "action": "Make quotation"}],
+        "link": "/quotations?new=1&lead={lead_id}", "closed_by": ["quotation_created"], "escalations": [],
+    },
+]  # fmt: skip
+
+# the order of the chain on a site's Process tab
+CHAIN = [r["code"] for r in sorted(DEFAULT_RULES, key=lambda r: r["number"])]
+ROLES = (
+    "salesperson",
+    "site_engineer",
+    "supervisor",
+    "planning",
+    "billing",
+    "accounts",
+    "store_purchase",
+    "estimator",
+    "director",
+    "office_admin",
+    "author",
+)
+DEFAULT_WASTAGE = {"raft": {"min": 5, "max": 7}, "footing": {"min": 12, "max": 15}}

@@ -838,6 +838,7 @@ export type KylasSettings = {
   default_owner_id: number | null;
   deal_pipeline_id: number | null;
   won_stage_id: number | null;
+  quotation_stage_id?: number | null;
   lead_code_field: string;
   category_field: string;
   junk_reasons: string[];

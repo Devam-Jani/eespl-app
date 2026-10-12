@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import { MENU } from "../menu";
 import Bell from "./Bell";
+import { initialMenuOpen, isPhone } from "./menuState";
 
 export default function Layout() {
   const { me, can, logout } = useAuth();
@@ -11,6 +12,11 @@ export default function Layout() {
   const sections = ["Modules", "Analytics", "Masters", "Settings", "Administration"] as const;
   // My work counts on the menu (refreshed on every page change)
   const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(() => initialMenuOpen(window.innerWidth));
+  // on a phone the menu closes again after picking a page
+  useEffect(() => {
+    if (isPhone(window.innerWidth)) setMenuOpen(false);
+  }, [location.pathname]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   useEffect(() => {
     if (!me) return;
@@ -22,7 +28,7 @@ export default function Layout() {
 
   return (
     <div className="shell">
-      <aside className="sidebar">
+      <aside className={`sidebar ${menuOpen ? "menu-open" : "menu-closed"}`}>
         <NavLink to="/" className="brand">
           <span className="brand-mark">E</span> EESPL
         </NavLink>
@@ -46,11 +52,14 @@ export default function Layout() {
       </aside>
       <div className="main">
         <header className="topbar">
+          <button className="btn btn-ghost menu-toggle" aria-expanded={menuOpen} aria-label="Menu" onClick={() => setMenuOpen(!menuOpen)}>
+            ☰ Menu
+          </button>
           <div className="topbar-user">
             <strong>{me?.user.full_name}</strong>
             <span className="muted">{me?.roles.map((r) => r.name).join(", ") || "No role"}</span>
           </div>
-          <Bell />
+          <Bell allLink="/notifications" />
           <button className="btn btn-ghost" onClick={() => void logout()}>
             Sign out
           </button>

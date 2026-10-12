@@ -481,7 +481,13 @@ def update_tender(
         if "guarantee_years" in changes:
             tender.guarantee_years = changes["guarantee_years"]
         send_override = team.enforce_send_check(
-            db, principal, team.tender_send_check(db, tender), body.override_reason, tender.code
+            db,
+            principal,
+            team.tender_send_check(db, tender),
+            body.override_reason,
+            tender.code,
+            subject=f"tender:{tender.id}",
+            link=f"/tenders/{tender.id}",
         )
     for field, value in changes.items():
         if field in ("name", "status") and value is None:
@@ -517,6 +523,9 @@ def update_tender(
         )
     if submitting:
         revision = revisions.submit(db, tender, principal.user.id, None)
+        from app.process import hooks  # noqa: PLC0415
+
+        hooks.tender_submitted(db, tender, principal.user.id)  # awaiting award
         _record(
             db,
             request,
@@ -1441,11 +1450,20 @@ def submit_tender(
     from app.team import service as team  # noqa: PLC0415
 
     override = team.enforce_send_check(
-        db, principal, team.tender_send_check(db, tender), body.override_reason, tender.code
+        db,
+        principal,
+        team.tender_send_check(db, tender),
+        body.override_reason,
+        tender.code,
+        subject=f"tender:{tender.id}",
+        link=f"/tenders/{tender.id}",
     )
     if override:
         _record(db, request, principal, "tender.sendcheck_override", tender, after=override)
     revision = revisions.submit(db, tender, principal.user.id, body.note)
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.tender_submitted(db, tender, principal.user.id)  # awaiting award
     _record(
         db,
         request,

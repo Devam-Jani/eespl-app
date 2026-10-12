@@ -200,9 +200,16 @@ def refresh_scope(db: Session, scope: AreaScope) -> None:
         select(Task).where(Task.area_scope_id == scope.id, Task.parent_task_id.is_(None))
     ).all()
     before = scope.progress_percent
-    scope.progress_percent = sum(
+    from_steps = sum(
         (Decimal(t.step.weight_percent) for t in tasks if t.step and _counts(t)), Decimal(0)
-    ).quantize(PCT)
+    )
+    # approved daily report lines on the place count too (the same places as material)
+    from_reports = (
+        min(Decimal(100), Decimal(scope.dpr_done_qty or 0) * 100 / Decimal(scope.qty))
+        if scope.qty and Decimal(scope.qty) > 0
+        else Decimal(0)
+    )
+    scope.progress_percent = max(from_steps, from_reports).quantize(PCT)
     db.flush()
     # the stage's last task done: billing gets a "ready to bill" item
     from app.sitecontrol import service as sitecontrol  # noqa: PLC0415

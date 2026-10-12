@@ -54,6 +54,7 @@ export type WorkItem = {
   action: string;
   severity: "normal" | "warn" | "danger";
   menu: string;
+  notification_id?: number;
 };
 export type MyWorkData = { sections: { role: string; title: string; items: WorkItem[] }[]; counts: Record<string, number>; total: number };
 
@@ -106,9 +107,16 @@ export function MyWork() {
                   <span className={`mywork-age ${i.age_days !== null && i.age_days > 7 ? "text-danger" : "muted"}`}>
                     {i.age_days === null ? "" : i.age_days === 0 ? "today" : `${i.age_days} d`}
                   </span>
-                  <Link className="btn btn-small btn-primary mywork-action" to={i.link}>
-                    {i.action}
-                  </Link>
+                  <span className="mywork-action">
+                    <Link className="btn btn-small btn-primary" to={i.link}>
+                      {i.action}
+                    </Link>
+                    {i.notification_id && (
+                      <button className="btn btn-small" onClick={() => void api(`/api/process/notifications/${i.notification_id}/done`, { method: "POST" }).then(reload)}>
+                        Done
+                      </button>
+                    )}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -118,7 +126,7 @@ export function MyWork() {
       {!supervisorOnly && (
         <section className="top-gap">
           <Suspense fallback={null}>
-            <Dashboard />
+            <Dashboard embedded />
           </Suspense>
         </section>
       )}
@@ -481,12 +489,17 @@ export function StatusBoard() {
 type PlanRow = { product_id: number; product: string; unit: string; planned: string; ready: string };
 type Plan = {
   by: string;
+  node_id: number | null;
+  area: string | null;
+  wastage: { application: string; min: number; max: number; used: number } | null;
   groups: { key: string; label: string; rows: PlanRow[] }[];
   products: (PlanRow & { indented: string; delivered: string; issued: string; balance: string; to_indent: string })[];
 };
 
 export function MaterialPlan() {
   const { id } = useParams();
+  const [search] = useSearchParams();
+  const node = search.get("node");
   const { can } = useAuth();
   const navigate = useNavigate();
   const [by, setBy] = useState("stage");
@@ -494,16 +507,16 @@ export function MaterialPlan() {
   const [qty, setQty] = useState<Record<number, string>>({});
   const [error, setError] = useState("");
   useEffect(() => {
-    api<Plan>(`/api/team/material-plan/${id}?by=${by}`).then(
+    api<Plan>(`/api/team/material-plan/${id}?by=${by}${node ? `&node=${node}` : ""}`).then(
       (p) => (setPlan(p), setQty(Object.fromEntries(p.products.filter((x) => Number(x.to_indent) > 0).map((x) => [x.product_id, String(Number(x.to_indent))])))),
       (e) => setError(errorText(e)),
     );
-  }, [id, by]);
+  }, [id, by, node]);
   async function indent() {
     try {
       const r = await api<{ id: number; code: string }>(`/api/team/material-plan/${id}/indent`, {
         method: "POST",
-        json: { lines: Object.entries(qty).map(([product_id, q]) => ({ product_id: Number(product_id), qty: q })), submit: true },
+        json: { lines: Object.entries(qty).map(([product_id, q]) => ({ product_id: Number(product_id), qty: q })), submit: true, node_ids: node ? [Number(node)] : [] },
       });
       navigate(`/indents/${r.id}`);
     } catch (e) {
@@ -532,6 +545,14 @@ export function MaterialPlan() {
         From the survey quantities and the systems' consumption (with wastage). "Ready" is the part on work fronts marked ready; "to indent" is what of that is not indented yet.
       </p>
       {error && <div className="alert alert-error">{error}</div>}
+      {plan?.area && (
+        <div className="alert alert-ok">
+          For the ready work front <b>{plan.area}</b>
+          {plan.wastage
+            ? ` · wastage for ${plan.wastage.application}: ${plan.wastage.min}–${plan.wastage.max}% (planned at ${plan.wastage.used}%)`
+            : " · wastage from the system"}. <Link to={`/sites/${id}/material-plan`}>Whole site</Link>
+        </div>
+      )}
       {plan && (
         <>
           <div className="table-wrap card">
@@ -810,10 +831,96 @@ type Tracked = {
   difference: string | null;
   paid: string | null;
   lines: { id: number; qty: string; certified_qty: string; rate: string; reason: string | null }[];
+  certified_by: string | null;
+  certified_on: string | null;
+  certified_via: string | null;
+  has_document: boolean;
+  all_lines: { contract_line_id: number; qty: string; certified_qty: string | null }[];
 };
+
+function CertifyForm({ bill, onClose, onSaved }: { bill: Tracked; onClose: () => void; onSaved: () => void }) {
+  const [f, setF] = useState({ approved_by: "", on_date: new Date().toLocaleDateString("en-CA", { timeZone: TZ }), amount: "" });
+  const [qty, setQty] = useState<Record<number, string>>(Object.fromEntries(bill.all_lines.map((l) => [l.contract_line_id, String(Number(l.certified_qty ?? l.qty))])));
+  const [file, setFile] = useState<File | null>(null);
+  const [error, setError] = useState("");
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    if (!file) return setError("Attach the client's signed copy or email");
+    const form = new FormData();
+    form.append("approved_by", f.approved_by);
+    form.append("on_date", f.on_date);
+    if (f.amount) form.append("amount", f.amount);
+    form.append("lines", JSON.stringify(Object.entries(qty).map(([id, q]) => ({ contract_line_id: Number(id), certified_qty: q }))));
+    form.append("file", file);
+    try {
+      await api(`/api/team/ra-bills/${bill.id}/client-certification`, { method: "POST", form });
+      onSaved();
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }
+  return (
+    <Modal title={`${bill.code}: the client's certification`} onClose={onClose}>
+      <form onSubmit={(e) => void save(e)}>
+        <p className="small muted">Recorded for the client (they need not verify in the portal). Attach their signed copy or the email.</p>
+        <div className="form-grid two">
+          <label className="field">
+            <span>Approved at the client by</span>
+            <input required value={f.approved_by} onChange={(e) => setF({ ...f, approved_by: e.target.value })} placeholder="Name, designation" />
+          </label>
+          <label className="field">
+            <span>Date</span>
+            <input type="date" required value={f.on_date} onChange={(e) => setF({ ...f, on_date: e.target.value })} />
+          </label>
+          <label className="field">
+            <span>Certified amount (₹)</span>
+            <input inputMode="decimal" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+          </label>
+          <label className="field">
+            <span>Signed copy or email</span>
+            <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.eml,.msg" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          </label>
+        </div>
+        <table className="table compact">
+          <thead>
+            <tr>
+              <th>Line</th>
+              <th className="num">Billed</th>
+              <th className="num">Certified</th>
+            </tr>
+          </thead>
+          <tbody>
+            {bill.all_lines.map((l) => (
+              <tr key={l.contract_line_id}>
+                <td>#{l.contract_line_id}</td>
+                <td className="num">{n(l.qty, 3)}</td>
+                <td className="num">
+                  <input
+                    className="input-num"
+                    inputMode="decimal"
+                    value={qty[l.contract_line_id] ?? ""}
+                    onChange={(e) => setQty({ ...qty, [l.contract_line_id]: e.target.value })}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {error && <div className="alert alert-error">{error}</div>}
+        <div className="form-actions">
+          <button type="button" className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn btn-primary">Record certification</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
 
 export function BillTracking() {
   const { can } = useAuth();
+  const [certifying, setCertifying] = useState<Tracked | null>(null);
   const [rows, setRows] = useState<Tracked[] | null>(null);
   const [error, setError] = useState("");
   const load = useCallback(() => api<Tracked[]>("/api/team/bill-tracking").then(setRows, (e) => setError(errorText(e))), []);
@@ -875,6 +982,22 @@ export function BillTracking() {
                 <td className="num">{money(b.paid)}</td>
                 <td>
                   <span className="badge badge-info">{b.status.replace(/_/g, " ")}</span>
+                  {b.certified_by && (
+                    <div className="small muted">
+                      by {b.certified_by}
+                      {b.certified_on && ` on ${fmt(b.certified_on)}`} {b.certified_via && `(${b.certified_via})`}
+                      {b.has_document && (
+                        <button className="btn btn-small btn-ghost" onClick={() => void downloadFile(`/api/team/ra-bills/${b.id}/client-certification/document`)}>
+                          ⤓ copy
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {["submitted", "certified_by_client"].includes(b.status) && (
+                    <button className="btn btn-small" onClick={() => setCertifying(b)}>
+                      Record certification
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -888,6 +1011,7 @@ export function BillTracking() {
           </tbody>
         </table>
       </div>
+      {certifying && <CertifyForm bill={certifying} onClose={() => setCertifying(null)} onSaved={() => (setCertifying(null), void load())} />}
     </>
   );
 }

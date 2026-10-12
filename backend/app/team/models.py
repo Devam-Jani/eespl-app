@@ -217,3 +217,20 @@ def board_label(column: str | None) -> str:
         "ongoing": "Ongoing",
         "completed_to_bill": "Completed, to bill",
     }.get(column or "", "Not on the board")
+
+
+class ClientSystemChoice(Base):
+    """The system last chosen for an area type for a client (the next survey or quotation offers
+    it first). The area type's default is only a suggestion."""
+
+    __tablename__ = "client_system_choices"
+
+    client_id: Mapped[int] = mapped_column(
+        ForeignKey("clients.id", ondelete="CASCADE"), primary_key=True
+    )
+    area_type_id: Mapped[int] = mapped_column(
+        ForeignKey("area_types.id", ondelete="CASCADE"), primary_key=True
+    )
+    system_id: Mapped[int] = mapped_column(ForeignKey("systems.id", ondelete="CASCADE"))
+    chosen_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    chosen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -148,6 +148,9 @@ def _finish(db: Session, dn: DeliveryNote, user_id) -> str:
 
     dn.pdf_path = pdf.save(db, dn, raw)
     _notify_site(db, dn, raw, user_id)
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.dn_created(db, dn)  # the engineer and supervisor: prepare the surface
     return raw
 
 
@@ -276,7 +279,7 @@ def is_listed(
     if user is not None and (
         user.id == site.site_incharge_id
         or db.scalar(
-            select(SiteMember.id).where(
+            select(SiteMember.site_id).where(
                 SiteMember.site_id == site.id, SiteMember.user_id == user.id
             )
         )
@@ -354,6 +357,9 @@ def confirm(
         _post_transfer_delivery(db, dn, uid)
     short = _discrepancies(db, dn, uid)
     dn.status = "short" if short else "confirmed"
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.delivery_confirmed(db, dn, user.id if user else None)  # work can start
     return dn
 
 

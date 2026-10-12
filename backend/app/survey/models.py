@@ -24,7 +24,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.masters.models import Tracked
@@ -57,6 +57,8 @@ class AreaType(Tracked, Base):
     default_upturn_mm: Mapped[Decimal] = mapped_column(Numeric(7, 1), server_default="0")
     # overrides each component's wastage when set
     default_wastage_percent: Mapped[Decimal | None] = mapped_column(Pct)
+    # the other systems that suit this area (offered next to the default as a choice)
+    suitable_system_ids: Mapped[list[int]] = mapped_column(ARRAY(Integer), server_default="{}")
     includes_walls: Mapped[bool] = mapped_column(Boolean, server_default="false")
     needs_sunk_depth: Mapped[bool] = mapped_column(Boolean, server_default="false")
     sort_order: Mapped[int] = mapped_column(Integer, server_default="0")

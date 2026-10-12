@@ -4,7 +4,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # Real environment variables win; the root .env is a fallback when running on the host.
-    model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore")
+    # blank values in .env (SMTP_PORT=) mean "use the default"
+    model_config = SettingsConfigDict(
+        env_file=("../.env", ".env"), extra="ignore", env_ignore_empty=True
+    )
 
     database_url: str
     cors_origins: list[str] = ["http://localhost:5174"]
@@ -24,6 +27,18 @@ class Settings(BaseSettings):
     kylas_api_key: SecretStr | None = None
     # demo users (seed-demo-team), read from .env and never printed
     demo_user_password: SecretStr | None = None
+    # the director (Ankur Sir): his user is made only when DIRECTOR_EMAIL is set in .env
+    director_email: str | None = None
+    director_name: str = "Ankur Shah"
+    # email to our staff only: Mailpit catches everything until go-live (EMAIL_ENABLED=true)
+    email_enabled: bool = False
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: SecretStr | None = None
+    smtp_from: str = "EESPL App <noreply@eespl.local>"
+    mailpit_host: str = "mailpit"
+    mailpit_port: int = 1025
     kylas_timeout_seconds: float = 20
 
     # Claude vision for survey photo suggestions (off unless enabled in survey settings). The key

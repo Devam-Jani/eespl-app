@@ -46,6 +46,7 @@ class DprLineIn(BaseModel):
     node_id: int | None = None
     survey_area_id: int | None = None
     new_area_id: int | None = None
+    area_scope_id: int | None = None  # the BOQ item on the place (default: the open one)
 
 
 class DprIn(BaseModel):
@@ -140,6 +141,8 @@ def _lines_out(db, d: Dpr) -> list[dict]:
                 "node_id": ln.node_id,
                 "survey_area_id": ln.survey_area_id,
                 "new_area_id": ln.new_area_id,
+                "area_scope_id": ln.area_scope_id,
+                "applied": ln.applied,
                 "place": place,
             }
         )
@@ -171,8 +174,40 @@ def _set_lines(db, site: Site, d: Dpr, lines: list[DprLineIn]) -> None:
                 node_id=node_id,
                 survey_area_id=ln.survey_area_id,
                 new_area_id=ln.new_area_id,
+                area_scope_id=ln.area_scope_id,
             )
         )
+
+
+def apply_lines(db, d: Dpr) -> list[int]:
+    """An approved report moves progress: each line's quantity counts on its place's scope
+    (the one it names, else the open one in the same unit), once. Reaching 100 % makes the
+    ready-to-bill item as a finished stage does. Returns the scopes moved."""
+    from app.sites import work  # noqa: PLC0415
+    from app.sites.models import AreaScope  # noqa: PLC0415
+
+    moved = []
+    for ln in d.lines:
+        if ln.applied or not ln.node_id or not ln.qty or Decimal(ln.qty) <= 0:
+            continue
+        scope = db.get(AreaScope, ln.area_scope_id) if ln.area_scope_id else None
+        if scope is None or scope.node_id != ln.node_id:
+            candidates = db.scalars(
+                select(AreaScope)
+                .where(AreaScope.node_id == ln.node_id, AreaScope.site_id == d.site_id)
+                .order_by(AreaScope.progress_percent, AreaScope.id)
+            ).all()
+            unit = (ln.unit or "").lower()
+            same = [c for c in candidates if not unit or (c.unit or "sqm").lower() == unit]
+            scope = next((c for c in same if Decimal(c.progress_percent) < 100), None)
+        if scope is None:
+            continue
+        scope.dpr_done_qty = Decimal(scope.dpr_done_qty or 0) + Decimal(ln.qty)
+        ln.area_scope_id, ln.applied = scope.id, True
+        db.flush()
+        work.refresh_scope(db, scope)
+        moved.append(scope.id)
+    return moved
 
 
 def can_approve(db, principal, site: Site) -> bool:
@@ -291,6 +326,10 @@ def save_dpr(
             raise svc.unprocessable("Write the work done before submitting")
         d.status, d.submitted_by, d.submitted_at = "submitted", principal.user.id, svc.now()
         d.auto = svc.day_activity(db, site.id, day)
+        db.flush()
+        from app.process import hooks  # noqa: PLC0415
+
+        hooks.dpr_submitted(db, d, principal.user.id)  # the engineer: approve or return
     db.flush()
     record(
         db,
@@ -328,6 +367,10 @@ def acknowledge(
         raise svc.conflict(f"The DPR is {d.status}")
     d.status, d.acknowledged_by, d.acknowledged_at = "acknowledged", principal.user.id, svc.now()
     d.return_comment = None
+    apply_lines(db, d)
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.dpr_reviewed(db, d, principal.user.id)
     record(db, request, principal, "dpr.acknowledge", "dpr", d.id)
     db.commit()
     return _out(db, site, d.on_date, d, principal)
@@ -357,6 +400,9 @@ def return_dpr(
         raise svc.conflict(f"The DPR is {d.status}")
     d.status, d.return_comment = "returned", body.comment.strip()
     d.returned_by, d.returned_at = principal.user.id, svc.now()
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.dpr_reviewed(db, d, principal.user.id)
     notify(
         db,
         [d.submitted_by],

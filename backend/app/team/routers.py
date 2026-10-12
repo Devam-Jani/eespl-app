@@ -204,6 +204,9 @@ def create_enquiry(
         )
     )
     record(db, request, principal, "lead.create", "lead", lead.id, after={"unassigned": True})
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.enquiry_unassigned(db, lead, principal.user.id)  # planning: allocate a salesperson
     db.commit()
     return {"id": lead.id, "code": lead.code}
 
@@ -253,7 +256,6 @@ def allocate(
     _: Allocate,
 ) -> dict:
     from app.crm.models import Lead, LeadActivity  # noqa: PLC0415
-    from app.portal.service import notify  # noqa: PLC0415
 
     lead = db.get(Lead, lead_id)
     if lead is None:
@@ -270,13 +272,10 @@ def allocate(
             by=principal.user.id,
         )
     )
-    notify(
-        db,
-        [owner.id],
-        "lead_allocated",
-        f"New enquiry {lead.code} {lead.contact_name}: contact the client",
-        link=f"/leads/{lead.id}",
-    )
+    from app.process import hooks  # noqa: PLC0415
+
+    db.flush()
+    hooks.lead_allocated(db, lead, principal.user.id)  # the salesperson: prepare the quotation
     record(
         db, request, principal, "lead.allocate", "lead", lead.id, after={"owner": owner.full_name}
     )
@@ -472,6 +471,9 @@ async def log_visit(
         v.id,
         after={"site": site_id, "lead": lead_id},
     )
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.site_visit_logged(db, v, principal.user.id)
     db.commit()
     return _visit_out(db, v)
 
@@ -672,16 +674,20 @@ def material_plan(
     principal: CurrentPrincipal,
     scope: Annotated[str, Depends(require_any_permission("planning.view", "indent.view"))],
     by: str = "stage",
+    node: int | None = None,
 ) -> dict:
     site = _site(
         db, site_id, "all" if "planning.view" in principal.permissions else scope, principal
     )
-    return jsonable_encoder(team.material_plan(db, site, "month" if by == "month" else "stage"))
+    return jsonable_encoder(
+        team.material_plan(db, site, "month" if by == "month" else "stage", node)
+    )
 
 
 class PlanIndentIn(BaseModel):
     lines: list[dict] = Field(min_length=1)  # [{product_id, qty}]
     submit: bool = True
+    node_ids: list[int] = []  # the ready work fronts it is for (closes their material to-dos)
 
 
 @router.post("/material-plan/{site_id}/indent", status_code=status.HTTP_201_CREATED)
@@ -711,6 +717,12 @@ def plan_indent(
         principal,
         scope,
     )
+    if body.node_ids:
+        from app.material.models import Indent  # noqa: PLC0415
+        from app.process import hooks  # noqa: PLC0415
+
+        hooks.indent_created(db, db.get(Indent, out.id), body.node_ids, principal.user.id)
+        db.commit()
     return {"id": out.id, "code": out.code}
 
 
@@ -900,6 +912,20 @@ def bill_tracking(
                 if certified is not None
                 else None,
                 "paid": paid.quantize(Decimal("0.01")) if paid is not None else None,
+                "certified_by": b.certified_by_client,
+                "certified_on": b.client_cert_on,
+                "certified_via": b.client_cert_via
+                or ("portal" if b.status == "certified_by_client" else None),
+                "has_document": bool(b.client_cert_doc),
+                "all_lines": [
+                    {
+                        "contract_line_id": ln.contract_line_id,
+                        "qty": ln.qty,
+                        "certified_qty": ln.certified_qty,
+                    }
+                    for ln in lines
+                    if Decimal(ln.qty) > 0
+                ],
                 "lines": [
                     {
                         "id": ln.id,
@@ -944,6 +970,11 @@ def diff_reason(
         ln.id,
         after={"reason": body.reason},
     )
+    from app.finance.models import RaBill  # noqa: PLC0415
+    from app.process import hooks  # noqa: PLC0415
+
+    ra = db.get(RaBill, ln.ra_bill_id)
+    hooks.diff_reason_given(db, ra.id, ra.site_id, principal.user.id)
     db.commit()
     return {"id": ln.id, "reason": ln.client_diff_reason}
 
@@ -999,6 +1030,9 @@ def mark_checked(
     if b is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Bill not found")
     b.billing_checked_by, b.billing_checked_at = principal.user.id, team.now()
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.labour_checked(db, b, principal.user.id)
     record(
         db,
         request,
@@ -1104,6 +1138,9 @@ def add_negotiation(
     db.add(n)
     db.flush()
     record(db, request, principal, "negotiation.add", "negotiation", n.id, after=body.model_dump())
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.negotiation_logged(db, n, principal.user.id)  # estimator and salesperson: revise
     db.commit()
     return _neg_out(db, n)
 
@@ -1360,3 +1397,187 @@ def send_check(
             )
         }
     raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "A tender or a quotation")
+
+
+# --- the client's certification, recorded by our staff --------------------------------------------
+
+CERT_TYPES = frozenset({".eml", ".msg"})
+
+
+@router.post("/ra-bills/{rid}/client-certification")
+async def client_certification(
+    rid: int,
+    request: Request,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    approved_by: Annotated[str, Form(min_length=2, max_length=200)],
+    on_date: Annotated[date, Form()],
+    lines: Annotated[str, Form()],
+    file: Annotated[UploadFile, File()],
+    amount: Annotated[Decimal | None, Form()] = None,
+) -> dict:
+    """Billing or the site's salesperson records the client's certification for them: the
+    certified quantities, the amount, the date, who at the client approved it, and the client's
+    signed copy or email. (A client who verifies in the portal counts too.)"""
+    import json  # noqa: PLC0415
+
+    from app.finance import service as fsvc  # noqa: PLC0415
+    from app.finance.models import ClientContract, RaBill  # noqa: PLC0415
+    from app.sites.models import SiteMember  # noqa: PLC0415
+
+    b = db.get(RaBill, rid)
+    if b is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Bill not found")
+    salesperson = db.scalar(
+        select(SiteMember.site_id).where(
+            SiteMember.site_id == b.site_id,
+            SiteMember.user_id == principal.user.id,
+            SiteMember.role_on_site == "sales",
+        )
+    )
+    billing_edit = material.covers_site(
+        db, principal.permissions.get("billing.edit"), principal, b.site_id
+    )
+    if not (billing_edit or salesperson):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Billing or the site's salesperson records it"
+        )
+    if b.status not in ("submitted", "certified_by_client"):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, f"{b.code} is {b.status}; it must be sent first"
+        )
+    try:
+        given = {
+            int(x["contract_line_id"]): Decimal(str(x["certified_qty"])) for x in json.loads(lines)
+        }
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "Certified quantities: a list of lines"
+        ) from exc
+    for ln in b.lines:
+        cq = given.get(
+            ln.contract_line_id,
+            Decimal(ln.certified_qty if ln.certified_qty is not None else ln.qty),
+        )
+        if cq < 0 or cq > Decimal(ln.qty):
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "The certified qty cannot be more than the qty billed",
+            )
+        ln.certified_qty = cq
+    rel, _name = await save_upload(file, f"certifications/{b.site_id}", CERT_TYPES)
+    b.status, b.certified_at, b.certified_by_client = "certified", team.now(), approved_by.strip()
+    b.client_cert_on, b.client_cert_amount, b.client_cert_doc = on_date, amount, rel
+    b.client_cert_recorded_by, b.client_cert_via = principal.user.id, "staff"
+    fsvc.ra_totals(db, b, db.get(ClientContract, b.contract_id))
+    record(
+        db,
+        request,
+        principal,
+        "ra.client_certification",
+        "ra_bill",
+        b.id,
+        after={
+            "approved_by": approved_by,
+            "on": str(on_date),
+            "certified_gross": str(b.certified_gross),
+            "via": "staff",
+        },
+    )
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.bill_certified(db, b, principal.user.id)  # less than billed: the reason is asked
+    db.commit()
+    return jsonable_encoder(
+        {
+            "id": b.id,
+            "code": b.code,
+            "status": b.status,
+            "certified_gross": b.certified_gross,
+            "approved_by": b.certified_by_client,
+            "on": b.client_cert_on,
+            "via": b.client_cert_via,
+        }
+    )
+
+
+@router.get("/ra-bills/{rid}/client-certification/document")
+def certification_document(
+    rid: int,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    scope: Annotated[str, Depends(require_permission("billing.view"))],
+):
+    from app.finance.models import RaBill  # noqa: PLC0415
+
+    b = db.get(RaBill, rid)
+    if b is None or not material.covers_site(db, scope, principal, b.site_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+    return send_file(b.client_cert_doc)
+
+
+# --- system choices per area type (no fixed product) ----------------------------------------------
+
+
+@router.get("/system-choices")
+def system_choices(
+    db: DbSession,
+    _: CurrentPrincipal,
+    area_type_id: int,
+    client_id: int | None = None,
+    survey_id: int | None = None,
+) -> dict:
+    """The area type's default as a suggestion, the other suitable systems to choose from, and the
+    client's last choice for this area type (offered first)."""
+    from app.masters.models import System  # noqa: PLC0415
+    from app.survey.models import AreaType  # noqa: PLC0415
+    from app.team.models import ClientSystemChoice  # noqa: PLC0415
+
+    if survey_id and not client_id:
+        from app.survey import service as survey_svc  # noqa: PLC0415
+        from app.survey.models import Survey  # noqa: PLC0415
+
+        sv = db.get(Survey, survey_id)
+        client_id = survey_svc.client_of(db, sv) if sv else None
+    at = db.get(AreaType, area_type_id)
+    if at is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Area type not found")
+    ids = list(
+        dict.fromkeys([x for x in [at.default_system_id, *(at.suitable_system_ids or [])] if x])
+    )
+    last = db.get(ClientSystemChoice, (client_id, area_type_id)) if client_id else None
+    if last and last.system_id not in ids:
+        ids.insert(0, last.system_id)
+    options = []
+    for sid in ids:
+        s = db.get(System, sid)
+        if s is not None:
+            options.append(
+                {
+                    "id": s.id,
+                    "code": s.code,
+                    "name": s.name,
+                    "default": s.id == at.default_system_id,
+                    "last_choice": bool(last and last.system_id == s.id),
+                }
+            )
+    return {
+        "area_type": at.name,
+        "suggested_id": last.system_id if last else at.default_system_id,
+        "options": options,
+    }
+
+
+class ChoiceIn(BaseModel):
+    client_id: int
+    area_type_id: int
+    system_id: int
+
+
+@router.post("/system-choices")
+def remember_choice(body: ChoiceIn, db: DbSession, principal: CurrentPrincipal) -> dict:
+    from app.team.service import remember_system  # noqa: PLC0415
+
+    remember_system(db, body.client_id, body.area_type_id, body.system_id, principal.user.id)
+    db.commit()
+    return {"ok": True}

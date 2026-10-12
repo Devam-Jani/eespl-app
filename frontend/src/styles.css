@@ -3552,3 +3552,33 @@ li.late a {
   .mywork-action { grid-column: 1 / -1; }
 }
 .perm-desc { font-size: 0.72rem; color: var(--muted); max-width: 22rem; white-space: normal; line-height: 1.25; }
+
+/* phone: the side menu collapses behind the menu button (closed when a page opens) */
+.menu-toggle { display: none; margin-right: auto; }
+@media (max-width: 760px) {
+  .menu-toggle { display: inline-flex; }
+  .sidebar.menu-closed nav { display: none; }
+  .sidebar.menu-closed { padding-bottom: 0.25rem; }
+}
+
+/* process chain: notifications, the site timeline, the rules table */
+.note-list { list-style: none; margin: 0; padding: 0; }
+.note-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.55rem 0.5rem; border-bottom: 1px solid var(--border); border-left: 3px solid transparent; }
+.note-row.unread .note-open b { color: var(--text, #111); }
+.note-row.sev-warn { border-left-color: var(--warn); }
+.note-row.sev-danger { border-left-color: #b42318; }
+.note-open { flex: 1; text-align: left; background: none; border: 0; padding: 0; cursor: pointer; display: flex; flex-direction: column; gap: 0.1rem; color: inherit; font: inherit; }
+.note-actions { display: flex; gap: 0.35rem; }
+.timeline { list-style: none; margin: 0.5rem 0 0; padding: 0; }
+.tl-step { display: grid; grid-template-columns: 1.2rem 1fr; gap: 0.5rem; padding: 0.45rem 0.4rem; border-left: 2px solid var(--border); margin-left: 0.5rem; }
+.tl-dot { width: 0.8rem; height: 0.8rem; border-radius: 50%; margin-top: 0.25rem; margin-left: -1.05rem; background: var(--border); }
+.tl-done .tl-dot { background: #1a7f37; }
+.tl-waiting .tl-dot { background: var(--warn); }
+.tl-escalated .tl-dot { background: #b42318; }
+.tl-not_reached { color: var(--muted); }
+.tl-current { background: var(--warn-soft); border-radius: 6px; }
+.rules-table td { vertical-align: top; }
+.rule-recipient { margin-bottom: 0.3rem; }
+.rules-table .input-num { width: 4.5rem; }
+.wastage-grid .inline-form { max-width: 22rem; padding: 0.2rem 0; }
+.mywork-action { display: inline-flex; gap: 0.35rem; }

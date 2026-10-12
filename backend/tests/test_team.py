@@ -232,7 +232,7 @@ def test_unassigned_enquiry_goes_to_a_salesperson(person, db):
     assert "lead_new" in sources(s, sh)["sales"]
     assert db.scalar(
         select(Notification).where(
-            Notification.user_id == su.id, Notification.kind == "lead_allocated"
+            Notification.user_id == su.id, Notification.kind == "process:lead_allocated"
         )
     )
 

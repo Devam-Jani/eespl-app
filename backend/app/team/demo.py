@@ -23,6 +23,8 @@ TEAM = {
     "site_engineer": ("DEMO Site Engineer", "Sr Engineer Site", "incharge"),
     "site_supervisor": ("DEMO Site Supervisor", "Sr Supervisor Site", "supervisor"),
     "store_purchase": ("DEMO Store", "Store & Purchase Executive", None),
+    # the applicator's person who confirms deliveries on the Shela site (a real login)
+    "site_receiver": ("DEMO Site Receiver (applicator)", "Applicator team leader", "receiver"),
 }
 DEMO_SITE_NAME = "%Shela%"
 

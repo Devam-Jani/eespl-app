@@ -33,7 +33,8 @@ from app.masters.models import Channel, Client, Tracked
 from app.models import Base, User
 
 SITE_STATUSES = ("planned", "active", "on_hold", "completed", "closed")
-MEMBER_ROLES = ("incharge", "supervisor", "sales", "office", "viewer")
+# receiver: confirms deliveries on this site only (our supervisor, or one person of the applicator)
+MEMBER_ROLES = ("incharge", "supervisor", "sales", "office", "viewer", "receiver")
 NODE_KINDS = (
     "tower",
     "wing",
@@ -238,6 +239,9 @@ class AreaScope(Tracked, Base):
     qty: Mapped[Decimal] = mapped_column(Qty)
     unit: Mapped[str | None] = mapped_column(String(20))
     progress_percent: Mapped[Decimal] = mapped_column(Percent, server_default="0")  # stored
+    # quantity done from approved daily report lines on this place (progress is the higher of
+    # the steps and this)
+    dpr_done_qty: Mapped[Decimal] = mapped_column(Numeric(14, 3), server_default="0")
 
 
 class Task(Tracked, Base):

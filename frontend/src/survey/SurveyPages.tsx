@@ -79,6 +79,7 @@ type AreaType = {
   id: number;
   name: string;
   default_system_id: number | null;
+  suitable_system_ids?: number[];
   default_upturn_mm: string;
   default_wastage_percent: string | null;
   includes_walls: boolean;
@@ -580,6 +581,9 @@ function AreaForm({
 }) {
   const unit = lookups.unit;
   const last = survey.areas[survey.areas.length - 1];
+  // no fixed product: the type's default is a suggestion next to the other suitable systems,
+  // with this client's last choice first
+  const [choices, setChoices] = useState<{ id: number; name: string; default: boolean; last_choice: boolean }[]>([]);
   const [f, setF] = useState(() => ({
     node_id: area?.node_id ? String(area.node_id) : last && !area ? String(last.node_id ?? "") : "",
     tower: area?.tower ?? (!area ? (last?.tower ?? "") : ""),
@@ -602,6 +606,18 @@ function AreaForm({
   }));
   const [error, setError] = useState<string | null>(null);
   const type = lookups.area_types.find((t) => String(t.id) === f.area_type_id);
+  useEffect(() => {
+    if (!f.area_type_id) return setChoices([]);
+    void api<{ suggested_id: number | null; options: { id: number; name: string; default: boolean; last_choice: boolean }[] }>(
+      `/api/team/system-choices?area_type_id=${f.area_type_id}&survey_id=${survey.id}`,
+    ).then(
+      (r) => {
+        setChoices(r.options);
+        if (!area && r.suggested_id) setF((x) => (x.system_id ? x : { ...x, system_id: String(r.suggested_id) }));
+      },
+      () => setChoices([]),
+    );
+  }, [f.area_type_id, survey.id, area]);
   const parsed = f.shape === "rect" ? parseSize(f.size, unit) : null;
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const floorOptions = useMemo(
@@ -770,12 +786,24 @@ function AreaForm({
           <label className="field">
             <span>System</span>
             <select className="tap-input" value={f.system_id} onChange={set("system_id")}>
-              <option value="">{systemName(type?.default_system_id) ? `Area type default: ${systemName(type?.default_system_id)}` : "None yet"}</option>
-              {lookups.systems.map((x) => (
-                <option key={x.id} value={x.id}>
-                  {x.name}
-                </option>
-              ))}
+              <option value="">{systemName(type?.default_system_id) ? `Suggested for the area type: ${systemName(type?.default_system_id)}` : "None yet"}</option>
+              {choices.length > 0 && (
+                <optgroup label="Suitable for this area (choose)">
+                  {choices.map((x) => (
+                    <option key={`c${x.id}`} value={x.id}>
+                      {x.name}
+                      {x.last_choice ? " · this client's last choice" : x.default ? " · suggested" : ""}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              <optgroup label="All systems">
+                {lookups.systems.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.name}
+                  </option>
+                ))}
+              </optgroup>
             </select>
           </label>
           <div className="row-2">
@@ -1233,7 +1261,8 @@ export function SurveySettings() {
           <thead>
             <tr>
               <th>Area type</th>
-              <th>Default system</th>
+              <th>Suggested system</th>
+              <th>Also suitable (choose)</th>
               <th className="num">Upturn mm</th>
               <th className="num">Wastage %</th>
               <th>Walls</th>
@@ -1251,6 +1280,21 @@ export function SurveySettings() {
                 <td>
                   <select value={t.default_system_id ?? ""} onChange={(e) => void saveType({ ...t, default_system_id: e.target.value ? Number(e.target.value) : null })}>
                     <option value="">—</option>
+                    {systems.map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.name}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td>
+                  <select
+                    multiple
+                    size={3}
+                    aria-label={`Also suitable for ${t.name}`}
+                    value={(t.suitable_system_ids ?? []).map(String)}
+                    onChange={(e) => void saveType({ ...t, suitable_system_ids: Array.from(e.target.selectedOptions).map((o) => Number(o.value)) })}
+                  >
                     {systems.map((x) => (
                       <option key={x.id} value={x.id}>
                         {x.name}

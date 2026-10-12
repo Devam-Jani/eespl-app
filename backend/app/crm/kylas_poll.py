@@ -98,6 +98,7 @@ class PollReport:
     won: int = 0
     failed: int = 0
     skipped: str | None = None
+    quotation_requested: int = 0
 
     def summary(self) -> str:
         return " ".join(f"{k}={v}" for k, v in vars(self).items() if v not in (None, 0))
@@ -121,6 +122,22 @@ def poll_leads(db: Session, client: KylasClient, report: PollReport) -> None:
             continue
         body = result.body
         lead.kylas_forecasting = str(body.get("forecastingType") or "")[:30] or None
+        # the quotation stage (read only): a "Make quotation" to-do on My work, once; the
+        # quotation itself is made in our app, never here
+        stage = _id(body.get("pipelineStage"))
+        lead.kylas_stage_id = stage
+        if (
+            p is not None
+            and p.kylas_quotation_stage_id
+            and stage == int(p.kylas_quotation_stage_id)
+            and lead.quotation_requested_at is None
+        ):
+            lead.quotation_requested_at = now()
+            _note(db, lead, "Kylas moved the lead to the quotation stage: make the quotation")
+            report.quotation_requested += 1
+            from app.process import hooks  # noqa: PLC0415
+
+            hooks.kylas_quotation(db, lead)  # the salesperson (planning if none): make it
         outcome, reason = classify(body, p.kylas_junk_reasons if p else [])
         if outcome == "converted" and lead.kylas_converted_at is None:
             lead.kylas_converted_at = now()

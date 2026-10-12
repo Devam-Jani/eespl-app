@@ -927,6 +927,9 @@ def create_subcon_bill(
         b.id,
         after={"number": b.number, "gross": str(gross)},
     )
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.labour_bill_entered(db, b)  # billing checks it; the director if flagged
     db.commit()
     return _subcon_out(db, b)
 
