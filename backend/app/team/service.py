@@ -371,6 +371,7 @@ def material_plan(db: Session, site: Site, by: str = "stage", node_id: int | Non
             for c in db.scalars(
                 select(SystemComponent).where(SystemComponent.system_id == boq.system_id)
             )
+            if c.consumption_per_unit is not None  # to confirm: not planned until filled
         }
         if by == "month":
             start = db.scalar(

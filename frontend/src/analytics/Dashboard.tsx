@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
@@ -7,6 +7,8 @@ import { MENU } from "../menu";
 import { HBarChart, PALETTE } from "./charts";
 import type { Drill, Tile } from "./ui";
 import { asOf, DataTable, drillHref, ExportButton, fmtValue, KpiTile, useData, useFilters } from "./ui";
+
+const DelaysCard = lazy(() => import("../schedule/Pages").then((m) => ({ default: m.DelaysCard })));
 
 type Home = { dashboards: { key: string; title: string; scope: string }[]; demo_available: boolean; as_of: string | null; can_export: boolean };
 type Section = { key: string; title: string; tiles: Tile[] };
@@ -119,6 +121,9 @@ function ManagementView({ demo }: { demo: boolean }) {
   return (
     <div className="dash-grid">
       <div className="dash-main">
+        <Suspense fallback={null}>
+          <DelaysCard />
+        </Suspense>
         {data.sections.map((s) => (
           <section key={s.key} className="dash-section">
             <h2 className="section-title">{s.title}</h2>

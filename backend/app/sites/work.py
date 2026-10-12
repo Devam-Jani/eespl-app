@@ -17,7 +17,7 @@ Progress (stored when a task changes, see refresh_scope):
 
 import re
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import func, select
@@ -210,6 +210,15 @@ def refresh_scope(db: Session, scope: AreaScope) -> None:
         else Decimal(0)
     )
     scope.progress_percent = max(from_steps, from_reports).quantize(PCT)
+    # the day the area was finished (for the schedule: our delay against the target finish)
+    if scope.progress_percent >= 100 and scope.completed_at is None:
+        scope.completed_at = datetime.now(UTC)
+        from app.schedule import service as schedule  # noqa: PLC0415
+
+        db.flush()
+        schedule.on_area_finished(db, scope)
+    elif scope.progress_percent < 100:
+        scope.completed_at = None
     db.flush()
     # the stage's last task done: billing gets a "ready to bill" item
     from app.sitecontrol import service as sitecontrol  # noqa: PLC0415

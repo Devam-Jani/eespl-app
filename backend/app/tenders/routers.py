@@ -1556,10 +1556,41 @@ def export_xlsx(
     rev: Annotated[
         int | None, Query(ge=0, description="A submitted revision; default: current")
     ] = None,
+    internal: bool = False,
 ) -> Response:
-    """EESPL's BOQ as Excel (selling rates only, never cost or margin)."""
-    doc = export.document(db, get_visible(db, tender_id, scope, principal), rev)
-    return _download(export.xlsx(doc), export.XLSX_TYPE, f"{export.file_stem(doc)}.xlsx")
+    """EESPL's BOQ as Excel (selling rates only, never cost or margin). internal: with the rate
+    working as a separate WORKING sheet, for tender.margin only; never sent to the client."""
+    tender = get_visible(db, tender_id, scope, principal)
+    doc = export.document(db, tender, rev)
+    content = export.xlsx(doc)
+    if not internal:
+        return _download(content, export.XLSX_TYPE, f"{export.file_stem(doc)}.xlsx")
+    if not can_cost(principal):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "The internal export is for tender.margin")
+    from io import BytesIO  # noqa: PLC0415
+
+    from openpyxl import load_workbook  # noqa: PLC0415
+
+    from app.costing import export as working_export  # noqa: PLC0415
+    from app.costing import working  # noqa: PLC0415
+    from app.costing.models import RateWorking  # noqa: PLC0415
+
+    w = (
+        db.scalar(
+            select(RateWorking).where(
+                RateWorking.tender_id == tender.id, RateWorking.rev_no == rev
+            )
+        )
+        if rev is not None
+        else working.for_tender(db, tender, principal.user.id)
+    )
+    wb = load_workbook(BytesIO(content))
+    if w is not None:
+        working_export.add_working_sheet(wb, db, w)
+    buf = BytesIO()
+    wb.save(buf)
+    db.commit()
+    return _download(buf.getvalue(), export.XLSX_TYPE, f"{export.file_stem(doc)} INTERNAL.xlsx")
 
 
 @router.get("/{tender_id}/export.pdf")

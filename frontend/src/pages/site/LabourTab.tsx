@@ -15,7 +15,8 @@ const MARKS: [AttendanceStatus, string][] = [
 ];
 export const TRADES = ["applicator", "helper", "mason", "supervisor", "other"];
 
-type Draft = Record<number, { status: AttendanceStatus | null; ot_hours: string }>;
+// hours: a gang paid by attendance (the month's bill splits by site)
+type Draft = Record<number, { status: AttendanceStatus | null; ot_hours: string; hours?: string }>;
 
 /** Quick mark: one tap per worker (P / ½ / A), "all present", then Save. Built for a phone. */
 export function QuickMark({ site, onSaved }: { site: Site; onSaved?: () => void }) {
@@ -30,7 +31,7 @@ export function QuickMark({ site, onSaved }: { site: Site; onSaved?: () => void 
 
   const show = (s: DaySheet) => {
     setSheet(s);
-    setDraft(Object.fromEntries(s.rows.map((r) => [r.labour_id, { status: r.status, ot_hours: Number(r.ot_hours) ? r.ot_hours : "" }])));
+    setDraft(Object.fromEntries(s.rows.map((r) => [r.labour_id, { status: r.status, ot_hours: Number(r.ot_hours) ? r.ot_hours : "", hours: r.hours ?? "" }])));
   };
 
   const load = useCallback(async () => {
@@ -60,7 +61,12 @@ export function QuickMark({ site, onSaved }: { site: Site; onSaved?: () => void 
   async function save() {
     const marks = Object.entries(draft)
       .filter(([, d]) => d.status)
-      .map(([id, d]) => ({ labour_id: Number(id), status: d.status, ot_hours: d.status === "absent" ? "0" : d.ot_hours || "0" }));
+      .map(([id, d]) => ({
+        labour_id: Number(id),
+        status: d.status,
+        ot_hours: d.status === "absent" ? "0" : d.ot_hours || "0",
+        hours: d.status !== "absent" && d.hours ? d.hours : null,
+      }));
     if (!marks.length) return;
     setBusy(true);
     setError(null);
@@ -140,6 +146,20 @@ export function QuickMark({ site, onSaved }: { site: Site; onSaved?: () => void 
                     {label}
                   </button>
                 ))}
+                {d.status && d.status !== "absent" && r.type === "subcontractor" && (
+                  <label className="ot-field">
+                    <span>Hours here</span>
+                    <input
+                      className="tap-input ot"
+                      inputMode="decimal"
+                      placeholder="8"
+                      aria-label={`${r.name}: hours on this site`}
+                      disabled={!canEdit}
+                      value={d.hours ?? ""}
+                      onChange={(e) => set(r.labour_id, { hours: e.target.value })}
+                    />
+                  </label>
+                )}
                 {d.status && d.status !== "absent" && (
                   <label className="ot-field">
                     <span>OT hrs</span>

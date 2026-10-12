@@ -685,6 +685,8 @@ def _expected_per_sqm(db: Session, system_id: int) -> dict[int, Decimal]:
     """Per product of the system: consumption per sqm including its wastage (base unit)."""
     out = {}
     for c in db.scalars(select(SystemComponent).where(SystemComponent.system_id == system_id)):
+        if c.consumption_per_unit is None:
+            continue  # to confirm: no expectation yet
         out[c.product_id] = Decimal(c.consumption_per_unit) * (
             1 + Decimal(c.wastage_percent or 0) / 100
         )

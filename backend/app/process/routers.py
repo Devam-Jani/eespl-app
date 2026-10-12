@@ -33,6 +33,7 @@ def _note_out(db, n, who: dict) -> dict:
     return {
         "id": n.id,
         "title": n.title,
+        "lines": n.body.split("\n") if n.body else [],
         "link": n.link,
         "site_id": n.site_id,
         "rule": n.rule_code,
@@ -50,6 +51,7 @@ def _note_out(db, n, who: dict) -> dict:
         "closed_at": n.closed_at,
         "closed_label": label(n.closed_at) if n.closed_at else None,
         "closed_by": who.get(n.closed_by),
+        "closed_reason": n.closed_reason,
         "email": n.email_status,
     }
 
@@ -85,9 +87,21 @@ def notifications(
     return jsonable_encoder({"items": [_note_out(db, n, who) for n in rows], "counts": counts})
 
 
+class DoneIn(BaseModel):
+    reason: str | None = Field(None, max_length=300)
+
+
 @router.post("/notifications/{nid}/done")
-def mark_done(nid: int, request: Request, db: DbSession, principal: CurrentPrincipal) -> dict:
-    """I did it: the to-do (and its escalations) close, with who and when."""
+def mark_done(
+    nid: int,
+    request: Request,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    body: DoneIn | None = None,
+) -> dict:
+    """Closed by hand: the to-do (and its escalations) close, with who and when. Doing the
+    action in the app closes it by itself, so closing an action item by hand needs a short
+    reason (it shows on the site's process timeline)."""
     from app.portal.models import Notification  # noqa: PLC0415
 
     n = db.get(Notification, nid)
@@ -95,7 +109,13 @@ def mark_done(nid: int, request: Request, db: DbSession, principal: CurrentPrinc
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Notification not found")
     if not n.needs_action or n.closed_at is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Nothing to close")
-    closed = engine.done(db, n, principal.user.id)
+    reason = " ".join(((body.reason if body else None) or "").split())
+    if len(reason) < 3:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Say briefly why '{n.action_label or 'the action'}' was not done in the app",
+        )
+    closed = engine.done(db, n, principal.user.id, reason)
     n.read_at = n.read_at or datetime.now(UTC)
     record(
         db,
@@ -104,7 +124,7 @@ def mark_done(nid: int, request: Request, db: DbSession, principal: CurrentPrinc
         "process.done",
         "notification",
         n.id,
-        after={"rule": n.rule_code, "subject": n.subject, "closed": closed},
+        after={"rule": n.rule_code, "subject": n.subject, "closed": closed, "reason": reason},
     )
     db.commit()
     return {"closed": closed}
@@ -174,6 +194,21 @@ def escalated(
             }
         )
     return jsonable_encoder(out)
+
+
+def _reasons(db, where, rule_code: str) -> list[dict]:
+    from app.portal.models import Notification  # noqa: PLC0415
+
+    rows = db.scalars(
+        select(Notification)
+        .where(where, Notification.rule_code == rule_code, Notification.closed_reason.is_not(None))
+        .order_by(Notification.closed_at)
+    ).all()
+    who = names(db, [n.closed_by for n in rows])
+    return [
+        {"by": who.get(n.closed_by), "at": label(n.closed_at), "reason": n.closed_reason}
+        for n in rows
+    ]
 
 
 def _pre_site_subjects(db, site) -> list[str]:
@@ -273,6 +308,8 @@ def timeline(
                         )
                     )
                 ),
+                # closed by hand without the action: who, when and why
+                "reasons": _reasons(db, on_site(Notification), r.code),
             }
         )
     if current is None:

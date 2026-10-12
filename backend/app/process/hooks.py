@@ -439,6 +439,8 @@ def stage_done(db: Session, item) -> None:
     from app.sites.models import AreaScope, SiteNode, StageTemplate  # noqa: PLC0415
 
     st = db.get(StageTemplate, item.stage_template_id) if item.stage_template_id else None
+    area = node_label(db, db.get(SiteNode, item.node_id))
+    unit = item.unit or _boq_unit(db, item.boq_line_id)
     emit(
         db,
         "stage_done",
@@ -446,11 +448,13 @@ def stage_done(db: Session, item) -> None:
         site_id=item.site_id,
         data={
             "ready_id": item.id,
-            "area": node_label(db, db.get(SiteNode, item.node_id)),
+            "area": area,
             "stage": st.name if st else "the stage",
             "qty": _n(item.qty),
-            "unit": item.unit or _boq_unit(db, item.boq_line_id),
+            "unit": unit,
             "date": label(item.created_at or datetime.now(UTC), "%d %b %Y"),
+            # one place per line, with its own quantity (never joined into the message)
+            "places": [{"place": area, "qty": _n(item.qty), "unit": unit}],
         },
     )
     # the last stage of the site: the final bill
@@ -597,7 +601,8 @@ def labour_decided(db: Session, b, actor_id) -> None:
 
 def timed_events(db: Session, at: datetime) -> int:
     """Follow-ups due (the quotation schedule), the monthly RA day per ongoing site with
-    measured work not billed, and the week's consumption flags per site."""
+    measured work not billed, the week's consumption flags per site, a promised handover
+    passed and not confirmed, a target finish passed."""
     from app.finance import service as fsvc  # noqa: PLC0415
     from app.finance.models import ClientContract, ContractLine, RaBill  # noqa: PLC0415
     from app.quotations.models import Quotation, QuotationFollowUp  # noqa: PLC0415
@@ -679,4 +684,7 @@ def timed_events(db: Session, at: datetime) -> int:
                     data={"flags": flags},
                 )
             )
+    from app.schedule import service as schedule  # noqa: PLC0415  (handover and target finish)
+
+    n += schedule.timed_events(db, at)
     return n

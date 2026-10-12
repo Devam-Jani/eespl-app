@@ -482,6 +482,9 @@ Send anyway? Give the reason:`)
             New revision
           </button>
         )}
+        <Link className="btn btn-small" to={`/quotations/${q.id}/working`}>
+          Rate working
+        </Link>
         {q.previous_id && (
           <button className="btn btn-small" onClick={() => setDialog("diff")}>
             Changes from R{q.revision - 1}

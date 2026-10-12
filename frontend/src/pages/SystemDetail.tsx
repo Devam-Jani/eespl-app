@@ -6,7 +6,8 @@ import { errorText, inr, num } from "../format";
 import type { Page, Product, RateBreakdown, System } from "../types";
 import { useLearned } from "../sitecontrol/learned";
 
-type Row = { product_id: number; consumption_per_unit: string; wastage_percent: string };
+// consumption or coats left blank: "to confirm" (never guessed); the note says where figures come from
+type Row = { product_id: number; consumption_per_unit: string; wastage_percent: string; coats: string; to_confirm: boolean; note: string };
 type Settings = {
   surface_prep_per_unit: string;
   labour_rate: string;
@@ -46,6 +47,8 @@ export default function SystemDetail() {
         <div>
           <h1>{system.name}</h1>
           {system.description && <p className="muted">{system.description}</p>}
+          {system.to_confirm && <span className="badge badge-warn">To confirm</span>}
+          {system.note && <p className="small muted">{system.note}</p>}
         </div>
         <div className="rate-badge">
           <span className="muted small">Selling rate</span>
@@ -90,8 +93,11 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
   const [rows, setRows] = useState<Row[]>(
     cost.components.map((c) => ({
       product_id: c.product_id,
-      consumption_per_unit: c.consumption_per_unit,
+      consumption_per_unit: c.consumption_per_unit ?? "",
       wastage_percent: c.wastage_percent,
+      coats: c.coats === null ? "" : String(c.coats),
+      to_confirm: c.to_confirm,
+      note: c.note ?? "",
     })),
   );
   const [settings, setSettings] = useState<Settings>({
@@ -141,8 +147,11 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
       JSON.stringify(
         cost.components.map((c) => ({
           product_id: c.product_id,
-          consumption_per_unit: c.consumption_per_unit,
+          consumption_per_unit: c.consumption_per_unit ?? "",
           wastage_percent: c.wastage_percent,
+          coats: c.coats === null ? "" : String(c.coats),
+          to_confirm: c.to_confirm,
+          note: c.note ?? "",
         })),
       ) ||
     settings.surface_prep_per_unit !== cost.surface_prep_per_unit ||
@@ -155,7 +164,19 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
     try {
       await api(`/api/systems/${system.id}`, {
         method: "PATCH",
-        json: { ...settings, components: rows.filter((r) => r.product_id) },
+        json: {
+          ...settings,
+          components: rows
+            .filter((r) => r.product_id)
+            .map((r) => ({
+              product_id: r.product_id,
+              consumption_per_unit: r.consumption_per_unit.trim() === "" ? null : r.consumption_per_unit,
+              wastage_percent: r.wastage_percent,
+              coats: r.coats.trim() === "" ? null : Number(r.coats),
+              to_confirm: r.to_confirm || r.consumption_per_unit.trim() === "",
+              note: r.note.trim() || null,
+            })),
+        },
       });
       await onSaved("System saved.");
     } catch (err) {
@@ -176,6 +197,7 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
               <tr>
                 <th>Product</th>
                 <th className="num">Consumption / {system.unit}</th>
+                <th className="num">Coats</th>
                 <th className="num">Wastage %</th>
                 <th className="num" title="Median actual consumption over completed areas (sites)">
                   Site average
@@ -199,6 +221,7 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
                     ) : (
                       productName(r.product_id)
                     )}
+                    {r.note && <div className="small muted">{r.note}</div>}
                   </td>
                   <td className="num">
                     {canEdit ? (
@@ -208,10 +231,22 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
                         step="0.0001"
                         min="0"
                         value={r.consumption_per_unit}
+                        placeholder="to confirm"
                         onChange={(e) => setRow(i, { consumption_per_unit: e.target.value })}
                       />
+                    ) : r.consumption_per_unit === "" ? (
+                      <span className="badge badge-warn">to confirm</span>
                     ) : (
                       num(r.consumption_per_unit)
+                    )}
+                  </td>
+                  <td className="num">
+                    {canEdit ? (
+                      <input className="input-num" type="number" step="1" min="1" value={r.coats} placeholder="to confirm" onChange={(e) => setRow(i, { coats: e.target.value })} />
+                    ) : r.coats === "" ? (
+                      <span className="muted">to confirm</span>
+                    ) : (
+                      r.coats
                     )}
                   </td>
                   <td className="num">
@@ -237,7 +272,10 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
           </table>
         </div>
         {canEdit && (
-          <button className="btn btn-small" onClick={() => setRows((rs) => [...rs, { product_id: 0, consumption_per_unit: "1", wastage_percent: "0" }])}>
+          <button
+            className="btn btn-small"
+            onClick={() => setRows((rs) => [...rs, { product_id: 0, consumption_per_unit: "", wastage_percent: "0", coats: "", to_confirm: true, note: "" }])}
+          >
             + Add product
           </button>
         )}

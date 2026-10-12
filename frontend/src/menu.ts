@@ -20,6 +20,7 @@ export const MENU: MenuItem[] = [
   { to: "/measurements", label: "Measurement book", perms: ["measurement.view"], section: "Modules" },
   { to: "/bill-tracking", label: "Client bill tracking", perms: ["billing.view"], section: "Modules" },
   { to: "/labour-check", label: "Labour bill check", perms: ["labourcheck.check"], section: "Modules" },
+  { to: "/labour-rates", label: "Labour rates and bills", perms: ["subcon.view", "payables.view"], section: "Modules" },
   { to: "/scorecard", label: "Closure scorecard", perms: ["scorecard.view"], section: "Analytics" },
   { to: "/settings/team", label: "Team", perms: ["planning.edit", "settings.company", "grants.manage"], section: "Settings" },
   { to: "/settings/process", label: "Process rules", perms: ["process.rules"], section: "Settings" },

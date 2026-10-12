@@ -172,6 +172,21 @@ class SiteNode(Tracked, Base):
     )
     front_ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     front_ready_photo: Mapped[str | None] = mapped_column(String(300))
+    # the handover: the date the client promised (entered by the site engineer after talking to
+    # the client, with who promised it); what the client says does not start the clock: only
+    # the supervisor confirming it was received (the work-front-ready tick, with its date) does.
+    handover_promised_on: Mapped[date | None] = mapped_column(Date)
+    handover_promised_by: Mapped[str | None] = mapped_column(String(200))
+    handover_promised_entered_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    handover_client_says_on: Mapped[date | None] = mapped_column(Date)
+    handover_status: Mapped[str | None] = mapped_column(String(14))  # received, not_received
+    handover_received_on: Mapped[date | None] = mapped_column(Date)
+    handover_confirmed_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    handover_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class StageTemplate(Tracked, Base):
@@ -242,6 +257,8 @@ class AreaScope(Tracked, Base):
     # quantity done from approved daily report lines on this place (progress is the higher of
     # the steps and this)
     dpr_done_qty: Mapped[Decimal] = mapped_column(Numeric(14, 3), server_default="0")
+    # the day progress reached 100 % (cleared if it drops): when the area was finished
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Task(Tracked, Base):

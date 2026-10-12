@@ -4,6 +4,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 import app.analytics.models  # noqa: F401  (registers the analytics tables and indexes)
+import app.costing.models  # noqa: F401  (rate working, freight, labour rates and bills)
 import app.crm.models  # noqa: F401  (registers the CRM tables)
 import app.execution.models  # noqa: F401  (registers the execution tables)
 import app.finance.models  # noqa: F401  (registers the finance tables)
@@ -12,6 +13,7 @@ import app.material.models  # noqa: F401  (registers the material tables)
 import app.portal.models  # noqa: F401  (registers the portal tables)
 import app.process.models  # noqa: F401  (registers the process tables)
 import app.quotations.models  # noqa: F401  (registers the quotation tables)
+import app.schedule.models  # noqa: F401  (project plan, lots, stage days)
 import app.sitecontrol.models  # noqa: F401  (registers the site control tables)
 import app.sites.models  # noqa: F401  (registers the site tables)
 import app.survey.models  # noqa: F401  (registers the survey tables)

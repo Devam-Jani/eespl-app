@@ -58,6 +58,9 @@ def _public(c: SystemComponent) -> dict:
         "product_name": p.name,
         "brand": p.brand,
         "unit": p.unit,
+        "coats": c.coats,
+        "to_confirm": c.to_confirm,
+        "note": c.note,
     }
 
 
@@ -73,6 +76,8 @@ def _out(db: Session, system: System, with_cost: bool) -> SystemOut:
         description=system.description,
         unit=system.unit,
         is_active=system.is_active,
+        to_confirm=system.to_confirm or any(c.to_confirm for c in system.components),
+        note=system.note,
         rate=rate,
         rate_error=error,
         components=[ComponentPublic(**_public(c)) for c in system.components],

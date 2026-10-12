@@ -218,6 +218,8 @@ def consumption(db: Session, areas: list[SurveyArea]) -> Consumption:
             units = units * SQFT_PER_SQM
         lines = {}
         for c in comps[sid]:
+            if c.consumption_per_unit is None:
+                continue  # consumption to confirm: no quantity until it is filled
             qty = units * Decimal(c.consumption_per_unit) * (1 + wastage(a, t, c) / 100)
             lines[c.product_id] = lines.get(c.product_id, ZERO) + qty
         floor_key = (

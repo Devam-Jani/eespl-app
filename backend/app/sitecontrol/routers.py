@@ -653,6 +653,17 @@ def list_contracts(
     return jsonable_encoder([_rc_out(db, c) for c in db.scalars(q.limit(500))])
 
 
+def _price_list(db, c: RateContract, principal) -> None:
+    """The agreed rate goes into the master price list (once per contract version)."""
+    from app.costing import prices as price_list  # noqa: PLC0415
+
+    db.flush()
+    price_list.record_price(
+        db, c.product_id, Decimal(c.rate), source="rate_contract", user_id=principal.user.id,
+        ref=f"RC {c.id} v{c.version}", vendor_id=c.vendor_id, on=c.valid_from,
+    )  # fmt: skip
+
+
 @router.post("/rate-contracts", status_code=status.HTTP_201_CREATED)
 def create_contract(
     body: ContractIn, request: Request, db: DbSession, principal: CurrentPrincipal, _: RcEdit
@@ -671,6 +682,7 @@ def create_contract(
     sc.check_overlap(db, c)
     db.add(c)
     sc.save_contract_version(db, c, principal.user.id)
+    _price_list(db, c, principal)
     record(
         db,
         request,
@@ -708,6 +720,7 @@ def update_contract(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Valid till is before valid from")
     sc.check_overlap(db, c)
     sc.save_contract_version(db, c, principal.user.id)
+    _price_list(db, c, principal)
     record(
         db,
         request,

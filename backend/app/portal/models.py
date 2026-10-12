@@ -199,6 +199,8 @@ class Notification(Base):
     site_id: Mapped[int | None] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"))
     kind: Mapped[str] = mapped_column(String(30))
     title: Mapped[str] = mapped_column(String(300))
+    # the places it is about, one per line with its own quantity (never joined into the title)
+    body: Mapped[str | None] = mapped_column(Text)
     link: Mapped[str | None] = mapped_column(String(300))
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
@@ -219,6 +221,8 @@ class Notification(Base):
     note: Mapped[str | None] = mapped_column(String(200))  # e.g. "no one assigned on this site"
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     closed_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    # closed by hand ("done") on an action item: why the action itself was not done
+    closed_reason: Mapped[str | None] = mapped_column(String(300))
     email_status: Mapped[str | None] = mapped_column(String(10))  # queued, sent, failed, summary
 
 

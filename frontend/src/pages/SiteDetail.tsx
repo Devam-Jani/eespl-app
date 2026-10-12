@@ -13,6 +13,8 @@ import TasksTab from "./site/TasksTab";
 const Site3DTab = lazy(() => import("./site/Site3DTab"));
 const MaterialTab = lazy(() => import("./site/MaterialTab"));
 const ProcessTab = lazy(() => import("../process/Pages").then((m) => ({ default: m.ProcessTab })));
+const HandoverTab = lazy(() => import("../schedule/Pages").then((m) => ({ default: m.HandoverTab })));
+const PlanLots = lazy(() => import("../schedule/Pages").then((m) => ({ default: m.PlanLots })));
 const SiteVisits = lazy(() => import("../team/Pages").then((m) => ({ default: m.SiteVisits })));
 const SiteControlStrip = lazy(() => import("../sitecontrol/Pages").then((m) => ({ default: m.SiteControlStrip })));
 // the execution tabs are their own chunk too
@@ -46,7 +48,9 @@ type Tab =
   | "budget"
   | "finance"
   | "portal"
-  | "process";
+  | "process"
+  | "lots"
+  | "handover";
 
 export default function SiteDetail() {
   const { id } = useParams();
@@ -133,6 +137,8 @@ export default function SiteDetail() {
           [
             ["overview", "Overview", true],
             ["process", "Process", true],
+            ["handover", "Handover", true],
+            ["lots", "Plan & lots", can("planning.view", "indent.view", "indent.create")],
             ["dpr", "DPR", can("dpr.view")],
             ["tasks", "Tasks", true],
             ["labour", "Labour", can("labour.view")],
@@ -197,6 +203,10 @@ export default function SiteDetail() {
             <ProcessTab siteId={site.id} />
           </Suspense>
         )}
+        <Suspense fallback={<p className="muted">Loading…</p>}>
+          {tab === "handover" && <HandoverTab siteId={site.id} />}
+          {tab === "lots" && <PlanLots siteId={site.id} />}
+        </Suspense>
         {tab === "3d" && (
           <Suspense fallback={<p className="muted">Loading the 3D view…</p>}>
             <Site3DTab site={site} onChange={load} onOpenStructure={() => setTab("structure")} />

@@ -155,13 +155,19 @@ class Product(Tracked, Base):
     category: Mapped["Category | None"] = relationship(lazy="joined")
 
 
+PRICE_SOURCES = ("vendor_quote", "rate_contract", "po", "manual")
+
+
 class ProductPrice(Tracked, Base):
-    """Append-only price history. The current price is the latest effective_from <= today."""
+    """Append-only price history (the master price list). The current price is the newest one in
+    force (the latest effective_from <= today). Who entered it is created_by; where it came from
+    is the source (a vendor quote, a rate contract, a PO, typed by hand) with its reference."""
 
     __tablename__ = "product_prices"
     __table_args__ = (
         CheckConstraint("purchase_rate >= 0", name="purchase_rate_nonnegative"),
         CheckConstraint("freight_per_unit >= 0", name="freight_nonnegative"),
+        CheckConstraint(_in("source", PRICE_SOURCES), name="source_valid"),
         Index("ix_product_prices_product_id_effective_from", "product_id", "effective_from"),
     )
 
@@ -171,6 +177,10 @@ class ProductPrice(Tracked, Base):
     freight_per_unit: Mapped[Decimal] = mapped_column(Money, server_default="0")
     effective_from: Mapped[date] = mapped_column(Date)
     note: Mapped[str | None] = mapped_column(Text)
+    unit: Mapped[str | None] = mapped_column(String(20))  # the product's unit when blank
+    source: Mapped[str] = mapped_column(String(16), server_default="manual")
+    vendor_id: Mapped[int | None] = mapped_column(ForeignKey("vendors.id", ondelete="SET NULL"))
+    ref: Mapped[str | None] = mapped_column(String(60))  # PO-2026-0003, RC 12, the quote's no.
 
 
 class System(Tracked, Base):
@@ -189,6 +199,9 @@ class System(Tracked, Base):
     labour_unit: Mapped[str] = mapped_column(String(10), server_default="sqm")
     default_margin_percent: Mapped[Decimal] = mapped_column(Numeric(6, 2), server_default="30")
     is_active: Mapped[bool] = mapped_column(server_default=true())
+    # products, consumption or coats our data does not give yet: left blank, never guessed
+    to_confirm: Mapped[bool] = mapped_column(server_default=false())
+    note: Mapped[str | None] = mapped_column(Text)
 
     components: Mapped[list["SystemComponent"]] = relationship(
         lazy="selectin",
@@ -208,8 +221,12 @@ class SystemComponent(Tracked, Base):
     id: Mapped[int] = mapped_column(Identity(), primary_key=True)
     system_id: Mapped[int] = mapped_column(ForeignKey("systems.id", ondelete="CASCADE"), index=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"))
-    consumption_per_unit: Mapped[Decimal] = mapped_column(Numeric(12, 4))
+    # blank: "to confirm" (our data does not say it); a rate cannot be built until it is filled
+    consumption_per_unit: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
     wastage_percent: Mapped[Decimal] = mapped_column(Numeric(6, 2), server_default="0")
+    coats: Mapped[int | None] = mapped_column(Integer)
+    to_confirm: Mapped[bool] = mapped_column(server_default=false())
+    note: Mapped[str | None] = mapped_column(Text)  # where the figures come from, or what is open
 
     product: Mapped[Product] = relationship(lazy="joined")
 
