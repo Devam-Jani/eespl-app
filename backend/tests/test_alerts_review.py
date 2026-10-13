@@ -137,7 +137,7 @@ def test_named_systems_have_no_guessed_consumption_or_coats(db):
         # from scratch, whatever the migration seeded (the product was not there then)
         conn.execute(
             text(
-                "DELETE FROM systems WHERE code IN ('SAMGARD', 'SAMGARD-PLUS', 'ULTRA-FLEX', 'HYBRID-PU')"
+                "DELETE FROM systems WHERE code IN ('CEMGUARD', 'CEMGUARD-PLUS', 'ULTRA-FLEX', 'HYBRID-PU')"
             )
         )
     with db_engine.begin() as conn:
@@ -146,13 +146,14 @@ def test_named_systems_have_no_guessed_consumption_or_coats(db):
         ids = seed(conn)
         assert seed(conn) == ids  # safe to run again
     systems = {s.code: s for s in db.scalars(select(System).where(System.id.in_(ids.values())))}
-    assert set(systems) == {"SAMGARD", "SAMGARD-PLUS", "ULTRA-FLEX", "HYBRID-PU"}
+    assert set(systems) == {"CEMGUARD", "CEMGUARD-PLUS", "ULTRA-FLEX", "HYBRID-PU"}
     assert all(s.to_confirm for s in systems.values())
-    assert systems["SAMGARD"].components == [] and systems["SAMGARD-PLUS"].components == []
+    # Cemguard and Cemguard Plus ("Samgard"): the Bronco products, nothing guessed
+    assert [c.product.code for c in systems["CEMGUARD"].components] == ["BRONCO-CEMGUARD"]
     comps = db.scalars(
         select(SystemComponent).where(SystemComponent.system_id.in_(ids.values()))
     ).all()
-    assert len(comps) == 2
+    assert len(comps) == 4
     assert all(c.consumption_per_unit is None and c.to_confirm for c in comps)
     hybrid = next(c for c in comps if c.system_id == ids["HYBRID-PU"])
     assert hybrid.product.code == "BRONCO-HYBRID-PU" and hybrid.coats is None  # the offers disagree
@@ -161,7 +162,7 @@ def test_named_systems_have_no_guessed_consumption_or_coats(db):
         flex.coats == 2 and "15-16 sqm per 25 kg" in flex.note
     )  # quoted, not turned into a number
     sunken = db.scalar(select(AreaType).where(AreaType.name == "Sunken slab"))
-    assert sunken.default_system_id == ids["SAMGARD-PLUS"]
+    assert sunken.default_system_id == ids["CEMGUARD-PLUS"]
     assert set(sunken.suitable_system_ids) == set(ids.values())
     # no rate until the consumption is confirmed
     from app.masters.rate import MissingConsumptionError, system_rate

@@ -50,17 +50,19 @@ def add_working_sheet(
 ) -> Worksheet:
     ws = wb.create_sheet(title)
     lines = {x["key"]: x for x in working.client_lines(db, w)}
+    basis = working.margin_basis(db)
     ws.append([f"Rate working: {_label(db, w)} (internal: costs and margins)"])
     ws["A1"].font = Font(bold=True, size=12)
+    ws.append([f"Margin basis: {working.BASIS_LABEL[basis]}. Labour: ₹ per sq ft × {F} per sqm."])
     ws.append(HEADERS + ["USED / ACTUAL (cushion)"])
-    for c in ws[2]:
+    for c in ws[3]:
         c.font, c.fill = BOLD, HEAD_FILL
     for n, g in enumerate(w.groups, start=1):
         result = working.work(db, g)
         ws.append([])
         r = ws.max_row + 1
         ws.append([n, g.name.upper(), None, None, None, None,
-                   f"wastage {g.wastage_percent.normalize():f} %" + (f" ({g.application})" if g.application else "")
+                   f"wastage {g.wastage_percent.normalize():f} %" + (f" ({g.wastage_source})" if g.wastage_source else "")
                    + (f", {g.coats} coats" if g.coats else "")])  # fmt: skip
         ws.cell(r, 2).font = BOLD
         first = ws.max_row + 1
@@ -99,13 +101,15 @@ def add_working_sheet(
         ctc = ws.max_row + 1
         ws.append([None, "CTC", None, None, f"=SUM(E{first}:E{lab})", f"=E{ctc}/{F}"])
         mar = ctc + 1
+        # on cost: margin = m × CTC; on the selling price: margin = CTC ÷ (1 − m) − CTC
+        margin_formula = f"=D{mar}*E{ctc}" if basis == "cost" else f"=E{ctc}/(1-D{mar})-E{ctc}"
         ws.append(
             [
                 None,
-                "MARGIN",
+                "MARGIN" + (" (on cost)" if basis == "cost" else " (on selling price)"),
                 None,
                 float(g.margin_percent or 0) / 100,
-                f"=D{mar}*E{ctc}",
+                margin_formula,
                 f"=E{mar}/{F}",
             ]
         )

@@ -46,6 +46,36 @@ AREA_UNITS = {"sqm", "sqft", "sft"}
 JOIN_AT = 0.34  # word overlap (Jaccard) for two lines to be one main item
 
 
+BASIS_LABEL = {
+    "cost": "margin on cost: rate = cost × (1 + margin)",
+    "selling": "margin on selling price: rate = cost ÷ (1 − margin)",
+}
+
+
+def margin_basis(db: Session) -> str:
+    return prices.settings(db).margin_basis or "cost"
+
+
+def with_margin(cost: Decimal, margin_percent: Decimal, basis: str) -> Decimal | None:
+    """The rate before rounding: on cost, cost × (1 + m); on the selling price, cost ÷ (1 − m)."""
+    m = Decimal(margin_percent) / 100
+    if basis == "selling":
+        return None if m >= 1 else cost / (1 - m)
+    return cost * (1 + m)
+
+
+def wastage_from_settings(db: Session, application: str | None) -> tuple[Decimal, str] | None:
+    """The application's wastage (raft 5-7 %, footing 12-15 %: the upper figure) and where it
+    came from."""
+    from app.process.engine import settings as process_settings  # noqa: PLC0415
+
+    for name, w in (process_settings(db).wastage or {}).items():
+        if application and name.lower() == application.strip().lower():
+            source = f"Settings > Process rules: {name} {w['min']}-{w['max']} %, the upper figure"
+            return Decimal(str(w["max"])), source
+    return None
+
+
 def money(v: Decimal) -> Decimal:
     return Decimal(v).quantize(CENT, rounding=ROUND_HALF_UP)
 
@@ -297,11 +327,12 @@ def init_from_system(db: Session, g: RateGroup, context: str = "") -> None:
     app_w = wastage_for(db, f"{g.name} {context}")
     g.application = app_w[0] if app_w else None
     if app_w:
-        g.wastage_percent = Decimal(str(app_w[1]["max"]))
+        g.wastage_percent, g.wastage_source = wastage_from_settings(db, app_w[0])
     elif system:
         g.wastage_percent = max(
             (Decimal(c.wastage_percent or 0) for c in system.components), default=Decimal(0)
         )
+        g.wastage_source = f"the system {system.name}"
     if system is None:
         return
     g.surface_prep = Decimal(system.surface_prep_per_unit or 0)
@@ -369,9 +400,16 @@ def work(db: Session, g: RateGroup) -> dict:
         labour_unit="sqft",
         margin_percent=Decimal(g.margin_percent or 0),
     )
+    basis = margin_basis(db)
+    gross = with_margin(br.base_cost, Decimal(g.margin_percent or 0), basis)
+    if gross is None:
+        g.cost_sqm = g.rate_sqm = g.rate_sqft = None
+        return {"errors": ["A margin on the selling price must be below 100 %"], "rate_sqm": None,
+                "rate_sqft": None, "rows": [], "cushions": []}  # fmt: skip
+    margin_amount = gross - br.base_cost
     g.cost_sqm = br.base_cost
-    g.rate_sqm = br.rate
-    g.rate_sqft = money((br.base_cost + br.margin_amount) / SQFT_PER_SQM)
+    g.rate_sqm = money(gross)
+    g.rate_sqft = money(gross / SQFT_PER_SQM)
     rows = [{"item": "Surface preparation", "coverage": None, "cost_of_material": None,
              "per_sqm": money(br.surface_prep), "ref": None}]  # fmt: skip
     cushions = []
@@ -409,15 +447,19 @@ def work(db: Session, g: RateGroup) -> dict:
     g.library_median_sqm = median_sqm
     limit = Decimal(prices.settings(db).library_diff_flag_percent)
     diff = (
-        ((br.rate - median_sqm) / median_sqm * 100).quantize(Decimal("0.1")) if median_sqm else None
+        ((g.rate_sqm - median_sqm) / median_sqm * 100).quantize(Decimal("0.1"))
+        if median_sqm
+        else None
     )
     return {
         "errors": [],
         "rows": rows,
         "material_sqm": money(br.material_cost),
         "cost_sqm": money(br.base_cost),
-        "margin_sqm": money(br.margin_amount),
-        "rate_sqm": br.rate,
+        "margin_sqm": money(margin_amount),
+        "margin_basis": basis,
+        "margin_basis_label": BASIS_LABEL[basis],
+        "rate_sqm": g.rate_sqm,
         "rate_sqft": g.rate_sqft,
         "cushions": cushions,
         "cushion_sqm": money(sum((Decimal(c["per_sqm"]) for c in cushions), Decimal(0))),
