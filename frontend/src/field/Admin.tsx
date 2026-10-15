@@ -192,6 +192,7 @@ type Person = {
   vehicle: string;
   manager_id: string | null;
   manager: string | null;
+  weekly_off: number | null;
   home_status: string;
   home: [number, number] | null;
   pending: [number, number] | null;
@@ -244,6 +245,7 @@ export function FieldSettings() {
             <th>Travel per km</th>
             <th>Vehicle</th>
             <th>Manager</th>
+            <th>Weekly off</th>
             <th className="num">Rate today</th>
             <th>Home</th>
             <th>Consent</th>
@@ -284,6 +286,16 @@ export function FieldSettings() {
                       ))}
                   </select>
                 </td>
+                <td>
+                  <select value={p.weekly_off ?? ""} onChange={(e) => put(p, { weekly_off: e.target.value === "" ? null : Number(e.target.value) })} aria-label="Weekly off">
+                    <option value="">none</option>
+                    {DAYS.map((d, i) => (
+                      <option key={d} value={i}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </td>
                 <td className="num">{p.rate_today !== null ? `${inr(p.rate_today)}/km` : "—"}</td>
                 <td className={p.home_status === "pending" || p.pending ? "text-warn" : ""}>
                   {p.pending ? "to approve" : p.home_status === "approved" ? "approved" : p.home_status}
@@ -292,7 +304,7 @@ export function FieldSettings() {
               </tr>
               {open === p.user_id && (
                 <tr>
-                  <td colSpan={8}>
+                  <td colSpan={9}>
                     <div className="field-day-grid">
                       <div>
                         <h3>Rate per km</h3>
@@ -375,6 +387,7 @@ export function FieldSettings() {
           ))}
         </tbody>
       </table>
+      <Holidays />
       {s && (
         <div className="card top-gap">
           <h3>General</h3>
@@ -413,5 +426,61 @@ export function FieldSettings() {
         </div>
       )}
     </>
+  );
+}
+
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+/** The company holidays: a day started on one is flagged for the manager, not blocked. */
+function Holidays() {
+  const [rows, setRows] = useState<{ id: number; on_date: string; name: string }[]>([]);
+  const [form, setForm] = useState({ on_date: "", name: "" });
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    api<typeof rows>("/api/field/admin/holidays").then(setRows, (e) => setError(errorText(e)));
+  }, []);
+  return (
+    <div className="card top-gap">
+      <h3>Company holidays</h3>
+      <p className="small muted">A day started on a holiday or on the person&apos;s weekly off is flagged for the manager (never blocked).</p>
+      {error && <div className="alert alert-error">{error}</div>}
+      <table className="table compact">
+        <tbody>
+          {rows.map((h) => (
+            <tr key={h.id}>
+              <td>{new Date(h.on_date).toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short", year: "numeric" })}</td>
+              <td>{h.name}</td>
+              <td>
+                <button
+                  className="btn btn-small btn-ghost"
+                  onClick={() => api<typeof rows>(`/api/field/admin/holidays/${h.id}`, { method: "DELETE" }).then(setRows, (e) => setError(errorText(e)))}
+                >
+                  Remove
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="form-row">
+        <input type="date" value={form.on_date} onChange={(e) => setForm({ ...form, on_date: e.target.value })} aria-label="Date" />
+        <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Diwali" aria-label="Holiday" />
+        <button
+          className="btn btn-small btn-primary"
+          disabled={!form.on_date || !form.name.trim()}
+          onClick={() =>
+            api<typeof rows>("/api/field/admin/holidays", { method: "POST", json: form }).then(
+              (r) => {
+                setRows(r);
+                setForm({ on_date: "", name: "" });
+              },
+              (e) => setError(errorText(e)),
+            )
+          }
+        >
+          Add
+        </button>
+      </div>
+    </div>
   );
 }

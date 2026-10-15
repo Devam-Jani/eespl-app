@@ -129,6 +129,19 @@ class TrackingProfile(Tracked, Base):
         ForeignKey("users.id", ondelete="SET NULL")
     )
     home_approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # the weekly off (0 Monday ... 6 Sunday; blank: none): a day started on it is flagged
+    weekly_off: Mapped[int | None] = mapped_column(Integer, server_default="6")
+
+
+class CompanyHoliday(Tracked, Base):
+    """A company holiday (Settings > Field tracking): a day started on it is flagged for the
+    manager, never blocked."""
+
+    __tablename__ = "field_holidays"
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    on_date: Mapped[date] = mapped_column(Date, unique=True)
+    name: Mapped[str] = mapped_column(String(100))
 
 
 class TravelRate(Tracked, Base):

@@ -127,12 +127,12 @@ def test_rates_not_sent_to_the_lines_hold_submit_until_sent_or_confirmed(boss, b
         ]
 
     assert unsent() is None  # sent: the lines carry the working's rates
-    # the margin basis changes in the settings: the worked rate moves, the lines do not
-    c.put("/api/prices/settings", json={"margin_basis": "selling"}, headers=h)
+    # the working's margin basis changes: the worked rate moves, the lines do not
+    c.put(f"/api/rate-working/{w['id']}/basis", json={"margin_basis": "cost"}, headers=h)
     u = unsent()
     assert u and u["lines"] == 4 and u["message"].startswith("Rates not sent to the lines")
     row = u["rows"][0]
-    assert row["worked_rate"] != row["line_rate"] and float(row["difference"]) > 0
+    assert row["worked_rate"] != row["line_rate"] and float(row["difference"]) < 0
     body = {"note": "invented", "override_reason": "invented checklist pass"}
     r = c.post(f"/api/tenders/{boq['tender']}/submit", json=body, headers=h)
     assert r.status_code == 409 and "Rates not sent to the lines" in r.json()["detail"]
@@ -140,7 +140,7 @@ def test_rates_not_sent_to_the_lines_hold_submit_until_sent_or_confirmed(boss, b
     assert c.post(f"/api/rate-working/{w['id']}/apply", headers=h).status_code == 200
     assert unsent() is None
     # ... or the user confirms the lines' rates (logged)
-    c.put("/api/prices/settings", json={"margin_basis": "cost"}, headers=h)
+    c.put(f"/api/rate-working/{w['id']}/basis", json={"margin_basis": "selling"}, headers=h)
     assert unsent()["lines"] == 4
     r = c.post(
         f"/api/tenders/{boq['tender']}/submit", json=body | {"rates_confirmed": True}, headers=h

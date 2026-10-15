@@ -9,6 +9,8 @@ import { LastPrice } from "../components/LastPrice";
 import { NewBill, NewCard } from "./LabourForms";
 import { errorText, inr, num } from "../format";
 import { shortDate } from "../pages/Tenders";
+import { GapNote, LibraryPicker } from "../knowledge/Picker";
+import type { Gap } from "../knowledge/Picker";
 
 type Line = { key: string; kind: string; id: number; item_no: string | null; description: string; unit: string | null; qty: string | null; rate: string | null };
 type Product = {
@@ -20,6 +22,7 @@ type Product = {
   default_consumption: string | null;
   consumption_changed: boolean;
   consumption_reason: string | null;
+  consumption_source?: string | null;
   price: string | null;
   price_info: { id: number; rate: string; date: string; by: string | null; source: string } | null;
   freight_used: string;
@@ -42,6 +45,9 @@ type Group = {
   library_median_sqm: string | null;
   coats: number | null;
   application: string | null;
+  surface?: string | null;
+  req_min_kg_sqm?: string | null;
+  req_dft_mm?: string | null;
   // cost data (tender.margin)
   wastage_percent?: string;
   wastage_source?: string | null;
@@ -75,6 +81,7 @@ type Working = {
   sees_cost: boolean;
   margin_basis: "cost" | "selling";
   margin_basis_label: string;
+  margin_basis_note?: string | null;
   line_count: number;
   groups: Group[];
   ungrouped: Line[];
@@ -131,6 +138,21 @@ export function RateWorkingView({ tenderId, quotationId }: { tenderId?: number; 
             {w.ungrouped.length ? `, ${w.ungrouped.length} not grouped` : ""}. Cost = Σ consumption × (price + freight) × (1 + wastage) + surface preparation + labour (₹/sq ft ×
             10.7639); {w.margin_basis_label}.
           </p>
+          {w.margin_basis_note && <p className="small text-warn">{w.margin_basis_note}.</p>}
+          {w.can_edit && (
+            <label className="small">
+              Margin for this working:{" "}
+              <select
+                value={w.margin_basis}
+                onChange={(e) =>
+                  void api<Working>(`/api/rate-working/${w.id}/basis`, { method: "PUT", json: { margin_basis: e.target.value } }).then(setW, (err) => setError(errorText(err)))
+                }
+              >
+                <option value="selling">on the selling price</option>
+                <option value="cost">on cost</option>
+              </select>
+            </label>
+          )}
         </div>
         <div className="page-actions">
           {w.can_edit && (
@@ -143,6 +165,23 @@ export function RateWorkingView({ tenderId, quotationId }: { tenderId?: number; 
                   Group the rest
                 </button>
               )}
+              {tenderId && (
+                <Link className="btn btn-small" to={`/knowledge/match/tender/${tenderId}`}>
+                  Match the client BOQ to the library
+                </Link>
+              )}
+              <button
+                className="btn btn-small"
+                title="Its workings are added to the BOQ knowledge as new evidence (a won BOQ is added by itself)"
+                onClick={() =>
+                  void api<{ lines: number }>(`/api/knowledge/learn/workings/${w.id}`, { method: "POST" }).then(
+                    (r) => setNotice(`Added to the library: ${r.lines} main item(s).`),
+                    (e) => setError(errorText(e)),
+                  )
+                }
+              >
+                Mark final: add to the library
+              </button>
               <button className="btn btn-small btn-primary" onClick={() => void apply()}>
                 Rates to the lines
               </button>
@@ -259,12 +298,22 @@ type Form = {
     consumption: string;
     default_consumption: string | null;
     consumption_reason: string;
+    consumption_source: string | null;
     price: string;
     freight_used: string;
     freight_actual: string;
     price_info: Product["price_info"];
   }[];
 };
+
+const SURFACES: [string, string][] = [
+  ["rcc", "RCC"],
+  ["brick", "Brick"],
+  ["plaster", "Plaster"],
+  ["screed", "Screed"],
+  ["old_tiles", "Old tiles"],
+  ["metal", "Metal"],
+];
 
 function toForm(g: Group): Form {
   return {
@@ -286,6 +335,7 @@ function toForm(g: Group): Form {
       consumption: p.consumption ?? "",
       default_consumption: p.default_consumption,
       consumption_reason: p.consumption_reason ?? "",
+      consumption_source: p.consumption_source ?? null,
       price: p.price ?? "",
       freight_used: p.freight_used ?? "0",
       freight_actual: p.freight_actual ?? "",
@@ -297,6 +347,20 @@ function toForm(g: Group): Form {
 function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: () => void; onError: (e: string) => void }) {
   const [f, setF] = useState<Form>(toForm(g));
   const [shown, setShown] = useState<Group>(g);
+  const { can: canDo } = useAuth();
+  const [picking, setPicking] = useState(false);
+  const [gap, setGap] = useState<Gap | null>(null);
+  const [fromLibrary, setFromLibrary] = useState<string | null>(null);
+  useEffect(() => {
+    if (!canDo("knowledge.view")) return;
+    api<{ gap: Gap | null; template: { name: string } | null }>(`/api/knowledge/groups/${g.id}/gap`).then(
+      (r) => {
+        setGap(r.gap);
+        setFromLibrary(r.template?.name ?? null);
+      },
+      () => undefined,
+    );
+  }, [g.id, shown.rate_sqm, canDo]);
   const [systems, setSystems] = useState<SystemLite[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [checks, setChecks] = useState<{ product: string; flagged: boolean; change_percent: string | null }[]>([]);
@@ -411,6 +475,38 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
             </select>
           </label>
           <label className="field">
+            <span>Surface (picks the consumption)</span>
+            <select value={shown.surface ?? ""} onChange={(e) => void save(false, { surface: e.target.value || null })} disabled={!edit}>
+              <option value="">— any —</option>
+              {SURFACES.map(([k, label]) => (
+                <option key={k} value={k}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Client asks: min kg/sqm · DFT mm</span>
+            <span className="inline-form">
+              <input
+                className="input-num"
+                defaultValue={shown.req_min_kg_sqm ?? ""}
+                key={`kg${shown.req_min_kg_sqm}`}
+                onBlur={(e) => e.target.value !== (shown.req_min_kg_sqm ?? "") && void save(false, { req_min_kg_sqm: e.target.value || null })}
+                disabled={!edit}
+                aria-label="Minimum kg per sqm"
+              />
+              <input
+                className="input-num"
+                defaultValue={shown.req_dft_mm ?? ""}
+                key={`dft${shown.req_dft_mm}`}
+                onBlur={(e) => e.target.value !== (shown.req_dft_mm ?? "") && void save(false, { req_dft_mm: e.target.value || null })}
+                disabled={!edit}
+                aria-label="DFT in mm"
+              />
+            </span>
+          </label>
+          <label className="field">
             <span>Wastage %</span>
             <input className="input-num" value={f.wastage_percent} onChange={set("wastage_percent")} disabled={!edit} />
             {s.wastage_source && <span className="small muted">from {s.wastage_source}</span>}
@@ -480,7 +576,9 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
                     </td>
                     <td className="num">
                       <input className="input-num" value={p.consumption} placeholder="to confirm" onChange={(e) => setP(i, { consumption: e.target.value })} disabled={!edit} />
-                      <div className="small muted">system {p.default_consumption === null ? "to confirm" : num(p.default_consumption)}</div>
+                      <div className="small muted" title={p.consumption_source ?? undefined}>
+                        {p.default_consumption === null ? "to confirm" : num(p.default_consumption)} from {p.consumption_source ?? "the system"}
+                      </div>
                     </td>
                     <td>
                       {changed || p.consumption_reason ? (
@@ -606,6 +704,30 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
               </table>
             )}
           </div>
+          {canDo("knowledge.view") && (
+            <div className={`card top-gap ${gap?.flagged ? "card-warn" : ""}`}>
+              <h3>Against what we sold at before</h3>
+              {fromLibrary && <p className="small muted">From the library: {fromLibrary}</p>}
+              {gap ? <GapNote gap={gap} /> : <p className="small muted">Not from the library yet.</p>}
+              {edit && (
+                <button className="btn btn-small" onClick={() => setPicking(true)}>
+                  {fromLibrary ? "Pick another template…" : "New main item from the library…"}
+                </button>
+              )}
+            </div>
+          )}
+          {picking && (
+            <LibraryPicker
+              groupId={g.id}
+              onClose={() => setPicking(false)}
+              onApplied={(gp, name) => {
+                setPicking(false);
+                setGap(gp);
+                setFromLibrary(name);
+                onSaved();
+              }}
+            />
+          )}
           <div className={`card top-gap ${s.library_flagged ? "card-warn" : ""}`}>
             <h3>Against the rate library</h3>
             {s.library_median_sqm ? (
@@ -1117,8 +1239,8 @@ export function CostingSettingsCard() {
       <h2 className="section-title">Prices, rate working and lots</h2>
       <div className="grid-2">
         <label className="field">
-          <span>Margin in the rate working</span>
-          <select value={String(s.margin_basis ?? "cost")} onChange={(e) => setS({ ...s, margin_basis: e.target.value })}>
+          <span>Margin in new rate workings (a saved working keeps its own)</span>
+          <select value={String(s.margin_basis ?? "selling")} onChange={(e) => setS({ ...s, margin_basis: e.target.value })}>
             <option value="cost">on cost: rate = cost × (1 + margin)</option>
             <option value="selling">on the selling price: rate = cost ÷ (1 − margin)</option>
           </select>

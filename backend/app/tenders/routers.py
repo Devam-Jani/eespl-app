@@ -530,6 +530,9 @@ def update_tender(
             db.scalar(select(Site).where(Site.tender_id == tender.id)),
             principal.user.id,
         )
+        from app.knowledge import hooks as knowledge  # noqa: PLC0415
+
+        knowledge.won_tender(db, tender)  # its workings become new evidence in the library
     if submitting:
         revision = revisions.submit(db, tender, principal.user.id, None)
         from app.process import hooks  # noqa: PLC0415

@@ -9,7 +9,8 @@
 - DEMO Site Supervisor checks DEMO Laxman gang in at DEMO Shela in the morning and at DEMO Gota
   Clinic in the afternoon of 14 Oct.
 Everything runs through the field service on a moved clock, as a real day would. Re-running
-replaces the DEMO field data."""
+replaces the DEMO field data and puts every other demo user back as the seed says (not tracked, no
+consent, no days)."""
 
 import io
 import math
@@ -24,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.field import geo, hooks, service
-from app.field.models import FieldDay, GangVisit, TravelClaim, TravelRate
+from app.field.models import FieldDay, GangVisit, TrackingProfile, TravelClaim, TravelRate
 from app.models import User
 from app.sites.models import Site, SiteMember
 from app.team.demo import email_for
@@ -247,6 +248,23 @@ def _seed(db: Session, clock: _Clock) -> list[str]:
         _member(db, s, engineer, "incharge")
         _member(db, s, supervisor, "supervisor")
     people = [sales, engineer]
+    # every other demo user back to the seed: not tracked, no consent, no day (a screenshot or a
+    # test run may have changed them)
+    from app.field.models import Consent  # noqa: PLC0415
+
+    others = [
+        u.id
+        for u in db.scalars(select(User).where(User.is_demo.is_(True)))
+        if u.id not in (sales.id, engineer.id)
+    ]
+    for uid in others:
+        p = db.get(TrackingProfile, uid)
+        if p is not None:
+            p.tracked, p.reimbursable = False, False
+    if others:
+        db.execute(delete(FieldDay).where(FieldDay.user_id.in_(others)))
+        db.execute(delete(Consent).where(Consent.user_id.in_(others)))
+        db.execute(delete(TravelClaim).where(TravelClaim.user_id.in_(others)))
     # replace any earlier DEMO field data
     db.execute(delete(TravelClaim).where(TravelClaim.user_id.in_([u.id for u in people])))
     db.execute(delete(FieldDay).where(FieldDay.user_id.in_([u.id for u in people])))

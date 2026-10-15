@@ -366,7 +366,7 @@ def _settings_out(s: CostingSettings) -> dict:
         "library_diff_flag_percent": s.library_diff_flag_percent,
         "calloff_tolerance_percent": s.calloff_tolerance_percent,
         "day_hours": s.day_hours,
-        "margin_basis": s.margin_basis or "cost",
+        "margin_basis": s.margin_basis or "selling",
     }
 
 

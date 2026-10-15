@@ -85,6 +85,10 @@ const ClaimDetail = lazy(() => fc().then((m) => ({ default: m.ClaimDetail })));
 const fa = () => import("./field/Admin");
 const GangCheckIn = lazy(() => fa().then((m) => ({ default: m.GangCheckIn })));
 const FieldSettings = lazy(() => fa().then((m) => ({ default: m.FieldSettings })));
+const kn = () => import("./knowledge/Pages");
+const KnowledgeHome = lazy(() => kn().then((m) => ({ default: m.KnowledgeHome })));
+const TemplatePage = lazy(() => kn().then((m) => ({ default: m.TemplatePage })));
+const MatchPage = lazy(() => kn().then((m) => ({ default: m.MatchPage })));
 const tm = () => import("./team/Pages");
 const MyWork = lazy(() => tm().then((m) => ({ default: m.MyWork })));
 const Enquiries = lazy(() => tm().then((m) => ({ default: m.Enquiries })));
@@ -155,6 +159,7 @@ const PAGES: Record<string, JSX.Element> = {
   "/quotations": <QuotationsList />,
   "/my-work": <MyWork />,
   "/field": <MyDay />,
+  "/knowledge": <KnowledgeHome />,
   "/field/team": <TeamMap />,
   "/field/claims": <Claims />,
   "/field/gangs": <GangCheckIn />,
@@ -343,6 +348,8 @@ export default function App() {
                   ["/prices/:id", ["tender.margin"], <ProductPrices />],
                   ["/sites/:id/takeoff", ["takeoff.view"], <TakeoffPage />],
                   ["/field/days/:id", ["field.track", "field.claims"], <DayMap />],
+                  ["/knowledge/templates/:id", ["knowledge.view"], <TemplatePage />],
+                  ["/knowledge/match/tender/:id", ["knowledge.view"], <MatchPage />],
                   ["/field/claims/:id", ["field.track", "field.claims"], <ClaimDetail />],
                   ["/assignments/:id", ["jobs.assign", "planning.view"], <AssignmentPage />],
                   ["/sites/:id/material-plan", ["planning.view", "indent.view"], <MaterialPlan />],

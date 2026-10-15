@@ -51,7 +51,7 @@ ALL = [
     "takeoff.view", "takeoff.edit",
     "field.track", "field.team", "field.admin", "field.claims", "field.claims_approve",
     "field.gang",
-    "site.location",
+    "site.location", "knowledge.view", "knowledge.cost", "knowledge.edit",
 ]  # fmt: skip
 TRACK = {"field.track": "own"}  # every staff user: their own day, map and claim
 
@@ -70,6 +70,9 @@ EXPECTED: dict[str, dict[str, str]] = {
     # sees and decides everything; users, roles and settings stay with office_admin
     "director": _all(*[c for c in ALL if c not in DIRECTOR_EXCLUDES]),
     "office_admin": _all(
+        "knowledge.view",
+        "knowledge.cost",
+        "knowledge.edit",
         "field.track",
         "field.team",
         "field.admin",
@@ -155,6 +158,9 @@ EXPECTED: dict[str, dict[str, str]] = {
         "sitearea.approve",
     ),  # fmt: skip
     "estimator": TRACK | _all(
+        "knowledge.view",
+        "knowledge.cost",
+        "knowledge.edit",
         "takeoff.view",
         "clients.view",
         "clients.edit",
@@ -175,6 +181,9 @@ EXPECTED: dict[str, dict[str, str]] = {
     # Mr. Sunil, Hardeep (Sr Engineer Billing & Planning): enquiries, the status board, material
     # planning, new areas, escalations; costs only if the director allows the person
     "planning": TRACK | _all(
+        "knowledge.view",
+        "knowledge.cost",
+        "knowledge.edit",
         "site.location",
         "takeoff.view",
         "takeoff.edit",
@@ -291,6 +300,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "sitevisit.log": "own",
         "scorecard.view": "own",
         "field.track": "own",
+        "knowledge.view": "all",
     },
     "site_supervisor": {
         "site.view": "assigned",

@@ -504,6 +504,9 @@ def refresh_flags(db: Session, day: FieldDay) -> list[dict]:
                     "stop": st.seq,
                 }
             )
+    off = day_off(db, day.user_id, day.on_date)
+    if off:
+        out.append({"code": "day_off", "text": f"Day started on {off}"})
     if day.start_home_m is not None and day.start_home_m > s.home_flag_m:
         out.append(
             {"code": "start_far", "text": f"Day started {_dist(day.start_home_m)} from home"}
@@ -548,6 +551,22 @@ def refresh_flags(db: Session, day: FieldDay) -> list[dict]:
         )
     day.flags = out
     return out
+
+
+WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+def day_off(db: Session, user_id, on: date) -> str | None:
+    """A company holiday, or the person's weekly off: what to say, else None."""
+    from app.field.models import CompanyHoliday  # noqa: PLC0415
+
+    h = db.scalar(select(CompanyHoliday).where(CompanyHoliday.on_date == on))
+    if h is not None:
+        return f"a company holiday ({h.name})"
+    p = db.get(TrackingProfile, user_id)
+    if p is not None and p.weekly_off is not None and on.weekday() == p.weekly_off:
+        return f"the weekly off ({WEEKDAYS[p.weekly_off]})"
+    return None
 
 
 def _dist(m: float) -> str:

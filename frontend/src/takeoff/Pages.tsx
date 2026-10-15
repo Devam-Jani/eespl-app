@@ -40,6 +40,7 @@ type CadFile = {
   } | null;
   plan_titles?: string[];
   sheet_unknown?: number | null;
+  sheet_guessed?: number | null;
   warnings: number;
   changes?: {
     previous: number | null;
@@ -60,6 +61,7 @@ type Area = {
   x: number;
   y: number;
   plan: string | null;
+  plan_guessed?: boolean;
   notes: { text: string; distance_m?: number }[];
   sunk_m: string | null;
   raise_m: string | null;
@@ -351,6 +353,7 @@ function Workspace({
         · {file.version} · units <b>{file.unit_name}</b>
         {file.unit_m === null && <span className="text-danger"> (unitless: set the unit before tracing)</span>} · {file.layers.length} layers · {file.dimensions} dimensions
         {file.sheet_unknown ? <span className="text-warn"> · {file.sheet_unknown} areas on an unknown sheet</span> : null}
+        {file.sheet_guessed ? <span className="text-warn"> · {file.sheet_guessed} sheets guessed (no frame): confirm them</span> : null}
         <CountSets file={file} />
         {file.architect && <> · layers of {file.architect}</>}
         {file.warnings > 0 && <span className="muted"> · {file.warnings} converter warnings</span>}
@@ -710,8 +713,8 @@ function CountSets({ file }: { file: CadFile }) {
   return (
     <div className="count-sets">
       <div title="Every text read: texts and multi-line texts, the texts inside blocks and the block attributes, on every layer">
-        <b>All texts:</b> {num(c.all.texts, 0)} ({num(c.all.text_entities, 0)} texts and multi-line texts in the drawing itself, the rest inside blocks or block attributes) · {c.all.size_labels}{" "}
-        size labels · {c.all.notes} waterproofing notes, on every layer
+        <b>All texts:</b> {num(c.all.texts, 0)} ({num(c.all.text_entities, 0)} texts and multi-line texts in the drawing itself, the rest inside blocks or block attributes) ·{" "}
+        {c.all.size_labels} size labels · {c.all.notes} waterproofing notes, on every layer
       </div>
       <div title="The texts on the layers shown by the layer mapping, outside blocks: what the area list is built from">
         <b>On the mapped layers:</b> {num(c.mapped.texts, 0)} texts · {c.mapped.size_labels} size labels · {c.mapped.notes} waterproofing notes
@@ -847,7 +850,26 @@ function AreasPanel({
                 <b>{a.name}</b>
                 {a.floor_label && <span className="badge badge-muted"> {a.floor_label}</span>}
                 {a.change && <span className="badge badge-warn"> {a.change}</span>}
-                {a.plan ? (
+                {a.plan && a.plan_guessed ? (
+                  <div className="small" onClick={(e) => e.stopPropagation()}>
+                    <span className="muted">{a.plan}</span> <span className="badge badge-warn">sheet guessed</span>{" "}
+                    {canEdit && a.status !== "accepted" && (
+                      <>
+                        <button className="btn btn-small btn-ghost" onClick={() => void onSave(a, { plan: a.plan })}>
+                          Confirm
+                        </button>
+                        <select value="" onChange={(e) => e.target.value && void onSave(a, { plan: e.target.value })} aria-label="Sheet">
+                          <option value="">— another sheet —</option>
+                          {(file.plan_titles ?? []).map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                      </>
+                    )}
+                  </div>
+                ) : a.plan ? (
                   <div className="small muted">{a.plan}</div>
                 ) : (
                   <div className="small" onClick={(e) => e.stopPropagation()}>

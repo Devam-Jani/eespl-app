@@ -80,7 +80,10 @@ PER_TEST_TABLES = [
     "product_prices", "cad_areas", "cad_files", "cad_layer_maps", "takeoff_settings",
     "field_claim_extras", "field_claim_days", "field_claims", "field_gang_workers",
     "field_gang_visits", "field_points", "field_stops", "field_days", "field_travel_rates",
-    "field_profiles", "field_consents", "field_settings",
+    "field_profiles", "field_consents", "field_settings", "field_holidays", "product_consumptions",
+    "knowledge_matches", "knowledge_fixes", "knowledge_lines", "knowledge_templates",
+    "knowledge_files",
+    "knowledge_settings",
 ]  # fmt: skip
 # seeded rows of truncated tables, put back after every test (copied once per run)
 SEED_COPIES = ["finance_settings", "letter_templates", "letterheads", "quotation_settings"]
@@ -110,6 +113,8 @@ PER_TEST_DELETES = [
     "INSERT INTO costing_settings (id) VALUES (1)",
     "INSERT INTO takeoff_settings (id) VALUES (1)",
     "INSERT INTO field_settings (id) VALUES (1)",
+    "INSERT INTO knowledge_settings (id, regions, old_after_months, last_run) "
+    "VALUES (1, '{}', 12, '{}')",
     "DELETE FROM area_types WHERE created_by IS NOT NULL",  # the seeded ones stay
     "INSERT INTO stores (name, kind) VALUES ('Ethios Godown', 'godown')",
 ]

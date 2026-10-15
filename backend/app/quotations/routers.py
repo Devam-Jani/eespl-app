@@ -2024,6 +2024,9 @@ def set_status(
             svc.mark_lost(db, q, body.lost_reason, body.lost_note, principal.user.id)
         elif body.status == "won":
             tender, site = svc.mark_won(db, q, principal.user.id, body.site_id, body.choices)
+            from app.knowledge import hooks as knowledge  # noqa: PLC0415
+
+            knowledge.won_quotation(db, q)  # its workings become new evidence in the library
             extra = {
                 "tender_id": tender.id,
                 "tender_code": tender.code,

@@ -83,7 +83,7 @@ def file_out(db, f: CadFile) -> dict:
         "inserts": s.get("inserts"), "layouts": s.get("layouts", []), "extents": s.get("extents"),
         "size_labels": s.get("size_labels"), "waterproofing_notes": s.get("waterproofing_notes"),
         "candidates": s.get("candidates"), "loose_notes": s.get("loose_notes", []),
-        "count_sets": s.get("count_sets"), "plan_titles": s.get("plan_titles", []), "sheet_unknown": s.get("sheet_unknown"),
+        "count_sets": s.get("count_sets"), "plan_titles": s.get("plan_titles", []), "sheet_unknown": s.get("sheet_unknown"), "sheet_guessed": s.get("sheet_guessed"),
         "warnings": f.warnings, "read_at": f.read_at,
     }  # fmt: skip
 
@@ -292,7 +292,7 @@ def area_out(db, a: CadArea, f: CadFile) -> dict:
     return {
         "id": a.id, "key": a.key, "name": a.name, "label_text": a.label_text, "size_text": a.size_text,
         "size_kind": a.size_kind, "label_w_m": a.label_w_m, "label_l_m": a.label_l_m,
-        "label_area_sqm": a.label_area_sqm, "x": a.x, "y": a.y, "plan": a.plan, "notes": a.notes,
+        "label_area_sqm": a.label_area_sqm, "x": a.x, "y": a.y, "plan": a.plan, "plan_guessed": a.plan_guessed, "notes": a.notes,
         "sunk_m": a.sunk_m, "raise_m": a.raise_m, "outline": a.outline, "traced_area_sqm": a.traced_area_sqm,
         "traced_perimeter_m": a.traced_perimeter_m, "side_wall_sqm": a.side_wall_sqm,
         "label_trace_diff_percent": diff, "label_trace_flagged": flagged,
@@ -527,6 +527,8 @@ def update_area(
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_ENTITY, "That place is not on this site"
             )
+    if "plan" in data:
+        a.plan_guessed = False  # picked or confirmed by the user
     if "sunk_mm" in data:
         a.sunk_m = (data.pop("sunk_mm") or 0) / 1000 or None
         service.side(a)

@@ -77,16 +77,7 @@ def test_margin_on_cost_or_on_the_selling_price_shown_on_the_sheet_and_in_the_ex
         f"/api/rate-working/groups/{raft['id']}", json={"system_id": boq["system"]}, headers=h
     ).json()
     cost = d(g["cost_sqm"])
-    assert g["margin_basis"] == "cost" and d(g["rate_sqm"]) == cents(cost * d("1.25"))
-    assert "rate = cost × (1 + margin)" in g["margin_basis_label"]
-    assert (
-        c.put("/api/prices/settings", json={"margin_basis": "selling"}, headers=h).json()[
-            "margin_basis"
-        ]
-        == "selling"
-    )
-    g = c.get(f"/api/rate-working/{w['id']}", headers=h).json()
-    g = next(x for x in g["groups"] if x["id"] == raft["id"])
+    # a new working: the margin on the selling price (the default from 15 Oct)
     assert g["margin_basis"] == "selling" and "cost ÷ (1 − margin)" in g["margin_basis_label"]
     assert d(g["rate_sqm"]) == cents(cost / d("0.75"))
     assert d(g["rate_sqft"]) == cents(cost / d("0.75") / SQFT_PER_SQM)
@@ -102,10 +93,30 @@ def test_margin_on_cost_or_on_the_selling_price_shown_on_the_sheet_and_in_the_ex
     assert any(
         isinstance(x, str) and "/(1-D" in x for x in cells
     )  # the Excel works it the same way
+    # this working on cost instead (its own choice)
+    out = c.put(
+        f"/api/rate-working/{w['id']}/basis", json={"margin_basis": "cost"}, headers=h
+    ).json()
+    g = next(x for x in out["groups"] if x["id"] == raft["id"])
+    assert g["margin_basis"] == "cost" and d(g["rate_sqm"]) == cents(cost * d("1.25"))
+    assert "rate = cost × (1 + margin)" in g["margin_basis_label"]
+    assert out["margin_basis_note"].startswith("Saved with margin on cost")
     assert (
         c.put("/api/prices/settings", json={"margin_basis": "sideways"}, headers=h).status_code
         == 422
     )
+
+
+def test_a_saved_working_keeps_its_basis_when_the_default_changes(boss, boq):
+    c, h = boss
+    w = _working(c, h, boq)
+    assert w["margin_basis"] == "selling" and w["margin_basis_note"] is None
+    assert (
+        c.put("/api/prices/settings", json={"margin_basis": "cost"}, headers=h).status_code == 200
+    )
+    w = c.get(f"/api/rate-working/{w['id']}", headers=h).json()
+    assert w["margin_basis"] == "selling"  # kept, and said
+    assert "it keeps that basis (new workings use margin on cost)" in w["margin_basis_note"]
 
 
 def test_the_application_fills_the_wastage_from_the_settings_and_says_so(boss, boq):
