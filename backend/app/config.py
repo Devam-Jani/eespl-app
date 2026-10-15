@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     kylas_timeout_seconds: float = 20
     # road km for the travel claim: our own OSRM container (never a third-party routing API)
     osrm_url: str = "http://osrm:5000"
+    # company data mounted read only (data/ on the PC): the BOQ files read for the knowledge library
+    data_dir: str = "/data"
     osrm_timeout_s: float = 8
 
     # Claude vision for survey photo suggestions (off unless enabled in survey settings). The key

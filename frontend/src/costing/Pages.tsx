@@ -9,6 +9,8 @@ import { LastPrice } from "../components/LastPrice";
 import { NewBill, NewCard } from "./LabourForms";
 import { errorText, inr, num } from "../format";
 import { shortDate } from "../pages/Tenders";
+import { GapNote, LibraryPicker } from "../knowledge/Picker";
+import type { Gap } from "../knowledge/Picker";
 
 type Line = { key: string; kind: string; id: number; item_no: string | null; description: string; unit: string | null; qty: string | null; rate: string | null };
 type Product = {
@@ -163,6 +165,23 @@ export function RateWorkingView({ tenderId, quotationId }: { tenderId?: number; 
                   Group the rest
                 </button>
               )}
+              {tenderId && (
+                <Link className="btn btn-small" to={`/knowledge/match/tender/${tenderId}`}>
+                  Match the client BOQ to the library
+                </Link>
+              )}
+              <button
+                className="btn btn-small"
+                title="Its workings are added to the BOQ knowledge as new evidence (a won BOQ is added by itself)"
+                onClick={() =>
+                  void api<{ lines: number }>(`/api/knowledge/learn/workings/${w.id}`, { method: "POST" }).then(
+                    (r) => setNotice(`Added to the library: ${r.lines} main item(s).`),
+                    (e) => setError(errorText(e)),
+                  )
+                }
+              >
+                Mark final: add to the library
+              </button>
               <button className="btn btn-small btn-primary" onClick={() => void apply()}>
                 Rates to the lines
               </button>
@@ -328,6 +347,20 @@ function toForm(g: Group): Form {
 function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: () => void; onError: (e: string) => void }) {
   const [f, setF] = useState<Form>(toForm(g));
   const [shown, setShown] = useState<Group>(g);
+  const { can: canDo } = useAuth();
+  const [picking, setPicking] = useState(false);
+  const [gap, setGap] = useState<Gap | null>(null);
+  const [fromLibrary, setFromLibrary] = useState<string | null>(null);
+  useEffect(() => {
+    if (!canDo("knowledge.view")) return;
+    api<{ gap: Gap | null; template: { name: string } | null }>(`/api/knowledge/groups/${g.id}/gap`).then(
+      (r) => {
+        setGap(r.gap);
+        setFromLibrary(r.template?.name ?? null);
+      },
+      () => undefined,
+    );
+  }, [g.id, shown.rate_sqm, canDo]);
   const [systems, setSystems] = useState<SystemLite[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [checks, setChecks] = useState<{ product: string; flagged: boolean; change_percent: string | null }[]>([]);
@@ -671,6 +704,30 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
               </table>
             )}
           </div>
+          {canDo("knowledge.view") && (
+            <div className={`card top-gap ${gap?.flagged ? "card-warn" : ""}`}>
+              <h3>Against what we sold at before</h3>
+              {fromLibrary && <p className="small muted">From the library: {fromLibrary}</p>}
+              {gap ? <GapNote gap={gap} /> : <p className="small muted">Not from the library yet.</p>}
+              {edit && (
+                <button className="btn btn-small" onClick={() => setPicking(true)}>
+                  {fromLibrary ? "Pick another template…" : "New main item from the library…"}
+                </button>
+              )}
+            </div>
+          )}
+          {picking && (
+            <LibraryPicker
+              groupId={g.id}
+              onClose={() => setPicking(false)}
+              onApplied={(gp, name) => {
+                setPicking(false);
+                setGap(gp);
+                setFromLibrary(name);
+                onSaved();
+              }}
+            />
+          )}
           <div className={`card top-gap ${s.library_flagged ? "card-warn" : ""}`}>
             <h3>Against the rate library</h3>
             {s.library_median_sqm ? (

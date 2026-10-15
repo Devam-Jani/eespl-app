@@ -27,6 +27,7 @@ from app.finance import payables as fin_payables
 from app.finance import payroll as fin_payroll
 from app.finance import petty as fin_petty
 from app.finance import reports as fin_reports
+from app.knowledge import routes as knowledge
 from app.masters.routers import (
     admin_settings,
     channels,
@@ -109,6 +110,7 @@ for _r in (
     schedule.router,
     takeoff.router,
     field.router,
+    knowledge.router,
     analytics.dashboard,
     analytics.router,
     portal_staff.router,

@@ -465,6 +465,12 @@ def main(argv: list[str] | None = None) -> None:
         help="The director's user from DIRECTOR_EMAIL in .env (set the password with set-password)",
     )
     sub.add_parser("seed-demo-field", help="DEMO field tracking: a day, a month's claim, gangs")
+    p = sub.add_parser(
+        "read-boqs", help="Read the old BOQs in data/boq-knowledge/files into the knowledge library"
+    )
+    p.add_argument("--again", action="store_true", help="read files already read again")
+    sub.add_parser("group-boqs", help="Group the knowledge library again (unreviewed templates)")
+    p.add_argument("--limit", type=int, default=None)
     sub.add_parser(
         "seed-demo-team",
         help="One invented demo user per role (password from DEMO_USER_PASSWORD in .env)",
@@ -497,6 +503,27 @@ def main(argv: list[str] | None = None) -> None:
         run_make_offer_template()
     elif args.command == "create-director":
         create_director()
+    elif args.command == "read-boqs":
+        import app.main  # noqa: F401, PLC0415  (every model registered)
+        from app.knowledge import library  # noqa: PLC0415
+
+        with SessionLocal() as db:
+            report = library.run(db, again=args.again, limit=args.limit)
+        print({k: v for k, v in report.items() if k not in ("failed", "scanned")})
+        print(f"failed: {len(report['failed'])}, scanned: {len(report['scanned'])}")
+    elif args.command == "group-boqs":
+        import app.main  # noqa: F401, PLC0415  (every model registered)
+        from app.knowledge import library  # noqa: PLC0415
+
+        with SessionLocal() as db:
+            library.historic(db, library.settings(db).regions or {})
+            made = library.regroup(db)
+            rows = library.consumption(db)
+            s = library.settings(db)
+            s.last_run = {**(s.last_run or {}), **library.reading_report(db)}
+            s.last_run |= {"templates_made": made, "consumption_rows": rows}
+            db.commit()
+        print({"templates_made": made, "consumption_rows": rows})
     elif args.command == "seed-demo-field":
         from app.field.demo import seed  # noqa: PLC0415
 

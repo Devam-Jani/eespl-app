@@ -4311,3 +4311,15 @@ li.late a {
     font-size: 0.85rem;
   }
 }
+
+/* the BOQ knowledge library */
+.stat-value {
+  font-weight: 700;
+  font-size: 1.15rem;
+}
+.table tr.row-ok td {
+  background: var(--ok-soft);
+}
+.library-proposal {
+  margin-top: 0.6rem;
+}
