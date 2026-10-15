@@ -208,8 +208,9 @@ def test_the_rate_formula_cushions_reasons_flags_and_the_rate_to_every_line(
     # consumption × (price + freight) × (1 + wastage), + surface prep + labour ₹/sq ft × 10.7639, + margin
     material = (d("1.2") * (250 + 5) + d("0.3") * (80 + 2)) * d("1.07")
     cost = material + 30 + 12 * SQFT_PER_SQM
-    assert d(g["rate_sqm"]) == cents(cost * d("1.25"))
-    assert d(g["rate_sqft"]) == cents(cost * d("1.25") / SQFT_PER_SQM)
+    # a new working: the margin on the selling price, rate = cost ÷ (1 − 25 %)
+    assert d(g["rate_sqm"]) == cents(cost / d("0.75"))
+    assert d(g["rate_sqft"]) == cents(cost / d("0.75") / SQFT_PER_SQM)
     labour_row = next(r for r in g["rows"] if r["item"] == "Labour")
     assert d(labour_row["per_sqm"]) == cents(12 * SQFT_PER_SQM)
     # cushions are visible lines: labour used vs paid, freight used vs actual
@@ -307,7 +308,7 @@ def test_the_rate_formula_cushions_reasons_flags_and_the_rate_to_every_line(
     assert (
         "COVRAGE" in cells
         and "CTC" in cells
-        and "MARGIN (on cost)" in cells
+        and "MARGIN (on selling price)" in cells
         and any(x.startswith("CUSHION") for x in cells)
     )
     assert (

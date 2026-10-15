@@ -42,6 +42,18 @@ Qty = Numeric(14, 3)
 Pct = Numeric(7, 3)
 
 LABOUR_UNITS = ("sqft", "sqm", "rmt", "nos", "cum")
+# the surface a product goes on: its consumption differs (Devam, 15 Oct)
+SURFACES = ("any", "rcc", "brick", "plaster", "screed", "old_tiles", "metal")
+SURFACE_LABEL = {
+    "any": "Any surface",
+    "rcc": "RCC",
+    "brick": "Brick",
+    "plaster": "Plaster",
+    "screed": "Screed",
+    "old_tiles": "Old tiles",
+    "metal": "Metal",
+}
+CONSUMPTION_SOURCES = ("old_boq", "data_sheet", "site_actual", "manual", "system")
 LABOUR_BILL_KINDS = ("piece", "attendance")
 LABOUR_BILL_STATUSES = ("draft", "approved", "cancelled")
 
@@ -63,8 +75,9 @@ class CostingSettings(Base):
     library_diff_flag_percent: Mapped[Decimal] = mapped_column(Pct, server_default="15")
     calloff_tolerance_percent: Mapped[Decimal] = mapped_column(Pct, server_default="5")
     day_hours: Mapped[Decimal] = mapped_column(Numeric(4, 1), server_default="8")  # a gang's day
-    # "cost": rate = cost × (1 + margin) (as before); "selling": rate = cost ÷ (1 − margin)
-    margin_basis: Mapped[str] = mapped_column(String(8), server_default="cost")
+    # the basis new workings take: "selling": rate = cost ÷ (1 − margin) (the default, Devam
+    # 15 Oct); "cost": rate = cost × (1 + margin)
+    margin_basis: Mapped[str] = mapped_column(String(8), server_default="selling")
 
 
 class FreightRate(Tracked, Base):
@@ -95,9 +108,13 @@ class RateWorking(Tracked, Base):
         CheckConstraint("(tender_id IS NOT NULL) <> (quotation_id IS NOT NULL)", name="one_parent"),
         UniqueConstraint("tender_id", "rev_no"),
         UniqueConstraint("quotation_id"),
+        CheckConstraint("margin_basis IN ('cost', 'selling')", name="margin_basis_valid"),
     )
 
     id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    # the margin basis this working is priced on, fixed when it is made (the settings' default
+    # at that time); a working saved on cost keeps it and says so
+    margin_basis: Mapped[str] = mapped_column(String(8), server_default="selling")
     tender_id: Mapped[int | None] = mapped_column(ForeignKey("tenders.id", ondelete="CASCADE"))
     quotation_id: Mapped[int | None] = mapped_column(
         ForeignKey("quotations.id", ondelete="CASCADE")
@@ -128,6 +145,10 @@ class RateGroup(Tracked, Base):
     name: Mapped[str] = mapped_column(String(200))
     system_id: Mapped[int | None] = mapped_column(ForeignKey("systems.id", ondelete="SET NULL"))
     application: Mapped[str | None] = mapped_column(String(40))  # raft, footing ... (wastage)
+    # the main item's surface and what the client's spec asks: they pick the consumption
+    surface: Mapped[str | None] = mapped_column(String(10))
+    req_min_kg_sqm: Mapped[Decimal | None] = mapped_column(Numeric(8, 3))
+    req_dft_mm: Mapped[Decimal | None] = mapped_column(Numeric(6, 3))
     coats: Mapped[int | None] = mapped_column(Integer)
     wastage_percent: Mapped[Decimal] = mapped_column(Pct, server_default="0")
     # where the wastage came from: the application in Settings > Process rules, the system, typed
@@ -157,6 +178,37 @@ class RateGroup(Tracked, Base):
     )
 
 
+class ProductConsumption(Tracked, Base):
+    """A product's consumption (per sqm, all coats) for a surface and what the client's spec asks
+    (coats, a minimum kg per sqm, a DFT): never one fixed number per product. Where it came from
+    (an old BOQ's working, the manufacturer's data sheet, a site's actual, typed) and how many
+    times it was used."""
+
+    __tablename__ = "product_consumptions"
+    __table_args__ = (
+        CheckConstraint(_in("surface", SURFACES), name="surface_valid"),
+        CheckConstraint(_in("source", CONSUMPTION_SOURCES), name="source_valid"),
+        CheckConstraint("consumption >= 0", name="consumption_nonnegative"),
+    )
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    product_id: Mapped[int] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), index=True
+    )
+    system_id: Mapped[int | None] = mapped_column(
+        ForeignKey("systems.id", ondelete="CASCADE"), index=True
+    )
+    surface: Mapped[str] = mapped_column(String(10), server_default="any")
+    coats: Mapped[int | None] = mapped_column(Integer)
+    min_kg_sqm: Mapped[Decimal | None] = mapped_column(Numeric(8, 3))  # the spec's minimum
+    dft_mm: Mapped[Decimal | None] = mapped_column(Numeric(6, 3))
+    consumption: Mapped[Decimal] = mapped_column(Numeric(12, 4))
+    source: Mapped[str] = mapped_column(String(12), server_default="manual")
+    source_ref: Mapped[str | None] = mapped_column(Text)  # file / sheet / row, data sheet, site
+    used_count: Mapped[int] = mapped_column(Integer, server_default="0")
+    to_check: Mapped[bool] = mapped_column(Boolean, server_default="false")
+
+
 class RateGroupProduct(Base):
     """One product of a main item: the consumption for this site (the system's default kept
     beside it, a reason when changed), the price used (from the master price list, with its date)
@@ -173,6 +225,11 @@ class RateGroupProduct(Base):
     consumption: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))  # per sqm, all coats
     default_consumption: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
     consumption_reason: Mapped[str | None] = mapped_column(String(300))
+    # where the starting consumption came from (the consumption table's row, or the system)
+    consumption_source: Mapped[str | None] = mapped_column(String(300))
+    consumption_row_id: Mapped[int | None] = mapped_column(
+        ForeignKey("product_consumptions.id", ondelete="SET NULL")
+    )
     price: Mapped[Decimal | None] = mapped_column(Money)
     price_id: Mapped[int | None] = mapped_column(
         ForeignKey("product_prices.id", ondelete="SET NULL")

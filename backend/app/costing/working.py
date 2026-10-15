@@ -52,8 +52,19 @@ BASIS_LABEL = {
 }
 
 
-def margin_basis(db: Session) -> str:
-    return prices.settings(db).margin_basis or "cost"
+def margin_basis(db: Session, w: RateWorking | None = None) -> str:
+    """The working's own basis; without a working, the basis new workings take (settings)."""
+    if w is not None and w.margin_basis:
+        return w.margin_basis
+    return prices.settings(db).margin_basis or "selling"
+
+
+def basis_note(db: Session, w: RateWorking) -> str | None:
+    """Said on a working whose basis is not the one new workings take."""
+    default = margin_basis(db)
+    if w.margin_basis and w.margin_basis != default:
+        return f"Saved with {BASIS_LABEL[w.margin_basis].split(':')[0]}: it keeps that basis (new workings use {BASIS_LABEL[default].split(':')[0]})"
+    return None
 
 
 def with_margin(cost: Decimal, margin_percent: Decimal, basis: str) -> Decimal | None:
@@ -165,7 +176,9 @@ def for_tender(db: Session, tender, user_id=None) -> RateWorking:
         old.locked = True
     if w is not None:
         return w
-    w = RateWorking(tender_id=tender.id, rev_no=rev, created_by=user_id)
+    w = RateWorking(
+        tender_id=tender.id, rev_no=rev, created_by=user_id, margin_basis=margin_basis(db)
+    )
     db.add(w)
     db.flush()
     prev = db.scalar(
@@ -185,7 +198,9 @@ def for_quotation(db: Session, q, user_id=None) -> RateWorking:
     w = db.scalar(select(RateWorking).where(RateWorking.quotation_id == q.id))
     if w is not None:
         return w
-    w = RateWorking(quotation_id=q.id, rev_no=q.revision or 0, created_by=user_id)
+    w = RateWorking(
+        quotation_id=q.id, rev_no=q.revision or 0, created_by=user_id, margin_basis=margin_basis(db)
+    )
     db.add(w)
     db.flush()
     prev = (
@@ -224,11 +239,11 @@ def copy(db: Session, src: RateWorking, dst: RateWorking, line_map: dict[str, st
 GROUP_FIELDS = (
     "sort_order", "name", "system_id", "application", "coats", "wastage_percent", "surface_prep",
     "labour_rate_card_id", "labour_used_sqft", "labour_paid_sqft", "margin_percent", "cost_sqm",
-    "rate_sqm", "rate_sqft", "library_median_sqm", "note",
+    "rate_sqm", "rate_sqft", "library_median_sqm", "note", "surface", "req_min_kg_sqm", "req_dft_mm",
 )  # fmt: skip
 PRODUCT_FIELDS = (
     "product_id", "sort_order", "consumption", "default_consumption", "consumption_reason",
-    "price", "price_id", "freight_used", "freight_actual",
+    "consumption_source", "consumption_row_id", "price", "price_id", "freight_used", "freight_actual",
 )  # fmt: skip
 
 
@@ -342,10 +357,107 @@ def init_from_system(db: Session, g: RateGroup, context: str = "") -> None:
     g.coats = max((c.coats for c in system.components if c.coats), default=None)
     g.products = []
     for i, c in enumerate(system.components):
-        g.products.append(new_product(db, c.product_id, c.consumption_per_unit, i))
+        value, source, row_id = pick_consumption(db, g, c.product_id, c.consumption_per_unit)
+        g.products.append(new_product(db, c.product_id, value, i, source, row_id))
 
 
-def new_product(db: Session, product_id: int, consumption, sort: int = 0) -> RateGroupProduct:
+SOURCE_LABEL = {
+    "old_boq": "old BOQ",
+    "data_sheet": "data sheet",
+    "site_actual": "site actual",
+    "manual": "typed",
+    "system": "the system",
+}
+
+
+def _requirement(g: RateGroup) -> str:
+    bits = [f"{g.coats} coats" if g.coats else None, f"min {g.req_min_kg_sqm.normalize():f} kg/sqm" if g.req_min_kg_sqm else None,
+            f"{g.req_dft_mm.normalize():f} mm DFT" if g.req_dft_mm else None]  # fmt: skip
+    return ", ".join(b for b in bits if b) or "no requirement"
+
+
+def pick_consumption(
+    db: Session, g: RateGroup, product_id: int, fallback
+) -> tuple[Decimal | None, str, int | None]:
+    """The consumption for the main item's surface and the client's requirement (coats, a
+    minimum kg per sqm, a DFT), from the consumption table: the surface itself before "any",
+    the requirement met exactly before a near one, then the most used; a row below the client's
+    minimum is never picked. None fits: the system's own figure. (value, where from, row id)"""
+    from app.costing.models import SURFACE_LABEL, ProductConsumption  # noqa: PLC0415
+
+    surface = g.surface or "any"
+    best, best_score = None, None
+    for r in db.scalars(
+        select(ProductConsumption).where(ProductConsumption.product_id == product_id)
+    ):
+        if r.system_id is not None and r.system_id != g.system_id:
+            continue
+        if r.surface not in (surface, "any"):
+            continue
+        if g.req_min_kg_sqm and Decimal(r.consumption) < Decimal(g.req_min_kg_sqm):
+            continue
+        score = 4 if r.surface == surface and surface != "any" else 1
+        score += (
+            3
+            if g.coats and r.coats == g.coats
+            else (-2 if g.coats and r.coats and r.coats != g.coats else 0)
+        )
+        score += 3 if g.req_min_kg_sqm and r.min_kg_sqm == g.req_min_kg_sqm else 0
+        score += (
+            3
+            if g.req_dft_mm and r.dft_mm == g.req_dft_mm
+            else (-2 if g.req_dft_mm and r.dft_mm and r.dft_mm != g.req_dft_mm else 0)
+        )
+        score += 1 if r.system_id == g.system_id and r.system_id else 0
+        key = (score, r.used_count or 0, r.source != "manual", -r.id)
+        if best_score is None or key > best_score:
+            best, best_score = r, key
+    if best is not None:
+        where = f"{SOURCE_LABEL[best.source]}: {SURFACE_LABEL[best.surface]}"
+        req = ", ".join(x for x in [f"{best.coats} coats" if best.coats else None, f"min {best.min_kg_sqm.normalize():f} kg/sqm" if best.min_kg_sqm else None,
+                                     f"{best.dft_mm.normalize():f} mm DFT" if best.dft_mm else None] if x)  # fmt: skip
+        where += f", {req}" if req else ""
+        where += f" (used {best.used_count}×)" if best.used_count else ""
+        where += f" · {best.source_ref}" if best.source_ref else ""
+        return Decimal(best.consumption), where[:300], best.id
+    if fallback is None:
+        return (
+            None,
+            f"no consumption for {SURFACE_LABEL.get(surface, surface)}, {_requirement(g)}: to confirm",
+            None,
+        )
+    return (
+        Decimal(fallback),
+        f"the system's figure (none for {SURFACE_LABEL.get(surface, surface)}, {_requirement(g)})"[
+            :300
+        ],
+        None,
+    )
+
+
+def repick(db: Session, g: RateGroup) -> None:
+    """The surface or the requirement changed: every product whose consumption was not changed
+    by hand takes the row for the new surface and requirement."""
+    system = db.get(System, g.system_id) if g.system_id else None
+    figures = {c.product_id: c.consumption_per_unit for c in (system.components if system else [])}
+    for p in g.products:
+        if p.consumption != p.default_consumption:
+            continue  # typed for this site, with its reason: kept
+        value, source, row_id = pick_consumption(
+            db, g, p.product_id, figures.get(p.product_id, p.default_consumption)
+        )
+        p.consumption = p.default_consumption = value
+        p.consumption_source, p.consumption_row_id = source, row_id
+
+
+def new_product(
+    db: Session,
+    product_id: int,
+    consumption,
+    sort: int = 0,
+    source: str | None = None,
+    row_id: int | None = None,
+) -> RateGroupProduct:
     cur = prices.current(db, product_id)
     f = prices.freight_for(db, product_id)
     freight = f.per_unit if f else (cur.freight_per_unit if cur else Decimal(0))
@@ -354,6 +466,8 @@ def new_product(db: Session, product_id: int, consumption, sort: int = 0) -> Rat
         sort_order=sort,
         consumption=consumption,
         default_consumption=consumption,
+        consumption_source=source,
+        consumption_row_id=row_id,
         price=cur.purchase_rate if cur else None,
         price_id=cur.id if cur else None,
         freight_used=freight or Decimal(0),
@@ -400,7 +514,7 @@ def work(db: Session, g: RateGroup) -> dict:
         labour_unit="sqft",
         margin_percent=Decimal(g.margin_percent or 0),
     )
-    basis = margin_basis(db)
+    basis = margin_basis(db, db.get(RateWorking, g.working_id))
     gross = with_margin(br.base_cost, Decimal(g.margin_percent or 0), basis)
     if gross is None:
         g.cost_sqm = g.rate_sqm = g.rate_sqft = None

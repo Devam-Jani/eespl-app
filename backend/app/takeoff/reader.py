@@ -40,6 +40,8 @@ class Parsed:
     layouts: list[str] = field(default_factory=list)
     # sheet frames: [x1, y1, x2, y2, source] (title-block rectangles, layout viewport windows)
     frames: list[list] = field(default_factory=list)
+    # model-space clusters: the bounding boxes of groups of drawn things that touch [x1, y1, x2, y2]
+    clusters: list[list] = field(default_factory=list)
     extents: list[float] | None = None
     geometry: dict = field(default_factory=dict)  # {layer: {"s": [x1, y1, x2, y2, ...]}}
 
@@ -49,7 +51,7 @@ class Parsed:
             "unit_m": self.unit_m, "layers": self.layers, "counts": self.counts, "top": self.top,
             "texts": len(self.texts), "dimensions": len(self.dimensions),
             "inserts": len(self.inserts), "blocks": sorted({i["block"] for i in self.inserts})[:300],
-            "layouts": self.layouts, "extents": self.extents, "frames": self.frames,
+            "layouts": self.layouts, "extents": self.extents, "frames": self.frames, "clusters": self.clusters,
         }  # fmt: skip
 
 
@@ -213,7 +215,52 @@ def read(path: Path, version: str | None = None, hidden: set[str] | None = None)
         out.extents = [xs[lo], ys[lo], xs[hi], ys[hi]]
     out.geometry = {layer: {"s": s} for layer, s in segs.items()}
     out.frames = _frames(rects, out.extents) + _viewports(doc, out.extents)
+    out.clusters = clusters(segs, out.extents)
     return out
+
+
+def clusters(
+    segs: dict[str, list[float]], extents: list[float] | None, cells: int = 300
+) -> list[list]:
+    """Groups of drawn things that touch, on a coarse grid (a plan with its labels, a schedule,
+    a title block): their bounding boxes, largest first. Used when a drawing has no frames."""
+    if not extents:
+        return []
+    x0, y0, x1, y1 = extents
+    size = max(x1 - x0, y1 - y0) / cells or 1.0
+    filled: set[tuple[int, int]] = set()
+    for s in segs.values():
+        for i in range(0, len(s), 4):
+            ax, ay, bx, by = s[i : i + 4]
+            n = max(1, int(max(abs(bx - ax), abs(by - ay)) / size))
+            for k in range(n + 1):
+                x, y = ax + (bx - ax) * k / n, ay + (by - ay) * k / n
+                if x0 - size <= x <= x1 + size and y0 - size <= y <= y1 + size:
+                    filled.add((int((x - x0) // size), int((y - y0) // size)))
+    seen: set[tuple[int, int]] = set()
+    out = []
+    for start in filled:
+        if start in seen:
+            continue
+        stack, cells_ = [start], []
+        seen.add(start)
+        while stack:
+            cx, cy = stack.pop()
+            cells_.append((cx, cy))
+            for dx in (-2, -1, 0, 1, 2):  # a gap of one empty cell still joins
+                for dy in (-2, -1, 0, 1, 2):
+                    nb = (cx + dx, cy + dy)
+                    if nb in filled and nb not in seen:
+                        seen.add(nb)
+                        stack.append(nb)
+        if len(cells_) < 4:
+            continue
+        xs = [c[0] for c in cells_]
+        ys = [c[1] for c in cells_]
+        out.append([round(x0 + min(xs) * size, 2), round(y0 + min(ys) * size, 2),
+                    round(x0 + (max(xs) + 1) * size, 2), round(y0 + (max(ys) + 1) * size, 2), len(cells_)])  # fmt: skip
+    out.sort(key=lambda c: -c[4])
+    return out[:400]
 
 
 def _rectangle(pts: list[tuple[float, float]]) -> tuple[float, float, float, float] | None:

@@ -12,6 +12,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 from app.auth.deps import CurrentPrincipal, require_permission
 from app.costing import prices, working
@@ -107,9 +108,14 @@ def group_out(db, g: RateGroup, lines: dict[str, dict], with_cost: bool) -> dict
         "library_median_sqm": result.get("library_median_sqm"),
         "coats": g.coats,
         "application": g.application,
-        "margin_basis": result.get("margin_basis") or working.margin_basis(db),
+        "surface": g.surface,
+        "req_min_kg_sqm": g.req_min_kg_sqm,
+        "req_dft_mm": g.req_dft_mm,
+        "margin_basis": result.get("margin_basis")
+        or working.margin_basis(db, db.get(RateWorking, g.working_id)),
         "margin_basis_label": working.BASIS_LABEL[
-            result.get("margin_basis") or working.margin_basis(db)
+            result.get("margin_basis")
+            or working.margin_basis(db, db.get(RateWorking, g.working_id))
         ],
     }
     if not with_cost:
@@ -176,6 +182,7 @@ def product_out(db, p: RateGroupProduct) -> dict:
         "default_consumption": p.default_consumption,
         "consumption_changed": p.consumption != p.default_consumption,
         "consumption_reason": p.consumption_reason,
+        "consumption_source": p.consumption_source,
         "price": p.price,
         "price_info": prices.price_out(db, used),
         "freight_used": p.freight_used,
@@ -199,8 +206,9 @@ def working_out(db, w: RateWorking, principal) -> dict:
         "locked": w.locked,
         "can_edit": with_cost and not w.locked,
         "sees_cost": with_cost,
-        "margin_basis": working.margin_basis(db),
-        "margin_basis_label": working.BASIS_LABEL[working.margin_basis(db)],
+        "margin_basis": working.margin_basis(db, w),
+        "margin_basis_label": working.BASIS_LABEL[working.margin_basis(db, w)],
+        "margin_basis_note": working.basis_note(db, w),
         "line_count": len(lines),
         "groups": groups,
         "ungrouped": [x for k, x in lines.items() if k not in grouped],
@@ -272,6 +280,82 @@ def quotation_unsent(
     found = working.unsent_for_quotation(db, qsvc.get_visible(db, qid, scope, principal))
     db.commit()
     return jsonable_encoder({"unsent": found})
+
+
+# --- the consumption table: product x surface x requirement ---------------------------------------
+
+
+def consumption_out(db, r) -> dict:
+    from app.costing.models import SURFACE_LABEL  # noqa: PLC0415
+
+    return {
+        "id": r.id, "product_id": r.product_id, "product": db.get(Product, r.product_id).name,
+        "system_id": r.system_id, "surface": r.surface, "surface_label": SURFACE_LABEL[r.surface],
+        "coats": r.coats, "min_kg_sqm": r.min_kg_sqm, "dft_mm": r.dft_mm, "consumption": r.consumption,
+        "source": r.source, "source_label": working.SOURCE_LABEL[r.source], "source_ref": r.source_ref,
+        "used_count": r.used_count, "to_check": r.to_check,
+    }  # fmt: skip
+
+
+@router.get("/consumptions")
+def consumptions(
+    db: DbSession, principal: CurrentPrincipal, product_id: int | None = None
+) -> list[dict]:
+    """The consumption rows (estimator and director: they are part of the cost)."""
+    from app.costing.models import ProductConsumption  # noqa: PLC0415
+
+    if not _cost(principal):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Consumption is for the estimator and the director"
+        )
+    q = select(ProductConsumption).order_by(
+        ProductConsumption.product_id,
+        ProductConsumption.surface,
+        ProductConsumption.used_count.desc(),
+    )
+    if product_id:
+        q = q.where(ProductConsumption.product_id == product_id)
+    return jsonable_encoder([consumption_out(db, r) for r in db.scalars(q.limit(2000))])
+
+
+class ConsumptionIn(BaseModel):
+    product_id: int
+    system_id: int | None = None
+    surface: str = Field("any", pattern="^(any|rcc|brick|plaster|screed|old_tiles|metal)$")
+    coats: int | None = Field(None, ge=1, le=20)
+    min_kg_sqm: Decimal | None = Field(None, ge=0, le=50)
+    dft_mm: Decimal | None = Field(None, ge=0, le=20)
+    consumption: Decimal = Field(ge=0, le=100)
+    source: str = Field("manual", pattern="^(data_sheet|site_actual|manual)$")
+    source_ref: str | None = Field(None, max_length=500)
+
+
+@router.post("/consumptions", status_code=status.HTTP_201_CREATED)
+def add_consumption(
+    body: ConsumptionIn, request: Request, db: DbSession, principal: CurrentPrincipal
+) -> dict:
+    from app.costing.models import ProductConsumption  # noqa: PLC0415
+
+    if not _cost(principal):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Consumption is for the estimator and the director"
+        )
+    if db.get(Product, body.product_id) is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unknown product")
+    r = ProductConsumption(**body.model_dump(), created_by=principal.user.id)
+    db.add(r)
+    db.flush()
+    record(
+        db,
+        request,
+        principal,
+        "consumption.add",
+        "product_consumption",
+        r.id,
+        after=jsonable_encoder(body.model_dump()),
+    )
+    db.commit()
+    return jsonable_encoder(consumption_out(db, r))
 
 
 @router.get("/{wid}")
@@ -368,6 +452,9 @@ class GroupIn(BaseModel):
     labour_paid_sqft: Decimal | None = Field(None, ge=0)
     margin_percent: Decimal | None = Field(None, ge=0, le=500)
     note: str | None = None
+    surface: str | None = Field(None, pattern="^(any|rcc|brick|plaster|screed|old_tiles|metal)$")
+    req_min_kg_sqm: Decimal | None = Field(None, ge=0, le=50)
+    req_dft_mm: Decimal | None = Field(None, ge=0, le=20)
     products: list[ProductIn] | None = None
 
 
@@ -405,6 +492,12 @@ def update_group(
             g.wastage_source = "typed for this site"
     if "labour_rate_card_id" in data and "labour_paid_sqft" not in data:
         working.labour_from_card(db, g)
+    # the surface or the client's requirement changed: the consumption rows for them
+    previous = {p.id: p.default_consumption for p in g.products}
+    repicked = bool(set(data) & {"surface", "req_min_kg_sqm", "req_dft_mm", "coats"}) and not new_system
+    if repicked:
+        db.flush()
+        working.repick(db, g)
     flags = []
     if products is not None and not new_system:
         keep = {p["id"] for p in products if p.get("id")}
@@ -421,7 +514,13 @@ def update_group(
                 p.default_consumption = None
                 g.products.append(p)
             p.sort_order = i
-            if "consumption" in row:
+            stale = (
+                repicked
+                and row.get("consumption") is not None
+                and previous.get(p.id) is not None
+                and Decimal(str(row["consumption"])) == Decimal(previous[p.id])
+            )  # the form still had the figure from before the surface or requirement changed
+            if "consumption" in row and not stale:
                 p.consumption = row["consumption"]
             reason = " ".join((row.get("consumption_reason") or "").split()) or None
             if p.default_consumption is not None and p.consumption != p.default_consumption:
@@ -429,8 +528,8 @@ def update_group(
                     name = db.get(Product, p.product_id).name
                     raise HTTPException(
                         status.HTTP_422_UNPROCESSABLE_ENTITY,
-                        f"{name}: say why the consumption differs from the system's "
-                        f"{p.default_consumption.normalize():f} for this site",
+                        f"{name}: say why the consumption differs from "
+                        f"{p.default_consumption.normalize():f} ({p.consumption_source or 'the system'}) for this site",
                     )
             p.consumption_reason = reason if p.consumption != p.default_consumption else None
             p.freight_used = row.get("freight_used") or Decimal(0)
@@ -494,6 +593,36 @@ def delete_group(
     db.delete(g)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class BasisIn(BaseModel):
+    margin_basis: str = Field(pattern="^(cost|selling)$")
+
+
+@router.put("/{wid}/basis")
+def set_basis(
+    wid: int, body: BasisIn, request: Request, db: DbSession, principal: CurrentPrincipal
+) -> dict:
+    """Price this working on cost or on the selling price (its own choice, logged)."""
+    w = _working(db, wid, principal)
+    _editable(db, w, principal)
+    before = w.margin_basis
+    w.margin_basis = body.margin_basis
+    db.flush()
+    for g in w.groups:
+        working.work(db, g)
+    record(
+        db,
+        request,
+        principal,
+        "rate_working.basis",
+        "rate_working",
+        w.id,
+        before={"margin_basis": before},
+        after={"margin_basis": w.margin_basis},
+    )
+    db.commit()
+    return working_out(db, w, principal)
 
 
 @router.post("/{wid}/apply")

@@ -146,17 +146,56 @@ def _plan_for(
     return None
 
 
+def loose_titles(texts: list[list]) -> list[tuple[float, float, str]]:
+    """For a drawing without frames: the plan titles, and the large headings with PLAN in them
+    (WORKING PLAN at three times the usual text height), not schedules, details or sections."""
+    heights = sorted(t[2] for t in texts if t[2] and not (len(t) > 5 and t[5]))
+    usual = heights[len(heights) // 2] if heights else 0
+    out = list(plan_titles(texts))
+    for x, y, h, _layer, text, *rest in texts:
+        t = clean(text)
+        if rest and rest[0]:
+            continue
+        if (h and usual and h >= 3 * usual and len(t) < 80 and re.search(r"\bPLAN\b", t, re.I)
+                and not re.search(r"SCHEDULE|DETAIL|SECTION|ELEVATION|KEY PLAN|FURNITURE", t, re.I)):  # fmt: skip
+            out.append((x, y, t))
+    return list(dict.fromkeys(out))
+
+
+def _guess_for(
+    x: float, y: float, titles: list[tuple[float, float, str]], clusters: list[list]
+) -> str | None:
+    """No frame: the nearest title in the same model-space cluster (a guess, to confirm). A
+    cluster reaches 25 % beyond its lines: a plan's title sits just under it."""
+
+    def grown(c):
+        m = 0.25 * max(c[2] - c[0], c[3] - c[1])
+        return [c[0] - m, c[1] - m, c[2] + m, c[3] + m]
+
+    for cl in sorted(
+        (grown(c) for c in clusters if _inside(x, y, c)),
+        key=lambda c: (c[2] - c[0]) * (c[3] - c[1]),
+    ):
+        inner = [((x - tx) ** 2 + (y - ty) ** 2, t) for tx, ty, t in titles if _inside(tx, ty, cl)]
+        if inner:
+            return min(inner)[1]  # the nearest title in a straight line
+    return None
+
+
 def find_areas(
     texts: list[list],
     unit_m: float | None,
     hidden: set[str],
     note_radius_m: float,
     frames: list[list] | None = None,
+    clusters: list[list] | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Candidates (labels with sizes, room names to trace) and the notes, attached or not."""
     candidates: list[dict] = []
     notes: list[dict] = []
     titles = plan_titles(texts)
+    fallback = loose_titles(texts) if clusters else []
+    framed = list(frames or [])  # every sheet frame, with a title or not
     frames = [
         fr
         for fr in frames or []
@@ -206,6 +245,10 @@ def find_areas(
     seen: dict[tuple, int] = defaultdict(int)
     for c in sorted(candidates, key=lambda c: (c["x"], -c["y"])):
         c["plan"] = _plan_for(c["x"], c["y"], titles, frames or [])
+        c["plan_guessed"] = False
+        if c["plan"] is None and clusters and not any(_inside(c["x"], c["y"], fr) for fr in framed):
+            guess = _guess_for(c["x"], c["y"], fallback, clusters)
+            c["plan"], c["plan_guessed"] = guess, guess is not None
         dp = depths(c["label_text"])
         for n in c.get("notes", []):
             nd = depths(n["text"])
@@ -230,7 +273,12 @@ def build_areas(db: Session, f: CadFile) -> list[CadArea]:
     summary = dict(f.summary or {})
     hidden = hidden_layers(db, f)
     cands, loose = find_areas(
-        f.texts or [], f.unit_m, hidden, float(s.note_radius_m), summary.get("frames")
+        f.texts or [],
+        f.unit_m,
+        hidden,
+        float(s.note_radius_m),
+        summary.get("frames"),
+        summary.get("clusters"),
     )
     from app.survey.models import AreaType  # noqa: PLC0415
 
@@ -242,7 +290,7 @@ def build_areas(db: Session, f: CadFile) -> list[CadArea]:
             cad_file_id=f.id, key=c["key"], name=c["name"], label_text=c["label_text"],
             size_text=size.text if size else None, size_kind=size.kind if size else None,
             label_w_m=dec(size.width_m) if size else None, label_l_m=dec(size.length_m) if size else None,
-            label_area_sqm=dec(size.area_sqm) if size else None, x=c["x"], y=c["y"], plan=c["plan"],
+            label_area_sqm=dec(size.area_sqm) if size else None, x=c["x"], y=c["y"], plan=c["plan"], plan_guessed=c["plan_guessed"],
             notes=[{k: n[k] for k in ("text", "x", "y", "distance_m") if k in n} for n in c.get("notes", [])],
             sunk_m=dec(c["sunk_m"]) if c["sunk_m"] else None, raise_m=dec(c["raise_m"]) if c["raise_m"] else None,
             area_type_id=types.get(guess_area_type(c["name"]) or ""),
@@ -257,8 +305,18 @@ def build_areas(db: Session, f: CadFile) -> list[CadArea]:
     summary["size_labels"] = sum(1 for c in cands if c["size"])
     summary["waterproofing_notes"] = sum(len(c.get("notes", [])) for c in cands) + len(loose)
     summary["count_sets"] = count_sets(f, hidden, cands, loose, float(s.note_radius_m))
-    summary["plan_titles"] = sorted({t for _x, _y, t in plan_titles(f.texts or [])})
+    summary["plan_titles"] = sorted(
+        {
+            t
+            for _x, _y, t in (
+                loose_titles(f.texts or [])
+                if summary.get("clusters")
+                else plan_titles(f.texts or [])
+            )
+        }
+    )
     summary["sheet_unknown"] = sum(1 for c in cands if not c["plan"])
+    summary["sheet_guessed"] = sum(1 for c in cands if c["plan_guessed"])
     f.summary = summary
     return made
 

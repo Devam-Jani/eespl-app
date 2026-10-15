@@ -4274,3 +4274,40 @@ li.late a {
 .btn-primary.tap:disabled {
   opacity: 0.5;
 }
+
+/* the phone header: the name on one line (cut with …), the role in the menu */
+.menu-user {
+  display: none;
+}
+@media (max-width: 760px) {
+  .topbar {
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+  }
+  .topbar-user {
+    flex: 1;
+    min-width: 0;
+    align-items: flex-start;
+  }
+  .topbar-user strong {
+    display: block;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .topbar-role {
+    display: none;
+  }
+  .menu-user {
+    display: flex;
+    flex-direction: column;
+    padding: 0.4rem 1rem 0.8rem;
+    color: #fff;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  .menu-user span {
+    opacity: 0.8;
+    font-size: 0.85rem;
+  }
+}

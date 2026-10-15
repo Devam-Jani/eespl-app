@@ -222,9 +222,8 @@ def test_notes_attach_to_the_nearest_area_and_set_the_depth_and_side_walls(boss,
     toilet = found["LADIES TOILET"]
     assert {n["text"] for n in toilet["notes"]} == {"CHEMICAL WATER PROOFING", "600 MM SUNK"}
     assert not found["TERRACE"]["notes"] and Decimal(str(toilet["sunk_m"])) == Decimal("0.600")
-    # no sheet frame in this drawing: the sheet is unknown (the user picks it), never guessed
-    # from the nearest title (test_takeoff_review: the plan from the frame)
-    assert toilet["plan"] is None
+    # no frame, and its rooms do not touch (each its own cluster, no title in it): unknown
+    assert toilet["plan"] is None and not toilet["plan_guessed"]
     assert toilet["area_type"] == "Toilet / bathroom" and found["TERRACE"]["area_type"] == "Terrace"
     assert f["size_labels"] == 3 and f["waterproofing_notes"] == 2 and f["dimensions"] == 1
     k = 1000

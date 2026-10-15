@@ -20,6 +20,7 @@ type Product = {
   default_consumption: string | null;
   consumption_changed: boolean;
   consumption_reason: string | null;
+  consumption_source?: string | null;
   price: string | null;
   price_info: { id: number; rate: string; date: string; by: string | null; source: string } | null;
   freight_used: string;
@@ -42,6 +43,9 @@ type Group = {
   library_median_sqm: string | null;
   coats: number | null;
   application: string | null;
+  surface?: string | null;
+  req_min_kg_sqm?: string | null;
+  req_dft_mm?: string | null;
   // cost data (tender.margin)
   wastage_percent?: string;
   wastage_source?: string | null;
@@ -75,6 +79,7 @@ type Working = {
   sees_cost: boolean;
   margin_basis: "cost" | "selling";
   margin_basis_label: string;
+  margin_basis_note?: string | null;
   line_count: number;
   groups: Group[];
   ungrouped: Line[];
@@ -131,6 +136,21 @@ export function RateWorkingView({ tenderId, quotationId }: { tenderId?: number; 
             {w.ungrouped.length ? `, ${w.ungrouped.length} not grouped` : ""}. Cost = Σ consumption × (price + freight) × (1 + wastage) + surface preparation + labour (₹/sq ft ×
             10.7639); {w.margin_basis_label}.
           </p>
+          {w.margin_basis_note && <p className="small text-warn">{w.margin_basis_note}.</p>}
+          {w.can_edit && (
+            <label className="small">
+              Margin for this working:{" "}
+              <select
+                value={w.margin_basis}
+                onChange={(e) =>
+                  void api<Working>(`/api/rate-working/${w.id}/basis`, { method: "PUT", json: { margin_basis: e.target.value } }).then(setW, (err) => setError(errorText(err)))
+                }
+              >
+                <option value="selling">on the selling price</option>
+                <option value="cost">on cost</option>
+              </select>
+            </label>
+          )}
         </div>
         <div className="page-actions">
           {w.can_edit && (
@@ -259,12 +279,22 @@ type Form = {
     consumption: string;
     default_consumption: string | null;
     consumption_reason: string;
+    consumption_source: string | null;
     price: string;
     freight_used: string;
     freight_actual: string;
     price_info: Product["price_info"];
   }[];
 };
+
+const SURFACES: [string, string][] = [
+  ["rcc", "RCC"],
+  ["brick", "Brick"],
+  ["plaster", "Plaster"],
+  ["screed", "Screed"],
+  ["old_tiles", "Old tiles"],
+  ["metal", "Metal"],
+];
 
 function toForm(g: Group): Form {
   return {
@@ -286,6 +316,7 @@ function toForm(g: Group): Form {
       consumption: p.consumption ?? "",
       default_consumption: p.default_consumption,
       consumption_reason: p.consumption_reason ?? "",
+      consumption_source: p.consumption_source ?? null,
       price: p.price ?? "",
       freight_used: p.freight_used ?? "0",
       freight_actual: p.freight_actual ?? "",
@@ -411,6 +442,38 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
             </select>
           </label>
           <label className="field">
+            <span>Surface (picks the consumption)</span>
+            <select value={shown.surface ?? ""} onChange={(e) => void save(false, { surface: e.target.value || null })} disabled={!edit}>
+              <option value="">— any —</option>
+              {SURFACES.map(([k, label]) => (
+                <option key={k} value={k}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Client asks: min kg/sqm · DFT mm</span>
+            <span className="inline-form">
+              <input
+                className="input-num"
+                defaultValue={shown.req_min_kg_sqm ?? ""}
+                key={`kg${shown.req_min_kg_sqm}`}
+                onBlur={(e) => e.target.value !== (shown.req_min_kg_sqm ?? "") && void save(false, { req_min_kg_sqm: e.target.value || null })}
+                disabled={!edit}
+                aria-label="Minimum kg per sqm"
+              />
+              <input
+                className="input-num"
+                defaultValue={shown.req_dft_mm ?? ""}
+                key={`dft${shown.req_dft_mm}`}
+                onBlur={(e) => e.target.value !== (shown.req_dft_mm ?? "") && void save(false, { req_dft_mm: e.target.value || null })}
+                disabled={!edit}
+                aria-label="DFT in mm"
+              />
+            </span>
+          </label>
+          <label className="field">
             <span>Wastage %</span>
             <input className="input-num" value={f.wastage_percent} onChange={set("wastage_percent")} disabled={!edit} />
             {s.wastage_source && <span className="small muted">from {s.wastage_source}</span>}
@@ -480,7 +543,9 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
                     </td>
                     <td className="num">
                       <input className="input-num" value={p.consumption} placeholder="to confirm" onChange={(e) => setP(i, { consumption: e.target.value })} disabled={!edit} />
-                      <div className="small muted">system {p.default_consumption === null ? "to confirm" : num(p.default_consumption)}</div>
+                      <div className="small muted" title={p.consumption_source ?? undefined}>
+                        {p.default_consumption === null ? "to confirm" : num(p.default_consumption)} from {p.consumption_source ?? "the system"}
+                      </div>
                     </td>
                     <td>
                       {changed || p.consumption_reason ? (
@@ -1117,8 +1182,8 @@ export function CostingSettingsCard() {
       <h2 className="section-title">Prices, rate working and lots</h2>
       <div className="grid-2">
         <label className="field">
-          <span>Margin in the rate working</span>
-          <select value={String(s.margin_basis ?? "cost")} onChange={(e) => setS({ ...s, margin_basis: e.target.value })}>
+          <span>Margin in new rate workings (a saved working keeps its own)</span>
+          <select value={String(s.margin_basis ?? "selling")} onChange={(e) => setS({ ...s, margin_basis: e.target.value })}>
             <option value="cost">on cost: rate = cost × (1 + margin)</option>
             <option value="selling">on the selling price: rate = cost ÷ (1 − margin)</option>
           </select>

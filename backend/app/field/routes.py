@@ -702,7 +702,7 @@ def person_out(db, u: User) -> dict:
     return {
         "user_id": str(u.id), "name": u.full_name, "job_title": u.job_title, "roles": [r.code for r in u.roles], "is_demo": u.is_demo,
         "tracked": bool(p and p.tracked), "reimbursable": bool(p and p.reimbursable), "vehicle": p.vehicle if p else "bike",
-        "manager_id": str(p.manager_id) if p and p.manager_id else None, "manager": db.get(User, p.manager_id).full_name if p and p.manager_id else None,
+        "manager_id": str(p.manager_id) if p and p.manager_id else None, "weekly_off": p.weekly_off if p else 6, "manager": db.get(User, p.manager_id).full_name if p and p.manager_id else None,
         "home_status": p.home_status if p else "none", "home": [p.home_lat, p.home_lng] if p and p.home_lat is not None else None,
         "pending": [p.pending_lat, p.pending_lng] if p and p.pending_lat is not None else None,
         "home_requested_at": p.home_requested_at if p else None, "consent_given_at": c.given_at if c else None,
@@ -731,6 +731,7 @@ class PersonIn(BaseModel):
     reimbursable: bool | None = None
     vehicle: Literal["bike", "car", "other"] | None = None
     manager_id: str | None = None
+    weekly_off: int | None = Field(None, ge=0, le=6)
 
 
 @router.put("/admin/people/{user_id}")
@@ -850,6 +851,69 @@ def decide_home(
     )
     db.commit()
     return jsonable_encoder(person_out(db, db.get(User, uid)))
+
+
+@router.get("/admin/holidays")
+def holidays(db: DbSession, _: Admin) -> list[dict]:
+    from app.field.models import CompanyHoliday  # noqa: PLC0415
+
+    return jsonable_encoder(
+        [
+            {"id": h.id, "on_date": h.on_date, "name": h.name}
+            for h in db.scalars(select(CompanyHoliday).order_by(CompanyHoliday.on_date))
+        ]
+    )
+
+
+class HolidayIn(BaseModel):
+    on_date: date
+    name: str = Field(min_length=1, max_length=100)
+
+
+@router.post("/admin/holidays", status_code=status.HTTP_201_CREATED)
+def add_holiday(
+    body: HolidayIn, request: Request, db: DbSession, principal: CurrentPrincipal, _: Admin
+) -> list[dict]:
+    from app.field.models import CompanyHoliday  # noqa: PLC0415
+
+    if db.scalar(select(CompanyHoliday.id).where(CompanyHoliday.on_date == body.on_date)):
+        raise HTTPException(status.HTTP_409_CONFLICT, "That date is already a holiday")
+    db.add(
+        CompanyHoliday(on_date=body.on_date, name=body.name.strip(), created_by=principal.user.id)
+    )
+    record(
+        db,
+        request,
+        principal,
+        "field.holiday",
+        "field_holiday",
+        str(body.on_date),
+        after=jsonable_encoder(body.model_dump()),
+    )
+    db.commit()
+    return holidays(db, "all")
+
+
+@router.delete("/admin/holidays/{hid}")
+def remove_holiday(
+    hid: int, request: Request, db: DbSession, principal: CurrentPrincipal, _: Admin
+) -> list[dict]:
+    from app.field.models import CompanyHoliday  # noqa: PLC0415
+
+    h = db.get(CompanyHoliday, hid)
+    if h is not None:
+        record(
+            db,
+            request,
+            principal,
+            "field.holiday_removed",
+            "field_holiday",
+            str(h.on_date),
+            before={"name": h.name},
+        )
+        db.delete(h)
+        db.commit()
+    return holidays(db, "all")
 
 
 @router.get("/admin/settings")

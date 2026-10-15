@@ -50,7 +50,7 @@ def add_working_sheet(
 ) -> Worksheet:
     ws = wb.create_sheet(title)
     lines = {x["key"]: x for x in working.client_lines(db, w)}
-    basis = working.margin_basis(db)
+    basis = working.margin_basis(db, w)
     ws.append([f"Rate working: {_label(db, w)} (internal: costs and margins)"])
     ws["A1"].font = Font(bold=True, size=12)
     ws.append([f"Margin basis: {working.BASIS_LABEL[basis]}. Labour: ₹ per sq ft × {F} per sqm."])

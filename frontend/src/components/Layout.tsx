@@ -32,6 +32,11 @@ export default function Layout() {
         <NavLink to="/" className="brand">
           <span className="brand-mark">E</span> EESPL
         </NavLink>
+        {/* on a phone the role is here, not in the header (the name stays there, on one line) */}
+        <div className="menu-user">
+          <strong>{me?.user.full_name}</strong>
+          <span>{me?.roles.map((r) => r.name).join(", ") || "No role"}</span>
+        </div>
         <nav>
           {sections.map((section) => {
             const items = visible.filter((i) => i.section === section);
@@ -56,8 +61,8 @@ export default function Layout() {
             ☰ Menu
           </button>
           <div className="topbar-user">
-            <strong>{me?.user.full_name}</strong>
-            <span className="muted">{me?.roles.map((r) => r.name).join(", ") || "No role"}</span>
+            <strong title={me?.user.full_name}>{me?.user.full_name}</strong>
+            <span className="muted topbar-role">{me?.roles.map((r) => r.name).join(", ") || "No role"}</span>
           </div>
           <Bell allLink="/notifications" />
           <button className="btn btn-ghost" onClick={() => void logout()}>

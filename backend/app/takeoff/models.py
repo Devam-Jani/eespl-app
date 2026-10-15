@@ -107,6 +107,8 @@ class CadArea(Tracked, Base):
     x: Mapped[float | None] = mapped_column(Float)  # the label, drawing units
     y: Mapped[float | None] = mapped_column(Float)
     plan: Mapped[str | None] = mapped_column(String(200))  # the floor plan's title under it
+    # no frame around it: the nearest title in its cluster, for the user to confirm
+    plan_guessed: Mapped[bool] = mapped_column(Boolean, server_default="false")
     notes: Mapped[list[Any]] = mapped_column(JSONB, server_default="[]")
     sunk_m: Mapped[Decimal | None] = mapped_column(M)
     raise_m: Mapped[Decimal | None] = mapped_column(M)
