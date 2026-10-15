@@ -38,6 +38,8 @@ class Parsed:
     dimensions: list[list] = field(default_factory=list)  # [x, y, value, text, layer]
     inserts: list[dict] = field(default_factory=list)
     layouts: list[str] = field(default_factory=list)
+    # sheet frames: [x1, y1, x2, y2, source] (title-block rectangles, layout viewport windows)
+    frames: list[list] = field(default_factory=list)
     extents: list[float] | None = None
     geometry: dict = field(default_factory=dict)  # {layer: {"s": [x1, y1, x2, y2, ...]}}
 
@@ -47,7 +49,7 @@ class Parsed:
             "unit_m": self.unit_m, "layers": self.layers, "counts": self.counts, "top": self.top,
             "texts": len(self.texts), "dimensions": len(self.dimensions),
             "inserts": len(self.inserts), "blocks": sorted({i["block"] for i in self.inserts})[:300],
-            "layouts": self.layouts, "extents": self.extents,
+            "layouts": self.layouts, "extents": self.extents, "frames": self.frames,
         }  # fmt: skip
 
 
@@ -125,6 +127,7 @@ def read(path: Path, version: str | None = None, hidden: set[str] | None = None)
     segs: dict[str, list[float]] = defaultdict(list)
     xs: list[float] = []
     ys: list[float] = []
+    rects: list[list] = []
 
     def take(e, depth: int) -> None:
         t = e.dxftype()
@@ -175,6 +178,10 @@ def read(path: Path, version: str | None = None, hidden: set[str] | None = None)
                             take(v, depth + 1)
                 except Exception:  # noqa: BLE001  (a broken block: skipped, the rest read)
                     counts["broken_block"] += 1
+        if t in ("LWPOLYLINE", "POLYLINE"):
+            r = _rectangle(_flatten(e))
+            if r:
+                rects.append([*r, f"rectangle on {layer}"])
         if t in GEOMETRY and layer not in hidden:
             pts = _flatten(e)
             for (x1, y1), (x2, y2) in zip(pts, pts[1:], strict=False):
@@ -205,7 +212,60 @@ def read(path: Path, version: str | None = None, hidden: set[str] | None = None)
         lo, hi = int(len(xs) * 0.001), max(0, int(len(xs) * 0.999) - 1)
         out.extents = [xs[lo], ys[lo], xs[hi], ys[hi]]
     out.geometry = {layer: {"s": s} for layer, s in segs.items()}
+    out.frames = _frames(rects, out.extents) + _viewports(doc, out.extents)
     return out
+
+
+def _rectangle(pts: list[tuple[float, float]]) -> tuple[float, float, float, float] | None:
+    """A closed axis-aligned rectangle (4 corners, the first repeated or not) as x1, y1, x2, y2."""
+    if len(pts) == 5 and math.dist(pts[0], pts[4]) < 1e-6:
+        pts = pts[:4]
+    if len(pts) != 4:
+        return None
+    xs = sorted({round(p[0], 3) for p in pts})
+    ys = sorted({round(p[1], 3) for p in pts})
+    if len(xs) != 2 or len(ys) != 2:
+        return None
+    return (xs[0], ys[0], xs[1], ys[1])
+
+
+def _frames(rects: list[list], extents: list[float] | None) -> list[list]:
+    """The rectangles big enough to be a sheet or a plan's frame (at least 1 % of the drawing
+    each way: drawings with many sheets side by side are wide); window and door rectangles are
+    far smaller. Only those around a plan title are used (see service._plan_for)."""
+    if not extents:
+        return []
+    w, h = extents[2] - extents[0], extents[3] - extents[1]
+    out = {
+        tuple(round(v, 2) for v in r[:4]): r[4]
+        for r in rects
+        if r[2] - r[0] >= 0.01 * w and r[3] - r[1] >= 0.01 * h
+    }
+    return [[*k, v] for k, v in out.items()][:3000]
+
+
+def _viewports(doc, extents: list[float] | None) -> list[list]:
+    """The model-space window each layout viewport shows (a plan put on its sheet), named by the
+    layout; the layout's own sheet viewport shows paper, not the drawing, so only windows over
+    the drawing count (converted drawings number every viewport 1)."""
+    out = []
+    for lay in doc.layouts:
+        if lay.name == "Model":
+            continue
+        for v in lay.query("VIEWPORT"):
+            try:
+                if not extents or not v.dxf.height or not v.dxf.view_height:
+                    continue
+                c, vh = v.dxf.view_center_point, float(v.dxf.view_height)
+                vw = vh * float(v.dxf.width) / float(v.dxf.height)
+                if (c.x + vw / 2 < extents[0] or c.x - vw / 2 > extents[2]
+                        or c.y + vh / 2 < extents[1] or c.y - vh / 2 > extents[3]):  # fmt: skip
+                    continue
+                out.append([round(c.x - vw / 2, 2), round(c.y - vh / 2, 2), round(c.x + vw / 2, 2),
+                            round(c.y + vh / 2, 2), f"layout {lay.name}"])  # fmt: skip
+            except Exception:  # noqa: BLE001,S112  (a broken viewport: no window)
+                continue
+    return out[:200]
 
 
 def write_geometry(parsed: Parsed, path: Path) -> None:

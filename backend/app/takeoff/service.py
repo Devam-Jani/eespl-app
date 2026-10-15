@@ -120,19 +120,48 @@ def plan_titles(texts: list[list]) -> list[tuple[float, float, str]]:
     return out
 
 
-def _plan_for(x: float, y: float, titles: list[tuple[float, float, str]]) -> str | None:
-    """The plan title nearest below the label (titles sit under their plan)."""
-    below = [(y - ty, abs(x - tx), t) for tx, ty, t in titles if ty <= y]
-    return min(below)[2] if below else None
+def _inside(x: float, y: float, fr: list) -> bool:
+    return fr[0] <= x <= fr[2] and fr[1] <= y <= fr[3]
+
+
+def _plan_for(
+    x: float, y: float, titles: list[tuple[float, float, str]], frames: list[list]
+) -> str | None:
+    """The plan title of the sheet the label is on: the smallest frame around the label that
+    holds a plan title (a title block, a sheet border, a layout viewport's window); several
+    plans on one sheet: the title nearest below the label, on that sheet only (titles sit under
+    their plan). No frame around the label with a title: None, "sheet unknown" (the user picks).
+    """
+    for fr in sorted(
+        (fr for fr in frames if _inside(x, y, fr)), key=lambda f: (f[2] - f[0]) * (f[3] - f[1])
+    ):
+        inner = [(tx, ty, t) for tx, ty, t in titles if _inside(tx, ty, fr)]
+        if inner:
+            below = [(y - ty, abs(x - tx), t) for tx, ty, t in inner if ty <= y]
+            near = below or [(abs(y - ty), abs(x - tx), t) for tx, ty, t in inner]
+            return min(near)[2]
+        name = str(fr[4])
+        if name.startswith("layout ") and not re.fullmatch(r"layout layout\s*\d*", name, re.I):
+            return name[7:]
+    return None
 
 
 def find_areas(
-    texts: list[list], unit_m: float | None, hidden: set[str], note_radius_m: float
+    texts: list[list],
+    unit_m: float | None,
+    hidden: set[str],
+    note_radius_m: float,
+    frames: list[list] | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Candidates (labels with sizes, room names to trace) and the notes, attached or not."""
     candidates: list[dict] = []
     notes: list[dict] = []
     titles = plan_titles(texts)
+    frames = [
+        fr
+        for fr in frames or []
+        if str(fr[4]).startswith("layout ") or any(_inside(tx, ty, fr) for tx, ty, _t in titles)
+    ]
     for x, y, _h, layer, text, *rest in texts:
         if layer in hidden or (rest and rest[0]):  # a text inside a block: a symbol, not a label
             continue
@@ -176,7 +205,7 @@ def find_areas(
             n["area"] = best[1]["name"]
     seen: dict[tuple, int] = defaultdict(int)
     for c in sorted(candidates, key=lambda c: (c["x"], -c["y"])):
-        c["plan"] = _plan_for(c["x"], c["y"], titles)
+        c["plan"] = _plan_for(c["x"], c["y"], titles, frames or [])
         dp = depths(c["label_text"])
         for n in c.get("notes", []):
             nd = depths(n["text"])
@@ -198,7 +227,11 @@ def build_areas(db: Session, f: CadFile) -> list[CadArea]:
     ):
         db.delete(a)
     db.flush()
-    cands, loose = find_areas(f.texts or [], f.unit_m, hidden_layers(db, f), float(s.note_radius_m))
+    summary = dict(f.summary or {})
+    hidden = hidden_layers(db, f)
+    cands, loose = find_areas(
+        f.texts or [], f.unit_m, hidden, float(s.note_radius_m), summary.get("frames")
+    )
     from app.survey.models import AreaType  # noqa: PLC0415
 
     types = {t.name: t.id for t in db.scalars(select(AreaType))}
@@ -219,13 +252,41 @@ def build_areas(db: Session, f: CadFile) -> list[CadArea]:
         made.append(a)
     db.flush()
     carry_over(db, f, made)
-    summary = dict(f.summary or {})
     summary["loose_notes"] = loose[:200]
     summary["candidates"] = len(made)
     summary["size_labels"] = sum(1 for c in cands if c["size"])
     summary["waterproofing_notes"] = sum(len(c.get("notes", [])) for c in cands) + len(loose)
+    summary["count_sets"] = count_sets(f, hidden, cands, loose, float(s.note_radius_m))
+    summary["plan_titles"] = sorted({t for _x, _y, t in plan_titles(f.texts or [])})
+    summary["sheet_unknown"] = sum(1 for c in cands if not c["plan"])
     f.summary = summary
     return made
+
+
+def count_sets(
+    f: CadFile, hidden: set[str], cands: list[dict], loose: list[dict], note_radius_m: float
+) -> dict:
+    """The counts two ways, so the numbers match whatever people compare them with: "all" is
+    every text read (texts inside blocks and block attributes too) and the labels and notes on
+    every layer; "mapped" is the texts on the layers shown by the architect's layer mapping,
+    outside blocks: the ones the candidate list is built from."""
+    texts = f.texts or []
+    if hidden:
+        every, every_loose = find_areas(texts, f.unit_m, set(), note_radius_m)
+    else:
+        every, every_loose = cands, loose
+    top = (f.summary or {}).get("top", {})  # in model space itself, not inside blocks
+
+    def notes(cs, ls):
+        return sum(len(c.get("notes", [])) for c in cs) + len(ls)
+
+    return {
+        "all": {"texts": len(texts), "text_entities": top.get("TEXT", 0) + top.get("MTEXT", 0),
+                "size_labels": sum(1 for c in every if c["size"]), "notes": notes(every, every_loose)},
+        "mapped": {"texts": sum(1 for t in texts if t[3] not in hidden and not (len(t) > 5 and t[5])),
+                   "size_labels": sum(1 for c in cands if c["size"]), "notes": notes(cands, loose),
+                   "hidden_layers": len(hidden)},
+    }  # fmt: skip
 
 
 def previous_file(db: Session, f: CadFile) -> CadFile | None:

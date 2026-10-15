@@ -7,6 +7,8 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { api, downloadFile, fetchObjectUrl } from "../api";
 import { useAuth } from "../auth";
 import { NegotiationLog } from "../team/Pages";
+import { UnsentRates } from "../pages/TenderDetail";
+import type { Unsent } from "../pages/TenderDetail";
 import Modal from "../components/Modal";
 import { errorText } from "../format";
 import { loadLookups, MarkupField, money, plain, SectionsEditor, STATUS_BADGE, useLookups } from "./common";
@@ -356,6 +358,17 @@ export function QuotationEditor() {
     },
     [refreshPreview],
   );
+  // the lines' rates against the rate working: sending is held until they match or are confirmed
+  const [unsent, setUnsent] = useState<Unsent | null>(null);
+  const loadUnsent = useCallback(() => {
+    api<{ unsent: Unsent | null }>(`/api/rate-working/quotations/${id}/unsent`).then(
+      (r) => setUnsent(r.unsent),
+      () => setUnsent(null),
+    );
+  }, [id]);
+  useEffect(() => {
+    loadUnsent();
+  }, [loadUnsent, q]);
   if (error && !q) return <div className="alert alert-error">{error}</div>;
   if (!q || !lookups) return <p className="muted">Loading…</p>;
   const base = `/api/quotations/${q.id}`;
@@ -401,6 +414,19 @@ export function QuotationEditor() {
   return (
     <>
       {header}
+      <UnsentRates
+        unsent={unsent}
+        canSend={!!q.can_edit}
+        onSend={() =>
+          void api(`/api/rate-working/${unsent?.working_id}/apply`, { method: "POST" }).then(
+            () => {
+              api<Quotation>(base).then(setQ, (e) => setError(errorText(e)));
+              loadUnsent();
+            },
+            (e) => setError(errorText(e)),
+          )
+        }
+      />
       <div className="q-actions">
         <button className="btn btn-small" onClick={() => void downloadFile(`${base}/docx`).catch((e) => setError(errorText(e)))}>
           ⤓ Word
@@ -429,9 +455,11 @@ export function QuotationEditor() {
             onClick={() => {
               const warn = q.items.flatMap((i) => i.checks.map((c) => `${i.name}: ${c}`));
               if (warn.length && !window.confirm(`Check before sending (warnings, not blocks):\n\n${warn.join("\n")}\n\nSend anyway?`)) return;
+              if (unsent && !window.confirm(`${unsent.message} (largest difference ₹${unsent.largest_difference}).\n\nSend with the rates the lines have now?`)) return;
+              const confirmed = !!unsent;
               void (async () => {
                 try {
-                  const r = await api<Quotation>(`${base}/status`, { method: "POST", json: { status: "sent" } });
+                  const r = await api<Quotation>(`${base}/status`, { method: "POST", json: { status: "sent", rates_confirmed: confirmed } });
                   setQ(r);
                   refreshPreview();
                   setNote("Sent: follow-ups are scheduled.");
@@ -445,7 +473,7 @@ export function QuotationEditor() {
 Send anyway? Give the reason:`)
                       : null;
                   if (reason && reason.trim().length >= 5)
-                    void apply(`${base}/status`, { status: "sent", override_reason: reason.trim() }, "POST", "Sent past the checklist (logged).");
+                    void apply(`${base}/status`, { status: "sent", override_reason: reason.trim(), rates_confirmed: confirmed }, "POST", "Sent past the checklist (logged).");
                   else setError(text);
                 }
               })();

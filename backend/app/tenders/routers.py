@@ -461,7 +461,9 @@ def update_tender(
 ) -> TenderOut | TenderCostOut:
     tender = _editable(db, tender_id, view, edit, principal)
     before = _snapshot(tender)
-    changes = body.model_dump(exclude_unset=True, exclude={"member_ids", "override_reason"})
+    changes = body.model_dump(
+        exclude_unset=True, exclude={"member_ids", "override_reason", "rates_confirmed"}
+    )
     if changes.get("client_id") is not None and db.get(Client, changes["client_id"]) is None:
         raise unprocessable("Unknown client")
     if changes.get("channel_id") is not None and db.get(Channel, changes["channel_id"]) is None:
@@ -489,6 +491,13 @@ def update_tender(
             subject=f"tender:{tender.id}",
             link=f"/tenders/{tender.id}",
         )
+        from app.costing import working  # noqa: PLC0415
+
+        rates_confirmed = working.enforce_rates_sent(
+            working.unsent_for_tender(db, tender), body.rates_confirmed, tender.code
+        )
+        if rates_confirmed:
+            send_override = {**(send_override or {}), **rates_confirmed}
     for field, value in changes.items():
         if field in ("name", "status") and value is None:
             continue
@@ -1460,6 +1469,13 @@ def submit_tender(
     )
     if override:
         _record(db, request, principal, "tender.sendcheck_override", tender, after=override)
+    from app.costing import working  # noqa: PLC0415
+
+    confirmed = working.enforce_rates_sent(
+        working.unsent_for_tender(db, tender), body.rates_confirmed, tender.code
+    )
+    if confirmed:
+        _record(db, request, principal, "tender.rates_not_sent_confirmed", tender, after=confirmed)
     revision = revisions.submit(db, tender, principal.user.id, body.note)
     from app.process import hooks  # noqa: PLC0415
 

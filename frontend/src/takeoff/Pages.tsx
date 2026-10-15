@@ -33,6 +33,13 @@ type CadFile = {
   waterproofing_notes: number | null;
   candidates: number | null;
   loose_notes: { text: string; x: number; y: number }[];
+  // the counts two ways: every text read (blocks and attributes too) and the mapped layers only
+  count_sets?: {
+    all: { texts: number; text_entities: number; size_labels: number; notes: number };
+    mapped: { texts: number; size_labels: number; notes: number; hidden_layers: number };
+  } | null;
+  plan_titles?: string[];
+  sheet_unknown?: number | null;
   warnings: number;
   changes?: {
     previous: number | null;
@@ -77,6 +84,8 @@ type Area = {
   side_measurement_id: number | null;
   accepted_by: string | null;
   survey_check: { survey_sqm: string; autocad_sqm: string; diff_percent: string; flagged: boolean; methods: string[] } | null;
+  group_ids?: number[]; // the same name without a size, found again on this sheet
+  count?: number;
 };
 type Geo = {
   extents: [number, number, number, number] | null;
@@ -340,8 +349,9 @@ function Workspace({
           {file.drawing} {file.rev}
         </b>{" "}
         · {file.version} · units <b>{file.unit_name}</b>
-        {file.unit_m === null && <span className="text-danger"> (unitless: set the unit before tracing)</span>} · {file.layers.length} layers · {file.texts} texts ·{" "}
-        {file.dimensions} dimensions · {file.size_labels} size labels · {file.waterproofing_notes} waterproofing notes
+        {file.unit_m === null && <span className="text-danger"> (unitless: set the unit before tracing)</span>} · {file.layers.length} layers · {file.dimensions} dimensions
+        {file.sheet_unknown ? <span className="text-warn"> · {file.sheet_unknown} areas on an unknown sheet</span> : null}
+        <CountSets file={file} />
         {file.architect && <> · layers of {file.architect}</>}
         {file.warnings > 0 && <span className="muted"> · {file.warnings} converter warnings</span>}
       </div>
@@ -687,6 +697,30 @@ function DrawingCanvas({
 
 // --- the areas ------------------------------------------------------------------------------------
 
+/** The counts both ways, each with what it means, so they match what people compare them with. */
+function CountSets({ file }: { file: CadFile }) {
+  const c = file.count_sets;
+  if (!c)
+    return (
+      <>
+        {" "}
+        · {file.texts} texts · {file.size_labels} size labels · {file.waterproofing_notes} waterproofing notes
+      </>
+    );
+  return (
+    <div className="count-sets">
+      <div title="Every text read: texts and multi-line texts, the texts inside blocks and the block attributes, on every layer">
+        <b>All texts:</b> {num(c.all.texts, 0)} ({num(c.all.text_entities, 0)} texts and multi-line texts in the drawing itself, the rest inside blocks or block attributes) · {c.all.size_labels}{" "}
+        size labels · {c.all.notes} waterproofing notes, on every layer
+      </div>
+      <div title="The texts on the layers shown by the layer mapping, outside blocks: what the area list is built from">
+        <b>On the mapped layers:</b> {num(c.mapped.texts, 0)} texts · {c.mapped.size_labels} size labels · {c.mapped.notes} waterproofing notes
+        {c.mapped.hidden_layers > 0 ? ` (${c.mapped.hidden_layers} layers hidden)` : " (no layer hidden yet)"}
+      </div>
+    </div>
+  );
+}
+
 function AreasPanel({
   file,
   areas,
@@ -813,7 +847,24 @@ function AreasPanel({
                 <b>{a.name}</b>
                 {a.floor_label && <span className="badge badge-muted"> {a.floor_label}</span>}
                 {a.change && <span className="badge badge-warn"> {a.change}</span>}
-                <div className="small muted">{a.plan}</div>
+                {a.plan ? (
+                  <div className="small muted">{a.plan}</div>
+                ) : (
+                  <div className="small" onClick={(e) => e.stopPropagation()}>
+                    <span className="badge badge-warn">sheet unknown</span>{" "}
+                    {canEdit && a.status !== "accepted" && (file.plan_titles ?? []).length > 0 && (
+                      <select value="" onChange={(e) => e.target.value && void onSave(a, { plan: e.target.value })} aria-label="Sheet">
+                        <option value="">— pick the sheet —</option>
+                        {(file.plan_titles ?? []).map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )}
+                {(a.count ?? 1) > 1 && <div className="small muted">found {a.count} times on this sheet without a size</div>}
                 {a.notes.map((n, i) => (
                   <div key={i} className="small note-tag">
                     {n.text}
@@ -903,8 +954,14 @@ function AreasPanel({
                             Survey + measurement book
                           </button>
                         )}
-                        <button className="btn btn-small btn-ghost" onClick={() => void onSave(a, { status: a.status === "ignored" ? "candidate" : "ignored" })}>
-                          {a.status === "ignored" ? "Bring back" : "Leave out"}
+                        <button
+                          className="btn btn-small btn-ghost"
+                          onClick={async () => {
+                            const patch = { status: a.status === "ignored" ? "candidate" : "ignored" };
+                            for (const id of a.group_ids ?? [a.id]) await onSave({ ...a, id }, patch);
+                          }}
+                        >
+                          {a.status === "ignored" ? "Bring back" : (a.count ?? 1) > 1 ? `Leave out all ${a.count}` : "Leave out"}
                         </button>
                       </div>
                     )}

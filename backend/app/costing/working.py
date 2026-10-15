@@ -517,6 +517,27 @@ def labour_from_card(db: Session, g: RateGroup) -> None:
 # --- the rate to the client's lines --------------------------------------------------------------
 
 
+def _line_rate(db: Session, g: RateGroup, gl) -> tuple:
+    """The client line of a group line, its unit, and the group's rate and cost in that unit
+    (None, None for a unit other than sqm or sq ft)."""
+    if gl.boq_line_id:
+        from app.tenders.models import BoqLine  # noqa: PLC0415
+
+        ln = db.get(BoqLine, gl.boq_line_id)
+        unit = (ln.unit or ln.unit_raw or "").lower()
+    else:
+        from app.quotations.models import QuotationLine  # noqa: PLC0415
+
+        ln = db.get(QuotationLine, gl.quotation_line_id)
+        unit = (ln.uom or "").lower()
+    cost_sqm = Decimal(g.cost_sqm or 0)
+    if unit == "sqm":
+        return ln, unit, Decimal(g.rate_sqm), cost_sqm
+    if unit in ("sqft", "sft"):
+        return ln, unit, Decimal(g.rate_sqft), cost_sqm / SQFT_PER_SQM
+    return ln, unit, None, None
+
+
 def apply_rates(db: Session, w: RateWorking) -> dict:
     """Every client line in a worked group gets the group's rate (sqm or sq ft); a line in another
     unit is left for a person (reported)."""
@@ -525,23 +546,9 @@ def apply_rates(db: Session, w: RateWorking) -> dict:
     for g in w.groups:
         if g.rate_sqm is None:
             continue
-        cost_sqm = Decimal(g.cost_sqm or 0)
         for gl in g.lines:
-            if gl.boq_line_id:
-                from app.tenders.models import BoqLine  # noqa: PLC0415
-
-                ln = db.get(BoqLine, gl.boq_line_id)
-                unit = (ln.unit or ln.unit_raw or "").lower()
-            else:
-                from app.quotations.models import QuotationLine  # noqa: PLC0415
-
-                ln = db.get(QuotationLine, gl.quotation_line_id)
-                unit = (ln.uom or "").lower()
-            if unit == "sqm":
-                rate, cost = Decimal(g.rate_sqm), cost_sqm
-            elif unit in ("sqft", "sft"):
-                rate, cost = Decimal(g.rate_sqft), cost_sqm / SQFT_PER_SQM
-            else:
+            ln, unit, rate, cost = _line_rate(db, g, gl)
+            if rate is None:
                 skipped.append({"line": gl.boq_line_id or gl.quotation_line_id, "unit": unit})
                 continue
             ln.rate, ln.cost_rate, ln.margin_percent = (
@@ -565,3 +572,71 @@ def apply_rates(db: Session, w: RateWorking) -> dict:
         refresh_tender_total(db, db.get(Tender, w.tender_id))
     db.flush()
     return {"applied": applied, "skipped": skipped}
+
+
+def unsent(db: Session, w: RateWorking | None) -> dict | None:
+    """The client lines whose rate is not the working's rate any more (the margin basis, a price,
+    a consumption ... changed after the rates were sent): each with both rates and the
+    difference; None when every line has the worked rate. The groups are worked again first, so
+    a change made in the settings counts even when nobody has opened the working since."""
+    if w is None:
+        return None
+    rows = []
+    for g in w.groups:
+        work(db, g)
+        if g.rate_sqm is None:
+            continue
+        for gl in g.lines:
+            ln, unit, rate, _cost = _line_rate(db, g, gl)
+            if rate is None:
+                continue
+            line_rate = money(Decimal(ln.rate)) if ln.rate is not None else None
+            if line_rate != money(rate):
+                rows.append({
+                    "group": g.name, "line_id": ln.id, "kind": "boq" if gl.boq_line_id else "quotation",
+                    "item_no": getattr(ln, "client_item_no", None), "unit": unit,
+                    "worked_rate": money(rate), "line_rate": line_rate,
+                    "difference": money(rate) - (line_rate or Decimal(0)),
+                })  # fmt: skip
+    db.flush()
+    if not rows:
+        return None
+    return {
+        "working_id": w.id,
+        "lines": len(rows),
+        "rows": rows[:100],
+        "largest_difference": max((abs(r["difference"]) for r in rows), default=Decimal(0)),
+        "message": f"Rates not sent to the lines: {len(rows)} line(s) differ from the working",
+    }
+
+
+def enforce_rates_sent(found: dict | None, confirmed: bool, what: str) -> dict | None:
+    """Submitting (or sending) with the client lines' rates not the working's is blocked until
+    the rates are sent to the lines, or the user confirms the lines' rates are meant (logged)."""
+    if not found:
+        return None
+    if not confirmed:
+        from fastapi import HTTPException, status  # noqa: PLC0415
+
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{what}: {found['message']} (largest difference ₹{found['largest_difference']}). "
+            "Send the rates to the lines from the rate working, or confirm the lines' rates.",
+        )
+    return {
+        "rates_not_sent_confirmed": found["lines"],
+        "largest_difference": str(found["largest_difference"]),
+    }
+
+
+def unsent_for_tender(db: Session, tender) -> dict | None:
+    w = db.scalar(
+        select(RateWorking).where(
+            RateWorking.tender_id == tender.id, RateWorking.rev_no == tender.revision
+        )
+    )
+    return unsent(db, w)
+
+
+def unsent_for_quotation(db: Session, q) -> dict | None:
+    return unsent(db, db.scalar(select(RateWorking).where(RateWorking.quotation_id == q.id)))

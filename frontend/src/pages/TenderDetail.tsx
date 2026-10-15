@@ -15,6 +15,38 @@ const TenderAward = lazy(() => import("../team/Pages").then((m) => ({ default: m
 type Tab = "details" | "boq" | "working" | "terms" | "revisions" | "award";
 const RateWorkingView = lazy(() => import("../costing/Pages").then((m) => ({ default: m.RateWorkingView })));
 
+export type Unsent = {
+  working_id: number;
+  lines: number;
+  message: string;
+  largest_difference: string;
+  rows: { group: string; line_id: number; item_no: string | null; unit: string; worked_rate: string; line_rate: string | null; difference: string }[];
+};
+
+/** The main item's warning: the client lines do not carry the working's rates. */
+export function UnsentRates({ unsent, canSend, onSend }: { unsent: Unsent | null; canSend: boolean; onSend: () => void }) {
+  if (!unsent) return null;
+  const first = unsent.rows[0];
+  return (
+    <div className="alert alert-warn unsent-rates">
+      <b>Rates not sent to the lines.</b> {unsent.lines} line(s) differ from the rate working, largest difference ₹{unsent.largest_difference}
+      {first && (
+        <>
+          {" "}
+          (e.g. {first.group}
+          {first.item_no ? ` item ${first.item_no}` : ""}: worked ₹{first.worked_rate}/{first.unit}, on the line {first.line_rate ? `₹${first.line_rate}` : "no rate"})
+        </>
+      )}
+      . Submit is held until the rates are sent or you confirm the lines' rates.{" "}
+      {canSend && (
+        <button className="btn btn-small btn-primary" onClick={onSend}>
+          Send the rates to the lines
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function TenderDetail() {
   const { id } = useParams();
   const { can } = useAuth();
@@ -38,6 +70,19 @@ export default function TenderDetail() {
     void load();
   }, [load]);
 
+  // the lines' rates against the rate working (checked again on each tab change: the working
+  // may have changed)
+  const [unsent, setUnsent] = useState<Unsent | null>(null);
+  const loadUnsent = useCallback(() => {
+    api<{ unsent: Unsent | null }>(`/api/rate-working/tenders/${id}/unsent`).then(
+      (r) => setUnsent(r.unsent),
+      () => setUnsent(null),
+    );
+  }, [id]);
+  useEffect(() => {
+    loadUnsent();
+  }, [loadUnsent, tab]);
+
   useEffect(() => {
     api<Revision[]>(`/api/tenders/${id}/revisions`).then(setRevs, () => setRevs([]));
   }, [id, tender?.submitted_revisions]);
@@ -47,13 +92,34 @@ export default function TenderDetail() {
   const current = tender.revision_label.split(" ")[0];
   const draft = tender.revision_label.includes("draft");
 
+  async function sendRates() {
+    if (!unsent) return;
+    setError(null);
+    try {
+      await api(`/api/rate-working/${unsent.working_id}/apply`, { method: "POST" });
+      setTender(await api<Tender>(`/api/tenders/${id}`));
+      loadUnsent();
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }
+
   async function submit() {
     if (!tender) return;
+    // the lines' rates are not the working's: send them first, or confirm the lines' rates
+    if (
+      unsent &&
+      !confirm(`${unsent.message} (largest difference ₹${unsent.largest_difference}).
+
+Submit with the rates the lines have now? Cancel, then "Send the rates to the lines", to use the working's.`)
+    )
+      return;
     const note = prompt(`Submit ${current} to the client? This freezes the BOQ as it is now. Note (optional):`, "");
     if (note === null) return;
     setError(null);
     try {
-      setTender(await api<Tender>(`/api/tenders/${tender.id}/submit`, { method: "POST", json: { note } }));
+      setTender(await api<Tender>(`/api/tenders/${tender.id}/submit`, { method: "POST", json: { note, rates_confirmed: !!unsent } }));
+      loadUnsent();
     } catch (err) {
       // the send checklist: the director may send anyway, with a reason (logged)
       const text = errorText(err);
@@ -63,7 +129,7 @@ export default function TenderDetail() {
 Send anyway? Give the reason:`);
         if (reason && reason.trim().length >= 5) {
           try {
-            setTender(await api<Tender>(`/api/tenders/${tender.id}/submit`, { method: "POST", json: { note, override_reason: reason.trim() } }));
+            setTender(await api<Tender>(`/api/tenders/${tender.id}/submit`, { method: "POST", json: { note, override_reason: reason.trim(), rates_confirmed: !!unsent } }));
             return;
           } catch (err2) {
             setError(errorText(err2));
@@ -88,6 +154,7 @@ Send anyway? Give the reason:`);
 
   return (
     <>
+      <UnsentRates unsent={unsent} canSend={canEdit && draft} onSend={() => void sendRates()} />
       <p className="breadcrumb">
         <Link to="/tenders">Tenders</Link> / <code>{tender.code}</code> · {tender.revision_label}
       </p>

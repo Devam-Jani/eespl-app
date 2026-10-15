@@ -7,7 +7,8 @@ Per node, from the node's OWN scopes and tasks (top-level tasks only):
   next_step               the first step not started yet
   is_late                 a task whose planned end has passed and is not done/certified
   waiting_certification   a hold-point step that is done but not certified
-  has_scope               the node has at least one area scope
+  has_scope               the node has at least one area scope, or an accepted AutoCAD area (work
+                          to do there, so it shows as not started rather than "no work here")
   template_ids            the stage templates of its scopes (for the template filter)
 
 Nothing is recomputed: percent is what task updates stored; the rest is one read of the site's
@@ -104,7 +105,7 @@ def build(db: Session, site_id: int) -> dict[str, Any]:
                         for t in own
                     ),
                     "waiting_certification": any(t.hold_point and t.status == "done" for t in own),
-                    "has_scope": n.id in templates,
+                    "has_scope": n.id in templates or n.id in autocad,
                     "template_ids": sorted(templates.get(n.id, ())),
                 },
             }

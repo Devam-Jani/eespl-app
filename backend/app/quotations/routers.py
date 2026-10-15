@@ -1867,6 +1867,8 @@ class StatusIn(BaseModel):
     choices: dict[int, str] | None = None  # item id -> the option the client chose
     # the send checklist: sending past it needs sendcheck.override and a reason (logged)
     override_reason: str | None = Field(None, max_length=1000)
+    # the lines' rates differ from the rate working: send with them anyway (logged)
+    rates_confirmed: bool = False
 
 
 def _issue(db, q: Quotation, user_id) -> list[QuotationFile]:
@@ -1989,6 +1991,13 @@ def set_status(
                 link=f"/quotations/{q.id}",
                 site_id=q.site_id,
             )
+            from app.costing import working  # noqa: PLC0415
+
+            rates_confirmed = working.enforce_rates_sent(
+                working.unsent_for_quotation(db, q), body.rates_confirmed, q.code
+            )
+            if rates_confirmed:
+                override = {**(override or {}), **rates_confirmed}
             if override:
                 record(
                     db,

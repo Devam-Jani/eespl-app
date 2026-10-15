@@ -173,3 +173,20 @@ describe("Save image layout", () => {
     expect(legendText({ label: "Done / certified", color: STATUS_COLORS.done, count: 12 })).toBe("Done / certified (12)");
   });
 });
+
+describe("rooms with AutoCAD areas", () => {
+  it("are sized from the accepted AutoCAD area when the place has no area of its own", () => {
+    const t = node("tower", "Chripal", null);
+    const f = node("floor", "1st", t.id, { level_no: 1 });
+    const toilet = node("toilet", "Ladies toilet", f.id, { autocad_sqm: 9 });
+    const terrace = node("terrace", "Terrace (front)", f.id, { autocad_sqm: 100 });
+    const own = node("toilet", "Gents toilet", f.id, { area_sqm: 4, autocad_sqm: 9 });
+    const boxes = layout([t, f, toilet, terrace, own]);
+    const box = (id: number) => boxes.find((b) => b.node_id === id)!;
+    expect(box(toilet.id).w).toBeCloseTo(3);
+    expect(box(terrace.id).w).toBeCloseTo(10);
+    expect(box(own.id).w).toBeCloseTo(2); // its own area wins
+    // the floor is as big as its rooms, not a large plane under small boxes
+    expect(box(f.id).w).toBeLessThan(10 * 2 + 4);
+  });
+});

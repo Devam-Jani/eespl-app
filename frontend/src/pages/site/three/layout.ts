@@ -27,7 +27,7 @@ export type LayoutNode = {
   name: string;
   level_no: number | null;
   area_sqm: number | null;
-  autocad_sqm?: number | null; // accepted AutoCAD takeoff area, shown on hover
+  autocad_sqm?: number | null; // accepted AutoCAD takeoff area: sizes the box when area_sqm is blank
   sort_order: number;
 };
 
@@ -77,9 +77,15 @@ function side(area: number | null, fallback: number): number {
   return area && area > 0 ? Math.max(1, Math.sqrt(area)) : fallback;
 }
 
+/** The node's area: its own, else the accepted AutoCAD takeoff area. */
+function areaOf(n: LayoutNode): number | null {
+  return n.area_sqm && n.area_sqm > 0 ? n.area_sqm : (n.autocad_sqm ?? null);
+}
+
 function roomSize(n: LayoutNode): [number, number] {
-  if (n.area_sqm && n.area_sqm > 0) {
-    const s = Math.sqrt(n.area_sqm);
+  const a = areaOf(n);
+  if (a && a > 0) {
+    const s = Math.sqrt(a);
     return [s, s];
   }
   return ROOM_DEFAULT[n.kind] ?? [2.5, 2.5];
@@ -144,7 +150,7 @@ export function layout(nodes: LayoutNode[]): Box[] {
         D = Math.max(D, s ?? FLOOR_DEFAULT[1]);
         continue;
       }
-      const sizes = items.map((i) => (i.kind === "flat" ? [side(i.area_sqm, FLAT_DEFAULT), side(i.area_sqm, FLAT_DEFAULT)] : roomSize(i)));
+      const sizes = items.map((i) => (i.kind === "flat" ? [side(areaOf(i), FLAT_DEFAULT), side(areaOf(i), FLAT_DEFAULT)] : roomSize(i)));
       const cw = Math.max(...sizes.map((s) => s[0]));
       const cd = Math.max(...sizes.map((s) => s[1]));
       const [cols, rows] = grid(items.length);
@@ -202,7 +208,7 @@ export function layout(nodes: LayoutNode[]): Box[] {
           });
           return;
         }
-        const fw = side(item.area_sqm, FLAT_DEFAULT);
+        const fw = side(areaOf(item), FLAT_DEFAULT);
         const fd = fw;
         add({
           node_id: item.id,
