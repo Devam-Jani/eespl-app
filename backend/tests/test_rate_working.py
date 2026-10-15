@@ -307,7 +307,7 @@ def test_the_rate_formula_cushions_reasons_flags_and_the_rate_to_every_line(
     assert (
         "COVRAGE" in cells
         and "CTC" in cells
-        and "MARGIN" in cells
+        and "MARGIN (on cost)" in cells
         and any(x.startswith("CUSHION") for x in cells)
     )
     assert (

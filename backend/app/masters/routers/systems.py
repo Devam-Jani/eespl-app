@@ -133,7 +133,14 @@ def list_systems(
     query = select(System)
     if q:
         pattern = like(q)
-        query = query.where(or_(System.code.ilike(pattern), System.name.ilike(pattern)))
+        by_product = (
+            select(SystemComponent.system_id)
+            .join(Product, Product.id == SystemComponent.product_id)
+            .where(func.array_to_string(Product.aliases, " | ").ilike(pattern))
+        )
+        query = query.where(
+            or_(System.code.ilike(pattern), System.name.ilike(pattern), System.id.in_(by_product))
+        )
     if active is not None:
         query = query.where(System.is_active == active)
     rows, total = paginate(db, query.order_by(System.name, System.id), limit, offset)

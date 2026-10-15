@@ -44,6 +44,11 @@ type Group = {
   application: string | null;
   // cost data (tender.margin)
   wastage_percent?: string;
+  wastage_source?: string | null;
+  applications?: { name: string; min: number; max: number }[];
+  system_coats?: { product: string; coats: number | null; to_confirm: boolean }[];
+  margin_basis?: "cost" | "selling";
+  margin_basis_label?: string;
   surface_prep?: string;
   labour_rate_card_id?: number | null;
   labour_rate_card?: string | null;
@@ -68,6 +73,8 @@ type Working = {
   locked: boolean;
   can_edit: boolean;
   sees_cost: boolean;
+  margin_basis: "cost" | "selling";
+  margin_basis_label: string;
   line_count: number;
   groups: Group[];
   ungrouped: Line[];
@@ -121,8 +128,8 @@ export function RateWorkingView({ tenderId, quotationId }: { tenderId?: number; 
           </h2>
           <p className="small muted">
             {w.line_count} client lines in {w.groups.length} main item(s)
-            {w.ungrouped.length ? `, ${w.ungrouped.length} not grouped` : ""}. Rate = Σ consumption × (price + freight) × (1 + wastage) + surface preparation + labour (₹/sq ft ×
-            10.764) + margin.
+            {w.ungrouped.length ? `, ${w.ungrouped.length} not grouped` : ""}. Cost = Σ consumption × (price + freight) × (1 + wastage) + surface preparation + labour (₹/sq ft ×
+            10.7639); {w.margin_basis_label}.
           </p>
         </div>
         <div className="page-actions">
@@ -304,30 +311,33 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
   }, [edit]);
   const set = (k: keyof Form) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const setP = (i: number, patch: Partial<Form["products"][number]>) => setF({ ...f, products: f.products.map((p, j) => (j === i ? { ...p, ...patch } : p)) });
-  async function save(systemChange = false) {
+  async function save(systemChange = false, only?: Record<string, unknown>) {
     const opt = (v: string) => (v.trim() === "" ? null : v);
-    const json = systemChange
-      ? { system_id: f.system_id ? Number(f.system_id) : null }
-      : {
-          name: f.name,
-          application: opt(f.application),
-          coats: f.coats ? Number(f.coats) : null,
-          wastage_percent: f.wastage_percent,
-          surface_prep: f.surface_prep,
-          labour_rate_card_id: f.labour_rate_card_id ? Number(f.labour_rate_card_id) : null,
-          labour_used_sqft: f.labour_used_sqft,
-          labour_paid_sqft: opt(f.labour_paid_sqft),
-          margin_percent: f.margin_percent,
-          products: f.products.map((p) => ({
-            id: p.id,
-            product_id: p.product_id,
-            consumption: opt(p.consumption),
-            consumption_reason: opt(p.consumption_reason),
-            price: opt(p.price),
-            freight_used: p.freight_used || "0",
-            freight_actual: opt(p.freight_actual),
-          })),
-        };
+    const json = only
+      ? only
+      : systemChange
+        ? { system_id: f.system_id ? Number(f.system_id) : null }
+        : {
+            name: f.name,
+            application: opt(f.application),
+            coats: f.coats ? Number(f.coats) : null,
+            // sent only when typed here, so a picked application fills it from the settings
+            ...(Number(f.wastage_percent) !== Number(shown.wastage_percent ?? 0) ? { wastage_percent: f.wastage_percent } : {}),
+            surface_prep: f.surface_prep,
+            labour_rate_card_id: f.labour_rate_card_id ? Number(f.labour_rate_card_id) : null,
+            labour_used_sqft: f.labour_used_sqft,
+            labour_paid_sqft: opt(f.labour_paid_sqft),
+            margin_percent: f.margin_percent,
+            products: f.products.map((p) => ({
+              id: p.id,
+              product_id: p.product_id,
+              consumption: opt(p.consumption),
+              consumption_reason: opt(p.consumption_reason),
+              price: opt(p.price),
+              freight_used: p.freight_used || "0",
+              freight_actual: opt(p.freight_actual),
+            })),
+          };
     try {
       const out = await api<Group & { price_checks?: typeof checks }>(`/api/rate-working/groups/${g.id}`, { method: "PUT", json });
       setShown(out);
@@ -382,16 +392,35 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
             {s.system_to_confirm && <span className="small text-warn">This system's consumption or coats are still to confirm.</span>}
           </label>
           <label className="field">
-            <span>Application (wastage from settings)</span>
-            <input value={f.application} onChange={set("application")} disabled={!edit} placeholder="raft, footing…" />
+            <span>Application (its wastage comes from the settings)</span>
+            <select
+              value={f.application}
+              onChange={(e) => {
+                setF({ ...f, application: e.target.value });
+                void save(false, { application: e.target.value || null });
+              }}
+              disabled={!edit}
+            >
+              <option value="">— none —</option>
+              {(s.applications ?? []).map((a) => (
+                <option key={a.name} value={a.name}>
+                  {a.name} ({a.min}–{a.max} %)
+                </option>
+              ))}
+              {f.application && !(s.applications ?? []).some((a) => a.name === f.application) && <option value={f.application}>{f.application}</option>}
+            </select>
           </label>
           <label className="field">
             <span>Wastage %</span>
             <input className="input-num" value={f.wastage_percent} onChange={set("wastage_percent")} disabled={!edit} />
+            {s.wastage_source && <span className="small muted">from {s.wastage_source}</span>}
           </label>
           <label className="field">
             <span>Coats</span>
             <input className="input-num" value={f.coats} onChange={set("coats")} disabled={!edit} />
+            {(s.system_coats ?? []).length > 0 && (
+              <span className="small muted">system: {(s.system_coats ?? []).map((c) => `${c.product} ${c.coats ? `${c.coats} coats` : "coats to confirm"}`).join("; ")}</span>
+            )}
           </label>
           <label className="field">
             <span>Surface preparation (₹/sqm)</span>
@@ -525,7 +554,10 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
                   <td />
                 </tr>
                 <tr>
-                  <td>Margin {num(s.margin_percent)} %</td>
+                  <td>
+                    Margin {num(s.margin_percent)} % {s.margin_basis === "selling" ? "on the selling price" : "on cost"}
+                    <div className="small muted">{s.margin_basis_label}</div>
+                  </td>
                   <td />
                   <td />
                   <td className="num">{inr(s.margin_sqm)}</td>
@@ -1084,6 +1116,13 @@ export function CostingSettingsCard() {
     <div className="card top-gap">
       <h2 className="section-title">Prices, rate working and lots</h2>
       <div className="grid-2">
+        <label className="field">
+          <span>Margin in the rate working</span>
+          <select value={String(s.margin_basis ?? "cost")} onChange={(e) => setS({ ...s, margin_basis: e.target.value })}>
+            <option value="cost">on cost: rate = cost × (1 + margin)</option>
+            <option value="selling">on the selling price: rate = cost ÷ (1 − margin)</option>
+          </select>
+        </label>
         {fields.map(([k, label]) => (
           <label key={k} className="field">
             <span>{label}</span>

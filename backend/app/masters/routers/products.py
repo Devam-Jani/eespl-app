@@ -89,6 +89,8 @@ def _query(q: str | None, category: str | None, category_id: int | None, active:
                 Product.code.ilike(pattern),
                 Product.name.ilike(pattern),
                 Product.brand.ilike(pattern),
+                # other names it goes by ("Samgard" finds Bronco Cemguard)
+                func.array_to_string(Product.aliases, " | ").ilike(pattern),
             )
         )
     if category_id is not None:

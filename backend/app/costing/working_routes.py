@@ -107,12 +107,19 @@ def group_out(db, g: RateGroup, lines: dict[str, dict], with_cost: bool) -> dict
         "library_median_sqm": result.get("library_median_sqm"),
         "coats": g.coats,
         "application": g.application,
+        "margin_basis": result.get("margin_basis") or working.margin_basis(db),
+        "margin_basis_label": working.BASIS_LABEL[
+            result.get("margin_basis") or working.margin_basis(db)
+        ],
     }
     if not with_cost:
         return out
     card = db.get(LabourRateCard, g.labour_rate_card_id) if g.labour_rate_card_id else None
     out |= {
         "wastage_percent": g.wastage_percent,
+        "wastage_source": g.wastage_source,
+        "applications": _applications(db),
+        "system_coats": _system_coats(db, g.system_id),
         "surface_prep": g.surface_prep,
         "labour_rate_card_id": g.labour_rate_card_id,
         "labour_rate_card": (
@@ -134,6 +141,27 @@ def group_out(db, g: RateGroup, lines: dict[str, dict], with_cost: bool) -> dict
         "library_limit_percent": result.get("library_limit_percent"),
     }
     return out
+
+
+def _applications(db) -> list[dict]:
+    """The applications with a wastage in Settings > Process rules (raft, footing ...)."""
+    from app.process.engine import settings as process_settings  # noqa: PLC0415
+
+    return [
+        {"name": k, "min": v["min"], "max": v["max"]}
+        for k, v in (process_settings(db).wastage or {}).items()
+    ]
+
+
+def _system_coats(db, system_id: int | None) -> list[dict]:
+    """The coats the system's products have (blank: to confirm)."""
+    system = db.get(System, system_id) if system_id else None
+    if system is None:
+        return []
+    return [
+        {"product": c.product.name, "coats": c.coats, "to_confirm": c.to_confirm}
+        for c in system.components
+    ]
 
 
 def product_out(db, p: RateGroupProduct) -> dict:
@@ -171,6 +199,8 @@ def working_out(db, w: RateWorking, principal) -> dict:
         "locked": w.locked,
         "can_edit": with_cost and not w.locked,
         "sees_cost": with_cost,
+        "margin_basis": working.margin_basis(db),
+        "margin_basis_label": working.BASIS_LABEL[working.margin_basis(db)],
         "line_count": len(lines),
         "groups": groups,
         "ungrouped": [x for k, x in lines.items() if k not in grouped],
@@ -331,8 +361,18 @@ def update_group(
     if new_system:  # the system's build-up first; what was typed with it wins
         g.system_id = data.pop("system_id")
         working.init_from_system(db, g, " ".join(working.words(g.name)))
+    old_wastage = g.wastage_percent
     for k, v in data.items():
         setattr(g, k, v)
+    # the application picked: its wastage from Settings > Process rules (and where it came from)
+    if "application" in data and "wastage_percent" not in data:
+        found = working.wastage_from_settings(db, g.application)
+        if found:
+            g.wastage_percent, g.wastage_source = found
+    elif "wastage_percent" in data and data["wastage_percent"] != old_wastage:
+        from_app = working.wastage_from_settings(db, g.application)
+        if not (from_app and from_app[0] == data["wastage_percent"]):
+            g.wastage_source = "typed for this site"
     if "labour_rate_card_id" in data and "labour_paid_sqft" not in data:
         working.labour_from_card(db, g)
     flags = []

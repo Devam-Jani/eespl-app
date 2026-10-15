@@ -27,6 +27,7 @@ export type LayoutNode = {
   name: string;
   level_no: number | null;
   area_sqm: number | null;
+  autocad_sqm?: number | null; // accepted AutoCAD takeoff area, shown on hover
   sort_order: number;
 };
 
@@ -99,8 +100,7 @@ export function layout(nodes: LayoutNode[]): Box[] {
   for (const list of byParent.values()) list.sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
   const kids = (id: number | null) => byParent.get(id) ?? [];
   const boxes: Box[] = [];
-  const add = (b: Omit<Box, "tower_id" | "floor_id" | "level" | "below"> & Partial<Box>) =>
-    boxes.push({ tower_id: null, floor_id: null, level: null, below: false, ...b });
+  const add = (b: Omit<Box, "tower_id" | "floor_id" | "level" | "below"> & Partial<Box>) => boxes.push({ tower_id: null, floor_id: null, level: null, below: false, ...b });
 
   // towers in order (a wing's towers in its place), and the site-level places
   const towers: LayoutNode[] = [];
@@ -160,7 +160,21 @@ export function layout(nodes: LayoutNode[]): Box[] {
 
     for (const f of floors) {
       const lv = level.get(f.id)!;
-      add({ node_id: f.id, kind: f.kind, role: "floor", x: tx, y: lv * FLOOR_H + FLOOR_H / 2, z: 0, w: W, h: FLOOR_H - 0.25, d: D, level: lv, tower_id: tower.id, floor_id: f.id, below: lv < 0 });
+      add({
+        node_id: f.id,
+        kind: f.kind,
+        role: "floor",
+        x: tx,
+        y: lv * FLOOR_H + FLOOR_H / 2,
+        z: 0,
+        w: W,
+        h: FLOOR_H - 0.25,
+        d: D,
+        level: lv,
+        tower_id: tower.id,
+        floor_id: f.id,
+        below: lv < 0,
+      });
       const grid_ = cells.get(f.id);
       if (!grid_) continue;
       grid_.items.forEach((item, i) => {
@@ -171,12 +185,40 @@ export function layout(nodes: LayoutNode[]): Box[] {
         const base = lv * FLOOR_H + 0.15;
         if (item.kind !== "flat") {
           const [rw, rd] = roomSize(item);
-          add({ node_id: item.id, kind: item.kind, role: "room", x: cx, y: base + (FLOOR_H - 1) / 2, z: cz, w: rw, h: FLOOR_H - 1, d: rd, level: lv, tower_id: tower.id, floor_id: f.id, below: lv < 0 });
+          add({
+            node_id: item.id,
+            kind: item.kind,
+            role: "room",
+            x: cx,
+            y: base + (FLOOR_H - 1) / 2,
+            z: cz,
+            w: rw,
+            h: FLOOR_H - 1,
+            d: rd,
+            level: lv,
+            tower_id: tower.id,
+            floor_id: f.id,
+            below: lv < 0,
+          });
           return;
         }
         const fw = side(item.area_sqm, FLAT_DEFAULT);
         const fd = fw;
-        add({ node_id: item.id, kind: item.kind, role: "flat", x: cx, y: base + (FLOOR_H - 0.6) / 2, z: cz, w: fw, h: FLOOR_H - 0.6, d: fd, level: lv, tower_id: tower.id, floor_id: f.id, below: lv < 0 });
+        add({
+          node_id: item.id,
+          kind: item.kind,
+          role: "flat",
+          x: cx,
+          y: base + (FLOOR_H - 0.6) / 2,
+          z: cz,
+          w: fw,
+          h: FLOOR_H - 0.6,
+          d: fd,
+          level: lv,
+          tower_id: tower.id,
+          floor_id: f.id,
+          below: lv < 0,
+        });
         // rooms in a row along the flat's front, shrunk to fit
         const rooms = kids(item.id);
         if (!rooms.length) return;
@@ -188,7 +230,21 @@ export function layout(nodes: LayoutNode[]): Box[] {
         rooms.forEach((room, j) => {
           const rw = sizes[j][0] * k;
           const rd = Math.min(sizes[j][1], fd * 0.45);
-          add({ node_id: room.id, kind: room.kind, role: "room", x: rx + rw / 2, y: base + 0.15 + (FLOOR_H - 1) / 2, z: cz - fd / 2 + 0.3 + rd / 2, w: rw, h: FLOOR_H - 1, d: rd, level: lv, tower_id: tower.id, floor_id: f.id, below: lv < 0 });
+          add({
+            node_id: room.id,
+            kind: room.kind,
+            role: "room",
+            x: rx + rw / 2,
+            y: base + 0.15 + (FLOOR_H - 1) / 2,
+            z: cz - fd / 2 + 0.3 + rd / 2,
+            w: rw,
+            h: FLOOR_H - 1,
+            d: rd,
+            level: lv,
+            tower_id: tower.id,
+            floor_id: f.id,
+            below: lv < 0,
+          });
           rx += rw + 0.3;
         });
       });
@@ -215,7 +271,19 @@ export function layout(nodes: LayoutNode[]): Box[] {
         add({ node_id: c.id, kind: c.kind, role: "slab", x: tx, y: topY + 0.2, z: 0, w: W, h: 0.4, d: D, level: maxLevel + 1, tower_id: tower.id });
         kids(c.id).forEach((t, i) => {
           const [w, h, d] = ELEMENT_SIZE[t.kind] ?? ELEMENT_SIZE.other;
-          add({ node_id: t.id, kind: t.kind, role: "element", x: tx + W / 2 - w / 2 - 1 - i * (w + 1), y: topY + 0.4 + h / 2, z: -D / 2 + d / 2 + 1, w, h, d, level: maxLevel + 1, tower_id: tower.id });
+          add({
+            node_id: t.id,
+            kind: t.kind,
+            role: "element",
+            x: tx + W / 2 - w / 2 - 1 - i * (w + 1),
+            y: topY + 0.4 + h / 2,
+            z: -D / 2 + d / 2 + 1,
+            w,
+            h,
+            d,
+            level: maxLevel + 1,
+            tower_id: tower.id,
+          });
         });
       } else if (c.kind === "oh_tank") {
         const [w, h, d] = ELEMENT_SIZE.oh_tank;
@@ -233,7 +301,19 @@ export function layout(nodes: LayoutNode[]): Box[] {
       }
     }
     const right = Math.max(cursor + W, besideZ > -D / 2 || besideW ? besideX + besideW : cursor + W);
-    add({ node_id: tower.id, kind: tower.kind, role: "group", x: (cursor + right) / 2, y: ((maxLevel + 2) * FLOOR_H + minLevel * FLOOR_H) / 2, z: 0, w: right - cursor, h: (maxLevel + 2 - minLevel) * FLOOR_H, d: D, level: null, tower_id: tower.id });
+    add({
+      node_id: tower.id,
+      kind: tower.kind,
+      role: "group",
+      x: (cursor + right) / 2,
+      y: ((maxLevel + 2) * FLOOR_H + minLevel * FLOOR_H) / 2,
+      z: 0,
+      w: right - cursor,
+      h: (maxLevel + 2 - minLevel) * FLOOR_H,
+      d: D,
+      level: null,
+      tower_id: tower.id,
+    });
     extents.push({ id: tower.id, x0: cursor, x1: right, d: D });
     cursor = right + TOWER_GAP;
   }
@@ -284,9 +364,5 @@ export function layout(nodes: LayoutNode[]): Box[] {
 
 /** Do two boxes overlap (strictly, beyond a touching face)? */
 export function overlaps(a: Box, b: Box, eps = 1e-6): boolean {
-  return (
-    Math.abs(a.x - b.x) * 2 < a.w + b.w - eps &&
-    Math.abs(a.y - b.y) * 2 < a.h + b.h - eps &&
-    Math.abs(a.z - b.z) * 2 < a.d + b.d - eps
-  );
+  return Math.abs(a.x - b.x) * 2 < a.w + b.w - eps && Math.abs(a.y - b.y) * 2 < a.h + b.h - eps && Math.abs(a.z - b.z) * 2 < a.d + b.d - eps;
 }

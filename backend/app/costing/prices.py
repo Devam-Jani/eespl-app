@@ -357,6 +357,7 @@ class SettingsIn(BaseModel):
     library_diff_flag_percent: Decimal | None = Field(None, ge=0, le=100)
     calloff_tolerance_percent: Decimal | None = Field(None, ge=0, le=100)
     day_hours: Decimal | None = Field(None, gt=0, le=24)
+    margin_basis: str | None = Field(None, pattern="^(cost|selling)$")
 
 
 def _settings_out(s: CostingSettings) -> dict:
@@ -365,6 +366,7 @@ def _settings_out(s: CostingSettings) -> dict:
         "library_diff_flag_percent": s.library_diff_flag_percent,
         "calloff_tolerance_percent": s.calloff_tolerance_percent,
         "day_hours": s.day_hours,
+        "margin_basis": s.margin_basis or "cost",
     }
 
 

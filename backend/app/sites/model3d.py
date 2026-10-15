@@ -31,6 +31,14 @@ STATUSES = ("not_started", "in_progress", "done", "certified", "blocked")
 def version(db: Session, site_id: int) -> str:
     """Changes when any node, scope or task of the site changes (or is added / removed)."""
     parts = []
+    from app.takeoff.models import CadArea, CadFile  # noqa: PLC0415
+
+    cad = db.execute(
+        select(func.count(), func.max(CadArea.updated_at))
+        .join(CadFile, CadFile.id == CadArea.cad_file_id)
+        .where(CadFile.site_id == site_id, CadArea.status == "accepted")
+    ).one()
+    parts.append(f"cad{cad[0]}:{cad[1].isoformat() if cad[1] else '-'}")
     for model in (SiteNode, AreaScope, Task):
         count, latest = db.execute(
             select(func.count(), func.max(model.updated_at)).where(model.site_id == site_id)
@@ -62,6 +70,9 @@ def build(db: Session, site_id: int) -> dict[str, Any]:
         if row.node_id is not None:
             tasks[row.node_id].append(row)
     today = date.today()
+    from app.takeoff.service import node_sqm  # noqa: PLC0415
+
+    autocad = node_sqm(db, site_id)  # accepted AutoCAD areas, shown on hover
     out = []
     for n in nodes:
         own = tasks.get(n.id, [])
@@ -80,6 +91,7 @@ def build(db: Session, site_id: int) -> dict[str, Any]:
                 "name": n.name,
                 "level_no": n.level_no,
                 "area_sqm": float(n.area_sqm) if n.area_sqm is not None else None,
+                "autocad_sqm": round(autocad[n.id], 2) if n.id in autocad else None,
                 "sort_order": n.sort_order,
                 "status": {
                     "percent": float(n.progress_percent or 0),

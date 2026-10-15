@@ -56,6 +56,8 @@ const cp = () => import("./costing/Pages");
 const QuotationWorking = lazy(() => cp().then((m) => ({ default: m.QuotationWorking })));
 const ProductPrices = lazy(() => cp().then((m) => ({ default: m.ProductPrices })));
 const LabourRates = lazy(() => cp().then((m) => ({ default: m.LabourRates })));
+// AutoCAD takeoff: the drawing viewer and the areas (its own chunk)
+const TakeoffPage = lazy(() => import("./takeoff/Pages").then((m) => ({ default: m.TakeoffPage })));
 const sc = () => import("./sitecontrol/Pages");
 const Deliveries = lazy(() => sc().then((m) => ({ default: m.Deliveries })));
 const DeliveryDetail = lazy(() => sc().then((m) => ({ default: m.DeliveryDetail })));
@@ -323,6 +325,7 @@ export default function App() {
                   ["/rfqs/:id", ["po.view"], <RfqDetail />],
                   ["/quotations/:id/working", ["quotation.view"], <QuotationWorking />],
                   ["/prices/:id", ["tender.margin"], <ProductPrices />],
+                  ["/sites/:id/takeoff", ["takeoff.view"], <TakeoffPage />],
                   ["/assignments/:id", ["jobs.assign", "planning.view"], <AssignmentPage />],
                   ["/sites/:id/material-plan", ["planning.view", "indent.view"], <MaterialPlan />],
                   ["/my-site/:id", ["site.view"], <SupervisorDay />],

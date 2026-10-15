@@ -1,6 +1,7 @@
-"""The systems Ankur Sir named in the director's review (12 Oct): Samgard, Samgard Plus, Ultra Flex
-and Hybrid PU, with the products our data has for them (the products master and rate library v2),
-and the suitable systems per area type (sunken, toilet, terrace).
+"""The systems Ankur Sir named in the director's review (12 Oct): Cemguard and Cemguard Plus
+("Samgard" in the meeting is Bronco Cemguard), Ultra Flex and Hybrid PU, with the products our
+data has for them (the products master and rate library v2), and the suitable systems per area
+type (sunken, toilet, terrace).
 
 Consumption and coats are left blank and marked "to confirm" wherever our data does not give them:
 never guessed. Where our data gives a figure in another form (a coverage per pack, two offers that
@@ -17,9 +18,47 @@ NOT_FOUND = (
     "library v2: its products, consumption and coats are to confirm."
 )
 
+CEMGUARD_NOTE = (
+    'Bronco Cemguard ("Samgard" in the director\'s meeting, 12 Oct). Not described in our offers '
+    "(they use Cemguard Plus and Cemguard CTE-HB): coats and consumption to confirm."
+)
+CEMGUARD_PLUS_NOTE = (
+    "Bronco Cemguard Plus: two-component acrylic polymer elastomeric coating, as in our bungalow "
+    "offer (Deep Vyana). Consumption to confirm."
+)
+
 NAMED = [
-    {"code": "SAMGARD", "name": "Samgard", "note": NOT_FOUND, "products": []},
-    {"code": "SAMGARD-PLUS", "name": "Samgard Plus", "note": NOT_FOUND, "products": []},
+    {
+        "code": "CEMGUARD",
+        "name": "Cemguard",
+        "note": CEMGUARD_NOTE,
+        "products": [
+            {
+                "code": "BRONCO-CEMGUARD",
+                "new": {"name": "BRONCO CEMGUARD", "brand": "Bronco", "unit": "kg",
+                        "pack_size": None, "pack_unit": None},
+                "aliases": ["SAMGARD"],
+                "coats": None,
+                "note": "No price and no consumption in our data: to confirm.",
+            }
+        ],
+    },
+    {
+        "code": "CEMGUARD-PLUS",
+        "name": "Cemguard Plus",
+        "note": CEMGUARD_PLUS_NOTE,
+        "products": [
+            {
+                "code": "BRONCO-CEMGUARD-PLUS",
+                "new": {"name": "BRONCO CEMGUARD PLUS", "brand": "Bronco", "unit": "kg",
+                        "pack_size": None, "pack_unit": None},
+                "aliases": ["SAMGARD PLUS", "SAMGARD"],
+                "coats": 2,  # "1st coat ... 2nd & final coat of BRONCO CEMGUARD PLUS" (our offers)
+                "note": "Our offers: 1st coat, then 2nd & final coat (in toilets over one coat of "
+                "Bronco Cemcrystal Plus, with fibre mesh). Consumption per sqm to confirm.",
+            }
+        ],
+    },
     {
         "code": "ULTRA-FLEX",
         "name": "Ultra Flex",
@@ -54,12 +93,12 @@ NAMED = [
     },
 ]  # fmt: skip
 
-# area type -> (the default suggestion, the suitable systems). Sunken = Samgard Plus with the
+# area type -> (the default suggestion, the suitable systems). Sunken = Cemguard Plus with the
 # other three to choose from (the director's meeting); our library treats toilets with sunken
 # slabs and wet areas; terrace: Hybrid PU, as in our terrace offers.
 AREA_TYPES = {
-    "Sunken slab": ("SAMGARD-PLUS", ["SAMGARD-PLUS", "SAMGARD", "ULTRA-FLEX", "HYBRID-PU"]),
-    "Toilet / bathroom": (None, ["ULTRA-FLEX", "SAMGARD", "SAMGARD-PLUS", "HYBRID-PU"]),
+    "Sunken slab": ("CEMGUARD-PLUS", ["CEMGUARD-PLUS", "CEMGUARD", "ULTRA-FLEX", "HYBRID-PU"]),
+    "Toilet / bathroom": (None, ["ULTRA-FLEX", "CEMGUARD", "CEMGUARD-PLUS", "HYBRID-PU"]),
     "Terrace": ("HYBRID-PU", ["HYBRID-PU"]),
 }
 
@@ -79,26 +118,39 @@ def seed(conn: Connection) -> dict[str, int]:
                 ),
                 {"c": s["code"], "n": s["name"], "note": s["note"]},
             ).scalar()
-            for p in s["products"]:
+        # every run: the products found for it and their link (never a price)
+        for p in s["products"]:
+            pid = conn.execute(
+                text("SELECT id FROM products WHERE code = :c"), {"c": p["code"]}
+            ).scalar()
+            if pid is None:
+                new = p["new"]
                 pid = conn.execute(
-                    text("SELECT id FROM products WHERE code = :c"), {"c": p["code"]}
+                    text(
+                        "INSERT INTO products (code, name, brand, unit, pack_size, pack_unit) "
+                        "VALUES (:c, :n, :b, :u, :ps, :pu) RETURNING id"
+                    ),
+                    {
+                        "c": p["code"],
+                        "n": new["name"],
+                        "b": new["brand"],
+                        "u": new["unit"],
+                        "ps": new["pack_size"],
+                        "pu": new["pack_unit"],
+                    },
                 ).scalar()
-                if pid is None:
-                    new = p["new"]
-                    pid = conn.execute(
-                        text(
-                            "INSERT INTO products (code, name, brand, unit, pack_size, pack_unit) "
-                            "VALUES (:c, :n, :b, :u, :ps, :pu) RETURNING id"
-                        ),
-                        {
-                            "c": p["code"],
-                            "n": new["name"],
-                            "b": new["brand"],
-                            "u": new["unit"],
-                            "ps": new["pack_size"],
-                            "pu": new["pack_unit"],
-                        },
-                    ).scalar()
+            for alias in p.get("aliases", []):  # "Samgard" still finds it
+                conn.execute(
+                    text(
+                        "UPDATE products SET aliases = array_append(aliases, :a) "
+                        "WHERE id = :p AND NOT (:a = ANY(aliases))"
+                    ),
+                    {"a": alias, "p": pid},
+                )
+            if not conn.execute(
+                text("SELECT 1 FROM system_components WHERE system_id = :s AND product_id = :p"),
+                {"s": sid, "p": pid},
+            ).scalar():
                 conn.execute(
                     text(
                         "INSERT INTO system_components (system_id, product_id, "
@@ -117,3 +169,33 @@ def seed(conn: Connection) -> dict[str, int]:
             {"ids": [ids[c] for c in suitable], "d": ids[default] if default else None, "n": name},
         )
     return ids
+
+
+# the rest of the Bronco range in our offers: in the products master, with no price
+RANGE = [
+    {"code": "BRONCO-CEMCRYSTAL-PLUS", "name": "BRONCO CEMCRYSTAL PLUS",
+     "brand": "Bronco", "unit": "kg"},
+]  # fmt: skip
+
+
+def cemguard(conn: Connection) -> dict[str, int]:
+    """Samgard and Samgard Plus are Bronco Cemguard and Cemguard Plus (the rate working review):
+    rename them, link the Bronco products (added when missing, never with a price), keep "Samgard"
+    as an alias, and add Cemcrystal Plus to the products master."""
+    for old, new, name, note in (
+        ("SAMGARD", "CEMGUARD", "Cemguard", CEMGUARD_NOTE),
+        ("SAMGARD-PLUS", "CEMGUARD-PLUS", "Cemguard Plus", CEMGUARD_PLUS_NOTE),
+    ):
+        conn.execute(
+            text("UPDATE systems SET code = :new, name = :n, note = :note WHERE code = :old"),
+            {"new": new, "n": name, "note": note, "old": old},
+        )
+    for r in RANGE:
+        if not conn.execute(
+            text("SELECT 1 FROM products WHERE code = :c"), {"c": r["code"]}
+        ).scalar():
+            conn.execute(
+                text("INSERT INTO products (code, name, brand, unit) VALUES (:c, :n, :b, :u)"),
+                {"c": r["code"], "n": r["name"], "b": r["brand"], "u": r["unit"]},
+            )
+    return seed(conn)

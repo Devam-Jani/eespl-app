@@ -54,12 +54,17 @@ class CostingSettings(Base):
     """One row (id 1): the flags. Wastage per application stays in Settings > Process rules."""
 
     __tablename__ = "costing_settings"
+    __table_args__ = (
+        CheckConstraint("margin_basis IN ('cost', 'selling')", name="margin_basis_valid"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     price_change_flag_percent: Mapped[Decimal] = mapped_column(Pct, server_default="10")
     library_diff_flag_percent: Mapped[Decimal] = mapped_column(Pct, server_default="15")
     calloff_tolerance_percent: Mapped[Decimal] = mapped_column(Pct, server_default="5")
     day_hours: Mapped[Decimal] = mapped_column(Numeric(4, 1), server_default="8")  # a gang's day
+    # "cost": rate = cost × (1 + margin) (as before); "selling": rate = cost ÷ (1 − margin)
+    margin_basis: Mapped[str] = mapped_column(String(8), server_default="cost")
 
 
 class FreightRate(Tracked, Base):
@@ -125,6 +130,8 @@ class RateGroup(Tracked, Base):
     application: Mapped[str | None] = mapped_column(String(40))  # raft, footing ... (wastage)
     coats: Mapped[int | None] = mapped_column(Integer)
     wastage_percent: Mapped[Decimal] = mapped_column(Pct, server_default="0")
+    # where the wastage came from: the application in Settings > Process rules, the system, typed
+    wastage_source: Mapped[str | None] = mapped_column(String(200))
     surface_prep: Mapped[Decimal] = mapped_column(Money, server_default="0")  # ₹ per sqm
     labour_rate_card_id: Mapped[int | None] = mapped_column(
         ForeignKey("labour_rate_cards.id", ondelete="SET NULL")

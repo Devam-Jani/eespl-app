@@ -48,6 +48,7 @@ ALL = [
     "leads.allocate", "jobs.assign", "planning.view", "planning.edit", "measurement.view",
     "measurement.edit", "dpr.approve", "labourcheck.check", "sendcheck.override",
     "scorecard.view", "sitevisit.log", "grants.manage", "process.rules", "process.escalations",
+    "takeoff.view", "takeoff.edit",
 ]  # fmt: skip
 
 
@@ -64,6 +65,8 @@ EXPECTED: dict[str, dict[str, str]] = {
     # sees and decides everything; users, roles and settings stay with office_admin
     "director": _all(*[c for c in ALL if c not in DIRECTOR_EXCLUDES]),
     "office_admin": _all(
+        "takeoff.view",
+        "takeoff.edit",
         "admin.users",
         "admin.roles",
         "process.rules",
@@ -141,6 +144,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "sitearea.approve",
     ),  # fmt: skip
     "estimator": _all(
+        "takeoff.view",
         "clients.view",
         "clients.edit",
         "vendors.view",
@@ -160,6 +164,8 @@ EXPECTED: dict[str, dict[str, str]] = {
     # Mr. Sunil, Hardeep (Sr Engineer Billing & Planning): enquiries, the status board, material
     # planning, new areas, escalations; costs only if the director allows the person
     "planning": _all(
+        "takeoff.view",
+        "takeoff.edit",
         "leads.view",
         "leads.edit",
         "leads.allocate",
@@ -192,6 +198,8 @@ EXPECTED: dict[str, dict[str, str]] = {
     ),  # fmt: skip
     # Jr Engineer Billing, Assistant Manager Billing: no vendor payables, no payroll
     "billing": _all(
+        "takeoff.view",
+        "takeoff.edit",
         "billing.view",
         "billing.edit",
         "measurement.view",
@@ -236,6 +244,8 @@ EXPECTED: dict[str, dict[str, str]] = {
                 "asset.view",
                 "portal.manage",
                 "dashboard.site",
+                "takeoff.view",
+                "takeoff.edit",
             ],
             "assigned",
         ),
@@ -243,6 +253,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "expense.create": "own",
     },  # fmt: skip
     "sales": {
+        "takeoff.view": "assigned",
         "clients.view": "all",
         "clients.edit": "own",
         "library.view": "all",
