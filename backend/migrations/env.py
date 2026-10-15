@@ -7,6 +7,7 @@ import app.analytics.models  # noqa: F401  (registers the analytics tables and i
 import app.costing.models  # noqa: F401  (rate working, freight, labour rates and bills)
 import app.crm.models  # noqa: F401  (registers the CRM tables)
 import app.execution.models  # noqa: F401  (registers the execution tables)
+import app.field.models  # noqa: F401  (field tracking and the travel claim)
 import app.finance.models  # noqa: F401  (registers the finance tables)
 import app.masters.models  # noqa: F401  (registers the master tables)
 import app.material.models  # noqa: F401  (registers the material tables)

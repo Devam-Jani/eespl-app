@@ -185,6 +185,11 @@ export default function Sites() {
                 <td>{s.channel_name ?? "—"}</td>
                 <td>
                   <SiteStatusBadge status={s.status} />
+                  {s.lat === null && ["planned", "active", "on_hold"].includes(s.status) && (
+                    <span className="badge badge-warn" title="No pinned location: check-ins at this site cannot be checked">
+                      location missing
+                    </span>
+                  )}
                 </td>
                 <td>
                   <ProgressBar value={s.progress_percent} />
@@ -212,24 +217,12 @@ export default function Sites() {
         </table>
       </div>
       {page && <Pager page={page} onOffset={setOffset} />}
-      {creating && lookups && (
-        <SiteForm lookups={lookups} site={null} onClose={() => setCreating(false)} onSaved={(s) => navigate(`/sites/${s.id}`)} />
-      )}
+      {creating && lookups && <SiteForm lookups={lookups} site={null} onClose={() => setCreating(false)} onSaved={(s) => navigate(`/sites/${s.id}`)} />}
     </>
   );
 }
 
-export function SiteForm({
-  lookups,
-  site,
-  onClose,
-  onSaved,
-}: {
-  lookups: SiteLookups;
-  site: Site | null;
-  onClose: () => void;
-  onSaved: (s: Site) => void;
-}) {
+export function SiteForm({ lookups, site, onClose, onSaved }: { lookups: SiteLookups; site: Site | null; onClose: () => void; onSaved: (s: Site) => void }) {
   const [form, setForm] = useState({
     name: site?.name ?? "",
     client_id: site?.client_id?.toString() ?? "",
@@ -254,11 +247,7 @@ export function SiteForm({
     const body: Record<string, unknown> = Object.fromEntries(Object.entries(form).map(([k, v]) => [k, v === "" ? null : v]));
     for (const k of ["client_id", "channel_id"]) body[k] = body[k] ? Number(body[k]) : null;
     try {
-      onSaved(
-        site
-          ? await api<Site>(`/api/sites/${site.id}`, { method: "PATCH", json: body })
-          : await api<Site>("/api/sites", { method: "POST", json: body }),
-      );
+      onSaved(site ? await api<Site>(`/api/sites/${site.id}`, { method: "PATCH", json: body }) : await api<Site>("/api/sites", { method: "POST", json: body }));
     } catch (err) {
       setError(errorText(err));
     }

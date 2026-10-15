@@ -204,6 +204,7 @@ def working_out(db, w: RateWorking, principal) -> dict:
         "line_count": len(lines),
         "groups": groups,
         "ungrouped": [x for k, x in lines.items() if k not in grouped],
+        "unsent": working.unsent(db, w),
     }
     db.flush()
     return jsonable_encoder(out)
@@ -242,6 +243,35 @@ def quotation_working(
     out = working_out(db, w, principal)
     db.commit()
     return out
+
+
+@router.get("/tenders/{tender_id}/unsent")
+def tender_unsent(
+    tender_id: int,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    scope: Annotated[str, Depends(require_permission("tender.view"))],
+) -> dict:
+    """Whether the BOQ lines carry the working's rates (the tender's warning, Submit blocked)."""
+    from app.tenders.service import get_visible  # noqa: PLC0415
+
+    found = working.unsent_for_tender(db, get_visible(db, tender_id, scope, principal))
+    db.commit()
+    return jsonable_encoder({"unsent": found})
+
+
+@router.get("/quotations/{qid}/unsent")
+def quotation_unsent(
+    qid: int,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    scope: Annotated[str, Depends(require_permission("quotation.view"))],
+) -> dict:
+    from app.quotations import service as qsvc  # noqa: PLC0415
+
+    found = working.unsent_for_quotation(db, qsvc.get_visible(db, qid, scope, principal))
+    db.commit()
+    return jsonable_encoder({"unsent": found})
 
 
 @router.get("/{wid}")

@@ -101,6 +101,12 @@ class Site(Tracked, Base):
     state: Mapped[str | None] = mapped_column(String(100))
     lat: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
     lng: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
+    # the check-in circle around the pin (blank: the field settings' radius, 150 m)
+    radius_m: Mapped[int | None] = mapped_column(Integer)
+    location_set_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    location_set_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     start_date: Mapped[date | None] = mapped_column(Date)
     target_date: Mapped[date | None] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(12), server_default="planned", index=True)

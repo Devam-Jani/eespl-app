@@ -1665,6 +1665,11 @@ input.full {
   font-size: 0.85rem;
 }
 
+.label-room {
+  font-size: 0.68rem;
+  border: 1px solid rgba(31, 42, 36, 0.25);
+}
+
 .tooltip3d {
   position: absolute;
   z-index: 2;
@@ -4041,6 +4046,11 @@ li.late a {
 .takeoff-facts {
   margin: 0.2rem 0 0.5rem;
 }
+.count-sets {
+  margin-top: 0.2rem;
+  display: grid;
+  gap: 0.1rem;
+}
 .takeoff-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 30rem;
@@ -4146,4 +4156,121 @@ li.late a {
   .takeoff-canvas {
     height: 60vh;
   }
+}
+
+/* --- field tracking ------------------------------------------------------------------------- */
+.field-phone {
+  max-width: 34rem;
+  margin: 0 auto;
+}
+.field-phone .card {
+  margin-bottom: 0.8rem;
+}
+.field-map {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  z-index: 0;
+}
+.field-day-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .field-day-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.map-pin span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font: 700 12px/1 system-ui, sans-serif;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.map-pin-home span {
+  background: #374151;
+}
+.map-pin-start span {
+  background: #6b7280;
+}
+.map-pin-flag span {
+  background: var(--danger);
+}
+.map-pin-person span {
+  background: #1f6feb;
+}
+.map-pin-site span {
+  background: #9a3412;
+}
+.map-pin-picked span {
+  background: #fff;
+  color: var(--danger);
+}
+.btn-big {
+  font-size: 1.15rem;
+  padding: 0.9rem;
+}
+.chip-on {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.consent-list dt {
+  font-weight: 700;
+  margin-top: 0.5rem;
+}
+.consent-list dd {
+  margin: 0.1rem 0 0;
+}
+.stop-list {
+  padding-left: 1.2rem;
+}
+.stop-list li {
+  margin-bottom: 0.45rem;
+}
+.field-thumb {
+  display: block;
+  max-width: 120px;
+  max-height: 120px;
+  border-radius: 6px;
+  margin-top: 0.25rem;
+}
+.field-flags {
+  list-style: none;
+  padding: 0;
+  margin: 0.3rem 0;
+}
+.field-current {
+  margin: 0.6rem 0;
+  padding: 0.6rem;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+.route-list li {
+  margin-bottom: 0.4rem;
+}
+.route-actions {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin-left: 0.4rem;
+}
+.selfie-btn {
+  margin: 0.5rem 0;
+}
+.btn-primary.tap {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn-primary.tap:disabled {
+  opacity: 0.5;
 }

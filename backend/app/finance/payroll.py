@@ -230,6 +230,7 @@ def _slip_out(db, p: Payslip) -> dict:
                 "esi_employer",
                 "pt",
                 "advance_recovery",
+                "travel_reimbursement",
                 "round_off",
                 "net",
             )
@@ -258,6 +259,7 @@ def _run_out(db, r: PayrollRun) -> dict:
                 "esi_employer",
                 "pt",
                 "advance_recovery",
+                "travel_reimbursement",
                 "net",
             )
         },
@@ -327,6 +329,9 @@ def run_payroll(
             if Decimal(x.amount) <= left:
                 x.recovered_in_payslip_id, left = p.id, left - Decimal(x.amount)
         p.advance_recovery = Decimal(p.advance_recovery) - left
+        from app.field.service import payroll_reimbursement  # noqa: PLC0415
+
+        p.travel_reimbursement = payroll_reimbursement(db, uid, body.month)
         svc.round_net(p)
     record(
         db,

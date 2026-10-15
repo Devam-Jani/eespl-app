@@ -272,6 +272,25 @@ DEFAULT_RULES: list[dict] = [
         "link": "/sites/{site_id}?tab=handover", "closed_by": ["area_finished"],
         "escalations": [{"after_hours": 3 * D, "to": ["director"]}],
     },
+    {
+        "code": "travel_claim_ready", "number": 27, "event": "travel_claim_ready",
+        "short": "Travel claim to approve", "ref": "{person} {month}",
+        "title": "Monthly travel claim ready",
+        "recipients": [
+            {"role": "person", "message": "Your travel claim for {month} is ready: {km} km, {amount}. Add tolls and parking with the bill photo before your manager approves.", "info": True, "link": "/field/claims/{claim_id}"},
+            {"role": "manager", "message": "Travel claim of {person} for {month}: {km} km, {amount} ({flagged} flagged days). Check the days and approve.", "action": "Approve", "link": "/field/claims/{claim_id}"},
+        ],
+        "link": "/field/claims/{claim_id}", "closed_by": ["claim_manager_approved"],
+        "escalations": [{"after_hours": 3 * D, "to": ["director"]}],
+    },
+    {
+        "code": "claim_manager_approved", "number": 28, "event": "claim_manager_approved",
+        "short": "Travel claim for accounts", "ref": "{person} {month}",
+        "title": "Travel claim approved by the manager",
+        "recipients": [{"role": "accounts", "message": "Travel claim of {person} for {month} approved by the manager: {amount}. Approve the month.", "action": "Approve", "link": "/field/claims/{claim_id}"}],
+        "link": "/field/claims/{claim_id}", "closed_by": ["claim_approved"],
+        "escalations": [{"after_hours": 5 * D, "to": ["director"]}],
+    },
 ]  # fmt: skip
 
 # the order of the chain on a site's Process tab
@@ -288,5 +307,7 @@ ROLES = (
     "director",
     "office_admin",
     "author",
+    "person",
+    "manager",
 )
 DEFAULT_WASTAGE = {"raft": {"min": 5, "max": 7}, "footing": {"min": 12, "max": 15}}

@@ -104,6 +104,8 @@ class TenderUpdate(BaseModel):
     guarantee_years: int | None = Field(default=None, ge=0, le=50)
     # the send checklist: sending past it needs sendcheck.override and a reason (logged)
     override_reason: str | None = Field(default=None, max_length=1000)
+    # the lines' rates differ from the rate working: submit with them anyway (logged)
+    rates_confirmed: bool = False
 
     @model_validator(mode="after")
     def _reason(self):
@@ -394,6 +396,8 @@ class SubmitIn(BaseModel):
     note: str | None = Field(default=None, max_length=2000)
     # the send checklist: sending past it needs sendcheck.override and a reason (logged)
     override_reason: str | None = Field(default=None, max_length=1000)
+    # the lines' rates differ from the rate working: submit with them anyway (logged)
+    rates_confirmed: bool = False
 
 
 class RevisionOut(BaseModel):

@@ -384,6 +384,15 @@ export default function Site3DTab({
         }
       }
     }
+    // an open floor: each room's name on its box (the AutoCAD area with it)
+    if (cutaway !== null) {
+      const rooms = shown.filter((b) => (b.role === "room" || b.role === "flat") && b.floor_id === cutaway);
+      if (rooms.length <= 120)
+        for (const b of rooms) {
+          const n = byId.get(b.node_id);
+          if (n) addLabel(n.autocad_sqm ? `${n.name} · ${n.autocad_sqm} sqm` : n.name, new THREE.Vector3(b.x, b.y + b.h / 2 + 0.2, b.z), "label-room");
+        }
+    }
     t.pickables = pickables;
     t.labels = labels;
     if (!framed.current && shown.length) {
@@ -397,17 +406,25 @@ export default function Site3DTab({
 
   // --- camera ---
 
-  function view(kind: "reset" | "top" | "front") {
+  function view(kind: "reset" | "top" | "front" | "floor") {
     const t = three.current;
     if (!t) return;
     const box = new THREE.Box3();
-    for (const b of boxes.filter(visible))
+    // an open floor: its rooms fill the view (else the whole floor, else everything shown)
+    const rooms = cutaway !== null ? boxes.filter((b) => (b.role === "room" || b.role === "flat") && b.floor_id === cutaway) : [];
+    const fitTo = kind === "floor" && rooms.length ? rooms : boxes.filter(visible);
+    for (const b of fitTo)
       box.expandByPoint(new THREE.Vector3(b.x - b.w / 2, b.y - b.h / 2, b.z - b.d / 2)).expandByPoint(new THREE.Vector3(b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2));
     if (box.isEmpty()) return;
     const c = box.getCenter(new THREE.Vector3());
-    const r = Math.max(10, box.getSize(new THREE.Vector3()).length() / 2);
+    const r = Math.max(kind === "floor" ? 3 : 10, box.getSize(new THREE.Vector3()).length() / 2);
     const d = r / Math.sin((t.camera.fov * Math.PI) / 360);
-    const dir = kind === "top" ? new THREE.Vector3(0, 1, 0.001) : kind === "front" ? new THREE.Vector3(0, 0.15, 1) : new THREE.Vector3(0.75, 0.55, 1);
+    const dir =
+      kind === "top" || kind === "floor"
+        ? new THREE.Vector3(0, kind === "floor" ? 1.4 : 1, kind === "floor" ? 0.9 : 0.001)
+        : kind === "front"
+          ? new THREE.Vector3(0, 0.15, 1)
+          : new THREE.Vector3(0.75, 0.55, 1);
     t.camera.position.copy(c).add(dir.normalize().multiplyScalar(d * 1.05));
     t.camera.near = d / 100;
     t.camera.far = d * 10;
@@ -416,6 +433,13 @@ export default function Site3DTab({
     t.controls.update();
     t.render();
   }
+
+  // opening a floor fits the camera to its rooms
+  useEffect(() => {
+    if (cutaway !== null) view("floor");
+    // view() reads the current boxes; refit only when another floor is opened
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cutaway]);
 
   // --- picking ---
 

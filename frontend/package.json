@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "js-aruco2": "2.0.0",
+    "leaflet": "1.9.4",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-router-dom": "6.28.0",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@eslint/js": "9.17.0",
+    "@types/leaflet": "1.9.12",
     "@types/node": "22.10.2",
     "@types/react": "18.3.12",
     "@types/react-dom": "18.3.1",

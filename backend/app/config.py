@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     dwg_timeout_s: int = 300
     dwg_max_mb: int = 50
     kylas_timeout_seconds: float = 20
+    # road km for the travel claim: our own OSRM container (never a third-party routing API)
+    osrm_url: str = "http://osrm:5000"
+    osrm_timeout_s: float = 8
 
     # Claude vision for survey photo suggestions (off unless enabled in survey settings). The key
     # comes from ANTHROPIC_API_KEY in .env only: never stored, logged or returned.

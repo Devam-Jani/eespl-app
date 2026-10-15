@@ -28,6 +28,7 @@ const BudgetTab = lazy(() => import("./site/BudgetTab"));
 const FinanceTab = lazy(() => import("./site/FinanceTab"));
 // the portal tab carries the client portal pages (for the preview)
 const PortalTab = lazy(() => import("./site/PortalTab"));
+const SiteLocationTab = lazy(() => import("../field/Maps").then((m) => ({ default: m.SiteLocationTab })));
 import { ProgressBar, SiteForm, SiteStatusBadge } from "./Sites";
 import { shortDate } from "./Tenders";
 
@@ -50,7 +51,8 @@ type Tab =
   | "portal"
   | "process"
   | "lots"
-  | "handover";
+  | "handover"
+  | "location";
 
 export default function SiteDetail() {
   const { id } = useParams();
@@ -144,6 +146,7 @@ export default function SiteDetail() {
             ["overview", "Overview", true],
             ["process", "Process", true],
             ["handover", "Handover", true],
+            ["location", "Location & visits", true],
             ["lots", "Plan & lots", can("planning.view", "indent.view", "indent.create")],
             ["dpr", "DPR", can("dpr.view")],
             ["tasks", "Tasks", true],
@@ -211,6 +214,7 @@ export default function SiteDetail() {
         )}
         <Suspense fallback={<p className="muted">Loading…</p>}>
           {tab === "handover" && <HandoverTab siteId={site.id} />}
+          {tab === "location" && <SiteLocationTab siteId={site.id} />}
           {tab === "lots" && <PlanLots siteId={site.id} />}
         </Suspense>
         {tab === "3d" && (

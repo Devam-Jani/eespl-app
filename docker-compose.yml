@@ -77,6 +77,17 @@ services:
       - "127.0.0.1:1026:1025"
       - "127.0.0.1:8026:8025"
 
+  # Road distances for the travel claim: our own OSRM (MLD) on the Geofabrik western India extract,
+  # prepared into data/osrm/ by scripts/osrm-prepare.sh (gitignored). No port is published: only
+  # the api and the worker reach it. Locations never go to a third-party routing service.
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend:v5.27.1
+    container_name: eespl-osrm
+    restart: unless-stopped
+    command: osrm-routed --algorithm mld --max-table-size 200 /data/western-zone-latest.osrm
+    volumes:
+      - ./data/osrm:/data:ro
+
   # Phone testing over HTTPS on the office network only (camera, WebXR). Off unless asked for:
   #   LAN_IP=192.168.1.20 docker compose --profile lan-https up -d lan-https
   # Binds to the PC's LAN address only; see docs/phone-testing.md. Never port-forward it.

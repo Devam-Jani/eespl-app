@@ -83,6 +83,7 @@ def file_out(db, f: CadFile) -> dict:
         "inserts": s.get("inserts"), "layouts": s.get("layouts", []), "extents": s.get("extents"),
         "size_labels": s.get("size_labels"), "waterproofing_notes": s.get("waterproofing_notes"),
         "candidates": s.get("candidates"), "loose_notes": s.get("loose_notes", []),
+        "count_sets": s.get("count_sets"), "plan_titles": s.get("plan_titles", []), "sheet_unknown": s.get("sheet_unknown"),
         "warnings": f.warnings, "read_at": f.read_at,
     }  # fmt: skip
 
@@ -307,6 +308,33 @@ def area_out(db, a: CadArea, f: CadFile) -> dict:
     }  # fmt: skip
 
 
+def group_repeats(rows: list[dict]) -> list[dict]:
+    """One row for a name found many times on one sheet without a size (TERRACE, TERRACE ...):
+    the first stands for the rest, with their count and ids (until one is traced or mapped).
+    Labels with a size come first."""
+    out, groups = [], {}
+    for a in rows:
+        loose = (
+            a["label_area_sqm"] is None
+            and a["status"] == "candidate"
+            and not a["outline"]
+            and not a["node_id"]
+        )
+        if loose:
+            k = ((a["name"] or "").upper(), a["plan"])
+            if k in groups:
+                groups[k]["group_ids"].append(a["id"])
+                groups[k]["count"] += 1
+                continue
+            groups[k] = a
+        a["group_ids"], a["count"] = [a["id"]], 1
+        out.append(a)
+    out.sort(
+        key=lambda a: (a["label_area_sqm"] is None, a["plan"] or "~", -(a["y"] or 0), a["x"] or 0)
+    )
+    return out
+
+
 @router.get("/files/{fid}/areas")
 def areas(
     fid: int, db: DbSession, principal: CurrentPrincipal, scope: View, show: str = "waterproofing"
@@ -322,6 +350,7 @@ def areas(
     out = [area_out(db, a, f) for a in rows]
     if show == "waterproofing":
         out = [a for a in out if a["waterproofing"] or a["status"] != "candidate"]
+    out = group_repeats(out)
     return jsonable_encoder(
         {
             "file": file_out(db, f),
@@ -476,6 +505,7 @@ class AreaIn(BaseModel):
     system_id: int | None = None
     sunk_mm: Decimal | None = Field(None, ge=0, le=3000)
     status: str | None = Field(None, pattern="^(candidate|ignored)$")
+    plan: str | None = Field(None, max_length=200)  # the sheet, picked when it is unknown
 
 
 @router.put("/areas/{aid}")

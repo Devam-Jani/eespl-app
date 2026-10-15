@@ -130,13 +130,24 @@ SAMPLE_DATA = {
     "promised": "02 Oct 2026",
     "target": "20 Oct 2026",
     "received": "05 Oct 2026",
+    "person": "Invented salesperson",
+    "month": "2026-09",
+    "km": "533.4",
+    "claim_id": 1,
 }
 
 
 @pytest.mark.parametrize("rule", DEFAULT_RULES, ids=[r["code"] for r in DEFAULT_RULES])
 def test_each_rule_tells_the_right_people_on_its_site_and_nobody_on_another(rule, team, db):
     people = team["people"]
-    data = dict(SAMPLE_DATA, author_id=str(people["A"]["salesperson"].id))
+    # the travel claim's person and their manager (field tracking): two people of site A
+    who_is = {"author": "salesperson", "person": "salesperson", "manager": "site_engineer"}
+    data = dict(
+        SAMPLE_DATA,
+        author_id=str(people["A"]["salesperson"].id),
+        person_id=str(people["A"]["salesperson"].id),
+        manager_id=str(people["A"]["site_engineer"].id),
+    )
     ev = engine.emit(
         db, rule["event"], subject=f"test:{rule['code']}", site_id=team["A"], data=data
     )
@@ -144,7 +155,7 @@ def test_each_rule_tells_the_right_people_on_its_site_and_nobody_on_another(rule
     assert ev is not None
     for entry in rule["recipients"]:
         role = entry["role"]
-        who = people["A"]["salesperson"] if role == "author" else people["A"][role]
+        who = people["A"][who_is.get(role, role)]
         got = [n for n in notes(db, who) if n.rule_code == rule["code"]]
         assert got, f"{role} got nothing for {rule['code']}"
         assert got[0].site_id == team["A"] and got[0].needs_action == (not entry.get("info"))

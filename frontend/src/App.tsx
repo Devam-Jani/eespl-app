@@ -74,6 +74,17 @@ const Notifications = lazy(() => pr().then((m) => ({ default: m.Notifications })
 const Escalated = lazy(() => pr().then((m) => ({ default: m.Escalated })));
 const ProcessRules = lazy(() => pr().then((m) => ({ default: m.ProcessRules })));
 const MyNotificationSettings = lazy(() => pr().then((m) => ({ default: m.MyNotificationSettings })));
+const fd = () => import("./field/MyDay");
+const MyDay = lazy(() => fd().then((m) => ({ default: m.MyDay })));
+const fm = () => import("./field/Maps");
+const DayMap = lazy(() => fm().then((m) => ({ default: m.DayMap })));
+const TeamMap = lazy(() => fm().then((m) => ({ default: m.TeamMap })));
+const fc = () => import("./field/Claims");
+const Claims = lazy(() => fc().then((m) => ({ default: m.Claims })));
+const ClaimDetail = lazy(() => fc().then((m) => ({ default: m.ClaimDetail })));
+const fa = () => import("./field/Admin");
+const GangCheckIn = lazy(() => fa().then((m) => ({ default: m.GangCheckIn })));
+const FieldSettings = lazy(() => fa().then((m) => ({ default: m.FieldSettings })));
 const tm = () => import("./team/Pages");
 const MyWork = lazy(() => tm().then((m) => ({ default: m.MyWork })));
 const Enquiries = lazy(() => tm().then((m) => ({ default: m.Enquiries })));
@@ -143,6 +154,11 @@ const PAGES: Record<string, JSX.Element> = {
   "/surveys": <SurveysList />,
   "/quotations": <QuotationsList />,
   "/my-work": <MyWork />,
+  "/field": <MyDay />,
+  "/field/team": <TeamMap />,
+  "/field/claims": <Claims />,
+  "/field/gangs": <GangCheckIn />,
+  "/settings/field": <FieldSettings />,
   "/notifications": <Notifications />,
   "/escalated": <Escalated />,
   "/settings/process": <ProcessRules />,
@@ -326,6 +342,8 @@ export default function App() {
                   ["/quotations/:id/working", ["quotation.view"], <QuotationWorking />],
                   ["/prices/:id", ["tender.margin"], <ProductPrices />],
                   ["/sites/:id/takeoff", ["takeoff.view"], <TakeoffPage />],
+                  ["/field/days/:id", ["field.track", "field.claims"], <DayMap />],
+                  ["/field/claims/:id", ["field.track", "field.claims"], <ClaimDetail />],
                   ["/assignments/:id", ["jobs.assign", "planning.view"], <AssignmentPage />],
                   ["/sites/:id/material-plan", ["planning.view", "indent.view"], <MaterialPlan />],
                   ["/my-site/:id", ["site.view"], <SupervisorDay />],
