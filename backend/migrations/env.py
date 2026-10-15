@@ -17,6 +17,7 @@ import app.schedule.models  # noqa: F401  (project plan, lots, stage days)
 import app.sitecontrol.models  # noqa: F401  (registers the site control tables)
 import app.sites.models  # noqa: F401  (registers the site tables)
 import app.survey.models  # noqa: F401  (registers the survey tables)
+import app.takeoff.models  # noqa: F401  (AutoCAD takeoff)
 import app.team.models  # noqa: F401  (registers the team tables)
 import app.tenders.models  # noqa: F401  (registers the tender tables)
 from app.config import settings

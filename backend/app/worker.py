@@ -15,6 +15,7 @@ from app.analytics import worker as analytics
 from app.crm import worker as kylas
 from app.process import worker as process
 from app.quotations import worker as quotations
+from app.takeoff import pipeline as takeoff
 
 TICK = 60
 _stop = False
@@ -35,6 +36,7 @@ def main() -> None:
     last_poll = 0.0
     while True:
         jobs = [kylas.push_sweep, analytics.run_due, quotations.expire_sweep, process.process_sweep]
+        jobs.append(takeoff.sweep)  # AutoCAD drawings left queued (read in the API normally)
         if time.time() - last_poll >= kylas.POLL_EVERY or args.once:
             jobs.append(kylas.poll_sweep)
         for job in jobs:

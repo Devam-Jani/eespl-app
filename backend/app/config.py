@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     smtp_from: str = "EESPL App <noreply@eespl.local>"
     mailpit_host: str = "mailpit"
     mailpit_port: int = 1025
+    # AutoCAD takeoff: LibreDWG's dwg2dxf (built into the image), its timeout and the size limit
+    dwg2dxf_path: str = "/opt/libredwg/bin/dwg2dxf"
+    dwg_timeout_s: int = 300
+    dwg_max_mb: int = 50
     kylas_timeout_seconds: float = 20
 
     # Claude vision for survey photo suggestions (off unless enabled in survey settings). The key

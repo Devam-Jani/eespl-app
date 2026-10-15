@@ -46,6 +46,7 @@ from app.schedule import routes as schedule
 from app.sitecontrol import routers as sitecontrol
 from app.sites import routers as sites
 from app.survey import routers as survey
+from app.takeoff import routes as takeoff
 from app.team import routers as team
 from app.tenders import routers as tenders
 
@@ -105,6 +106,7 @@ for _r in (
     rate_working.router,
     labour_rates.router,
     schedule.router,
+    takeoff.router,
     analytics.dashboard,
     analytics.router,
     portal_staff.router,

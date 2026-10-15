@@ -101,7 +101,7 @@ MaybeUpdate = Annotated[str | None, Depends(optional_scope("site.update"))]
 
 PHOTO_TYPES = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
 PHOTO_MAX = 15 * 1024 * 1024
-DRAWING_TYPES = {".pdf", ".png", ".jpg", ".jpeg", ".dwg"}
+DRAWING_TYPES = {".pdf", ".png", ".jpg", ".jpeg", ".dwg", ".dxf"}  # dwg and dxf: read for areas
 DRAWING_MAX = 50 * 1024 * 1024
 
 
@@ -1423,7 +1423,7 @@ async def _store_revision(
 ) -> DrawingRevision:
     name = _safe(file.filename or "drawing.pdf")
     if Path(name).suffix.lower() not in DRAWING_TYPES:
-        raise unprocessable("Upload a drawing as PDF, PNG, JPG or DWG")
+        raise unprocessable("Upload a drawing as PDF, PNG, JPG, DWG or DXF")
     data = await file.read(DRAWING_MAX + 1)
     if len(data) > DRAWING_MAX:
         raise unprocessable("The drawing is larger than 50 MB")

@@ -619,6 +619,7 @@ export default function Site3DTab({
             <div className="tooltip3d" style={{ left: hover.x + 14, top: hover.y + 14 }}>
               <strong>{hover.node.name}</strong> <span className="muted">{hover.node.kind.replace("_", " ")}</span>
               <div>{Math.round(hover.node.status.percent)}% done</div>
+              {hover.node.autocad_sqm ? <div>AutoCAD: {hover.node.autocad_sqm} sqm</div> : null}
               {hover.node.status.current_step && <div>Now: {hover.node.status.current_step}</div>}
               {hover.node.status.next_step && <div>Next: {hover.node.status.next_step}</div>}
               {hover.node.status.waiting_certification && <div>Waiting for certification</div>}

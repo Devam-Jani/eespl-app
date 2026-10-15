@@ -120,6 +120,12 @@ export default function SiteDetail() {
                 <Link to={`/my-site/${site.id}`}>My site today</Link>
               </>
             )}
+            {can("takeoff.view") && (
+              <>
+                {" · "}
+                <Link to={`/sites/${site.id}/takeoff`}>AutoCAD takeoff</Link>
+              </>
+            )}
           </p>
         </div>
         <div className="rate-badge">

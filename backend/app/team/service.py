@@ -391,6 +391,46 @@ def material_plan(db: Session, site: Site, by: str = "stage", node_id: int | Non
             if ready:
                 r["ready"] += qty
                 t["ready"] += qty
+    # accepted AutoCAD areas on places without a BOQ item: their system (or the area type's) by
+    # the area taken off the drawing, the side walls of a sunken area included
+    from app.survey.models import AreaType  # noqa: PLC0415
+    from app.takeoff.models import CadArea, CadFile  # noqa: PLC0415
+
+    scoped = set(db.scalars(select(AreaScope.node_id).where(AreaScope.site_id == site.id)))
+    for a in db.scalars(
+        select(CadArea)
+        .join(CadFile, CadFile.id == CadArea.cad_file_id)
+        .where(
+            CadFile.site_id == site.id, CadArea.status == "accepted", CadArea.node_id.is_not(None)
+        )
+    ):
+        if a.node_id in scoped or (node_id and a.node_id != node_id):
+            continue
+        at = db.get(AreaType, a.area_type_id) if a.area_type_id else None
+        system_id = a.system_id or (at.default_system_id if at else None)
+        if not system_id:
+            continue
+        node = db.get(SiteNode, a.node_id)
+        ready = bool(node and node.front_ready)
+        app_w = wastage_for(db, f"{node_label(db, node)} {node.kind}") if node else None
+        if app_w:
+            applied[node.id] = app_w
+        sqm = Decimal(a.traced_area_sqm or a.label_area_sqm or 0) + Decimal(a.side_wall_sqm or 0)
+        key = "unscheduled" if by == "month" else "autocad"
+        label = "Not scheduled" if by == "month" else "AutoCAD takeoff (places without a BOQ item)"
+        g = groups.setdefault(key, {"key": key, "label": label, "rows": {}})
+        for c in db.scalars(select(SystemComponent).where(SystemComponent.system_id == system_id)):
+            if c.consumption_per_unit is None:
+                continue  # to confirm: not planned until filled
+            w = Decimal(str(app_w[1]["max"] if app_w else (c.wastage_percent or 0)))
+            qty = sqm * Decimal(c.consumption_per_unit) * (1 + w / 100)
+            r = g["rows"].setdefault(c.product_id, {"planned": ZERO, "ready": ZERO})
+            t = totals.setdefault(c.product_id, {"planned": ZERO, "ready": ZERO})
+            r["planned"] += qty
+            t["planned"] += qty
+            if ready:
+                r["ready"] += qty
+                t["ready"] += qty
     store_ids = list(db.scalars(select(Store.id).where(Store.site_id == site.id)))
     indented = dict(
         db.execute(
