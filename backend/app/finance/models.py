@@ -741,6 +741,8 @@ class Payslip(Tracked, Base):
     esi_employer: Mapped[Decimal] = money_col()
     pt: Mapped[Decimal] = money_col()
     advance_recovery: Mapped[Decimal] = money_col()
+    # approved travel claims paid with this month (a reimbursement: not part of the gross)
+    travel_reimbursement: Mapped[Decimal] = money_col()
     round_off: Mapped[Decimal] = money_col()  # net pay is rounded to the rupee
     net: Mapped[Decimal] = money_col()
     site_days: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")  # {site id: days}

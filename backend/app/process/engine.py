@@ -122,6 +122,10 @@ def resolve(db: Session, role: str, ev: ProcessEvent) -> tuple[list[uuid.UUID], 
     found: list = []
     if role == "author":
         found = [data.get("author_id") or ev.actor_id]
+    elif role == "person":  # the person the event is about (their own travel claim)
+        found = [data.get("person_id")]
+    elif role == "manager":  # that person's manager (field tracking profile)
+        found = [data.get("manager_id")]
     elif role == "director":
         found = _role_holders(db, "director") or _role_holders(db, "super_admin")
     elif role == "office_admin":

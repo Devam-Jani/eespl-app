@@ -49,7 +49,11 @@ ALL = [
     "measurement.edit", "dpr.approve", "labourcheck.check", "sendcheck.override",
     "scorecard.view", "sitevisit.log", "grants.manage", "process.rules", "process.escalations",
     "takeoff.view", "takeoff.edit",
+    "field.track", "field.team", "field.admin", "field.claims", "field.claims_approve",
+    "field.gang",
+    "site.location",
 ]  # fmt: skip
+TRACK = {"field.track": "own"}  # every staff user: their own day, map and claim
 
 
 def _all(*codes):
@@ -58,13 +62,20 @@ def _all(*codes):
 
 DIRECTOR_EXCLUDES = {"admin.users", "admin.roles", "admin.settings", "portal.view",
                      "portal.comment",
-                     "portal.snag", "portal.approve"}  # fmt: skip
+                     "portal.snag", "portal.approve",
+                     "field.admin", "field.claims_approve"}  # fmt: skip
 
 EXPECTED: dict[str, dict[str, str]] = {
     "super_admin": _all(*ALL),
     # sees and decides everything; users, roles and settings stay with office_admin
     "director": _all(*[c for c in ALL if c not in DIRECTOR_EXCLUDES]),
     "office_admin": _all(
+        "field.track",
+        "field.team",
+        "field.admin",
+        "field.claims",
+        "field.gang",
+        "site.location",
         "takeoff.view",
         "takeoff.edit",
         "admin.users",
@@ -143,7 +154,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "ratecontract.edit",
         "sitearea.approve",
     ),  # fmt: skip
-    "estimator": _all(
+    "estimator": TRACK | _all(
         "takeoff.view",
         "clients.view",
         "clients.edit",
@@ -163,7 +174,8 @@ EXPECTED: dict[str, dict[str, str]] = {
     ),  # fmt: skip
     # Mr. Sunil, Hardeep (Sr Engineer Billing & Planning): enquiries, the status board, material
     # planning, new areas, escalations; costs only if the director allows the person
-    "planning": _all(
+    "planning": TRACK | _all(
+        "site.location",
         "takeoff.view",
         "takeoff.edit",
         "leads.view",
@@ -197,7 +209,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "process.escalations",
     ),  # fmt: skip
     # Jr Engineer Billing, Assistant Manager Billing: no vendor payables, no payroll
-    "billing": _all(
+    "billing": TRACK | _all(
         "takeoff.view",
         "takeoff.edit",
         "billing.view",
@@ -251,6 +263,8 @@ EXPECTED: dict[str, dict[str, str]] = {
         ),
         "library.view": "all",
         "expense.create": "own",
+        "field.track": "own",
+        "site.location": "assigned",
     },  # fmt: skip
     "sales": {
         "takeoff.view": "assigned",
@@ -276,6 +290,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "quotation.send": "own",
         "sitevisit.log": "own",
         "scorecard.view": "own",
+        "field.track": "own",
     },
     "site_supervisor": {
         "site.view": "assigned",
@@ -300,8 +315,10 @@ EXPECTED: dict[str, dict[str, str]] = {
         "survey.edit": "assigned",
         "delivery.view": "assigned",
         "delivery.confirm": "assigned",
+        "field.track": "own",
+        "field.gang": "assigned",
     },
-    "store_purchase": _all(
+    "store_purchase": TRACK | _all(
         "vendors.view",
         "vendors.edit",
         "library.view",
@@ -323,7 +340,9 @@ EXPECTED: dict[str, dict[str, str]] = {
         "ratecontract.view",
         "ratecontract.edit",
     ),  # fmt: skip
-    "accounts": _all(
+    "accounts": TRACK | _all(
+        "field.claims",
+        "field.claims_approve",
         "clients.view",
         "vendors.view",
         "settings.company",

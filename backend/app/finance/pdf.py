@@ -225,6 +225,7 @@ def payslip(db: Session, run: PayrollRun, p: Payslip, user: User) -> bytes:
 <tbody>{rows}<tr><td><b>Gross</b></td><td class="num"><b>{e(inr(p.gross))}</b></td><td><b>Total deductions</b></td>
 <td class="num"><b>{e(inr(total_ded))}</b></td></tr></tbody></table>
 <table class="totals"><tr><td>Gross less deductions</td><td class="num">{e(inr(Decimal(p.gross) - total_ded))}</td></tr>
+{f'<tr><td>Travel reimbursement (approved travel claim, not salary)</td><td class="num">{e(inr(p.travel_reimbursement))}</td></tr>' if Decimal(p.travel_reimbursement or 0) else ""}
 <tr><td>Round off</td><td class="num">{e(inr(p.round_off))}</td></tr>
 <tr><td><b>Net pay</b></td><td class="num"><b>{e(inr(p.net))}</b></td></tr></table>
 <div class="words">{e(in_words(p.net))}</div>

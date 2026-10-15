@@ -21,6 +21,7 @@ from app.execution import dpr as ex_dpr
 from app.execution import inspections as ex_inspections
 from app.execution import labour as ex_labour
 from app.execution import subcon as ex_subcon
+from app.field import routes as field
 from app.finance import billing as fin_billing
 from app.finance import payables as fin_payables
 from app.finance import payroll as fin_payroll
@@ -107,6 +108,7 @@ for _r in (
     labour_rates.router,
     schedule.router,
     takeoff.router,
+    field.router,
     analytics.dashboard,
     analytics.router,
     portal_staff.router,

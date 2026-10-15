@@ -495,6 +495,7 @@ def round_net(p: Payslip) -> None:
         - Decimal(p.esi_employee)
         - Decimal(p.pt)
         - Decimal(p.advance_recovery)
+        + Decimal(p.travel_reimbursement or 0)
     )
     p.net = exact.quantize(Decimal(1), ROUND_HALF_UP)
     p.round_off = p.net - exact

@@ -464,6 +464,7 @@ def main(argv: list[str] | None = None) -> None:
         "create-director",
         help="The director's user from DIRECTOR_EMAIL in .env (set the password with set-password)",
     )
+    sub.add_parser("seed-demo-field", help="DEMO field tracking: a day, a month's claim, gangs")
     sub.add_parser(
         "seed-demo-team",
         help="One invented demo user per role (password from DEMO_USER_PASSWORD in .env)",
@@ -496,6 +497,12 @@ def main(argv: list[str] | None = None) -> None:
         run_make_offer_template()
     elif args.command == "create-director":
         create_director()
+    elif args.command == "seed-demo-field":
+        from app.field.demo import seed  # noqa: PLC0415
+
+        with SessionLocal() as db:
+            for line in seed(db):
+                print(line)
     elif args.command == "seed-demo-team":
         from app.team.demo import seed  # noqa: PLC0415
 

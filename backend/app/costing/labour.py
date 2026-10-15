@@ -301,6 +301,29 @@ def gang_lines(db: Session, contractor_id: int, start: date, end: date) -> list[
             a.ot_rate_per_hour
         )
         s["days"] += 1
+    # the supervisor's gang check-ins: each person's hours on each site (a worker with a muster
+    # roll entry that day is counted there, not twice); a headcount without names at the gang's
+    # average wage
+    from app.field.service import gang_hours  # noqa: PLC0415
+
+    marked = set(db.execute(select(Attendance.labour_id, Attendance.on_date).join(Labour, Labour.id == Attendance.labour_id)
+                            .where(Labour.subcontractor_id == contractor_id, Attendance.on_date >= start, Attendance.on_date <= end)).all())  # fmt: skip
+    gang = {
+        w.id: w for w in db.scalars(select(Labour).where(Labour.subcontractor_id == contractor_id))
+    }
+    wages = [Decimal(w.daily_wage) for w in gang.values() if w.daily_wage]
+    average = sum(wages, ZERO) / len(wages) if wages else ZERO
+    worker_days: set = set()
+    for (site_id, labour_id, on), hours in gang_hours(db, contractor_id, start, end).items():
+        if labour_id is not None and (labour_id, on) in marked:
+            continue
+        s = by_site[site_id]
+        wage = Decimal(gang[labour_id].daily_wage) if labour_id in gang else average
+        s["hours"] += hours
+        s["amount"] += hours / day * wage
+        if (site_id, labour_id, on) not in worker_days:
+            worker_days.add((site_id, labour_id, on))
+            s["days"] += 1
     out = []
     for site_id, s in sorted(by_site.items()):
         site = db.get(Site, site_id)
