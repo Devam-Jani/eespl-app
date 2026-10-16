@@ -173,6 +173,12 @@ Send anyway? Give the reason:`);
                 <Link to={`/surveys?tender=${tender.id}`}>Surveys</Link>
               </>
             )}
+            {can("methodology.view") && (
+              <>
+                {" · "}
+                <Link to={`/methodology?tender=${tender.id}`}>Methodology</Link>
+              </>
+            )}
           </p>
         </div>
         <div className="page-actions">

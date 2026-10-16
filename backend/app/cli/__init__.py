@@ -21,6 +21,7 @@ import argparse
 import getpass
 import sys
 from collections import Counter
+from pathlib import Path
 
 from sqlalchemy import select
 
@@ -470,6 +471,18 @@ def main(argv: list[str] | None = None) -> None:
     )
     p.add_argument("--again", action="store_true", help="read files already read again")
     sub.add_parser("group-boqs", help="Group the knowledge library again (unreviewed templates)")
+    sub.add_parser(
+        "demo-methodology", help="DEMO: the Godrej Phase-11 methodology (built, checked, exported)"
+    )
+    p = sub.add_parser("seed-methodology", help="Seed the method library from our offers (.docx)")
+    p.add_argument("paths", nargs="+")
+    p = sub.add_parser(
+        "import-standard", help="Import a client standard from a folder of SOP PDFs and sheets"
+    )
+    p.add_argument("folder")
+    p.add_argument("--name", required=True)
+    p.add_argument("--client", default=None)
+    p.add_argument("--demo", action="store_true")
     p.add_argument("--limit", type=int, default=None)
     sub.add_parser(
         "seed-demo-team",
@@ -533,6 +546,45 @@ def main(argv: list[str] | None = None) -> None:
             s.last_run |= out
             db.commit()
         print(out | {"usual_by_area": units["usual_by_area"]})
+    elif args.command == "demo-methodology":
+        import json  # noqa: PLC0415
+
+        import app.main  # noqa: F401, PLC0415  (every model registered)
+        from app.methodology import demo as mdemo  # noqa: PLC0415
+
+        with SessionLocal() as db:
+            out = mdemo.run(db)
+            db.commit()
+        print(json.dumps(out, indent=1, default=str))
+    elif args.command == "seed-methodology":
+        import app.main  # noqa: F401, PLC0415  (every model registered)
+        from app.methodology import seed as mseed  # noqa: PLC0415
+
+        with SessionLocal() as db:
+            report = mseed.seed(db, [Path(p) for p in args.paths])
+            db.commit()
+        fixes = report.pop("fixes")
+        confirm = report.pop("to_confirm")
+        print(report)
+        print(f"fixes: {len(fixes)}")
+        for f in fixes:
+            print(f"  {f['where']}: {f['before']!r} -> {f['after']!r} ({f['why']})")
+        print(f"to confirm (two offers differ): {len(confirm)}")
+        for x in confirm:
+            print(f"  {x['system']} {x['label']}: {x['note']}")
+    elif args.command == "import-standard":
+        import app.main  # noqa: F401, PLC0415  (every model registered)
+        from app.methodology import sop  # noqa: PLC0415
+
+        with SessionLocal() as db:
+            std = sop.import_standard(db, Path(args.folder), args.name, args.client, demo=args.demo)
+            db.commit()
+            r = dict(std.report)
+            per = r.pop("per_sop")
+        print(r)
+        for x in per:
+            sop_ref = f"{x['sop_no']} rev {x['revision']} ({x['format']})"
+            print(f"  {x['file']}: {sop_ref}, {x['rules']} rule(s)")
     elif args.command == "seed-demo-field":
         from app.field.demo import seed  # noqa: PLC0415
 

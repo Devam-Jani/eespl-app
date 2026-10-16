@@ -85,6 +85,12 @@ const ClaimDetail = lazy(() => fc().then((m) => ({ default: m.ClaimDetail })));
 const fa = () => import("./field/Admin");
 const GangCheckIn = lazy(() => fa().then((m) => ({ default: m.GangCheckIn })));
 const FieldSettings = lazy(() => fa().then((m) => ({ default: m.FieldSettings })));
+const md = () => import("./methodology/Pages");
+const MethodologyHome = lazy(() => md().then((m) => ({ default: m.MethodologyHome })));
+const MethodSystemPage = lazy(() => md().then((m) => ({ default: m.SystemPage })));
+const StandardPage = lazy(() => md().then((m) => ({ default: m.StandardPage })));
+const MethodologyPage = lazy(() => md().then((m) => ({ default: m.MethodologyPage })));
+const SiteMethodology = lazy(() => md().then((m) => ({ default: m.SiteMethodology })));
 const kn = () => import("./knowledge/Pages");
 const KnowledgeHome = lazy(() => kn().then((m) => ({ default: m.KnowledgeHome })));
 const TemplatePage = lazy(() => kn().then((m) => ({ default: m.TemplatePage })));
@@ -160,6 +166,7 @@ const PAGES: Record<string, JSX.Element> = {
   "/my-work": <MyWork />,
   "/field": <MyDay />,
   "/knowledge": <KnowledgeHome />,
+  "/methodology": <MethodologyHome />,
   "/field/team": <TeamMap />,
   "/field/claims": <Claims />,
   "/field/gangs": <GangCheckIn />,
@@ -349,6 +356,10 @@ export default function App() {
                   ["/sites/:id/takeoff", ["takeoff.view"], <TakeoffPage />],
                   ["/field/days/:id", ["field.track", "field.claims"], <DayMap />],
                   ["/knowledge/templates/:id", ["knowledge.view"], <TemplatePage />],
+                  ["/methodology/systems/:id", ["methodology.view"], <MethodSystemPage />],
+                  ["/methodology/standards/:id", ["methodology.view"], <StandardPage />],
+                  ["/methodology/m/:id", ["methodology.view"], <MethodologyPage />],
+                  ["/sites/:id/methodology", ["methodology.site"], <SiteMethodology />],
                   ["/knowledge/match/tender/:id", ["knowledge.view"], <MatchPage />],
                   ["/field/claims/:id", ["field.track", "field.claims"], <ClaimDetail />],
                   ["/assignments/:id", ["jobs.assign", "planning.view"], <AssignmentPage />],
