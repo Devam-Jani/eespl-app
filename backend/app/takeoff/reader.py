@@ -5,6 +5,7 @@ counts, texts and multi-line texts with their positions, dimensions with their v
 layouts. The geometry for the viewer is written as compact JSON (segments per layer)."""
 
 import gzip
+import io
 import json
 import math
 from collections import Counter, defaultdict
@@ -40,6 +41,7 @@ class Parsed:
     layouts: list[str] = field(default_factory=list)
     # sheet frames: [x1, y1, x2, y2, source] (title-block rectangles, layout viewport windows)
     frames: list[list] = field(default_factory=list)
+    repairs: int = 0  # raw line breaks inside values joined back (see repair)
     # model-space clusters: the bounding boxes of groups of drawn things that touch [x1, y1, x2, y2]
     clusters: list[list] = field(default_factory=list)
     extents: list[float] | None = None
@@ -52,6 +54,7 @@ class Parsed:
             "texts": len(self.texts), "dimensions": len(self.dimensions),
             "inserts": len(self.inserts), "blocks": sorted({i["block"] for i in self.inserts})[:300],
             "layouts": self.layouts, "extents": self.extents, "frames": self.frames, "clusters": self.clusters,
+            "dxf_repairs": self.repairs,
         }  # fmt: skip
 
 
@@ -108,20 +111,49 @@ def _size(e) -> float:
         return 1.0
 
 
+def repair(data: bytes) -> tuple[bytes, int]:
+    r"""dwg2dxf writes some multi-line texts with raw line breaks, so a strict reader fails
+    ("Invalid group code ... at line N"). A DXF is pairs of lines (group code, value): a line where
+    a group code is expected that is not one is the rest of the value above, joined back onto it (as
+    a text line break, \P, for text values). (repaired DXF, how many lines were joined)"""
+    lines = data.split(b"\n")
+    out: list[bytes] = []
+    expect_code, code, repairs = True, None, 0
+    last = len(lines) - 1
+    for i, raw in enumerate(lines):
+        s = raw.rstrip(b"\r").strip()
+        if expect_code:
+            if s.lstrip(b"-").isdigit() or (i == last and not s) or not out:
+                out.append(raw)
+                code = int(s) if s.lstrip(b"-").isdigit() else None
+                expect_code = False
+            else:
+                prev = out.pop().rstrip(b"\r")
+                sep = rb"\P" if code in (1, 3) else b" "
+                out.append(prev + sep + raw)
+                repairs += 1
+        else:
+            out.append(raw)
+            expect_code = True
+    return (b"\n".join(out) if repairs else data), repairs
+
+
 def read(path: Path, version: str | None = None, hidden: set[str] | None = None) -> Parsed:
     """Read the DXF (recovering from the errors converted drawings carry)."""
     import ezdxf  # noqa: PLC0415  (only the takeoff needs it)
     from ezdxf import recover  # noqa: PLC0415
 
     try:
-        doc, _auditor = recover.readfile(str(path))
+        data, repairs = repair(path.read_bytes())
+        doc, _auditor = recover.read(io.BytesIO(data))
     except (OSError, ezdxf.DXFStructureError) as exc:
         raise CadError(
             f"The drawing could not be read after conversion ({type(exc).__name__})."
         ) from exc
     code = int(doc.header.get("$INSUNITS", 0) or 0)
+    dxf_repairs = repairs
     name, unit_m = UNITS.get(code, (f"code {code}", None))
-    out = Parsed(version=version, units_code=code, unit_name=name, unit_m=unit_m)
+    out = Parsed(version=version, units_code=code, unit_name=name, unit_m=unit_m, repairs=dxf_repairs)
     hidden = hidden or set()
     counts: Counter = Counter()
     top: Counter = Counter()

@@ -101,7 +101,7 @@ def client_lines(db: Session, w: RateWorking) -> list[dict]:
         from app.tenders.models import BoqLine, BoqSection  # noqa: PLC0415
 
         rows = db.execute(
-            select(BoqLine, BoqSection.sort_order)
+            select(BoqLine, BoqSection)
             .outerjoin(BoqSection, BoqSection.id == BoqLine.section_id)
             .where(BoqLine.tender_id == w.tender_id)
             .order_by(BoqSection.sort_order.nulls_first(), BoqLine.sort_order, BoqLine.id)
@@ -119,8 +119,10 @@ def client_lines(db: Session, w: RateWorking) -> list[dict]:
                 "system_id": ln.system_id,
                 "library_item_id": ln.library_item_id,
                 "status": ln.status,
+                "parent": f"s{sec.id}" if sec else None,
+                "parent_name": sec.title if sec else None,
             }
-            for ln, _s in rows
+            for ln, sec in rows
         ]
     from app.quotations.models import QuotationItem, QuotationLine  # noqa: PLC0415
 
@@ -143,6 +145,8 @@ def client_lines(db: Session, w: RateWorking) -> list[dict]:
             "system_id": ln.system_id,
             "library_item_id": ln.library_item_id,
             "status": None,
+            "parent": f"i{item.id}",
+            "parent_name": item.name,
         }
         for ln, item in rows
     ]
@@ -279,12 +283,51 @@ def _best_system(db: Session, line: dict) -> int | None:
     )
 
 
+# a client line that is one step of a system (the Deep Vyana / Ladani layout: surface preparation,
+# pipe sleeve packing, brick bat, the coating, protection, each a line with its own rate)
+STEP_KINDS: list[tuple[str, str]] = [
+    (
+        "surface_prep",
+        r"surface\s*prep|cleaning|grinding|chipping|hacking|opening\s*(of\s*)?the\s*cracks",
+    ),
+    ("pipe", r"pipe\s*sleeve|pipe\s*packing|pipe\s*penetration|sleeve\s*packing|outlet"),
+    ("filling", r"brick\s*bat|\bbbc|screed|filling|\bips\b|block\s*wall|brick\s*wall"),
+    ("protection", r"protect|plaster|\btil(e|es|ing)\b|geo\s*textile"),
+    ("coving", r"coving|\bvata\b|fillet"),
+    ("termination", r"terminat"),
+    ("coating", r"waterproof|water\s*proof|coating|membrane|\bcoat\b|polymer|crystalline|primer"),
+]
+
+
+def step_of(text: str | None) -> str | None:
+    """The step a line (or a build-up row) is, from its first words, else all of them."""
+    t = (text or "").lower()
+    head = re.split(r"[:.;]", t, maxsplit=1)[0]
+    for part in (head, t):
+        for kind, pat in STEP_KINDS:
+            if re.search(pat, part):
+                return kind
+    return None
+
+
 def suggest(db: Session, w: RateWorking, user_id=None) -> list[RateGroup]:
     """Group the lines not in a group yet: by system (the line's or its best system candidate),
     else by close item text (and the same kind of unit). New groups get the system's build-up."""
     grouped = {_line_key(gl) for g in w.groups for gl in g.lines}
     clusters: list[dict] = []
-    for line in client_lines(db, w):
+    lines = [x for x in client_lines(db, w) if x["key"] not in grouped]
+    # the steps of one system under one item or section: one main item for the system
+    by_parent: dict[str, list[dict]] = {}
+    for x in lines:
+        if x.get("parent"):
+            by_parent.setdefault(x["parent"], []).append(x)
+    for members in by_parent.values():
+        kinds = {step_of(x["description"]) for x in members} - {None}
+        if len(members) >= 2 and len(kinds) >= 2:
+            clusters.append({"system_id": next((_best_system(db, x) for x in members if _best_system(db, x)), None),
+                             "family": "area", "tokens": set(), "lines": members, "name": members[0]["parent_name"]})  # fmt: skip
+            grouped |= {x["key"] for x in members}
+    for line in lines:
         if line["key"] in grouped:
             continue
         sid = _best_system(db, line)
@@ -312,7 +355,7 @@ def suggest(db: Session, w: RateWorking, user_id=None) -> list[RateGroup]:
         g = RateGroup(
             working_id=w.id,
             sort_order=start + i,
-            name=system.name if system else _name_from(c["lines"]),
+            name=c.get("name") or (system.name if system else _name_from(c["lines"])),
             system_id=system.id if system else None,
             created_by=user_id,
         )
@@ -652,6 +695,46 @@ def _line_rate(db: Session, g: RateGroup, gl) -> tuple:
     return ln, unit, None, None
 
 
+def step_shares(db: Session, w: RateWorking, g: RateGroup) -> dict[str, Decimal] | None:
+    """A main item whose client lines are steps of one system (surface preparation, pipe sleeve,
+    brick bat, the coating, protection): each line's rate per sqm from its own part of the
+    build-up, at the item's margin (labour and anything unmatched go to the coating line). None
+    when the lines are not steps."""
+    lines = {x["key"]: x for x in client_lines(db, w)}
+    kinds = {
+        _line_key(gl): step_of(lines[_line_key(gl)]["description"])
+        for gl in g.lines
+        if _line_key(gl) in lines
+    }
+    if len(set(kinds.values()) - {None}) < 2:
+        return None
+    result = work(db, g)
+    if not result.get("rows") or not g.cost_sqm or not g.rate_sqm:
+        return None
+    factor = Decimal(g.rate_sqm) / Decimal(g.cost_sqm)
+    parts: dict[str, Decimal] = {}
+    for r in result["rows"]:
+        item = r["item"]
+        kind = (
+            "surface_prep"
+            if item == "Surface preparation"
+            else "coating"
+            if item == "Labour"
+            else (step_of(item) or "coating")
+        )
+        parts[kind] = parts.get(kind, Decimal(0)) + Decimal(r["per_sqm"] or 0)
+    present = {k or "coating" for k in kinds.values()}
+    home = (
+        "coating" if "coating" in present else max(present, key=lambda k: parts.get(k, Decimal(0)))
+    )
+    for k in list(parts):
+        if k not in present:
+            parts[home] = parts.get(home, Decimal(0)) + parts.pop(k)
+    return {
+        key: money(parts.get(kind or "coating", Decimal(0)) * factor) for key, kind in kinds.items()
+    }
+
+
 def apply_rates(db: Session, w: RateWorking) -> dict:
     """Every client line in a worked group gets the group's rate (sqm or sq ft); a line in another
     unit is left for a person (reported)."""
@@ -660,11 +743,18 @@ def apply_rates(db: Session, w: RateWorking) -> dict:
     for g in w.groups:
         if g.rate_sqm is None:
             continue
+        shares = step_shares(db, w, g)
         for gl in g.lines:
             ln, unit, rate, cost = _line_rate(db, g, gl)
             if rate is None:
                 skipped.append({"line": gl.boq_line_id or gl.quotation_line_id, "unit": unit})
                 continue
+            share = shares.get(_line_key(gl)) if shares else None
+            if share is not None:  # a step line: its own part of the build-up, at the margin
+                per_sqm = Decimal(share)
+                cost = per_sqm * Decimal(g.cost_sqm) / Decimal(g.rate_sqm) if g.rate_sqm else cost
+                rate = per_sqm if unit == "sqm" else money(per_sqm / SQFT_PER_SQM)
+                cost = cost if unit == "sqm" else cost / SQFT_PER_SQM
             ln.rate, ln.cost_rate, ln.margin_percent = (
                 rate,
                 cost.quantize(Decimal("0.0001")),
@@ -700,10 +790,14 @@ def unsent(db: Session, w: RateWorking | None) -> dict | None:
         work(db, g)
         if g.rate_sqm is None:
             continue
+        shares = step_shares(db, w, g)
         for gl in g.lines:
             ln, unit, rate, _cost = _line_rate(db, g, gl)
             if rate is None:
                 continue
+            share = shares.get(_line_key(gl)) if shares else None
+            if share is not None:  # a step line: its own part of the build-up
+                rate = Decimal(share) if unit == "sqm" else money(Decimal(share) / SQFT_PER_SQM)
             line_rate = money(Decimal(ln.rate)) if ln.rate is not None else None
             if line_rate != money(rate):
                 rows.append({

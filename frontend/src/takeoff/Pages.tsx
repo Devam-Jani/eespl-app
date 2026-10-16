@@ -42,6 +42,7 @@ type CadFile = {
   sheet_unknown?: number | null;
   sheet_guessed?: number | null;
   warnings: number;
+  dxf_repairs?: number;
   changes?: {
     previous: number | null;
     added: Brief[];
@@ -357,6 +358,7 @@ function Workspace({
         <CountSets file={file} />
         {file.architect && <> · layers of {file.architect}</>}
         {file.warnings > 0 && <span className="muted"> · {file.warnings} converter warnings</span>}
+        {(file.dxf_repairs ?? 0) > 0 && <span className="muted"> · {file.dxf_repairs} broken text line(s) repaired in the DXF</span>}
       </div>
       <div className="takeoff-grid">
         <div className="takeoff-canvas-wrap">

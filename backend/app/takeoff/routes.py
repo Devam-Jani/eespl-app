@@ -84,7 +84,7 @@ def file_out(db, f: CadFile) -> dict:
         "size_labels": s.get("size_labels"), "waterproofing_notes": s.get("waterproofing_notes"),
         "candidates": s.get("candidates"), "loose_notes": s.get("loose_notes", []),
         "count_sets": s.get("count_sets"), "plan_titles": s.get("plan_titles", []), "sheet_unknown": s.get("sheet_unknown"), "sheet_guessed": s.get("sheet_guessed"),
-        "warnings": f.warnings, "read_at": f.read_at,
+        "warnings": f.warnings, "dxf_repairs": s.get("dxf_repairs", 0), "read_at": f.read_at,
     }  # fmt: skip
 
 

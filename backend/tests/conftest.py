@@ -83,7 +83,7 @@ PER_TEST_TABLES = [
     "field_profiles", "field_consents", "field_settings", "field_holidays", "product_consumptions",
     "knowledge_matches", "knowledge_fixes", "knowledge_lines", "knowledge_templates",
     "knowledge_files",
-    "knowledge_settings",
+    "knowledge_settings", "knowledge_product_reviews",
 ]  # fmt: skip
 # seeded rows of truncated tables, put back after every test (copied once per run)
 SEED_COPIES = ["finance_settings", "letter_templates", "letterheads", "quotation_settings"]

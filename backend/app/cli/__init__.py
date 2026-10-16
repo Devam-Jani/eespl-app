@@ -517,13 +517,22 @@ def main(argv: list[str] | None = None) -> None:
 
         with SessionLocal() as db:
             library.historic(db, library.settings(db).regions or {})
+            library.refresh_families(db)
+            units = library.check_units(db)
             made = library.regroup(db)
+            far = library.flag_far_rates(db)
             rows = library.consumption(db)
             s = library.settings(db)
             s.last_run = {**(s.last_run or {}), **library.reading_report(db)}
-            s.last_run |= {"templates_made": made, "consumption_rows": rows}
+            out = {
+                "templates_made": made,
+                "consumption_rows": rows,
+                "units_converted": units["converted"],
+                "far_rates_flagged": far,
+            }
+            s.last_run |= out
             db.commit()
-        print({"templates_made": made, "consumption_rows": rows})
+        print(out | {"usual_by_area": units["usual_by_area"]})
     elif args.command == "seed-demo-field":
         from app.field.demo import seed  # noqa: PLC0415
 

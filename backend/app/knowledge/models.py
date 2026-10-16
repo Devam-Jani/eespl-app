@@ -201,3 +201,38 @@ class KnowledgeMatch(Base):
     status: Mapped[str] = mapped_column(String(10), server_default="proposed")
     by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ProductReview(Base):
+    """A product our old workings used that the product master does not have: waits here (name,
+    the old price, where it came from, a suggested match) until planning accepts it into the
+    master, merges it into a product (as an alias), or rejects it."""
+
+    __tablename__ = "knowledge_product_reviews"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'accepted', 'merged', 'rejected')", name="status_valid"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), index=True)
+    unit: Mapped[str | None] = mapped_column(String(20))
+    old_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    source: Mapped[str | None] = mapped_column(Text)  # the template / BOQs it came from
+    template_id: Mapped[int | None] = mapped_column(
+        ForeignKey("knowledge_templates.id", ondelete="SET NULL")
+    )
+    suggested_product_id: Mapped[int | None] = mapped_column(
+        ForeignKey("products.id", ondelete="SET NULL")
+    )
+    status: Mapped[str] = mapped_column(String(10), server_default="pending")
+    product_id: Mapped[int | None] = mapped_column(
+        ForeignKey("products.id", ondelete="SET NULL")
+    )  # after the decision
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
