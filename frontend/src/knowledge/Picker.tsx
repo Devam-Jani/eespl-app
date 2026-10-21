@@ -38,6 +38,8 @@ export type ProductRow = {
   freight_near: string | null;
 };
 export type Proposal = Brief & {
+  why?: string[];
+  workings?: number;
   score: number;
   confidence: number;
   rates: { city: string | null; region: string | null; city_stats: Stats; region_stats: Stats; all_stats: Stats; unit: string | null };
@@ -263,6 +265,7 @@ export function LibraryPicker({ groupId, onApplied, onClose }: { groupId: number
                     Use this
                   </button>
                 </div>
+                {t.why && <p className="small muted">Why here: {t.why.join(" · ")}</p>}
                 <p className="small">
                   {t.description.slice(0, 420)}
                   {t.description.length > 420 ? "…" : ""}

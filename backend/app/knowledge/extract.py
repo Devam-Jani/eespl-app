@@ -62,6 +62,10 @@ SURFACES: list[tuple[str, str]] = [
     ("rcc", r"\brcc\b|r\.c\.c|concrete|slab\b|raft|wall\s*surface"),
 ]
 FAMILIES: list[tuple[str, str]] = [
+    # a layer that names the line on its own (a geotextile over the coating is a geotextile line)
+    ("geotextile", r"geo\s*-?\s*textile"),
+    ("brick_bat_coba", r"brick\s*bat|\bbbc\b|\bbbcc\b"),
+    ("china_mosaic", r"china\s*mosaic"),
     ("crystalline", r"crystal"),
     ("pu", r"\bpu\b|polyurethane|poly\s*urethane"),
     ("polyurea", r"polyurea"),
@@ -84,6 +88,7 @@ FAMILY_LABEL = {
     "crystalline": "crystalline", "pu": "PU", "polyurea": "polyurea", "acrylic": "acrylic", "cementitious": "cementitious",
     "app_membrane": "APP membrane", "sbs_membrane": "SBS membrane", "hdpe": "HDPE", "pvc_tpo": "PVC / TPO", "bituminous": "bituminous",
     "epoxy": "epoxy", "injection": "injection", "liquid_membrane": "liquid membrane", "swellable": "swellable / water bar",
+    "geotextile": "geotextile", "brick_bat_coba": "brick bat coba", "china_mosaic": "china mosaic",
 }  # fmt: skip
 BRANDS: list[tuple[str, str]] = [
     ("Dr. Fixit / Pidilite", r"dr\.?\s*fixit|pidilite"), ("Sika", r"\bsika"), ("Fosroc", r"fosroc"),

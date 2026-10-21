@@ -1994,6 +1994,9 @@ def _post_grn(db: Session, g: Grn, user_id) -> None:
         ind = db.get(Indent, i)
         db.refresh(ind)
         svc.refresh_indent(ind)
+    from app.methodology import site as methodology_site  # noqa: PLC0415
+
+    methodology_site.on_delivery(db, g)  # a planned material test of the site becomes due
 
 
 @router.post("/grns/{grn_id}/approve")

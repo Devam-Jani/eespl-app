@@ -2027,6 +2027,9 @@ def set_status(
             from app.knowledge import hooks as knowledge  # noqa: PLC0415
 
             knowledge.won_quotation(db, q)  # its workings become new evidence in the library
+            from app.methodology import site as methodology_site  # noqa: PLC0415
+
+            methodology_site.on_win_quotation(db, q, tender, site, principal.user.id)
             extra = {
                 "tender_id": tender.id,
                 "tender_code": tender.code,

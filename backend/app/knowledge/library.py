@@ -177,9 +177,11 @@ def run(
         text("UPDATE knowledge_lines SET working = NULL WHERE working = 'null'::jsonb")
     )  # rows stored before none_as_null
     db.commit()
+    units = check_units(db)
     made = group(db)
+    far = flag_far_rates(db)
     rows = consumption(db)
-    report = reading_report(db) | {"templates_made": made, "consumption_rows": rows, "seconds": round(time.time() - t0),
+    report = reading_report(db) | {"templates_made": made, "units_converted": units["converted"], "far_rates_flagged": far, "consumption_rows": rows, "seconds": round(time.time() - t0),
                                    "source_folder": str(base)}  # fmt: skip
     s.last_run = report
     s.source_folder = str(base)
@@ -540,5 +542,95 @@ def consumption(db: Session) -> int:
                                   source_ref=f"{total} old BOQ working(s), {used} at this figure; e.g. {refs[(pid, surface, coats, kg, dft)]}"[:2000],
                                   to_check=len(counts) > 2))  # fmt: skip
         n += 1
+    db.flush()
+    return n
+
+
+# --- rate units ---------------------------------------------------------------------------------------
+
+
+def check_units(db: Session) -> dict:
+    """Our offers often quote per sq ft while the BOQ's unit column says sqm (terrace at ₹65 "per
+    sqm" is ₹65 per sq ft). A line read as per sqm is taken as per sq ft (rate × 10.7639) when
+    its rate is under a fifth of the usual rate for its area type, the converted rate falls in
+    the usual range, and its own unit was blank or its sheet's other lines are per sq ft. Then
+    every line still more than 5× away from its template's median is marked "unit to check"."""
+    lines = list(
+        db.scalars(
+            select(KnowledgeLine).where(
+                KnowledgeLine.rate_sqm.is_not(None), KnowledgeLine.hidden.is_(False)
+            )
+        )
+    )
+    by_area: dict[str, list[Decimal]] = defaultdict(list)
+    for ln in lines:
+        if ln.area_type and ln.rate_sqm and Decimal(ln.rate_sqm) >= 150:
+            by_area[ln.area_type].append(Decimal(ln.rate_sqm))
+    usual = {a: Decimal(statistics.median(v)) for a, v in by_area.items() if len(v) >= 5}
+    sheet_sqft: dict[tuple, bool] = defaultdict(bool)
+    for ln in lines:
+        if ln.unit in ("sqft", "sft"):
+            sheet_sqft[(ln.file_id, ln.sheet)] = True
+    changed = 0
+    for ln in lines:
+        m = usual.get(ln.area_type or "")
+        if not m or ln.unit != "sqm" or (ln.check_note or "").startswith("unit read as sq ft"):
+            continue
+        r = Decimal(ln.rate_sqm)
+        conv = r * Decimal("10.7639")
+        blank = not (ln.unit_raw or "").strip()
+        if (
+            r < m / 5
+            and m / Decimal("2.5") <= conv <= m * Decimal("2.5")
+            and (blank or sheet_sqft[(ln.file_id, ln.sheet)])
+        ):
+            ln.rate_sqm = conv.quantize(Decimal("0.01"))
+            ln.to_check, ln.check_note = (
+                True,
+                f"unit read as sq ft: ₹{r} per sq ft is ₹{ln.rate_sqm} per sqm (×10.7639)",
+            )
+            changed += 1
+    db.flush()
+    return {"converted": changed, "usual_by_area": {k: str(round(v)) for k, v in usual.items()}}
+
+
+def flag_far_rates(db: Session) -> int:
+    """After grouping: a line more than 5× away from its template's median: "unit to check"."""
+    n = 0
+    meds = {
+        t.id: t.median_rate
+        for t in db.scalars(
+            select(KnowledgeTemplate).where(KnowledgeTemplate.median_rate.is_not(None))
+        )
+    }
+    for ln in db.scalars(select(KnowledgeLine).where(KnowledgeLine.template_id.is_not(None))):
+        med = meds.get(ln.template_id)
+        r = ln.rate_sqm if ln.rate_sqm is not None else ln.rate
+        if not med or not r or Decimal(r) <= 0:
+            continue
+        ratio = Decimal(r) / Decimal(med)
+        if (ratio > 5 or ratio < Decimal("0.2")) and not (ln.check_note or "").startswith(
+            "unit to check"
+        ):
+            ln.to_check, ln.check_note = (
+                True,
+                f"unit to check: ₹{r} is {round(ratio, 1)}× the template median ₹{med}",
+            )
+            n += 1
+    db.flush()
+    return n
+
+
+def refresh_families(db: Session) -> int:
+    """The system families of every stored line worked again from its words (after the family
+    list changed), keeping the area, surface and requirements as read."""
+    n = 0
+    for ln in db.scalars(select(KnowledgeLine)):
+        req = extract.requirements(ln.parent_item, ln.description, ln.remarks, ln.product_make)
+        r = dict(ln.requirements or {})
+        if r.get("families") != req.families:
+            r["families"] = req.families
+            ln.requirements = r
+            n += 1
     db.flush()
     return n

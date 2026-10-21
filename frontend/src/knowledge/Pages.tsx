@@ -37,6 +37,7 @@ export function KnowledgeHome() {
   const [error, setError] = useState<string | null>(null);
   const q = params.get("q") ?? "";
   const area = params.get("area") ?? "";
+  const singles = params.get("singles") === "1";
   useEffect(() => {
     api<Report>("/api/knowledge/report").then(setR, (e) => setError(errorText(e)));
     api<{ areas: { key: string; label: string }[] }>("/api/knowledge/options").then(
@@ -45,8 +46,10 @@ export function KnowledgeHome() {
     );
   }, []);
   useEffect(() => {
-    api<Brief[]>(`/api/knowledge/templates?limit=300${q ? `&q=${encodeURIComponent(q)}` : ""}${area ? `&area=${area}` : ""}`).then(setRows, (e) => setError(errorText(e)));
-  }, [q, area]);
+    api<Brief[]>(`/api/knowledge/templates?limit=300${singles ? "&singles=true" : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}${area ? `&area=${area}` : ""}`).then(setRows, (e) =>
+      setError(errorText(e)),
+    );
+  }, [q, area, singles]);
   const setP = (k: string, v: string) => {
     const n = new URLSearchParams(params);
     if (v) n.set(k, v);
@@ -113,6 +116,8 @@ export function KnowledgeHome() {
           )}
         </div>
       )}
+      <ReviewQueue />
+      <ProductsToReview />
       <div className="card top-gap">
         <div className="form-row">
           <input value={q} onChange={(e) => setP("q", e.target.value)} placeholder="Search templates (sunken toilet, crystalline, PU…)" aria-label="Search" />
@@ -124,6 +129,9 @@ export function KnowledgeHome() {
               </option>
             ))}
           </select>
+          <label className="small">
+            <input type="checkbox" checked={singles} onChange={(e) => setP("singles", e.target.checked ? "1" : "")} /> show single-line templates
+          </label>
         </div>
         <table className="table compact">
           <thead>
@@ -443,6 +451,7 @@ export function TemplatePage() {
               </button>
             </div>
           )}
+          <MergeSuggestions id={t.id} canEdit={t.can_edit} onMerged={(into) => (window.location.href = `/knowledge/templates/${into}`)} />
           {t.fixes.length > 0 && (
             <details>
               <summary className="small">{t.fixes.length} change(s) by hand</summary>
@@ -551,5 +560,130 @@ export function MatchPage() {
         </tbody>
       </table>
     </>
+  );
+}
+
+/** Templates not reviewed yet, the most used first (single-line ones hidden). */
+function ReviewQueue() {
+  const [rows, setRows] = useState<(Brief & { merge_suggestions: number })[]>([]);
+  useEffect(() => {
+    api<typeof rows>("/api/knowledge/review-queue?limit=15").then(setRows, () => undefined);
+  }, []);
+  if (!rows.length) return null;
+  return (
+    <details className="card top-gap" open>
+      <summary>
+        <b>Review queue</b> <span className="small muted">templates not reviewed yet, the most used first</span>
+      </summary>
+      <table className="table compact">
+        <tbody>
+          {rows.map((t) => (
+            <tr key={t.id}>
+              <td>
+                <Link to={`/knowledge/templates/${t.id}`}>{t.name}</Link>
+              </td>
+              <td className="num small">{t.boqs} BOQ(s)</td>
+              <td className="small">{t.merge_suggestions ? <span className="badge badge-warn">{t.merge_suggestions} near-duplicate(s)</span> : null}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </details>
+  );
+}
+
+type Review = { id: number; name: string; old_price: string | null; source: string | null; suggested: { id: number; name: string } | null; status: string };
+
+/** Products the old workings used that the master does not have: they join it only when planning
+ * accepts or merges them. */
+function ProductsToReview() {
+  const { can } = useAuth();
+  const [rows, setRows] = useState<Review[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(() => api<Review[]>("/api/knowledge/product-reviews").then(setRows, () => undefined), []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  if (!rows.length) return null;
+  const decide = (r: Review, json: Record<string, unknown>) => api(`/api/knowledge/product-reviews/${r.id}`, { method: "POST", json }).then(load, (e) => setError(errorText(e)));
+  return (
+    <details className="card top-gap" open>
+      <summary>
+        <b>Products to review ({rows.length})</b> <span className="small muted">not in the product master: accept, merge into a product we have, or reject</span>
+      </summary>
+      {error && <div className="alert alert-error">{error}</div>}
+      <table className="table compact">
+        <thead>
+          <tr>
+            <th>Name in the old workings</th>
+            <th className="num">Old price</th>
+            <th>From</th>
+            <th>Suggested match</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id}>
+              <td>{r.name}</td>
+              <td className="num">{inr(r.old_price)}</td>
+              <td className="small muted">{r.source}</td>
+              <td className="small">{r.suggested?.name ?? "—"}</td>
+              <td>
+                {can("knowledge.edit") && (
+                  <span className="inline-form">
+                    {r.suggested && (
+                      <button className="btn btn-small" onClick={() => void decide(r, { action: "merge", product_id: r.suggested!.id })}>
+                        Merge into {r.suggested.name}
+                      </button>
+                    )}
+                    <button className="btn btn-small" onClick={() => void decide(r, { action: "accept" })}>
+                      Accept
+                    </button>
+                    <button className="btn btn-small btn-ghost" onClick={() => void decide(r, { action: "reject" })}>
+                      Reject
+                    </button>
+                  </span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </details>
+  );
+}
+
+function MergeSuggestions({ id, canEdit, onMerged }: { id: number; canEdit: boolean; onMerged: (into: number) => void }) {
+  const [rows, setRows] = useState<Brief[]>([]);
+  useEffect(() => {
+    api<Brief[]>(`/api/knowledge/templates/${id}/merge-suggestions`).then(setRows, () => undefined);
+  }, [id]);
+  if (!rows.length) return null;
+  return (
+    <details className="top-gap">
+      <summary className="small">{rows.length} near-duplicate(s): the same area and system, worded differently</summary>
+      <table className="table compact">
+        <tbody>
+          {rows.map((x) => (
+            <tr key={x.id}>
+              <td className="small">
+                <Link to={`/knowledge/templates/${x.id}`}>{x.name}</Link> ({x.boqs} BOQs, median {inr(x.median_rate)})
+              </td>
+              <td>
+                {canEdit && (
+                  <button
+                    className="btn btn-small"
+                    onClick={() => void api(`/api/knowledge/templates/${id}/merge`, { method: "POST", json: { into_id: x.id } }).then(() => onMerged(x.id))}
+                  >
+                    Merge this into it
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </details>
   );
 }

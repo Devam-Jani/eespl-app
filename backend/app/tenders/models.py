@@ -92,6 +92,10 @@ class Tender(Tracked, Base):
     revision: Mapped[int] = mapped_column(Integer, server_default="0")
     lost_note: Mapped[str | None] = mapped_column(Text)
     guarantee_years: Mapped[int | None] = mapped_column(Integer)  # the send checklist
+    # the client's waterproofing standard the methodology is checked against (Godrej SOPs)
+    client_standard_id: Mapped[int | None] = mapped_column(
+        ForeignKey("client_standards.id", ondelete="SET NULL")
+    )
     # awaiting award: the last follow-up reminder; the lead made for the contractor who won
     award_followup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     winner_lead_id: Mapped[int | None] = mapped_column(ForeignKey("leads.id", ondelete="SET NULL"))

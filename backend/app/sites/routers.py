@@ -370,6 +370,12 @@ def create_from_tender(
     db.add(site)
     db.flush()
     material.site_store(db, site, principal.user.id)
+    from app.methodology import site as methodology_site  # noqa: PLC0415
+
+    # the won tender's methodology: its stage templates, pond tests and material tests, and the
+    # client's copy shared in the portal
+    if methodology_site.on_win(db, tender, site.id, principal.user.id) is not None:
+        methodology_site.share_latest(db, tender, site.id, principal.user.id)
     _record(
         db,
         request,

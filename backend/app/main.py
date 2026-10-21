@@ -39,6 +39,7 @@ from app.masters.routers import (
     vendors,
 )
 from app.material import routers as material
+from app.methodology import routes as methodology
 from app.portal import routers as portal
 from app.portal import staff as portal_staff
 from app.process import routers as process
@@ -111,6 +112,7 @@ for _r in (
     takeoff.router,
     field.router,
     knowledge.router,
+    methodology.router,
     analytics.dashboard,
     analytics.router,
     portal_staff.router,

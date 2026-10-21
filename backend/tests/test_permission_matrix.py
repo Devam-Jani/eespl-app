@@ -52,6 +52,7 @@ ALL = [
     "field.track", "field.team", "field.admin", "field.claims", "field.claims_approve",
     "field.gang",
     "site.location", "knowledge.view", "knowledge.cost", "knowledge.edit",
+    "methodology.view", "methodology.edit", "methodology.compliance", "methodology.site",
 ]  # fmt: skip
 TRACK = {"field.track": "own"}  # every staff user: their own day, map and claim
 
@@ -70,6 +71,10 @@ EXPECTED: dict[str, dict[str, str]] = {
     # sees and decides everything; users, roles and settings stay with office_admin
     "director": _all(*[c for c in ALL if c not in DIRECTOR_EXCLUDES]),
     "office_admin": _all(
+        "methodology.view",
+        "methodology.edit",
+        "methodology.compliance",
+        "methodology.site",
         "knowledge.view",
         "knowledge.cost",
         "knowledge.edit",
@@ -158,6 +163,10 @@ EXPECTED: dict[str, dict[str, str]] = {
         "sitearea.approve",
     ),  # fmt: skip
     "estimator": TRACK | _all(
+        "methodology.view",
+        "methodology.edit",
+        "methodology.compliance",
+        "methodology.site",
         "knowledge.view",
         "knowledge.cost",
         "knowledge.edit",
@@ -181,6 +190,10 @@ EXPECTED: dict[str, dict[str, str]] = {
     # Mr. Sunil, Hardeep (Sr Engineer Billing & Planning): enquiries, the status board, material
     # planning, new areas, escalations; costs only if the director allows the person
     "planning": TRACK | _all(
+        "methodology.view",
+        "methodology.edit",
+        "methodology.compliance",
+        "methodology.site",
         "knowledge.view",
         "knowledge.cost",
         "knowledge.edit",
@@ -274,6 +287,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "expense.create": "own",
         "field.track": "own",
         "site.location": "assigned",
+        "methodology.site": "assigned",
     },  # fmt: skip
     "sales": {
         "takeoff.view": "assigned",
@@ -301,6 +315,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "scorecard.view": "own",
         "field.track": "own",
         "knowledge.view": "all",
+        "methodology.view": "own",
     },
     "site_supervisor": {
         "site.view": "assigned",

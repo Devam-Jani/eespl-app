@@ -128,6 +128,12 @@ export default function SiteDetail() {
                 <Link to={`/sites/${site.id}/takeoff`}>AutoCAD takeoff</Link>
               </>
             )}
+            {can("methodology.site") && (
+              <>
+                {" · "}
+                <Link to={`/sites/${site.id}/methodology`}>Methodology</Link>
+              </>
+            )}
           </p>
         </div>
         <div className="rate-badge">

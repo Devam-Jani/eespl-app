@@ -47,6 +47,7 @@ export const MENU: MenuItem[] = [
   { to: "/systems", label: "Systems (rate calculator)", perms: ["library.view"], section: "Masters" },
   { to: "/rate-library", label: "Rate library", perms: ["library.view"], section: "Masters" },
   { to: "/knowledge", label: "BOQ knowledge", perms: ["knowledge.view"], section: "Masters" },
+  { to: "/methodology", label: "Methodology builder", perms: ["methodology.view"], section: "Masters" },
   { to: "/tc-library", label: "T&C library", perms: ["library.view"], section: "Masters" },
   { to: "/vendors", label: "Vendors", perms: ["vendors.view"], section: "Masters" },
   { to: "/settings/company", label: "Company profile", perms: ["settings.company"], section: "Settings" },

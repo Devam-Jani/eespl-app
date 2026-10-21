@@ -86,11 +86,15 @@ def templates(
     q: str | None = None,
     area: str | None = None,
     hidden: bool = False,
+    singles: bool = False,
     limit: int = 200,
 ) -> list[dict]:
+    """Single-line templates are hidden unless asked for (singles=true)."""
     query = select(KnowledgeTemplate).where(KnowledgeTemplate.merged_into_id.is_(None))
     if not hidden:
         query = query.where(KnowledgeTemplate.hidden.is_(False))
+    if not singles:
+        query = query.where(KnowledgeTemplate.lines_count > 1)
     if area:
         query = query.where(KnowledgeTemplate.area_type == area)
     if q:
@@ -483,7 +487,7 @@ def apply(
             "group": group,
             "gap": out["gap"],
             "missing_products": out["missing_products"],
-            "added_products": out["added_products"],
+            "to_review": out["added_products"],
             "template": service.template_brief(t),
         }
     )
@@ -632,3 +636,120 @@ def put_settings(
 
 def _median(values):
     return statistics.median(values) if values else None
+
+
+# --- products to review -------------------------------------------------------------------------------
+
+
+def review_out(db, r) -> dict:
+    from app.masters.models import Product  # noqa: PLC0415
+
+    sug = db.get(Product, r.suggested_product_id) if r.suggested_product_id else None
+    done = db.get(Product, r.product_id) if r.product_id else None
+    return {"id": r.id, "name": r.name, "unit": r.unit, "old_price": r.old_price, "source": r.source, "template_id": r.template_id,
+            "suggested": {"id": sug.id, "name": sug.name} if sug else None, "status": r.status,
+            "product": {"id": done.id, "name": done.name} if done else None, "note": r.note, "created_at": r.created_at}  # fmt: skip
+
+
+@router.get("/product-reviews")
+def product_reviews(
+    db: DbSession, _: View, status_: Annotated[str | None, Query(alias="status")] = "pending"
+) -> list[dict]:
+    from app.knowledge.models import ProductReview  # noqa: PLC0415
+
+    q = select(ProductReview).order_by(ProductReview.created_at.desc())
+    if status_:
+        q = q.where(ProductReview.status == status_)
+    return jsonable_encoder([review_out(db, r) for r in db.scalars(q.limit(500))])
+
+
+class ReviewIn(BaseModel):
+    action: str = Field(pattern="^(accept|merge|reject)$")
+    name: str | None = Field(None, max_length=200)
+    unit: str = Field("kg", max_length=20)
+    product_id: int | None = None
+    note: str | None = Field(None, max_length=1000)
+
+
+@router.post("/product-reviews/{rid}")
+def decide_review(
+    rid: int, body: ReviewIn, request: Request, db: DbSession, principal: CurrentPrincipal, _: Edit
+) -> dict:
+    """Planning decides: accept into the master (with the old price, to check), merge into a
+    product we have (its name becomes an alias), or reject."""
+    from datetime import UTC, datetime  # noqa: PLC0415
+
+    from app.knowledge.models import ProductReview  # noqa: PLC0415
+
+    r = db.get(ProductReview, rid)
+    if r is None or r.status != "pending":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Already decided")
+    if body.action == "accept":
+        r.product_id, r.status = (
+            service.accept_review(db, r, body.name, body.unit, principal.user.id),
+            "accepted",
+        )
+    elif body.action == "merge":
+        if not body.product_id:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Pick the product it is")
+        try:
+            service.merge_review(db, r, body.product_id)
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        r.product_id, r.status = body.product_id, "merged"
+    else:
+        r.status = "rejected"
+    r.decided_by, r.decided_at, r.note = principal.user.id, datetime.now(UTC), body.note
+    record(
+        db,
+        request,
+        principal,
+        "knowledge.product_review",
+        "knowledge_product_review",
+        r.id,
+        after=body.model_dump(),
+    )
+    db.commit()
+    return jsonable_encoder(review_out(db, r))
+
+
+# --- the review queue and merge suggestions ----------------------------------------------------------------
+
+
+@router.get("/review-queue")
+def review_queue(db: DbSession, _: View, limit: int = 100, singles: bool = False) -> list[dict]:
+    """Templates not reviewed yet, the most used first (single-line ones hidden unless asked)."""
+    q = select(KnowledgeTemplate).where(KnowledgeTemplate.merged_into_id.is_(None), KnowledgeTemplate.hidden.is_(False),
+                                        KnowledgeTemplate.reviewed.is_(False))  # fmt: skip
+    if not singles:
+        q = q.where(KnowledgeTemplate.lines_count > 1)
+    rows = db.scalars(
+        q.order_by(
+            KnowledgeTemplate.files_count.desc(), KnowledgeTemplate.lines_count.desc()
+        ).limit(min(limit, 500))
+    )
+    return jsonable_encoder(
+        [
+            service.template_brief(t) | {"merge_suggestions": len(merge_suggestions(db, t))}
+            for t in rows
+        ]
+    )
+
+
+def merge_suggestions(db, t: KnowledgeTemplate) -> list[KnowledgeTemplate]:
+    """Near-duplicates: the same area, unit and main system family, worded differently (another
+    surface reading, another kg figure)."""
+    fam = (t.families or [None])[0]
+    q = select(KnowledgeTemplate).where(
+        KnowledgeTemplate.id != t.id, KnowledgeTemplate.merged_into_id.is_(None), KnowledgeTemplate.hidden.is_(False),
+        KnowledgeTemplate.area_type == t.area_type, KnowledgeTemplate.unit == t.unit,
+    )  # fmt: skip
+    out = [x for x in db.scalars(q) if (x.families or [None])[0] == fam]
+    return sorted(out, key=lambda x: -(x.files_count or 0))[:8]
+
+
+@router.get("/templates/{tid}/merge-suggestions")
+def template_merge_suggestions(tid: int, db: DbSession, _: View) -> list[dict]:
+    return jsonable_encoder(
+        [service.template_brief(x) for x in merge_suggestions(db, _template(db, tid))]
+    )

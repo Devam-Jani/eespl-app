@@ -10,12 +10,12 @@ from collections import Counter, defaultdict
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.knowledge import extract
 from app.knowledge.library import _product_index, jaccard, match_product, settings, words
-from app.knowledge.models import KnowledgeFile, KnowledgeLine, KnowledgeTemplate
+from app.knowledge.models import KnowledgeFile, KnowledgeLine, KnowledgeTemplate, ProductReview
 
 SQFT = Decimal("10.7639")
 NOT_PRODUCT = re.compile(r"margin|profit|overhead|total|gst|\btax\b|contingenc", re.I)
@@ -233,55 +233,81 @@ def products(
 # --- proposing templates for a new main item ----------------------------------------------------------
 
 
-def score(
-    t: KnowledgeTemplate,
-    area,
-    surface,
-    coats,
-    kg,
-    dft,
-    protection,
-    brand,
-    text_words,
-    city_lines: int,
-) -> float:
+SURFACE_NAME = {
+    "rcc": "RCC",
+    "brick": "brick",
+    "plaster": "plaster",
+    "screed": "screed",
+    "old_tiles": "old tiles",
+    "metal": "metal",
+}
+
+
+def score(t: KnowledgeTemplate, area, surface, coats, kg, dft, protection, brand, text_words,
+          city_lines: int, region_lines: int) -> tuple[float, list[str]]:  # fmt: skip
+    """How well the template fits, and why: the area must be the one asked; then the surface and
+    the client's requirements; then the past rates near the place (the city, then the region)
+    and the number of BOQs it comes from. -1: not this area."""
+    why: list[str] = []
     s = 0.0
     if area:
         if t.area_type != area:
-            return -1
-        s += 40
+            return -1, ["another area"]
+        why.append(f"area {extract.AREA_LABEL.get(area, area)} ✓")
     if surface:
-        s += 20 if t.surface == surface else (5 if not t.surface else -10)
-    if coats:
-        s += 10 if t.coats == coats else (0 if not t.coats else -5)
-    if kg:
-        s += (
-            10
-            if t.min_kg_sqm and Decimal(t.min_kg_sqm) == Decimal(kg)
-            else (
-                4
-                if t.min_kg_sqm and abs(Decimal(t.min_kg_sqm) - Decimal(kg)) <= Decimal("0.3")
-                else 0
+        if t.surface == surface:
+            s += 6
+            why.append(f"surface {SURFACE_NAME.get(surface, surface)} ✓")
+        elif t.surface:
+            why.append(
+                f"surface {SURFACE_NAME.get(t.surface, t.surface)} (asked {SURFACE_NAME.get(surface, surface)})"
             )
-        )
-    if dft:
-        s += 10 if t.dft_mm and Decimal(t.dft_mm) == Decimal(dft) else 0
+    if coats:
+        if t.coats == coats:
+            s += 10
+            why.append(f"{coats} coats ✓")
+        elif t.coats:
+            s -= 4
+            why.append(f"{t.coats} coats (asked {coats})")
+    if kg:
+        if t.min_kg_sqm and Decimal(t.min_kg_sqm) == Decimal(kg):
+            s += 10
+            why.append(f"{kg} kg/sqm ✓")
+        elif t.min_kg_sqm and abs(Decimal(t.min_kg_sqm) - Decimal(kg)) <= Decimal("0.3"):
+            s += 4
+            why.append(f"{t.min_kg_sqm.normalize():f} kg/sqm, close to {kg}")
+    if dft and t.dft_mm and Decimal(t.dft_mm) == Decimal(dft):
+        s += 10
+        why.append(f"{dft} mm DFT ✓")
     desc = (t.description or "").lower()
     if protection and protection in desc:
         s += 3
+        why.append(f"{protection} protection ✓")
     if brand and brand.split()[0].lower() in desc:
         s += 4
+        why.append(f"{brand} ✓")
     if text_words:
-        s += 20 * jaccard(text_words, words(t.description))
-    s += min(10, 3 * math.log1p(t.files_count or 0))
-    s += min(6, 2 * city_lines)
-    return s
+        sim = jaccard(text_words, words(t.description))
+        s += 20 * sim
+        if sim >= 0.3:
+            why.append(f"words {round(100 * sim)} % alike")
+    near = min(24, 4 * city_lines) + min(12, 1.5 * region_lines)
+    s += near
+    if city_lines or region_lines:
+        why.append(f"{city_lines} rate(s) in the city, {region_lines} in the region")
+    else:
+        why.append("no past rate near the place")
+    s += min(16, 4 * math.log1p(t.files_count or 0))
+    why.append(f"{t.files_count} BOQ(s)")
+    return s, why
 
 
 def propose(db: Session, area=None, surface=None, coats=None, kg=None, dft=None, protection=None, brand=None, city=None,
             unit="sqm", text=None, limit=6, with_cost=False) -> list[dict]:  # fmt: skip
-    """The templates that fit what was picked, best first, each with its products and consumption for
-    that surface, its steps, and the past rates near the place (with margins for cost users)."""
+    """The templates that fit what was picked, best first (how well they match, then the rates near
+    the place and the number of BOQs), each with why it ranks there, its products and consumption
+    for that surface, its steps, and the past rates near the place (margins for cost users). A
+    template without workings still shows: its rates and products are useful."""
     q = select(KnowledgeTemplate).where(
         KnowledgeTemplate.hidden.is_(False),
         KnowledgeTemplate.merged_into_id.is_(None),
@@ -292,15 +318,19 @@ def propose(db: Session, area=None, surface=None, coats=None, kg=None, dft=None,
     if area:
         q = q.where(KnowledgeTemplate.area_type == area)
     tw = words(text) if text else set()
-    cand = []
+    region = region_of(db, city)
     city_count: Counter = Counter()
+    region_count: Counter = Counter()
     if city:
-        for (tid,) in db.execute(
-            select(KnowledgeLine.template_id).where(KnowledgeLine.city.ilike(city))
-        ).all():
-            city_count[tid] += 1
+        for tid, lcity, lregion in db.execute(select(KnowledgeLine.template_id, KnowledgeLine.city, KnowledgeLine.region).where(
+                KnowledgeLine.template_id.is_not(None), (KnowledgeLine.city.ilike(city)) | (KnowledgeLine.region == region))):  # fmt: skip
+            if lcity and lcity.lower() == city.lower():
+                city_count[tid] += 1
+            elif region and lregion == region:
+                region_count[tid] += 1
+    cand = []
     for t in db.scalars(q):
-        sc = score(
+        sc, why = score(
             t,
             area,
             surface,
@@ -311,37 +341,32 @@ def propose(db: Session, area=None, surface=None, coats=None, kg=None, dft=None,
             brand,
             tw,
             city_count[t.id],
+            region_count[t.id],
         )
         if sc >= 0:
-            cand.append((sc, t))
+            cand.append((sc, why, t))
     cand.sort(key=lambda x: -x[0])
-    built: dict[int, dict] = {}
-    if with_cost:
-        # a template whose workings used products we have in the master can be priced today
-        rescored = []
-        for sc, t in cand[:25]:
-            p = built[t.id] = products(db, t, surface, city)
-            priced = sum(
-                1
-                for x in p["products"]
-                if (x["product_id"] or x["price_median"]) and x["consumption"] is not None
-            )
-            rescored.append((sc + min(15, 8 * priced), t))
-        cand = sorted(rescored, key=lambda x: -x[0]) + cand[25:]
     out = []
     best = cand[0][0] if cand else 1
-    for sc, t in cand[:limit]:
+    for sc, why, t in cand[:limit]:
         r = rates(db, t, city, with_cost)
+        workings = (
+            db.scalar(
+                select(func.count())
+                .select_from(KnowledgeLine)
+                .where(KnowledgeLine.template_id == t.id, KnowledgeLine.working.is_not(None))
+            )
+            or 0
+        )
+        if not workings:
+            why.append("no working to price, fill from the system")
         item = template_brief(t) | {
-            "score": round(sc, 1),
+            "score": round(sc, 1), "why": why, "workings": workings,
             "confidence": round(min(100.0, 100 * sc / max(best, 1)) if best > 0 else 0, 0),
-            "rates": {
-                k: r[k]
-                for k in ("city", "region", "city_stats", "region_stats", "all_stats", "unit")
-            },
-        }
+            "rates": {k: r[k] for k in ("city", "region", "city_stats", "region_stats", "all_stats", "unit")},
+        }  # fmt: skip
         if with_cost:
-            item["products"] = built.get(t.id) or products(db, t, surface, city)
+            item["products"] = products(db, t, surface, city)
             item["margins"] = margins(db, t)
         out.append(item)
     return out
@@ -379,12 +404,13 @@ def fill_group(db: Session, g, t: KnowledgeTemplate, city: str | None, surface: 
     missing, added = [], []
     for i, it in enumerate(x for x in p["products"] if x["consumption"] is not None):
         if not it["product_id"]:
-            pid = product_from_old_boq(db, it, t, user_id)
-            if pid is None:
-                missing.append(it["label"])
-                continue
-            it["product_id"] = pid
-            added.append(it["label"])
+            # not in the product master: on the list of products to review (planning decides)
+            r = to_review(db, it, t)
+            added.append(
+                {"label": it["label"], "review_id": r.id, "old_price": it.get("price_median")}
+            )
+            missing.append(it["label"])
+            continue
         prod = working.new_product(
             db,
             it["product_id"],
@@ -432,34 +458,73 @@ def fill_group(db: Session, g, t: KnowledgeTemplate, city: str | None, surface: 
     }
 
 
-def product_from_old_boq(db: Session, it: dict, t: KnowledgeTemplate, user_id) -> int | None:
-    """A product our old workings used that the master does not have: added to the master (code
-    BOQ-..., marked by its code and its price note to check) with the price the old workings used,
-    so the working can be priced; never for a line without a price."""
+def suggest_match(db: Session, name: str) -> int | None:
+    """The existing product whose name is closest (words alike), when close enough."""
+    from app.masters.models import Product  # noqa: PLC0415
+
+    w = words(name)
+    best, sim = None, 0.0
+    for p in db.scalars(select(Product).where(Product.is_active.is_(True))):
+        s = jaccard(w, words(" ".join([p.name, *(p.aliases or [])])))
+        if s > sim:
+            best, sim = p.id, s
+    return best if sim >= 0.3 else None
+
+
+def to_review(db: Session, it: dict, t: KnowledgeTemplate) -> ProductReview:
+    """A product a template's workings used that the master does not have: put on the list of
+    products to review (never straight into the master)."""
+    label = " ".join((it.get("label") or "").split())[:200]
+    r = db.scalar(
+        select(ProductReview).where(
+            func.lower(ProductReview.name) == label.lower(), ProductReview.status == "pending"
+        )
+    )
+    if r is None:
+        r = ProductReview(name=label, unit=None, old_price=it.get("price_median"), template_id=t.id,
+                          source=f"{it.get('boqs', 0)} old BOQ working(s) of template {t.name}"[:2000],
+                          suggested_product_id=suggest_match(db, label))  # fmt: skip
+        db.add(r)
+        db.flush()
+    return r
+
+
+def accept_review(db: Session, r, name: str | None, unit: str, user_id) -> int:
+    """Planning accepts it: a product of the master, with the old price as its first price (to
+    check). Returns the product id."""
     import re  # noqa: PLC0415
 
     from app.costing import prices  # noqa: PLC0415
     from app.masters.models import Product  # noqa: PLC0415
 
-    label = " ".join((it.get("label") or "").split())
-    if not it.get("price_median") or len(label) < 3:
-        return None
+    label = (name or r.name).strip()
     code = ("BOQ-" + re.sub(r"[^A-Z0-9]+", "-", label.upper()).strip("-"))[:50]
     p = db.scalar(select(Product).where(Product.code == code))
     if p is None:
         p = Product(
             code=code,
-            name=label.title()[:200],
-            unit="kg",
-            aliases=[label.lower()[:200]],
+            name=label[:200],
+            unit=unit,
+            aliases=[r.name.lower()[:200]],
             created_by=user_id,
         )
         db.add(p)
         db.flush()
-    if prices.current(db, p.id) is None:
-        prices.record_price(db, p.id, Decimal(it["price_median"]), source="manual", user_id=user_id, ref=f"knowledge template {t.id}",
-                            note=f"The price our old BOQ workings used ({it['boqs']} BOQ(s), template {t.name}); from an old BOQ, check it")  # fmt: skip
+    if r.old_price and prices.current(db, p.id) is None:
+        prices.record_price(db, p.id, Decimal(r.old_price), source="manual", user_id=user_id, ref=f"product review {r.id}",
+                            note=f"The price our old BOQ workings used ({r.source}); check it")  # fmt: skip
     return p.id
+
+
+def merge_review(db: Session, r, product_id: int) -> None:
+    """It is a product we have: its name becomes an alias, so the workings find it next time."""
+    from app.masters.models import Product  # noqa: PLC0415
+
+    p = db.get(Product, product_id)
+    if p is None:
+        raise ValueError("Unknown product")
+    if r.name.lower() not in [a.lower() for a in (p.aliases or [])]:
+        p.aliases = [*(p.aliases or []), r.name.lower()[:200]]
 
 
 def gap_to_past(

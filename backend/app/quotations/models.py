@@ -382,6 +382,9 @@ class Quotation(Tracked, Base):
     quote_date: Mapped[date] = mapped_column(Date)
     validity_days: Mapped[int] = mapped_column(Integer, server_default="30")
     guarantee_years: Mapped[int | None] = mapped_column(Integer)  # the send checklist
+    client_standard_id: Mapped[int | None] = mapped_column(
+        ForeignKey("client_standards.id", ondelete="SET NULL")
+    )
     status: Mapped[str] = mapped_column(String(12), server_default="draft", index=True)
     lost_reason: Mapped[str | None] = mapped_column(String(20))
     lost_note: Mapped[str | None] = mapped_column(Text)

@@ -533,6 +533,10 @@ def update_tender(
         from app.knowledge import hooks as knowledge  # noqa: PLC0415
 
         knowledge.won_tender(db, tender)  # its workings become new evidence in the library
+        from app.methodology import site as methodology_site  # noqa: PLC0415
+
+        won_site = db.scalar(select(Site).where(Site.tender_id == tender.id))
+        methodology_site.on_win(db, tender, won_site.id if won_site else None, principal.user.id)
     if submitting:
         revision = revisions.submit(db, tender, principal.user.id, None)
         from app.process import hooks  # noqa: PLC0415
@@ -1596,9 +1600,7 @@ def export_xlsx(
 
     w = (
         db.scalar(
-            select(RateWorking).where(
-                RateWorking.tender_id == tender.id, RateWorking.rev_no == rev
-            )
+            select(RateWorking).where(RateWorking.tender_id == tender.id, RateWorking.rev_no == rev)
         )
         if rev is not None
         else working.for_tender(db, tender, principal.user.id)
