@@ -369,6 +369,11 @@ class Inspection(Tracked, Base):
     client_signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     client_signature_path: Mapped[str | None] = mapped_column(String(400))
     photos: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default="[]")
+    # the quality checklist: the stage's dates; the client's sign recorded by our staff
+    stage_started_on: Mapped[date | None] = mapped_column(Date)
+    stage_ended_on: Mapped[date | None] = mapped_column(Date)
+    client_recorded_by_staff: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    client_signed_copy_path: Mapped[str | None] = mapped_column(String(400))
 
     template: Mapped[ChecklistTemplate] = relationship(lazy="joined")
 

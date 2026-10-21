@@ -4,6 +4,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 import app.analytics.models  # noqa: F401  (registers the analytics tables and indexes)
+import app.closeout.models  # noqa: F401  (work orders, billing, close-out)
 import app.costing.models  # noqa: F401  (rate working, freight, labour rates and bills)
 import app.crm.models  # noqa: F401  (registers the CRM tables)
 import app.execution.models  # noqa: F401  (registers the execution tables)

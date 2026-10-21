@@ -97,8 +97,53 @@ def sections(db: Session, site_id: int) -> dict[str, bool]:
     return {s: bool(chosen.get(s, True)) for s in SECTIONS}
 
 
+# --- client roles (project manager, planning, site, billing, accounts) -----------------------
+
+# what each portal section needs: any one of these rights
+SECTION_RIGHTS = {
+    "dpr": ("progress.view",),
+    "photos": ("progress.view",),
+    "inspections": ("progress.view", "inspection.sign"),
+    "snags": ("progress.view", "snag.raise"),
+    "documents": ("documents.view",),
+    "billing": ("bill.view", "payment.view"),
+    "measurements": ("measurement.approve",),
+    "handover": ("handover.edit", "progress.view"),
+}
+
+
+def rights_of(db: Session, user_id) -> set[str] | None:
+    """The rights of a client login from its roles; None for a login without roles (invited
+    before the roles existed: everything its portal permissions allow)."""
+    from app.closeout.models import ClientRoleDef  # noqa: PLC0415
+
+    roles: set[str] = set()
+    for r in db.scalars(select(ClientUser.roles).where(ClientUser.user_id == user_id)):
+        roles |= set(r or [])
+    if not roles:
+        return None
+    out: set[str] = set()
+    for d in db.scalars(select(ClientRoleDef).where(ClientRoleDef.code.in_(roles))):
+        out |= set(d.rights or [])
+    return out
+
+
+def has_right(db: Session, ctx: PortalCtx, *rights: str) -> bool:
+    if ctx.preview:
+        return True
+    have = rights_of(db, ctx.user.id)
+    return have is None or bool(have & set(rights))
+
+
+def need_right(db: Session, ctx: PortalCtx, *rights: str) -> None:
+    """403 unless one of the client's roles gives one of these rights."""
+    if not has_right(db, ctx, *rights):
+        raise forbidden(f"Your client role does not allow this ({' or '.join(rights)})")
+
+
 def portal_site(db: Session, ctx: PortalCtx, site_id: int, section: str | None = None) -> Site:
-    """The site, or 404 when this client may not see it (or the section is off)."""
+    """The site, or 404 when this client may not see it (or the section is off); 403 when the
+    client's role does not cover the section."""
     ok = db.scalar(visible_sites(ctx.user.id).where(Site.id == site_id)) is not None
     site = db.get(Site, site_id) if ok else None
     if site is None:
@@ -107,8 +152,10 @@ def portal_site(db: Session, ctx: PortalCtx, site_id: int, section: str | None =
         db, ctx.staff.permissions.get("portal.manage"), ctx.staff, site.id
     ):
         raise not_found("Site not found")
-    if section and not sections(db, site.id).get(section, True):
+    if section and section in SECTIONS and not sections(db, site.id).get(section, True):
         raise not_found("Not shown for this site")
+    if section in SECTION_RIGHTS:
+        need_right(db, ctx, *SECTION_RIGHTS[section])
     return site
 
 

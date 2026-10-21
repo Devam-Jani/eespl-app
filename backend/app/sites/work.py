@@ -188,6 +188,38 @@ def generate_tasks(db: Session, site: Site, user_id) -> dict[str, int]:
 # --- progress -----------------------------------------------------------------------------------
 
 
+def weights_by_days(days: list[int]) -> list[Decimal]:
+    """Weights from the stages' days, to two decimals, totalling exactly 100 (the remainder of
+    the rounding goes to the longest stage)."""
+    total = sum(max(0, d) for d in days)
+    if not days:
+        return []
+    if total <= 0:
+        days, total = [1] * len(days), len(days)
+    out = [(Decimal(100) * max(0, d) / total).quantize(PCT, ROUND_HALF_UP) for d in days]
+    out[max(range(len(days)), key=lambda i: days[i])] += Decimal(100) - sum(out, Decimal(0))
+    return out
+
+
+def site_weights(db: Session, site_id: int, template: StageTemplate) -> dict[int, Decimal]:
+    """The weight of each step on this site: from the site's own stage days where the planner
+    changed them (Prompt 20), else the template's weights."""
+    from app.schedule.models import SiteStageDays  # noqa: PLC0415
+
+    own = dict(
+        db.execute(
+            select(SiteStageDays.step_id, SiteStageDays.days).where(
+                SiteStageDays.site_id == site_id,
+                SiteStageDays.step_id.in_([s.id for s in template.steps] or [0]),
+            )
+        ).all()
+    )
+    if not own:
+        return {s.id: Decimal(s.weight_percent) for s in template.steps}
+    days = [own.get(s.id, s.typical_days or 1) for s in template.steps]
+    return dict(zip([s.id for s in template.steps], weights_by_days(days), strict=True))
+
+
 def _counts(task: Task) -> bool:
     if task.status == "certified":
         return True
@@ -200,8 +232,15 @@ def refresh_scope(db: Session, scope: AreaScope) -> None:
         select(Task).where(Task.area_scope_id == scope.id, Task.parent_task_id.is_(None))
     ).all()
     before = scope.progress_percent
+    template = db.get(StageTemplate, scope.stage_template_id)
+    weights = site_weights(db, scope.site_id, template) if template else {}
     from_steps = sum(
-        (Decimal(t.step.weight_percent) for t in tasks if t.step and _counts(t)), Decimal(0)
+        (
+            weights.get(t.step.id, Decimal(t.step.weight_percent))
+            for t in tasks
+            if t.step and _counts(t)
+        ),
+        Decimal(0),
     )
     # approved daily report lines on the place count too (the same places as material)
     from_reports = (

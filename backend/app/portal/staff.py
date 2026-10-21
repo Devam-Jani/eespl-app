@@ -91,6 +91,12 @@ def _users_out(db, site: Site) -> list[dict]:
                 "has_password": u.has_password,
                 "last_login_at": u.last_login_at,
                 "has_site": u.id in given,
+                "roles": db.scalar(
+                    select(ClientUser.roles).where(
+                        ClientUser.user_id == u.id, ClientUser.client_id == site.client_id
+                    )
+                )
+                or [],
                 "invite": {
                     "expires_at": inv.expires_at,
                     "used": inv.used_at is not None,
@@ -154,6 +160,8 @@ class InviteIn(BaseModel):
     phone: str | None = Field(default=None, max_length=50)
     client_id: int
     site_ids: list[int] = Field(min_length=1)
+    # the client roles chosen at invite (project manager, planning, site, billing, accounts)
+    roles: list[str] = Field(default_factory=list)
 
 
 def _invite_link(db, user: User, by) -> dict:
@@ -208,8 +216,17 @@ def invite(body: InviteIn, request: Request, db: DbSession, principal: CurrentPr
         db.flush()
     else:
         user.full_name, user.phone = body.full_name.strip(), body.phone or user.phone
-    if db.get(ClientUser, (user.id, body.client_id)) is None:
-        db.add(ClientUser(user_id=user.id, client_id=body.client_id))
+    if body.roles:
+        from app.closeout.models import ClientRoleDef  # noqa: PLC0415
+
+        known = set(db.scalars(select(ClientRoleDef.code)))
+        if set(body.roles) - known:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unknown client role")
+    cu = db.get(ClientUser, (user.id, body.client_id))
+    if cu is None:
+        db.add(ClientUser(user_id=user.id, client_id=body.client_id, roles=sorted(set(body.roles))))
+    elif body.roles:
+        cu.roles = sorted(set(body.roles))
     for s in sites:
         if db.get(ClientUserSite, (user.id, s.id)) is None:
             db.add(ClientUserSite(user_id=user.id, site_id=s.id))

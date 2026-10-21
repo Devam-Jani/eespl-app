@@ -51,6 +51,9 @@ class ClientUser(Base):
     client_id: Mapped[int] = mapped_column(
         ForeignKey("clients.id", ondelete="CASCADE"), primary_key=True, index=True
     )
+    # the client roles (project manager, planning, site, billing, accounts); none: everything
+    # the portal permissions allow (logins invited before the roles existed)
+    roles: Mapped[list[str]] = mapped_column(JSONB, server_default="[]")
 
 
 class ClientUserSite(Base):

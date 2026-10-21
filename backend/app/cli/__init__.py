@@ -12,6 +12,7 @@
     docker compose exec api python -m app.cli import-powerplay-projects /data/powerplay/<file>.xlsx
     docker compose exec api python -m app.cli import-offer data/samples/offer-ladani.docx
     docker compose exec api python -m app.cli make-offer-template
+    docker compose exec api python -m app.cli demo-closeout
 
 The password is prompted for (twice) when run in a terminal. When stdin is not a terminal,
 one line is read from stdin instead, so scripts can pipe it in without it appearing in argv.
@@ -474,6 +475,10 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser(
         "demo-methodology", help="DEMO: the Godrej Phase-11 methodology (built, checked, exported)"
     )
+    sub.add_parser(
+        "demo-closeout",
+        help="DEMO: work order, approved measurements, bill tracking, WCC, issues (DEMO Shela)",
+    )
     p = sub.add_parser("seed-methodology", help="Seed the method library from our offers (.docx)")
     p.add_argument("paths", nargs="+")
     p = sub.add_parser(
@@ -554,6 +559,16 @@ def main(argv: list[str] | None = None) -> None:
 
         with SessionLocal() as db:
             out = mdemo.run(db)
+            db.commit()
+        print(json.dumps(out, indent=1, default=str))
+    elif args.command == "demo-closeout":
+        import json  # noqa: PLC0415
+
+        import app.main  # noqa: F401, PLC0415  (every model registered)
+        from app.closeout import demo as cdemo  # noqa: PLC0415
+
+        with SessionLocal() as db:
+            out = cdemo.run(db)
             db.commit()
         print(json.dumps(out, indent=1, default=str))
     elif args.command == "seed-methodology":

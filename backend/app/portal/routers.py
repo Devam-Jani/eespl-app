@@ -414,6 +414,7 @@ def sign_inspection(
 ) -> dict:
     """The client representative signs an inspection that waits for their sign-off."""
     svc.need(ctx, "portal.approve")
+    svc.need_right(db, ctx, "inspection.sign")
     site, i = _inspection(db, ctx, site_id, iid)
     if i.client_signoff != "waiting":
         raise HTTPException(
@@ -494,6 +495,7 @@ def mom_pdf(site_id: int, mid: int, db: DbSession, ctx: Ctx):
 @router.post("/sites/{site_id}/mom-points/{pid}/acknowledge")
 def acknowledge_point(site_id: int, pid: int, request: Request, db: DbSession, ctx: Ctx) -> dict:
     svc.need(ctx, "portal.approve")
+    svc.need_right(db, ctx, "inspection.sign")
     site = svc.portal_site(db, ctx, site_id, "inspections")
     p = db.get(MomPoint, pid)
     m = db.get(Mom, p.mom_id) if p else None
@@ -830,6 +832,7 @@ def client_certify(
     """The client certifies a submitted RA bill with their qty per line. It only becomes the
     certified figure when EESPL confirms."""
     svc.need(ctx, "portal.approve")
+    svc.need_right(db, ctx, "bill.certify")
     site, b = _ra(db, ctx, site_id, rid)
     if b.status != "submitted":
         raise HTTPException(status.HTTP_409_CONFLICT, f"{b.code} is {b.status}")
@@ -872,6 +875,7 @@ def client_reject(
     site_id: int, rid: int, body: RemarkIn, request: Request, db: DbSession, ctx: Ctx
 ) -> dict:
     svc.need(ctx, "portal.approve")
+    svc.need_right(db, ctx, "bill.certify")
     site, b = _ra(db, ctx, site_id, rid)
     if b.status != "submitted":
         raise HTTPException(status.HTTP_409_CONFLICT, f"{b.code} is {b.status}")
@@ -955,6 +959,7 @@ async def raise_snag(
     photos: Annotated[list[UploadFile] | None, File()] = None,
 ) -> dict:
     svc.need(ctx, "portal.snag")
+    svc.need_right(db, ctx, "snag.raise")
     site = svc.portal_site(db, ctx, site_id, "snags")
     if node_id is not None:
         n = db.get(SiteNode, node_id)
@@ -1006,6 +1011,7 @@ async def raise_snag(
 @router.post("/sites/{site_id}/snags/{sid}/verify")
 def verify_snag(site_id: int, sid: int, request: Request, db: DbSession, ctx: Ctx) -> dict:
     svc.need(ctx, "portal.snag")
+    svc.need_right(db, ctx, "snag.raise")
     site, s = _snag(db, ctx, site_id, sid)
     if s.status != "fixed":
         raise HTTPException(status.HTTP_409_CONFLICT, f"{s.code} is {s.status}")
@@ -1023,6 +1029,7 @@ def reopen_snag(
     site_id: int, sid: int, body: RemarkIn, request: Request, db: DbSession, ctx: Ctx
 ) -> dict:
     svc.need(ctx, "portal.snag")
+    svc.need_right(db, ctx, "snag.raise")
     site, s = _snag(db, ctx, site_id, sid)
     if s.status not in ("fixed", "verified"):
         raise HTTPException(status.HTTP_409_CONFLICT, f"{s.code} is {s.status}")

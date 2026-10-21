@@ -4,6 +4,7 @@
 import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { Link, Navigate, Outlet, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { HandoverTab, MeasurementsTab, OverdueList } from "./CloseoutTabs";
 import { api, ApiError, downloadFile, fetchObjectUrl } from "../api";
 import { useAuth } from "../auth";
 import Bell from "../components/Bell";
@@ -26,7 +27,7 @@ type Overview = SiteCard & {
 
 /** Preview mode: the client user staff are previewing as (read-only), else none. */
 const PreviewContext = createContext<string | null>(null);
-function usePortal() {
+export function usePortal() {
   const preview = useContext(PreviewContext);
   const headers = useMemo<Record<string, string> | undefined>(() => (preview ? { "X-Preview-As": preview } : undefined), [preview]);
   const get = useCallback(<T,>(path: string) => api<T>(path, { headers }), [headers]);
@@ -170,12 +171,31 @@ export function PortalSite({ siteId, preview }: { siteId: number; preview?: stri
   );
 }
 
+// what each tab needs of the client's roles (any one); null rights: everything (no roles set)
+const TAB_RIGHTS: Record<string, string[]> = {
+  dpr: ["progress.view"],
+  photos: ["progress.view"],
+  inspections: ["progress.view", "inspection.sign"],
+  snags: ["progress.view", "snag.raise"],
+  documents: ["documents.view"],
+  billing: ["bill.view", "payment.view"],
+  measurements: ["measurement.approve"],
+  handover: ["handover.edit", "progress.view"],
+};
+
 function SiteView({ siteId }: { siteId: number }) {
   const { get, preview } = usePortal();
   const [params, setParams] = useSearchParams();
-  const [localTab, setLocalTab] = useState<keyof Sections>("overview");
-  const tab = (preview ? localTab : (params.get("tab") as keyof Sections)) || "overview";
-  const setTab = (t: keyof Sections) => (preview ? setLocalTab(t) : setParams({ tab: t }, { replace: true }));
+  const [localTab, setLocalTab] = useState<string>("overview");
+  const tab = (preview ? localTab : params.get("tab")) || "overview";
+  const setTab = (t: string) => (preview ? setLocalTab(t) : setParams({ tab: t }, { replace: true }));
+  const [rights, setRights] = useState<string[] | null | undefined>(undefined);
+  useEffect(() => {
+    get<{ rights: string[] | null }>("/api/portal/me/roles").then(
+      (r) => setRights(r.rights),
+      () => setRights(null),
+    );
+  }, [get]);
   const [site, setSite] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(() => get<Overview>(`/api/portal/sites/${siteId}`).then(setSite, (err) => setError(errorText(err))), [get, siteId]);
@@ -185,7 +205,16 @@ function SiteView({ siteId }: { siteId: number }) {
 
   if (error) return <div className="alert alert-error">{error}</div>;
   if (!site) return <p className="muted">Loading…</p>;
-  const tabs = TABS.filter(([k]) => site.sections[k]);
+  const may = (k: string) => rights === null || rights === undefined || !TAB_RIGHTS[k] || TAB_RIGHTS[k].some((r) => rights.includes(r));
+  const tabs: [string, string][] = [
+    ...TABS.filter(([k]) => site.sections[k] && may(k)),
+    ...(
+      [
+        ["measurements", "Measurements"],
+        ["handover", "Handover dates"],
+      ] as [string, string][]
+    ).filter(([k]) => may(k)),
+  ];
   return (
     <>
       {!preview && (
@@ -196,7 +225,7 @@ function SiteView({ siteId }: { siteId: number }) {
       <h1 className="portal-title">
         {site.name} <span className="muted small">{site.code}</span>
       </h1>
-      <select className="tab-select tap-input" value={tab} onChange={(e) => setTab(e.target.value as keyof Sections)} aria-label="Section">
+      <select className="tab-select tap-input" value={tab} onChange={(e) => setTab(e.target.value)} aria-label="Section">
         {tabs.map(([k, l]) => (
           <option key={k} value={k}>
             {l}
@@ -216,7 +245,14 @@ function SiteView({ siteId }: { siteId: number }) {
         {tab === "photos" && <PhotosTab siteId={siteId} />}
         {tab === "inspections" && <InspectionsTab siteId={siteId} />}
         {tab === "documents" && <DocumentsTab siteId={siteId} />}
-        {tab === "billing" && <BillingTab siteId={siteId} />}
+        {tab === "billing" && (
+          <>
+            {(rights === null || rights === undefined || rights.includes("payment.view")) && <OverdueList siteId={siteId} />}
+            <BillingTab siteId={siteId} />
+          </>
+        )}
+        {tab === "measurements" && <MeasurementsTab siteId={siteId} />}
+        {tab === "handover" && <HandoverTab siteId={siteId} canEdit={rights === null || rights === undefined || rights.includes("handover.edit")} />}
         {tab === "snags" && <SnagsTab site={site} />}
       </div>
     </>
@@ -1195,7 +1231,7 @@ export function Thread({ entityType, entityId, staff = false }: { entityType: st
         <div key={c.id} className={`comment ${c.side} ${c.internal ? "internal" : ""}`}>
           <div className="small muted">
             {c.author ?? "—"} · {c.side === "client" ? "client" : "EESPL"} ·{" "}
-            {new Date(c.created_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",  day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+            {new Date(c.created_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
             {c.internal && <span className="badge badge-warn">internal</span>}
           </div>
           <div>{c.body}</div>

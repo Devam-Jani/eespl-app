@@ -128,6 +128,8 @@ class Site(Tracked, Base):
     progress_percent: Mapped[Decimal] = mapped_column(Percent, server_default="0")  # stored
     # invented analytics demo data (python -m app.cli seed-demo-analytics); never real
     is_demo: Mapped[bool] = mapped_column(server_default=false(), index=True)
+    # measurements go to the client for approval; RA bills take only approved ones
+    measurements_need_approval: Mapped[bool] = mapped_column(server_default=false())
 
     client: Mapped[Client | None] = relationship(lazy="joined")
     channel: Mapped[Channel | None] = relationship(lazy="joined")

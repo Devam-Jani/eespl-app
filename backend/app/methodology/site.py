@@ -6,7 +6,7 @@ the hours the standard asks (photos and the result on site), and the sampling as
 that a delivery of the product makes due."""
 
 import re
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -17,8 +17,10 @@ from app.methodology.models import (
     MaterialTest,
     Methodology,
     MethodologyItem,
+    MethodProduct,
     MethodSystem,
     PondTest,
+    PreBidQuery,
     StandardRule,
 )
 from app.sites.models import StageTemplate, StageTemplateStep
@@ -26,13 +28,28 @@ from app.sites.models import StageTemplate, StageTemplateStep
 COVERS = re.compile(r"PROTECTION|SEPARATION|SCREED|SLOPE|BACK\s*FILL|PLASTER", re.I)
 
 
-def _weights(n: int) -> list[Decimal]:
-    if n == 0:
-        return []
-    each = (Decimal(100) / n).quantize(Decimal("0.01"), ROUND_HALF_UP)
-    out = [each] * (n - 1)
-    out.append(Decimal(100) - sum(out, Decimal(0)))
-    return out
+def _wait_hours(text: str | None) -> float:
+    """ "3 to 4 hrs" -> 4, "air curing for 48 hours" -> 48, "at least 3 days" -> 72."""
+    if not text:
+        return 0.0
+    nums = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", text)]
+    if not nums:
+        return 0.0
+    return max(nums) * (24 if re.search(r"day", text, re.I) else 1)
+
+
+def stage_days(stage: dict) -> int:
+    """A stage's days: half a day of work per step of ours, plus its waiting and curing time
+    (the testing stage: the hours its tests need); at least one."""
+    steps = [x for x in stage["steps"] if x.get("scope") != "client"] or stage["steps"]
+    hours = sum(_wait_hours(x.get("wait")) for x in steps)
+    return max(1, round(len(steps) * 0.5 + hours / 24))
+
+
+def _weights(days: list[int]) -> list[Decimal]:
+    from app.sites.work import weights_by_days
+
+    return weights_by_days(days)
 
 
 def _checklist(db: Session, name: str, stage: dict) -> ChecklistTemplate:
@@ -113,7 +130,8 @@ def stage_template(db: Session, m: Methodology, it: MethodologyItem, user_id=Non
             else -1
         )
         used = set()
-        for i, (s, w) in enumerate(zip(stages, _weights(len(stages)), strict=True)):
+        days_all = [stage_days(s) for s in stages]
+        for i, (s, w, days) in enumerate(zip(stages, _weights(days_all), days_all, strict=True)):
             nxt = stages[i + 1]["heading"] if i + 1 < len(stages) else ""
             hold = bool(COVERS.search(nxt)) or s["heading"] == "TESTING"
             c = _match(s["heading"], checklist, used)
@@ -124,7 +142,6 @@ def stage_template(db: Session, m: Methodology, it: MethodologyItem, user_id=Non
             if c is not None:
                 used.add(c["stage"])
                 tpl = _checklist(db, f"{m.code} {it.name} — {c['stage']}", c)
-            days = 2 if s["heading"] == "TESTING" else 1
             db.add(StageTemplateStep(template_id=t.id, sort_order=i + 1, name=s["heading"].title()[:200], weight_percent=w, needs_photo=True,
                                      needs_inspection=tpl is not None or hold, hold_point=hold, checklist_template_id=tpl.id if tpl else None, typical_days=days))  # fmt: skip
         db.flush()
@@ -143,6 +160,7 @@ def handover(db: Session, m: Methodology, site_id: int | None, user_id=None) -> 
         "pond_tests": 0,
         "material_tests": 0,
     }
+    products: dict[str, tuple] = {}
     for it in m.items:
         t = stage_template(db, m, it, user_id)
         out["stage_templates"] += 1
@@ -177,27 +195,33 @@ def handover(db: Session, m: Methodology, site_id: int | None, user_id=None) -> 
         sampling = next(
             (x["text"] for x in (rule.tests if rule else []) if x.get("kind") == "sampling"), None
         )
-        specs = [
-            {"property": s["label"], "standard": s.get("standard"), "required": s["required"]}
-            for s in (rule.min_specs if rule else [])
-            if s.get("num") is not None
-        ]
-        products = []
         for s in it.stages:
-            if re.search(r"COATING|MEMBRANE", s["heading"]):
-                for x in s["steps"]:
-                    if x.get("product") and x["product"] not in products:
-                        products.append(x["product"])
+            if not re.search(r"COATING|MEMBRANE", s["heading"]):
+                continue
+            for x in s["steps"]:
+                pname = x.get("product")
+                if pname and pname not in products:
+                    products[pname] = (it, [], sampling)
+                if pname and rule is not None and rule not in products[pname][1]:
+                    products[pname][1].append(rule)
+    # one row per product on the site (a product in several items is sampled once)
+    if site_id is not None:
         known = {
-            (mt.methodology_item_id, mt.product_name)
+            mt.product_name
             for mt in db.scalars(select(MaterialTest).where(MaterialTest.site_id == site_id))
         }
-        for pname in products:
-            if (it.id, pname) in known:
+        queries = list(
+            db.scalars(
+                select(PreBidQuery).where(
+                    PreBidQuery.methodology_id == m.id, PreBidQuery.kind == "contradiction"
+                )
+            )
+        )
+        for pname, (it, rules, sampling) in products.items():
+            if pname in known:
                 continue
-            from app.methodology.models import MethodProduct
-
             mp = db.scalar(select(MethodProduct).where(MethodProduct.name == pname))
+            specs = product_specs(rules, pname, mp.kind if mp else None, queries)
             db.add(MaterialTest(site_id=site_id, methodology_item_id=it.id, product_name=pname, product_id=mp.product_id if mp else None, tests=specs,
                                 frequency=sampling or "on every delivery: the manufacturer's test certificate, cross-checked with the specification", status="planned", created_by=user_id))  # fmt: skip
             out["material_tests"] += 1
@@ -205,6 +229,89 @@ def handover(db: Session, m: Methodology, site_id: int | None, user_id=None) -> 
         m.site_id = site_id
     db.flush()
     return out
+
+
+def product_specs(
+    rules: list[StandardRule], pname: str, kind: str | None, queries: list
+) -> list[dict]:
+    """The client's specs for this product's own material: a mesh gets the mesh weight, a coating
+    the coating's values (not the membrane's or the PU's). Where the SOP says two things, the
+    stricter one, with the pre-bid query that asks which applies."""
+    if not rules:
+        return []
+    ptype = vocab.system_type_of(pname)
+    rows = [
+        {**x, "_doc": r.document_id}
+        for r in rules
+        for x in r.min_specs
+        if x.get("num") is not None and x.get("op") in ("min", "eq", "range")
+    ]
+    if kind == "mesh" or re.search(r"mesh|geo[- ]?textile|fabric", pname, re.I):
+        rows = [x for x in rows if x["property"] == "mesh_gsm"]
+    elif ptype:
+        mine = [
+            x
+            for x in rows
+            if x["property"] != "mesh_gsm"
+            and vocab.family(x.get("system_type")) == vocab.family(ptype)
+        ]
+        untyped = [x for x in rows if x["property"] != "mesh_gsm" and not x.get("system_type")]
+        rows = mine or (
+            untyped if any(vocab.satisfies(ptype, r.system_type) for r in rules) else []
+        )
+    else:
+        rows = []
+    out: dict[str, dict] = {}
+    for x in rows:
+        prop = x["property"]
+        got = out.get(prop)
+        if got is None:
+            out[prop] = {
+                "property": x["label"],
+                "standard": vocab.standard_of(x.get("standard") or ""),
+                "required": x["required"],
+                "num": x["num"],
+                "page": x.get("page"),
+                "_doc": x["_doc"],
+            }
+            continue
+        if float(x["num"]) == float(got["num"]):
+            continue
+        stricter = (
+            x if (float(x["num"]) > float(got["num"])) == (prop in vocab.HIGHER_IS_BETTER) else None
+        )
+        other = got["required"] if stricter else x["required"]
+        if stricter:
+            got.update(
+                required=x["required"],
+                num=x["num"],
+                standard=vocab.standard_of(x.get("standard") or "") or got["standard"],
+                page=x.get("page"),
+            )
+        notes = got.setdefault("notes", [])
+        if x["_doc"] != got["_doc"]:
+            if other not in " ".join(notes):
+                notes.append(f"another SOP asks {other}: the stricter is used")
+            continue
+        q = next(
+            (
+                q
+                for q in queries
+                if q.text.lower().startswith(vocab.PROPERTY_LABEL.get(prop, prop).lower())
+            ),
+            None,
+        )
+        notes.insert(
+            0,
+            f"the SOP also says {other}: the stricter is used"
+            + (f"; pre-bid query #{q.id}" if q else ""),
+        )
+        if q:
+            got["prebid_query_id"] = q.id
+    for r in out.values():
+        if r.get("notes"):
+            r["note"] = "; ".join(dict.fromkeys(r.pop("notes")))
+    return [{k: v for k, v in r.items() if k not in ("num", "_doc")} for r in out.values()]
 
 
 def on_delivery(db: Session, grn) -> int:

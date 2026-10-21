@@ -11,6 +11,7 @@ The client's copy has nothing internal (no compliance colours, gaps, sources or 
 questions); the internal copy adds the compliance summary and the pre-bid query sheet."""
 
 import io
+import re
 from datetime import date
 from html import escape
 
@@ -185,6 +186,31 @@ def item_view(db: Session, m: Methodology, it: MethodologyItem, n: int, internal
             "compliance": it.compliance if internal else None, "item": it}  # fmt: skip
 
 
+def places_text(places: list[dict], internal: bool) -> str:
+    """The client's copy: how many, the size range and how many of each size ("24 toilets,
+    2.89 to 3.26 sqm: 1365 × 2135 (8), 1455 × 2135 (7) ..."); the internal copy: every label."""
+    if internal:
+        return ", ".join(sorted({p["label"] for p in places if p.get("label")}))
+    sized = [p for p in places if p.get("area_sqm")]
+    if not sized:
+        return f"{len(places)} place(s)"
+    counts: dict[str, int] = {}
+    for p in sized:
+        m = re.search(r"(\d{3,5})\s*[xX×*]\s*(\d{3,5})", p.get("label") or "")
+        key = (
+            " × ".join(str(n) for n in sorted(int(g) for g in m.groups()))
+            if m
+            else p.get("label") or "?"
+        )
+        counts[key] = counts.get(key, 0) + 1
+    name = (sized[0].get("name") or "place").split()[0].lower()
+    areas = [float(p["area_sqm"]) for p in sized]
+    sizes = ", ".join(
+        f"{k} ({n})" for k, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    )
+    return f"{len(sized)} {name}{'s' if len(sized) > 1 and not name.endswith('s') else ''}, {min(areas):.2f} to {max(areas):.2f} sqm: {sizes}"
+
+
 def _numbered(stages: list[dict]) -> list[tuple[str, list[tuple[int, str]]]]:
     out, n = [], 0
     for s in stages:
@@ -221,7 +247,7 @@ def docx(db: Session, m: Methodology, internal: bool = False) -> bytes:
         for label, val, src in v["conds"]:
             P(d, f"•\t{label}: {val}" + (f"  [{src}]" if src else ""), s["Offer Step"])
         if v["places"]:
-            labels = ", ".join(sorted({p["label"] for p in v["places"] if p.get("label")}))[:400]
+            labels = places_text(v["places"], internal)
             P(d, f"•\tFrom the drawings: {labels}", s["Offer Step"])
         for r in v["reason"]:
             P(d, r, s["Offer Body"])
@@ -389,7 +415,7 @@ def html(db: Session, m: Methodology, internal: bool = False, for_pdf: bool = Tr
             for lab, val, src in v["conds"]
         ]
         if v["places"]:
-            labels = ", ".join(sorted({p["label"] for p in v["places"] if p.get("label")}))[:400]
+            labels = places_text(v["places"], internal)
             parts.append(f'<p class="cond">• From the drawings: {escape(labels)}</p>')
         parts += [f'<p class="why">{escape(r)}</p>' for r in v["reason"]]
         parts.append(_steps_html(v["stages"]))

@@ -543,6 +543,9 @@ def create_ra(
     )
     svc.ra_totals(db, b, c)
     db.flush()
+    from app.closeout import measure  # noqa: PLC0415
+
+    measure.stamp_billed(db, b)  # the approved measurements this bill takes
     record(
         db,
         request,

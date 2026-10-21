@@ -530,6 +530,8 @@ def sales(db: Session, principal: Principal, scope: str, demo: bool = False) -> 
             Quotation.is_latest,
             Quotation.status.in_(("won", "lost")),
             func.date(func.timezone("Asia/Kolkata", Quotation.decided_at)) >= q0,
+            # the civil contractor lost the main job: not our loss
+            func.coalesce(Quotation.lost_reason, "") != "main_job_lost",
         )
         if own:
             qq = qq.where(Quotation.salesperson_id == me)

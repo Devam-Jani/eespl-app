@@ -945,7 +945,10 @@ export function BillTracking() {
       <div className="page-header">
         <h1>Client bill tracking</h1>
       </div>
-      <p className="muted small">Each RA bill: sent, certified by the client, the difference from what was billed (with the reason) and paid. Selling amounts only.</p>
+      <p className="muted small">
+        Each RA bill: sent, certified by the client, the difference from what was billed (with the reason) and paid. Selling amounts only.{" "}
+        <a href="/billing/tracking">Each step through the client, with the billing cycle →</a>
+      </p>
       {error && <div className="alert alert-error">{error}</div>}
       <div className="table-wrap card">
         <table className="table">

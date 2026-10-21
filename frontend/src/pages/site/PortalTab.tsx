@@ -15,6 +15,7 @@ type PortalUser = {
   has_password: boolean;
   last_login_at: string | null;
   has_site: boolean;
+  roles?: string[];
   invite: { expires_at: string; used: boolean; expired: boolean } | null;
 };
 type Settings = { site_id: number; client_id: number | null; client_name: string | null; visible: boolean; sections: Record<string, boolean>; users: PortalUser[] };
@@ -38,12 +39,19 @@ export default function PortalTab({ site }: { site: Site }) {
   const [docs, setDocs] = useState<Doc[]>([]);
   const [link, setLink] = useState<{ name: string; url: string; expires_at: string } | null>(null);
   const [invite, setInvite] = useState({ full_name: "", email: "", phone: "" });
+  const [roles, setRoles] = useState<{ code: string; label: string; rights: string[] }[]>([]);
+  const [picked, setPicked] = useState<string[]>([]);
   const [preview, setPreview] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     if (manage) api<Settings>(`/api/portal-admin/sites/${site.id}`).then(setS, (err) => setError(errorText(err)));
     api<Doc[]>(`/api/portal-admin/sites/${site.id}/documents`).then(setDocs, () => setDocs([]));
+    if (manage)
+      api<{ roles: { code: string; label: string; rights: string[] }[] }>("/api/closeout/client-roles").then(
+        (r) => setRoles(r.roles),
+        () => setRoles([]),
+      );
   }, [manage, site.id]);
   useEffect(load, [load]);
 
@@ -71,12 +79,13 @@ export default function PortalTab({ site }: { site: Site }) {
     const r = await run(
       api<{ link: string; expires_at: string }>("/api/portal-admin/invites", {
         method: "POST",
-        json: { ...invite, phone: invite.phone || null, client_id: s.client_id, site_ids: [site.id] },
+        json: { ...invite, phone: invite.phone || null, client_id: s.client_id, site_ids: [site.id], roles: picked },
       }),
     );
     if (r) {
       showLink(invite.full_name, r);
       setInvite({ full_name: "", email: "", phone: "" });
+      setPicked([]);
       load();
     }
   }
@@ -138,6 +147,7 @@ export default function PortalTab({ site }: { site: Site }) {
                   <tr key={u.id}>
                     <td>
                       {u.full_name}
+                      {(u.roles ?? []).length > 0 && <div className="small">{(u.roles ?? []).map((r) => roles.find((x) => x.code === r)?.label ?? r).join(", ")}</div>}
                       <div className="muted small">
                         {u.email}
                         {u.phone ? ` · ${u.phone}` : ""}
@@ -210,6 +220,21 @@ export default function PortalTab({ site }: { site: Site }) {
                 <input placeholder="Phone" value={invite.phone} onChange={(e) => setInvite({ ...invite, phone: e.target.value })} />
                 <button className="btn btn-primary">Create invite link</button>
               </div>
+              {roles.length > 0 && (
+                <div className="top-gap">
+                  <div className="small muted">Client roles (what they may see and do in the portal; none: everything the portal allows)</div>
+                  {roles.map((r) => (
+                    <label key={r.code} className="role-pick">
+                      <input
+                        type="checkbox"
+                        checked={picked.includes(r.code)}
+                        onChange={(e) => setPicked(e.target.checked ? [...picked, r.code] : picked.filter((x) => x !== r.code))}
+                      />{" "}
+                      <b>{r.label}</b> <span className="muted small">{r.rights.map((x) => x.replace(".", " ")).join(", ")}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </form>
           )}
         </>

@@ -134,6 +134,20 @@ SAMPLE_DATA = {
     "month": "2026-09",
     "km": "533.4",
     "claim_id": 1,
+    "wo": "CWO-T",
+    "wo_id": 1,
+    "topic": "retention",
+    "days": 6,
+    "due": "15 Oct",
+    "how": "30 days after the invoice",
+    "step": "with the client's accounts",
+    "window": "1-5",
+    "spoke_to": "the client's accounts",
+    "issue": "ISU-T",
+    "issue_id": 1,
+    "category": "material late",
+    "text": "tiles not delivered",
+    "ra_bill_id": 1,
 }
 
 

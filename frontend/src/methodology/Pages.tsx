@@ -117,7 +117,7 @@ type Check = {
   status: "green" | "red" | "confirm";
   gap?: string | null;
   ref?: string | null;
-  choices?: { key: string; label: string; options?: string[]; query?: string }[];
+  choices?: { key: string; label: string; options?: string[]; query?: string; note?: string | null }[];
   choice?: string;
 };
 type Item = {
@@ -809,6 +809,13 @@ export function MethodologyPage() {
     if (!reason) return;
     act(() => api(`/api/methodology/items/${item.id}/steps`, { method: "POST", json: { stage, step, text, reason } }));
   };
+  const perimeter = (item: Item) => {
+    const v = window.prompt("The tank's real perimeter (m)");
+    if (!v) return;
+    const reason = window.prompt("Where it comes from");
+    if (!reason) return;
+    act(() => api(`/api/methodology/items/${item.id}/perimeter`, { method: "PUT", json: { perimeter_m: Number(v), reason } }));
+  };
   const choose = (item: Item, choice: "approved" | "keep") => {
     const reason = choice === "keep" ? "Keep our make and ask the client to approve it before the bid (TPT)" : "Use a make on the client's approved list";
     act(() => api(`/api/methodology/items/${item.id}/make`, { method: "PUT", json: { choice, reason } }));
@@ -958,7 +965,10 @@ export function MethodologyPage() {
                                   >
                                     {c.label}
                                   </button>{" "}
-                                  <span className="muted">{c.options ? c.options.slice(0, 4).join("; ") : c.query}</span>
+                                  <span className="muted">
+                                    {c.options ? c.options.slice(0, 4).join("; ") : c.query}
+                                    {c.note && <div className="small">{c.note}</div>}
+                                  </span>
                                 </div>
                               ))}
                             </div>
@@ -969,6 +979,14 @@ export function MethodologyPage() {
                   </tbody>
                 </table>
               </>
+            )}
+            {it.conditions.tank_perimeter_m && can("methodology.edit") && (
+              <p className="small">
+                Tank perimeter: {fmt(it.conditions.tank_perimeter_m.value)} m <span className="muted">({it.conditions.tank_perimeter_m.source})</span>{" "}
+                <button className="btn btn-small" disabled={busy} onClick={() => perimeter(it)}>
+                  Enter the real perimeter
+                </button>
+              </p>
             )}
             {only !== "compliance" && <Steps stages={it.stages} edit={can("methodology.edit") ? editStep(it) : undefined} />}
             {only !== "compliance" && it.edits.length > 0 && (
@@ -1031,7 +1049,7 @@ type SiteOut = {
   material_tests: {
     id: number;
     product_name: string;
-    tests: { property: string; standard: string | null; required: string }[];
+    tests: { property: string; standard: string | null; required: string; note?: string }[];
     frequency: string | null;
     status: string;
     reference: string | null;
@@ -1129,7 +1147,9 @@ export function SiteMethodology() {
             {s.material_tests.map((t) => (
               <tr key={t.id}>
                 <td className="small">{t.product_name}</td>
-                <td className="small">{t.tests.map((x) => `${x.property} ${x.required}`).join("; ") || "test certificate"}</td>
+                <td className="small">
+                  {t.tests.map((x) => `${x.property} ${x.required}${x.standard ? ` (${x.standard})` : ""}${x.note ? ` — ${x.note}` : ""}`).join("; ") || "test certificate"}
+                </td>
                 <td className="small">{t.frequency}</td>
                 <td>{t.status}</td>
               </tr>

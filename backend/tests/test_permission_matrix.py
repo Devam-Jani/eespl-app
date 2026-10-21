@@ -53,6 +53,8 @@ ALL = [
     "field.gang",
     "site.location", "knowledge.view", "knowledge.cost", "knowledge.edit",
     "methodology.view", "methodology.edit", "methodology.compliance", "methodology.site",
+    "wo.view", "wo.edit", "closeout.billing", "closeout.site", "closeout.payments",
+    "issues.view", "issues.edit",
 ]  # fmt: skip
 TRACK = {"field.track": "own"}  # every staff user: their own day, map and claim
 
@@ -71,6 +73,13 @@ EXPECTED: dict[str, dict[str, str]] = {
     # sees and decides everything; users, roles and settings stay with office_admin
     "director": _all(*[c for c in ALL if c not in DIRECTOR_EXCLUDES]),
     "office_admin": _all(
+        "wo.view",
+        "wo.edit",
+        "closeout.billing",
+        "closeout.site",
+        "closeout.payments",
+        "issues.view",
+        "issues.edit",
         "methodology.view",
         "methodology.edit",
         "methodology.compliance",
@@ -190,6 +199,13 @@ EXPECTED: dict[str, dict[str, str]] = {
     # Mr. Sunil, Hardeep (Sr Engineer Billing & Planning): enquiries, the status board, material
     # planning, new areas, escalations; costs only if the director allows the person
     "planning": TRACK | _all(
+        "wo.view",
+        "wo.edit",
+        "closeout.billing",
+        "closeout.site",
+        "closeout.payments",
+        "issues.view",
+        "issues.edit",
         "methodology.view",
         "methodology.edit",
         "methodology.compliance",
@@ -232,6 +248,10 @@ EXPECTED: dict[str, dict[str, str]] = {
     ),  # fmt: skip
     # Jr Engineer Billing, Assistant Manager Billing: no vendor payables, no payroll
     "billing": TRACK | _all(
+        "wo.view",
+        "closeout.billing",
+        "issues.view",
+        "issues.edit",
         "takeoff.view",
         "takeoff.edit",
         "billing.view",
@@ -288,6 +308,9 @@ EXPECTED: dict[str, dict[str, str]] = {
         "field.track": "own",
         "site.location": "assigned",
         "methodology.site": "assigned",
+        "closeout.site": "assigned",
+        "issues.view": "assigned",
+        "issues.edit": "assigned",
     },  # fmt: skip
     "sales": {
         "takeoff.view": "assigned",
@@ -316,6 +339,11 @@ EXPECTED: dict[str, dict[str, str]] = {
         "field.track": "own",
         "knowledge.view": "all",
         "methodology.view": "own",
+        "wo.view": "own",
+        "wo.edit": "own",
+        "closeout.payments": "own",
+        "issues.view": "assigned",
+        "issues.edit": "assigned",
     },
     "site_supervisor": {
         "site.view": "assigned",
@@ -366,6 +394,9 @@ EXPECTED: dict[str, dict[str, str]] = {
         "ratecontract.edit",
     ),  # fmt: skip
     "accounts": TRACK | _all(
+        "closeout.payments",
+        "issues.view",
+        "issues.edit",
         "field.claims",
         "field.claims_approve",
         "clients.view",

@@ -43,7 +43,7 @@ def test_consumption_is_picked_by_surface_and_requirement_with_its_source(boss, 
     ).json()
     p = next(x for x in g["products"] if x["product_id"] == hdpe)
     assert d(p["consumption"]) == d("1.40") and p["consumption_source"].startswith(
-        "old BOQ: RCC, 2 coats (used 7×)"
+        "old BOQs: RCC, 2 coats (used 7×)"
     )
     assert "Invented BOQ.xlsx" in p["consumption_source"]
     g = c.put(f"/api/rate-working/groups/{raft['id']}", json={"surface": "brick"}, headers=h).json()

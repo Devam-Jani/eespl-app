@@ -210,9 +210,14 @@ def update_product(
     if "code" in changes:
         _check_code(db, changes["code"], exclude=product.id)
     before = audit.model_snapshot(product)
+    newly_discontinued = changes.get("discontinued_on") and product.discontinued_on is None
     for field, value in changes.items():
         setattr(product, field, value)
     db.flush()
+    if newly_discontinued:
+        from app.closeout import issues  # noqa: PLC0415
+
+        issues.product_discontinued(db, product, principal.user.id)
     after = audit.model_snapshot(product)
     if after != before:
         audit.record(db, "product.update", "product", product.id, user_id=principal.user.id,
