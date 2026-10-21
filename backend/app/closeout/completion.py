@@ -91,14 +91,72 @@ def _with_children(db: Session, site_id: int, node_ids: list[int]) -> list[int]:
     return sorted(out)
 
 
+def _ancestors(db: Session, node_id: int | None) -> list[int]:
+    out, seen = [], set()
+    while node_id and node_id not in seen:
+        seen.add(node_id)
+        out.append(node_id)
+        n = db.get(SiteNode, node_id)
+        node_id = n.parent_id if n else None
+    return out
+
+
+def system_of(db: Session, cl, node_id: int | None):
+    """The line's system: the work order line's (its quotation line, else the BOQ line it came
+    from), else the area's stage template. (system, where it came from) or (None, None)."""
+    from app.closeout.models import ClientWorkOrderLine  # noqa: PLC0415
+    from app.masters.models import System  # noqa: PLC0415
+    from app.quotations.models import QuotationLine  # noqa: PLC0415
+    from app.sites.models import AreaScope, StageTemplate  # noqa: PLC0415
+    from app.tenders.models import BoqLine  # noqa: PLC0415
+
+    wl = db.get(ClientWorkOrderLine, cl.wo_line_id) if cl is not None and cl.wo_line_id else None
+    ql = db.get(QuotationLine, wl.quotation_line_id) if wl is not None and wl.quotation_line_id else None
+    if ql is not None and ql.system_id:
+        return db.get(System, ql.system_id), "work order line"
+    bl = db.get(BoqLine, cl.boq_line_id) if cl is not None and cl.boq_line_id else None
+    if bl is not None and bl.system_id:
+        return db.get(System, bl.system_id), "work order line" if wl else "contract line"
+    for nid in _ancestors(db, node_id):
+        for sc in db.scalars(select(AreaScope).where(AreaScope.node_id == nid).order_by(AreaScope.id)):
+            if bl is not None and sc.boq_line_id and sc.boq_line_id != bl.id:
+                continue
+            tpl = db.get(StageTemplate, sc.stage_template_id)
+            if tpl is not None and tpl.system_id:
+                return db.get(System, tpl.system_id), f"stage template {tpl.name}"
+    return None, None
+
+
+def stage_dates(db: Session, node_id: int | None, boq_line_id: int | None) -> tuple[date | None, date | None]:
+    """The area's real stage dates: the first stage's start to the last stage's end (its tasks,
+    else the stage dates on its inspections)."""
+    from app.execution.models import Inspection  # noqa: PLC0415
+    from app.sites.models import AreaScope, Task  # noqa: PLC0415
+
+    if not node_id:
+        return None, None
+    q = select(AreaScope.id).where(AreaScope.node_id == node_id)
+    scopes = list(db.scalars(q.where(AreaScope.boq_line_id == boq_line_id))) if boq_line_id else []
+    scopes = scopes or list(db.scalars(q))
+    starts, ends = [], []
+    for t in db.scalars(select(Task).where(Task.area_scope_id.in_(scopes or [0]), Task.parent_task_id.is_(None))):
+        i = db.scalars(select(Inspection).where(Inspection.task_id == t.id).order_by(Inspection.id.desc())).first()
+        s = t.actual_start or (i.stage_started_on if i else None)
+        e = t.actual_end or (i.stage_ended_on if i else None)
+        if s:
+            starts.append(s)
+        if e:
+            ends.append(e)
+    return (min(starts) if starts else None), (max(ends) if ends else None)
+
+
 def areas_of(
     db: Session, site: Site, node_ids: list[int] | None = None
 ) -> tuple[list[dict], list[str], list[str], date | None]:
-    """Our areas with their approved quantity (per place and item), the systems and products used,
-    and the first date of the work."""
+    """Our areas with their approved quantity in the line's unit (the work order's), the system
+    and products of each line, and the real stage dates of each area."""
     from app.finance.models import ContractLine  # noqa: PLC0415
-    from app.masters.models import Product, System, SystemComponent  # noqa: PLC0415
-    from app.tenders.models import BoqLine  # noqa: PLC0415
+    from app.masters.models import Product, SystemComponent  # noqa: PLC0415
 
     q = select(Measurement).where(Measurement.site_id == site.id, Measurement.status == "approved")
     if node_ids:
@@ -108,28 +166,32 @@ def areas_of(
     for m in db.scalars(q.order_by(Measurement.measured_on, Measurement.id)):
         cl = db.get(ContractLine, m.contract_line_id) if m.contract_line_id else None
         item = cl.description if cl else m.description
-        key = (m.node_id, item, m.unit)
-        g = groups.setdefault(key, {"node_id": m.node_id, "area": _path(db, m.node_id) or m.description, "item": item[:200], "qty": Decimal(0), "unit": m.unit or "sqm",
-                                    "from": m.measured_on, "to": m.measured_on, "system": None})  # fmt: skip
+        unit = (cl.unit if cl else None) or m.unit or "sqm"
+        key = (m.node_id, item, unit)
+        g = groups.get(key)
+        if g is None:
+            sysm, sys_from = system_of(db, cl, m.node_id)
+            prods = []
+            if sysm is not None:
+                for c in db.scalars(select(SystemComponent).where(SystemComponent.system_id == sysm.id).order_by(SystemComponent.id)):
+                    p = db.get(Product, c.product_id)
+                    if p and p.name not in prods:
+                        prods.append(p.name)
+            start, end = stage_dates(db, m.node_id, cl.boq_line_id if cl else None)
+            g = groups[key] = {"node_id": m.node_id, "area": _path(db, m.node_id) or m.description, "item": item[:200], "qty": Decimal(0), "unit": unit,
+                               "system": sysm.name if sysm else None, "system_from": sys_from, "products": prods,
+                               "from": start, "to": end, "dates_from": "stages" if start and end else None, "_m_from": m.measured_on, "_m_to": m.measured_on}  # fmt: skip
         g["qty"] += Decimal(m.qty)
-        g["to"] = max(g["to"], m.measured_on)
-        first = min(first, m.measured_on) if first else m.measured_on
-        bl = db.get(BoqLine, cl.boq_line_id) if cl and cl.boq_line_id else None
-        sysm = db.get(System, bl.system_id) if bl and bl.system_id else None
-        if sysm:
-            g["system"] = sysm.name
-            if sysm.name not in systems:
-                systems.append(sysm.name)
-            for c in db.scalars(
-                select(SystemComponent).where(SystemComponent.system_id == sysm.id)
-            ):
-                p = db.get(Product, c.product_id)
-                if p and p.name not in products:
-                    products.append(p.name)
-    out = [
-        {**g, "qty": str(g["qty"]), "from": g["from"].isoformat(), "to": g["to"].isoformat()}
-        for g in groups.values()
-    ]
+        g["_m_from"], g["_m_to"] = min(g["_m_from"], m.measured_on), max(g["_m_to"], m.measured_on)
+    out = []
+    for g in groups.values():
+        if g["dates_from"] is None:  # no stage dates kept: the measurement dates, said so
+            g["from"], g["to"], g["dates_from"] = g["_m_from"], g["_m_to"], "measurement book"
+        first = min(first, g["from"]) if first else g["from"]
+        if g["system"] and g["system"] not in systems:
+            systems.append(g["system"])
+        products += [p for p in g["products"] if p not in products]
+        out.append({**{k: v for k, v in g.items() if not k.startswith("_")}, "qty": str(g["qty"]), "from": g["from"].isoformat(), "to": g["to"].isoformat()})
     return out, systems, products, first
 
 
@@ -148,6 +210,11 @@ def make(
     if not areas:
         raise unprocessable(
             "No approved measurement on these areas: the certificate takes only approved quantities"
+        )
+    missing = [f"{a['area']} ({a['item'][:50]})" for a in areas if not a["system"]]
+    if missing:
+        raise unprocessable(
+            "No system for " + "; ".join(missing[:5]) + ": give the work order line a system (its quotation line) or the area a stage template with one"
         )
     found, source = guarantee_years(db, site)
     if years is None:
@@ -214,11 +281,23 @@ def addendum(
 # --- the marked plan -----------------------------------------------------------------------------
 
 
+def qty_text(qty, unit: str) -> str:
+    """The approved quantity as stored (7.015, not 7.02), the same in the table and on the plan."""
+    return f"{Decimal(qty):,.3f} {unit}"
+
+
+def _d(v) -> str:
+    return date.fromisoformat(v).strftime("%d.%m.%Y") if isinstance(v, str) else v.strftime("%d.%m.%Y")
+
+
 def plan_svg(db: Session, site: Site, w: WorkCompletion, width: int = 760) -> str:
     """Our areas highlighted, the rest greyed, names and quantities on them: the site's drawing
     (its traced areas) where there is one, else the site's structure as a plan (towers, flats,
     their areas)."""
-    ours = {a["node_id"]: a for a in w.areas if a.get("node_id")}
+    ours: dict[int, dict] = {}
+    for a in w.areas:
+        if a.get("node_id"):
+            ours.setdefault(a["node_id"], {"qty": []})["qty"].append(qty_text(a["qty"], a["unit"]))
     drawing = _drawing_svg(db, site, ours, width)
     if drawing:
         return drawing
@@ -250,7 +329,7 @@ def plan_svg(db: Session, site: Site, w: WorkCompletion, width: int = 760) -> st
         None, []
     )
     cell_w, cell_h, pad = 132, 46, 10
-    parts, y = [], 30
+    parts, y = [f'<text x="{pad}" y="14" class="l">Schematic: the site has no drawing with these areas traced; places as listed on the site</text>'], 40
     for t in towers:
         flats = flats_of(t)
         if not flats:
@@ -272,7 +351,7 @@ def plan_svg(db: Session, site: Site, w: WorkCompletion, width: int = 760) -> st
                     f'<text x="{x + 6}" y="{y + 24}" fill="{txt}" class="a">{escape(a.name[:18])}</text>'
                 )
                 sub = (
-                    f"{Decimal(mine['qty']):.2f} {mine['unit']}"
+                    " + ".join(mine["qty"])
                     if mine
                     else (
                         "other applicator"
@@ -304,35 +383,54 @@ def _drawing_svg(db: Session, site: Site, ours: dict, width: int) -> str | None:
 
     f = db.scalars(
         select(CadFile)
-        .where(CadFile.site_id == site.id, CadFile.status == "read")
+        .where(CadFile.site_id == site.id, CadFile.status == "ready")
         .order_by(CadFile.id.desc())
     ).first()
     if f is None:
         return None
-    areas = [a for a in db.scalars(select(CadArea).where(CadArea.cad_file_id == f.id)) if a.outline]
-    if not areas:
+    every = [a for a in db.scalars(select(CadArea).where(CadArea.cad_file_id == f.id)) if a.outline]
+    mine_areas = [a for a in every if a.node_id in ours]
+    if not mine_areas:  # the drawing does not have these areas traced: the schematic instead
         return None
+    from app.sites.models import Drawing, DrawingRevision  # noqa: PLC0415
+
+    dr, rev = db.get(Drawing, f.drawing_id), db.get(DrawingRevision, f.revision_id)
+    # the part of the drawing around our areas (a margin of a fifth each side), not the whole floor
+    xs = [p[0] for a in mine_areas for p in a.outline]
+    ys = [p[1] for a in mine_areas for p in a.outline]
+    mx, my = (max(xs) - min(xs)) * 0.2 + 1, (max(ys) - min(ys)) * 0.2 + 1
+    box = (min(xs) - mx, max(xs) + mx, min(ys) - my, max(ys) + my)
+    areas = [a for a in every if any(box[0] <= p[0] <= box[1] and box[2] <= p[1] <= box[3] for p in a.outline)
+             or (box[0] <= sum(p[0] for p in a.outline) / len(a.outline) <= box[1] and box[2] <= sum(p[1] for p in a.outline) / len(a.outline) <= box[3])]  # fmt: skip
     xs = [p[0] for a in areas for p in a.outline]
     ys = [p[1] for a in areas for p in a.outline]
-    minx, maxx, miny, maxy = min(xs), max(xs), min(ys), max(ys)
+    minx, maxx, miny, maxy = max(min(xs), box[0]), min(max(xs), box[1]), max(min(ys), box[2]), min(max(ys), box[3])
     sx = (width - 20) / max(maxx - minx, 1)
+    top = 24
     h = int((maxy - miny) * sx) + 20
-    parts = []
+    title = f"{dr.title if dr else 'Drawing'}{f' R{rev.rev_no}' if rev else ''}: our areas in green, with the approved quantities"
+    parts = [f'<text x="10" y="14" style="font:600 10px sans-serif;fill:#333">{escape(title)}</text>',
+             f'<clipPath id="plan"><rect x="0" y="0" width="{width}" height="{h}"/></clipPath><g transform="translate(0 {top})" clip-path="url(#plan)">']  # fmt: skip
     for a in areas:
         mine = ours.get(a.node_id) if a.node_id else None
         pts = " ".join(
             f"{10 + (p[0] - minx) * sx:.1f},{10 + (maxy - p[1]) * sx:.1f}" for p in a.outline
         )
         parts.append(
-            f'<polygon points="{pts}" fill="{"#1f8a5b" if mine else "#d9dcdf"}" stroke="#555" stroke-width="0.6"/>'
+            f'<polygon points="{pts}" fill="{"#1f8a5b" if mine else "#eceff1"}" stroke="#555" stroke-width="0.8"/>'
         )
         cx = 10 + (sum(p[0] for p in a.outline) / len(a.outline) - minx) * sx
         cy = 10 + (maxy - sum(p[1] for p in a.outline) / len(a.outline)) * sx
-        label = f"{a.name} {Decimal(mine['qty']):.2f}" if mine else a.name
-        parts.append(
-            f'<text x="{cx:.1f}" y="{cy:.1f}" text-anchor="middle" style="font:9px sans-serif">{escape(label[:30])}</text>'
-        )
-    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {h}" width="100%">{"".join(parts)}</svg>'
+        color = "#ffffff" if mine else "#555"
+        lines_ = [a.name] + ([" + ".join(mine["qty"])] if mine else [])
+        for k, txt in enumerate(lines_):
+            parts.append(f'<text x="{cx:.1f}" y="{cy + (k - (len(lines_) - 1) / 2) * 11 + 3:.1f}" text-anchor="middle" font-family="sans-serif" '
+                         f'font-size="8" font-weight="{600 if mine else 400}" fill="{color}">{escape(txt[:28])}</text>')  # fmt: skip
+    parts.append("</g>")
+    y = h + top + 6
+    parts.append(f'<rect x="10" y="{y}" width="14" height="10" fill="#1f8a5b"/><text x="30" y="{y + 9}" style="font:10px sans-serif;fill:#333">our areas (approved quantity)</text>'
+                 f'<rect x="290" y="{y}" width="14" height="10" fill="#eceff1" stroke="#555" stroke-width="0.5"/><text x="310" y="{y + 9}" style="font:10px sans-serif;fill:#333">not ours / not in this certificate</text>')  # fmt: skip
+    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {y + 16}" width="100%">{"".join(parts)}</svg>'
 
 
 # --- the documents -------------------------------------------------------------------------------
@@ -340,7 +438,8 @@ def _drawing_svg(db: Session, site: Site, ours: dict, width: int) -> str | None:
 CSS = """
 table.wcc{width:100%;border-collapse:collapse;font-size:9.5pt}table.wcc td,table.wcc th{border:1px solid #999;padding:4px}
 table.wcc th{background:#eef3f1;text-align:left}td.num{text-align:right}.sig{margin-top:28px;display:flex;justify-content:space-between}
-.plan{border:1px solid #ccc;padding:6px;margin:8px 0}.small{font-size:8.5pt;color:#555}h2.c{text-align:center;letter-spacing:1px}
+.plan{border:1px solid #ccc;padding:6px;margin:8px 0}table.sigs{width:100%;margin-top:22px;font-size:10pt}table.sigs td{width:50%;vertical-align:top;padding-right:20px}
+.space{height:46px}.small{font-size:8.5pt;color:#555}h2.c{text-align:center;letter-spacing:1px}
 """
 
 
@@ -373,8 +472,9 @@ def html(db: Session, w: WorkCompletion) -> str:
 
     site = db.get(Site, w.site_id)
     client = db.get(Client, w.client_id) if w.client_id else None
-    rows = "".join(f'<tr><td>{i}</td><td>{escape(a["area"])}</td><td>{escape(a["item"])}</td><td class="num">{Decimal(a["qty"]):,.2f}</td><td>{escape(a["unit"])}</td>'
-                   f'<td>{escape(a.get("system") or "—")}</td><td>{a["from"]} to {a["to"]}</td></tr>' for i, a in enumerate(w.areas, 1))  # fmt: skip
+    rows = "".join(f'<tr><td>{i}</td><td>{escape(a["area"])}</td><td>{escape(a["item"])}</td><td class="num">{Decimal(a["qty"]):,.3f}</td><td>{escape(a["unit"])}</td>'
+                   f'<td>{escape(a.get("system") or "—")}<div class="small">{escape(", ".join(a.get("products") or []))}</div></td>'
+                   f'<td>{_d(a["from"])} to {_d(a["to"])}<div class="small">{escape(a.get("dates_from") or "")}</div></td></tr>' for i, a in enumerate(w.areas, 1))  # fmt: skip
     base = db.get(WorkCompletion, w.addendum_of_id) if w.addendum_of_id else None
     signed = (
         (
@@ -386,21 +486,35 @@ def html(db: Session, w: WorkCompletion) -> str:
             )
         )
         if w.status == "signed"
-        else "Client's signature: ____________________"
+        else ""
     )
+    firm, sig_name, sig_role = signatory(db)
     body = f"""
 <h2 class="c">WORK COMPLETION CERTIFICATE{' — ADDENDUM TO ' + escape(base.code) if base else ''}</h2>
 <p><b>Certificate:</b> {w.code} &nbsp; <b>Date of completion:</b> {w.completion_date:%d.%m.%Y}{' &nbsp; <b>Work started:</b> ' + w.started_on.strftime('%d.%m.%Y') if w.started_on else ''}</p>
 <p><b>Site:</b> {escape(site.code)} {escape(site.name)}{', ' + escape(site.city) if site.city else ''} &nbsp; <b>Client:</b> {escape(client.name if client else '—')}</p>
 <p>This is to certify that the waterproofing works listed below were carried out by us at the above site and completed on {w.completion_date:%d.%m.%Y}. The quantities are the ones approved by the client in the measurement book.</p>
-<table class="wcc"><thead><tr><th>#</th><th>Area</th><th>Item</th><th>Qty</th><th>Unit</th><th>System</th><th>Dates</th></tr></thead><tbody>{rows}</tbody></table>
+<table class="wcc"><thead><tr><th>#</th><th>Area</th><th>Item</th><th>Qty</th><th>Unit</th><th>System and products</th><th>Dates</th></tr></thead><tbody>{rows}</tbody></table>
 <p><b>Systems:</b> {escape(', '.join(w.systems) or '—')}<br><b>Products:</b> {escape(', '.join(w.products) or '—')}</p>
 <p><b>Guarantee:</b> {w.guarantee_years} years from {w.completion_date:%d.%m.%Y} to {w.guarantee_expiry:%d.%m.%Y}{' (' + escape(w.guarantee_from) + ')' if w.guarantee_from else ''}.</p>
 {('<p><b>Note:</b> ' + escape(w.note) + '</p>') if w.note else ''}
 <h3>MARKED PLAN</h3><div class="plan">{plan_svg(db, site, w)}</div>
-<div class="sig"><div>For the applicator<br><br>____________________</div><div>{signed}</div></div>
+<table class="sigs"><tr>
+<td><b>{escape(firm)}</b><div class="space"></div>____________________<br>{escape(sig_name or '')}<br>{escape(sig_role)}<br>Date: {w.completion_date:%d.%m.%Y}</td>
+<td><b>For {escape(client.name if client else 'the client')}</b><div class="space"></div>____________________<br>Name: ____________________<br>Designation: ______________<br>Date: ____________________
+{('<div class="small">' + signed + '</div>') if signed else ''}</td></tr></table>
 """
     return _page(db, w.code, body)
+
+
+def signatory(db: Session) -> tuple[str, str | None, str]:
+    """Our signatory from the letterhead (Settings > Letterheads): the firm line, the name and the
+    designation."""
+    from app.quotations.models import Letterhead  # noqa: PLC0415
+
+    head = db.scalars(select(Letterhead).where(Letterhead.is_active).order_by(Letterhead.id)).first()
+    firm = (head.signatory_firm if head else None) or "For the applicator"
+    return firm, (head.signatory_name if head else None), ((head.signatory_designation if head else None) or "Authorised signatory")
 
 
 def bond_html(db: Session, w: WorkCompletion) -> str:
@@ -411,7 +525,7 @@ def bond_html(db: Session, w: WorkCompletion) -> str:
     total = {}
     for a in w.areas:
         total[a["unit"]] = total.get(a["unit"], Decimal(0)) + Decimal(a["qty"])
-    qty = ", ".join(f"{v:,.2f} {k}" for k, v in total.items())
+    qty = ", ".join(f"{v:,.3f} {k}" for k, v in total.items())
     body = f"""
 <h2 class="c">GUARANTEE BOND</h2>
 <p>Reference: {w.code} &nbsp; Date: {w.completion_date:%d.%m.%Y}</p>
@@ -421,7 +535,7 @@ for a period of <b>{w.guarantee_years} years</b> from {w.completion_date:%d.%m.%
 others (chasing, drilling, re-tiling, new fixtures) and are used as intended.</p>
 <p>Systems: {escape(', '.join(w.systems) or '—')}. Products: {escape(', '.join(w.products) or '—')}.</p>
 <p>Any leakage in these areas reported within the guarantee period will be inspected within 7 days and, when it is due to our work, rectified at our cost.</p>
-<div class="sig"><div>For the applicator<br><br>____________________<br>Authorised signatory</div></div>
+<div class="sig"><div>{escape(signatory(db)[0])}<div class="space"></div>____________________<br>{escape(signatory(db)[1] or '')}<br>{escape(signatory(db)[2])}</div></div>
 """
     return _page(db, f"{w.code} bond", body)
 
@@ -456,7 +570,7 @@ def register(db: Session, site_ids=None, today: date | None = None) -> list[dict
             is not None
         )
         out.append({"id": w.id, "code": w.code, "addendum_of": w.addendum_of_id, "site_id": w.site_id, "site": f"{site.code} {site.name}" if site else None,
-                    "client": client.name if client else None, "areas": [f"{a['area']}: {Decimal(a['qty']):.2f} {a['unit']}" for a in w.areas],
+                    "client": client.name if client else None, "areas": [f"{a['area']}: {qty_text(a['qty'], a['unit'])}" for a in w.areas],
                     "products": w.products, "systems": w.systems, "start": w.completion_date, "expiry": w.guarantee_expiry, "years": w.guarantee_years,
                     "active": (today or date.today()) <= w.guarantee_expiry, "has_complaints": issues, "is_demo": w.is_demo})  # fmt: skip
     return out
@@ -485,5 +599,5 @@ def past_projects(db: Session) -> list[dict]:
             for a in x.areas:
                 total[a["unit"]] = total.get(a["unit"], Decimal(0)) + Decimal(a["qty"])
         out.append({"client": client.name if client else "", "site": site.name if site else "", "city": site.city if site else "", "systems": ", ".join(w.systems),
-                    "quantities": ", ".join(f"{v:,.2f} {k}" for k, v in total.items()), "completion": w.completion_date, "guarantee_years": w.guarantee_years, "is_demo": w.is_demo})  # fmt: skip
+                    "quantities": ", ".join(f"{v:,.3f} {k}" for k, v in total.items()), "completion": w.completion_date, "guarantee_years": w.guarantee_years, "is_demo": w.is_demo})  # fmt: skip
     return out

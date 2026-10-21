@@ -4476,3 +4476,39 @@ li.late a {
   border: 1px solid var(--accent);
   background: var(--accent-soft);
 }
+.spec-lines {
+  border-collapse: collapse;
+  width: 100%;
+}
+.spec-lines td {
+  padding: 2px 8px 2px 0;
+  vertical-align: top;
+  border: 0;
+}
+.also-asked {
+  font-size: 11px;
+  color: var(--muted);
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.seg button {
+  border: 0;
+  background: var(--surface);
+  padding: 8px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+.seg button.on {
+  background: var(--accent);
+  color: #fff;
+}
+.ft-in {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+

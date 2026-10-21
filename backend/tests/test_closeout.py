@@ -666,6 +666,22 @@ def test_a_stuck_bill_escalates_and_payment_reminders_come_on_due_plus_5_and_plu
 # --- 9. work completion --------------------------------------------------------------------------------
 
 
+def _give_system(db, w):
+    """The PU coating line's system (on its BOQ line), with one product."""
+    from app.finance.models import ContractLine
+    from app.masters.models import System, SystemComponent
+
+    s = System(code="INV-PU", name="Invented PU system", unit="sqm")
+    p = Product(code="INV-PU-1", name="Invented PU coat", unit="kg")
+    db.add_all([s, p])
+    db.flush()
+    db.add(SystemComponent(system_id=s.id, product_id=p.id, consumption_per_unit=D("1.5")))
+    cl = db.get(ContractLine, w["pu"])
+    db.get(BoqLine, cl.boq_line_id).system_id = s.id
+    db.commit()
+    return s
+
+
 def test_the_work_completion_takes_approved_quantities_and_is_locked_once_signed(
     boss, measured, db
 ):
@@ -676,6 +692,13 @@ def test_the_work_completion_takes_approved_quantities_and_is_locked_once_signed
     _line(c, h, w, b1, length="3", breadth="1")  # a draft: not in the certificate
     db.get(Measurement, a["id"]).status = "approved"
     db.commit()
+    r = c.post(
+        f"/api/closeout/sites/{w['site']}/work-completions",
+        json={"completion_date": "2026-11-15", "guarantee_years": 10},
+        headers=h,
+    )
+    assert r.status_code == 422 and "No system for" in r.json()["detail"]  # every line its system
+    _give_system(db, w)
     r = c.post(
         f"/api/closeout/sites/{w['site']}/work-completions",
         json={"completion_date": "2026-11-15", "guarantee_years": 10},

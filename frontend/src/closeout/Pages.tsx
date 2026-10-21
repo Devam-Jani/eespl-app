@@ -391,7 +391,8 @@ type MLine = {
   recorded_by_staff: boolean;
   zone_reason: string | null;
   billed_in: string | null;
-  changes: { id: number; field: string; old: string | null; new: string; remark: string | null; by: string; at: string; status: string }[];
+  shown?: Record<string, string>;
+  changes: { id: number; field: string; old: string | null; new: string; old_shown?: string; new_shown?: string; remark: string | null; by: string; at: string; status: string }[];
 };
 
 export function SiteMeasurements() {
@@ -469,7 +470,7 @@ export function SiteMeasurements() {
                 <td className="small">
                   {m.changes.map((c) => (
                     <div key={c.id}>
-                      {c.field}: {num(c.old, 3)} → {num(c.new, 3)} by {c.by} ({c.status})
+                      {c.field.replace("_m", "")}: {c.old_shown ?? num(c.old, 3)} → {c.new_shown ?? num(c.new, 3)} by {c.by} ({c.status})
                       {c.status === "pending" && (
                         <>
                           {" "}

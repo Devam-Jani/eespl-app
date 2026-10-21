@@ -241,6 +241,9 @@ class MeasurementChange(Base):
     field: Mapped[str] = mapped_column(String(20))  # length_m, breadth_m, qty ...
     old_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
     new_value: Mapped[Decimal] = mapped_column(Numeric(14, 3))
+    # as typed (19 ft 5 in): the value columns hold metres
+    old_text: Mapped[str | None] = mapped_column(String(40))
+    new_text: Mapped[str | None] = mapped_column(String(40))
     remark: Mapped[str | None] = mapped_column(Text)
     by_user: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     by_name: Mapped[str] = mapped_column(String(200))

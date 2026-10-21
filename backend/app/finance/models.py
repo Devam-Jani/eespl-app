@@ -133,6 +133,10 @@ class ContractLine(Tracked, Base):
     qty: Mapped[Decimal] = mapped_column(Qty)
     rate: Mapped[Decimal] = mapped_column(Rate)
     is_extra: Mapped[bool] = mapped_column(Boolean, server_default="false")  # beyond the BOQ
+    # the accepted work order's line: its unit, rate and qty rule the book, bills and certificate
+    wo_line_id: Mapped[int | None] = mapped_column(
+        ForeignKey("client_work_order_lines.id", ondelete="SET NULL")
+    )
     approved_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )

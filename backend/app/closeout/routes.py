@@ -632,11 +632,12 @@ class MeasureIn(BaseModel):
     contract_line_id: int | None = None
     node_id: int | None = None
     cad_area_id: int | None = None
-    unit: str | None = "sqm"
-    length_m: Decimal | None = None
-    breadth_m: Decimal | None = None
-    perimeter_m: Decimal | None = None
-    height_m: Decimal | None = None
+    unit: str | None = None  # the contract line's (the work order's) when not given
+    # metres (5.918) or feet and inches as typed ("19 ft 5 in"): stored in metres
+    length_m: Decimal | str | None = None
+    breadth_m: Decimal | str | None = None
+    perimeter_m: Decimal | str | None = None
+    height_m: Decimal | str | None = None
     deductions_sqm: Decimal | None = None
     qty: Decimal | None = None
     measured_on: date | None = None
@@ -872,11 +873,11 @@ def sheet_rows(db: Session, site: Site) -> tuple[list[str], list[list]]:
         "#",
         "Place",
         "Description",
-        "L (m)",
-        "B (m)",
-        "Perimeter (m)",
-        "Height (m)",
-        "Deductions (sqm)",
+        "L",
+        "B",
+        "Perimeter",
+        "Height",
+        "Deductions",
         "Qty",
         "Unit",
         "Status",
@@ -895,10 +896,12 @@ def sheet_rows(db: Session, site: Site) -> tuple[list[str], list[list]]:
     ):
         ln = msvc.line_out(db, m)
         corr = "; ".join(
-            f"{c['field']} {c['old']} -> {c['new']} by {c['by']} on {c['at']:%d.%m.%Y %H:%M} ({c['status']}{': ' + c['remark'] if c['remark'] else ''})"
+            f"{c['field']} {c['old_shown']} -> {c['new_shown']} by {c['by']} on {c['at']:%d.%m.%Y %H:%M} ({c['status']}{': ' + c['remark'] if c['remark'] else ''})"
             for c in ln["changes"]
         )
-        rows.append([i, ln["place"] or "", ln["description"], m.length_m, m.breadth_m, m.perimeter_m, m.height_m, m.deductions_sqm, m.qty, m.unit, m.status,
+        size = ln["shown"]
+        rows.append([i, ln["place"] or "", ln["description"], size.get("length_m", ""), size.get("breadth_m", ""), size.get("perimeter_m", ""), size.get("height_m", ""),
+                     m.deductions_sqm, m.qty, m.unit, m.status,
                      (m.approved_name or "") + (" (recorded by staff)" if m.recorded_by_staff else ""), m.approved_at.strftime("%d.%m.%Y") if m.approved_at else "", corr])  # fmt: skip
     return cols, rows
 

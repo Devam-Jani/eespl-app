@@ -175,7 +175,7 @@ def approve(site_id: int, mid: int, request: Request, db: DbSession, ctx: Ctx) -
 
 class CorrectIn(BaseModel):
     field: str
-    new_value: Decimal = Field(ge=0)
+    new_value: Decimal | str  # metres, or feet and inches as typed ("19 ft 5 in")
     remark: str | None = Field(default=None, max_length=1000)
 
 

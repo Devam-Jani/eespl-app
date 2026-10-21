@@ -215,6 +215,8 @@ class Measurement(Tracked, Base):
     signed_copy_path: Mapped[str | None] = mapped_column(String(400))
     zone_reason: Mapped[str | None] = mapped_column(Text)  # outside our RFI zones: why
     ra_bill_id: Mapped[int | None] = mapped_column(ForeignKey("ra_bills.id", ondelete="SET NULL"))
+    # the sizes as typed on site ({"length_m": "19 ft 5 in"}); the size columns hold metres
+    entered: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class TenderBidder(Base):
