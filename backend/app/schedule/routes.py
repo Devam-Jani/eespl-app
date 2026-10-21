@@ -283,6 +283,9 @@ def promise(
     )
     node.handover_client_says_on = body.client_says_on
     node.handover_promised_entered_by = principal.user.id
+    from app.closeout import handover  # noqa: PLC0415
+
+    handover.note(node, "promised", body.promised_on, f"{body.promised_by.strip()} (entered by {principal.user.full_name})")
     record(db, request, principal, "handover.promise", "site_node", node.id,
            before=jsonable_encoder(before), after=jsonable_encoder(body.model_dump()))  # fmt: skip
     db.commit()

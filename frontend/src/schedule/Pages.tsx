@@ -249,6 +249,11 @@ type Area = {
   our_delay_days: number | null;
   overdue_handover: boolean;
   overdue_finish: boolean;
+  client_promised_on?: string | null;
+  client_promised_by?: string | null;
+  moved_to?: string | null;
+  moved_because?: string | null;
+  moved_by?: string | null;
 };
 type Handover = { site: string; areas: Area[]; client_delay_days: number; our_delay_days: number; can_promise: boolean; can_confirm: boolean };
 
@@ -268,6 +273,18 @@ export function HandoverTab({ siteId }: { siteId: number }) {
         json: { promised_on: edit.promised_on, promised_by: edit.promised_by, client_says_on: edit.client_says_on || null },
       });
       setEdit(null);
+      void load();
+    } catch (e) {
+      setError(errorText(e));
+    }
+  }
+  const { can } = useAuth();
+  const [moving, setMoving] = useState<{ node: number; place: string; to: string; reason: string } | null>(null);
+  async function move() {
+    if (!moving) return;
+    try {
+      await api(`/api/closeout/sites/${siteId}/nodes/${moving.node}/handover-move`, { method: "POST", json: { promised_on: moving.to, reason: moving.reason } });
+      setMoving(null);
       void load();
     } catch (e) {
       setError(errorText(e));
@@ -325,7 +342,19 @@ export function HandoverTab({ siteId }: { siteId: number }) {
                   {a.promised_on ? (
                     <>
                       {shortDate(a.promised_on)}
-                      <div className="muted">{a.promised_by}</div>
+                      {a.moved_to ? (
+                        <div className="muted">
+                          moved by {a.moved_by} because {a.moved_because}
+                          {a.client_promised_on && (
+                            <>
+                              {" "}
+                              · the client promised <b>{shortDate(a.client_promised_on)}</b>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="muted">{a.promised_by}</div>
+                      )}
                       {a.client_says_on && <div className="muted">client says handed over {shortDate(a.client_says_on)} (not counted)</div>}
                     </>
                   ) : (
@@ -357,6 +386,11 @@ export function HandoverTab({ siteId }: { siteId: number }) {
                       Promised date
                     </button>
                   )}
+                  {can("closeout.site") && !a.received_on && a.promised_on && (
+                    <button className="btn btn-small btn-ghost" onClick={() => setMoving({ node: a.node_id, place: a.place, to: a.promised_on ?? "", reason: "" })}>
+                      Move the date
+                    </button>
+                  )}
                   {h.can_confirm && !a.received_on && (
                     <>
                       <button className="btn btn-small btn-primary" onClick={() => void confirm(a, true)}>
@@ -373,6 +407,27 @@ export function HandoverTab({ siteId }: { siteId: number }) {
           </tbody>
         </table>
       </div>
+      {moving && (
+        <div className="form-row top-gap">
+          <span className="small">
+            <b>{moving.place}</b>: moved to
+          </span>
+          <label className="field">
+            <span>New date</span>
+            <input type="date" value={moving.to} onChange={(e) => setMoving({ ...moving, to: e.target.value })} />
+          </label>
+          <label className="field grow">
+            <span>Because (the client sees it)</span>
+            <input value={moving.reason} onChange={(e) => setMoving({ ...moving, reason: e.target.value })} />
+          </label>
+          <button className="btn btn-primary" disabled={!moving.to || moving.reason.trim().length < 3} onClick={() => void move()}>
+            Move
+          </button>
+          <button className="btn btn-ghost" onClick={() => setMoving(null)}>
+            Cancel
+          </button>
+        </div>
+      )}
       {edit && (
         <div className="form-row top-gap">
           <label className="field">

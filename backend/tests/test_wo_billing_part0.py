@@ -137,8 +137,8 @@ def test_one_material_row_per_product_with_its_own_specs_and_the_stricter_value(
     assert (
         coat[0]["required"] == "min. 150%"
         and coat[0]["prebid_query_id"] == 7
-        and "120%" in coat[0]["note"]
-    )
+        and coat[0]["also"] == [{"required": "min. 120%", "source": "the client's standard, p.8"}]
+    )  # the other value under "also asked", with its source
     mesh = msite.product_specs([rule], "Geotextile 40 GSM", "mesh", [q])
     assert [x["property"] for x in mesh] == ["Mesh / fabric"]
 

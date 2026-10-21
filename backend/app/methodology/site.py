@@ -217,11 +217,12 @@ def handover(db: Session, m: Methodology, site_id: int | None, user_id=None) -> 
                 )
             )
         )
+        docs = sop_labels(db, {r.document_id for _it, rs, _s in products.values() for r in rs if r.document_id})
         for pname, (it, rules, sampling) in products.items():
             if pname in known:
                 continue
             mp = db.scalar(select(MethodProduct).where(MethodProduct.name == pname))
-            specs = product_specs(rules, pname, mp.kind if mp else None, queries)
+            specs = product_specs(rules, pname, mp.kind if mp else None, queries, docs)
             db.add(MaterialTest(site_id=site_id, methodology_item_id=it.id, product_name=pname, product_id=mp.product_id if mp else None, tests=specs,
                                 frequency=sampling or "on every delivery: the manufacturer's test certificate, cross-checked with the specification", status="planned", created_by=user_id))  # fmt: skip
             out["material_tests"] += 1
@@ -231,14 +232,27 @@ def handover(db: Session, m: Methodology, site_id: int | None, user_id=None) -> 
     return out
 
 
+def sop_labels(db: Session, ids: set[int]) -> dict[int, str]:
+    """'SOP GPL-WP-04 R2' per standard document (its title when it has no number)."""
+    from app.methodology.models import StandardDocument  # noqa: PLC0415
+
+    out = {}
+    for d in db.scalars(select(StandardDocument).where(StandardDocument.id.in_(ids or {0}))):
+        name = f"SOP {d.sop_no}" if d.sop_no else (d.title or d.file_name)
+        out[d.id] = f"{name}{' R' + d.revision if d.revision else ''}"
+    return out
+
+
 def product_specs(
-    rules: list[StandardRule], pname: str, kind: str | None, queries: list
+    rules: list[StandardRule], pname: str, kind: str | None, queries: list, docs: dict | None = None
 ) -> list[dict]:
-    """The client's specs for this product's own material: a mesh gets the mesh weight, a coating
-    the coating's values (not the membrane's or the PU's). Where the SOP says two things, the
-    stricter one, with the pre-bid query that asks which applies."""
+    """The client's specs for this product's own material, one row per spec: the value used, its
+    SOP and page. A mesh gets the mesh weight, a coating the coating's values (not the membrane's
+    or the PU's). Where SOPs (or one SOP) say two things, the stricter is used and the other value
+    is kept under "also asked" with its source, and the pre-bid query that asks which applies."""
     if not rules:
         return []
+    docs = docs or {}
     ptype = vocab.system_type_of(pname)
     rows = [
         {**x, "_doc": r.document_id}
@@ -261,56 +275,39 @@ def product_specs(
         )
     else:
         rows = []
+
+    def src(x: dict) -> str:
+        label = docs.get(x["_doc"]) or "the client's standard"
+        return f"{label}, p.{x['page']}" if x.get("page") else label
+
     out: dict[str, dict] = {}
     for x in rows:
         prop = x["property"]
         got = out.get(prop)
         if got is None:
-            out[prop] = {
-                "property": x["label"],
-                "standard": vocab.standard_of(x.get("standard") or ""),
-                "required": x["required"],
-                "num": x["num"],
-                "page": x.get("page"),
-                "_doc": x["_doc"],
-            }
+            out[prop] = {"property": x["label"], "standard": vocab.standard_of(x.get("standard") or ""), "required": x["required"], "num": x["num"],
+                         "page": x.get("page"), "source": src(x), "also": [], "_doc": x["_doc"]}  # fmt: skip
             continue
         if float(x["num"]) == float(got["num"]):
             continue
-        stricter = (
-            x if (float(x["num"]) > float(got["num"])) == (prop in vocab.HIGHER_IS_BETTER) else None
-        )
-        other = got["required"] if stricter else x["required"]
-        if stricter:
-            got.update(
-                required=x["required"],
-                num=x["num"],
-                standard=vocab.standard_of(x.get("standard") or "") or got["standard"],
-                page=x.get("page"),
-            )
-        notes = got.setdefault("notes", [])
-        if x["_doc"] != got["_doc"]:
-            if other not in " ".join(notes):
-                notes.append(f"another SOP asks {other}: the stricter is used")
-            continue
-        q = next(
-            (
-                q
-                for q in queries
-                if q.text.lower().startswith(vocab.PROPERTY_LABEL.get(prop, prop).lower())
-            ),
-            None,
-        )
-        notes.insert(
-            0,
-            f"the SOP also says {other}: the stricter is used"
-            + (f"; pre-bid query #{q.id}" if q else ""),
-        )
-        if q:
+        higher = prop in vocab.HIGHER_IS_BETTER
+        if (float(x["num"]) > float(got["num"])) == higher:  # the new one is stricter
+            got["also"].append({"required": got["required"], "source": got["source"]})
+            got.update(required=x["required"], num=x["num"], page=x.get("page"), source=src(x), _doc=x["_doc"],
+                       standard=vocab.standard_of(x.get("standard") or "") or got["standard"])  # fmt: skip
+        else:
+            got["also"].append({"required": x["required"], "source": src(x)})
+        same_sop = any(a["source"].split(", p.")[0] == got["source"].split(", p.")[0] for a in got["also"])
+        q = next((q for q in queries if q.text.lower().startswith(vocab.PROPERTY_LABEL.get(prop, prop).lower())), None)
+        if q and same_sop:
             got["prebid_query_id"] = q.id
     for r in out.values():
-        if r.get("notes"):
-            r["note"] = "; ".join(dict.fromkeys(r.pop("notes")))
+        seen, also = set(), []
+        for a in r["also"]:
+            if (a["required"], a["source"]) not in seen:
+                seen.add((a["required"], a["source"]))
+                also.append(a)
+        r["also"] = also
     return [{k: v for k, v in r.items() if k not in ("num", "_doc")} for r in out.values()]
 
 

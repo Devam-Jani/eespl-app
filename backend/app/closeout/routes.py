@@ -40,6 +40,8 @@ from app.closeout import workorder as wsvc
 from app.closeout.common import locked, next_code, not_found, today, unprocessable
 from app.closeout.models import (
     CLIENT_RIGHTS,
+    CLIENT_ROLE_DEFAULTS,
+    RIGHT_LABELS,
     ClientBillingCycle,
     ClientRoleDef,
     ClientWorkOrder,
@@ -495,15 +497,33 @@ def delete_wo(
 PortalManage = Annotated[str, Depends(require_permission("portal.manage"))]
 
 
+RolesView = Annotated[str, Depends(require_any_permission("portal.manage", "portal.roles"))]
+RolesEdit = Annotated[str, Depends(require_permission("portal.roles"))]
+
+
 @router.get("/client-roles")
-def client_roles(db: DbSession, _: PortalManage) -> dict:
+def client_roles(db: DbSession, _: RolesView) -> dict:
+    """Settings > Client roles: each role's rights (given at an invite) and its defaults."""
     return {
         "rights": list(CLIENT_RIGHTS),
+        "right_labels": RIGHT_LABELS,
         "roles": [
-            {"code": r.code, "label": r.label, "rights": r.rights}
+            {"code": r.code, "label": r.label, "rights": r.rights, "default_rights": CLIENT_ROLE_DEFAULTS.get(r.code, [])}
             for r in db.scalars(select(ClientRoleDef).order_by(ClientRoleDef.sort_order))
         ],
     }
+
+
+@router.post("/client-roles/{code}/reset")
+def reset_client_role(code: str, request: Request, db: DbSession, principal: CurrentPrincipal, _: RolesEdit) -> dict:
+    r = db.get(ClientRoleDef, code)
+    if r is None or code not in CLIENT_ROLE_DEFAULTS:
+        raise not_found("Client role not found")
+    before = {"rights": r.rights}
+    r.rights = sorted(CLIENT_ROLE_DEFAULTS[code])
+    record(db, request, principal, "client_role.reset", "client_role", code, before=before, after={"rights": r.rights})
+    db.commit()
+    return client_roles(db, "all")
 
 
 class RoleIn(BaseModel):
@@ -518,7 +538,7 @@ def set_client_role(
     request: Request,
     db: DbSession,
     principal: CurrentPrincipal,
-    _: PortalManage,
+    _: RolesEdit,
 ) -> dict:
     r = db.get(ClientRoleDef, code)
     if r is None:
@@ -563,8 +583,10 @@ def set_user_roles(
     rows = list(db.scalars(select(ClientUser).where(ClientUser.user_id == uid)))
     if not rows:
         raise not_found("Client user not found")
+    from app.portal import service as portal_svc  # noqa: PLC0415
+
     for r in rows:
-        r.roles = sorted(set(body.roles))
+        r.roles, r.rights = sorted(set(body.roles)), portal_svc.rights_for_roles(db, body.roles)
     record(db, request, principal, "client_user.roles", "user", uid, after={"roles": body.roles})
     db.commit()
     return {"user_id": uid, "roles": sorted(set(body.roles))}
@@ -595,6 +617,11 @@ def move_handover(
     if node is None or node.site_id != site.id:
         raise not_found("Place not found")
     before = {"promised_on": node.handover_promised_on}
+    from app.closeout import handover  # noqa: PLC0415
+
+    if node.handover_promised_on and not any(h["kind"] == "promised" for h in node.handover_history or []):
+        handover.note(node, "promised", node.handover_promised_on, node.handover_promised_by or "the client")  # the date before history was kept
+    handover.note(node, "moved", body.promised_on, principal.user.full_name, body.reason, was=node.handover_promised_on)
     node.handover_promised_on = body.promised_on
     node.handover_promised_by = f"moved by {principal.user.full_name}: {body.reason}"[:200]
     node.handover_promised_entered_by = principal.user.id
@@ -632,11 +659,12 @@ class MeasureIn(BaseModel):
     contract_line_id: int | None = None
     node_id: int | None = None
     cad_area_id: int | None = None
-    unit: str | None = "sqm"
-    length_m: Decimal | None = None
-    breadth_m: Decimal | None = None
-    perimeter_m: Decimal | None = None
-    height_m: Decimal | None = None
+    unit: str | None = None  # the contract line's (the work order's) when not given
+    # metres (5.918) or feet and inches as typed ("19 ft 5 in"): stored in metres
+    length_m: Decimal | str | None = None
+    breadth_m: Decimal | str | None = None
+    perimeter_m: Decimal | str | None = None
+    height_m: Decimal | str | None = None
     deductions_sqm: Decimal | None = None
     qty: Decimal | None = None
     measured_on: date | None = None
@@ -872,11 +900,11 @@ def sheet_rows(db: Session, site: Site) -> tuple[list[str], list[list]]:
         "#",
         "Place",
         "Description",
-        "L (m)",
-        "B (m)",
-        "Perimeter (m)",
-        "Height (m)",
-        "Deductions (sqm)",
+        "L",
+        "B",
+        "Perimeter",
+        "Height",
+        "Deductions",
         "Qty",
         "Unit",
         "Status",
@@ -895,10 +923,12 @@ def sheet_rows(db: Session, site: Site) -> tuple[list[str], list[list]]:
     ):
         ln = msvc.line_out(db, m)
         corr = "; ".join(
-            f"{c['field']} {c['old']} -> {c['new']} by {c['by']} on {c['at']:%d.%m.%Y %H:%M} ({c['status']}{': ' + c['remark'] if c['remark'] else ''})"
+            f"{c['field']} {c['old_shown']} -> {c['new_shown']} by {c['by']} on {c['at']:%d.%m.%Y %H:%M} ({c['status']}{': ' + c['remark'] if c['remark'] else ''})"
             for c in ln["changes"]
         )
-        rows.append([i, ln["place"] or "", ln["description"], m.length_m, m.breadth_m, m.perimeter_m, m.height_m, m.deductions_sqm, m.qty, m.unit, m.status,
+        size = ln["shown"]
+        rows.append([i, ln["place"] or "", ln["description"], size.get("length_m", ""), size.get("breadth_m", ""), size.get("perimeter_m", ""), size.get("height_m", ""),
+                     m.deductions_sqm, m.qty, m.unit, m.status,
                      (m.approved_name or "") + (" (recorded by staff)" if m.recorded_by_staff else ""), m.approved_at.strftime("%d.%m.%Y") if m.approved_at else "", corr])  # fmt: skip
     return cols, rows
 

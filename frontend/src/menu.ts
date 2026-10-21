@@ -5,37 +5,42 @@ export type MenuItem = {
   perms: string[];
   /** ...and all of these as well (e.g. tender.margin for pages that show cost). */
   all?: string[];
-  section: "Modules" | "Analytics" | "Masters" | "Settings" | "Administration";
+  section: Group;
 };
+
+/** The menu's groups, by what people do; each shows only the pages the role may open. */
+export const GROUPS = ["My work", "Sales", "Planning", "Site", "Billing", "Stores", "Accounts", "Analytics", "Masters", "Settings", "Administration"] as const;
+export type Group = (typeof GROUPS)[number];
 
 // every staff role holds at least one of these: My work is everyone's home
 const STAFF = ["dashboard.view", "site.view", "leads.view", "tender.view", "billing.view", "payables.view", "po.view", "admin.users", "store.view", "delivery.view"];
 
 export const MENU: MenuItem[] = [
-  { to: "/my-work", label: "My work", perms: STAFF, section: "Modules" },
-  { to: "/notifications", label: "Notifications", perms: STAFF, section: "Modules" },
-  { to: "/field", label: "My day (check-in)", perms: ["field.track"], section: "Modules" },
-  { to: "/field/team", label: "Team map", perms: ["field.track"], section: "Modules" },
-  { to: "/field/claims", label: "Travel claims", perms: ["field.track", "field.claims"], section: "Modules" },
-  { to: "/field/gangs", label: "Gang check-in", perms: ["field.gang"], section: "Modules" },
-  { to: "/escalated", label: "Escalated (all sites)", perms: ["process.escalations", "process.rules"], section: "Modules" },
-  { to: "/enquiries", label: "Enquiries to allocate", perms: ["leads.allocate"], section: "Modules" },
-  { to: "/planning/board", label: "Site status board", perms: ["planning.view", "site.view"], section: "Modules" },
-  { to: "/measurements", label: "Measurement book", perms: ["measurement.view"], section: "Modules" },
-  { to: "/bill-tracking", label: "Client bill tracking", perms: ["billing.view"], section: "Modules" },
-  { to: "/work-orders", label: "Client work orders", perms: ["wo.view"], section: "Modules" },
-  { to: "/billing/tracking", label: "Bill steps at the client", perms: ["closeout.billing", "closeout.payments"], section: "Modules" },
-  { to: "/billing/payments", label: "Payment follow-up", perms: ["closeout.payments"], section: "Modules" },
-  { to: "/guarantees", label: "Guarantee register", perms: ["closeout.billing", "closeout.payments"], section: "Modules" },
-  { to: "/issues", label: "Issue log", perms: ["issues.view"], section: "Modules" },
-  { to: "/labour-check", label: "Labour bill check", perms: ["labourcheck.check"], section: "Modules" },
-  { to: "/labour-rates", label: "Labour rates and bills", perms: ["subcon.view", "payables.view"], section: "Modules" },
+  { to: "/my-work", label: "My work", perms: STAFF, section: "My work" },
+  { to: "/notifications", label: "Notifications", perms: STAFF, section: "My work" },
+  { to: "/field", label: "My day (check-in)", perms: ["field.track"], section: "My work" },
+  { to: "/field/team", label: "Team map", perms: ["field.track"], section: "Site" },
+  { to: "/field/claims", label: "Travel claims", perms: ["field.track", "field.claims"], section: "Accounts" },
+  { to: "/field/gangs", label: "Gang check-in", perms: ["field.gang"], section: "My work" },
+  { to: "/escalated", label: "Escalated (all sites)", perms: ["process.escalations", "process.rules"], section: "My work" },
+  { to: "/enquiries", label: "Enquiries to allocate", perms: ["leads.allocate"], section: "Planning" },
+  { to: "/planning/board", label: "Site status board", perms: ["planning.view", "site.view"], section: "Planning" },
+  { to: "/measurements", label: "Measurement book", perms: ["measurement.view"], section: "Billing" },
+  { to: "/bills", label: "Bills", perms: ["billing.view", "closeout.billing", "closeout.payments"], section: "Billing" },
+  { to: "/billing/checklist", label: "Billing checklist", perms: ["closeout.billing"], section: "Billing" },
+  { to: "/work-orders", label: "Client work orders", perms: ["wo.view"], section: "Billing" },
+  { to: "/billing/payments", label: "Payment follow-up", perms: ["closeout.payments"], section: "Accounts" },
+  { to: "/guarantees", label: "Guarantee register", perms: ["closeout.billing", "closeout.payments"], section: "Billing" },
+  { to: "/issues", label: "Issue log", perms: ["issues.view"], section: "Site" },
+  { to: "/labour-check", label: "Labour bill check", perms: ["labourcheck.check"], section: "Billing" },
+  { to: "/labour-rates", label: "Labour rates and bills", perms: ["subcon.view", "payables.view"], section: "Billing" },
   { to: "/scorecard", label: "Closure scorecard", perms: ["scorecard.view"], section: "Analytics" },
+  { to: "/settings/client-roles", label: "Client roles", perms: ["portal.roles"], section: "Settings" },
   { to: "/settings/team", label: "Team", perms: ["planning.edit", "settings.company", "grants.manage"], section: "Settings" },
   { to: "/settings/process", label: "Process rules", perms: ["process.rules"], section: "Settings" },
   { to: "/settings/field", label: "Field tracking", perms: ["field.admin"], section: "Settings" },
   { to: "/my-notifications", label: "My notifications", perms: STAFF, section: "Settings" },
-  { to: "/dashboard", label: "Dashboard", perms: ["dashboard.company", "dashboard.sales", "dashboard.site", "dashboard.finance", "dashboard.purchase"], section: "Modules" },
+  { to: "/dashboard", label: "Dashboard", perms: ["dashboard.company", "dashboard.sales", "dashboard.site", "dashboard.finance", "dashboard.purchase"], section: "Analytics" },
   { to: "/analytics/sites", label: "Sites", perms: ["dashboard.company", "dashboard.site"], section: "Analytics" },
   { to: "/analytics/finance", label: "Finance", perms: ["dashboard.company", "dashboard.finance"], section: "Analytics" },
   { to: "/analytics/profitability", label: "Profitability", perms: ["dashboard.company", "dashboard.finance"], all: ["tender.margin"], section: "Analytics" },
@@ -67,37 +72,49 @@ export const MENU: MenuItem[] = [
   { to: "/settings/quotation-library", label: "Quotation library", perms: ["quotation.view"], all: ["quotation.template.edit"], section: "Settings" },
   { to: "/settings/site-control", label: "Site control", perms: ["settings.company"], section: "Settings" },
   { to: "/settings/survey", label: "Site survey", perms: ["survey.view"], all: ["settings.company"], section: "Settings" },
-  { to: "/leads", label: "Leads", perms: ["leads.view"], section: "Modules" },
-  { to: "/quotations", label: "Quotations", perms: ["quotation.view"], section: "Modules" },
-  { to: "/deliveries", label: "Deliveries at site", perms: ["delivery.view"], section: "Modules" },
-  { to: "/rate-contracts", label: "Rate contracts", perms: ["ratecontract.view"], section: "Modules" },
-  { to: "/ready-to-bill", label: "Ready to bill", perms: ["billing.view"], section: "Modules" },
-  { to: "/new-areas", label: "New areas (planning)", perms: ["sitearea.approve"], section: "Modules" },
-  { to: "/tenders", label: "Tenders", perms: ["tender.view"], section: "Modules" },
-  { to: "/sites", label: "Sites", perms: ["site.view"], section: "Modules" },
-  { to: "/snags", label: "Snags", perms: ["site.view"], section: "Modules" },
-  { to: "/surveys", label: "Site surveys", perms: ["survey.view"], section: "Modules" },
-  { to: "/indents", label: "Indents", perms: ["indent.view", "indent.create", "indent.approve"], section: "Modules" },
-  { to: "/rfqs", label: "RFQs", perms: ["po.view"], section: "Modules" },
-  { to: "/purchase-orders", label: "Purchase orders", perms: ["po.view"], section: "Modules" },
-  { to: "/grns", label: "Goods receipts (GRN)", perms: ["grn.view"], section: "Modules" },
-  { to: "/stores", label: "Stores & stock", perms: ["store.view"], section: "Modules" },
-  { to: "/transfers", label: "Transfers", perms: ["store.view"], section: "Modules" },
-  { to: "/freight", label: "Site freight", perms: ["po.view", "store.view"], section: "Modules" },
-  { to: "/daily-reports", label: "Daily reports", perms: ["dpr.view"], section: "Modules" },
-  { to: "/attendance", label: "Attendance", perms: ["labour.view"], section: "Modules" },
+  { to: "/leads", label: "Leads", perms: ["leads.view"], section: "Sales" },
+  { to: "/quotations", label: "Quotations", perms: ["quotation.view"], section: "Sales" },
+  { to: "/deliveries", label: "Deliveries at site", perms: ["delivery.view"], section: "Site" },
+  { to: "/rate-contracts", label: "Rate contracts", perms: ["ratecontract.view"], section: "Sales" },
+  { to: "/ready-to-bill", label: "Ready to bill", perms: ["billing.view"], section: "Billing" },
+  { to: "/new-areas", label: "New areas (planning)", perms: ["sitearea.approve"], section: "Planning" },
+  { to: "/tenders", label: "Tenders", perms: ["tender.view"], section: "Sales" },
+  { to: "/sites", label: "Sites", perms: ["site.view"], section: "Site" },
+  { to: "/snags", label: "Snags", perms: ["site.view"], section: "Site" },
+  { to: "/surveys", label: "Site surveys", perms: ["survey.view"], section: "Sales" },
+  { to: "/indents", label: "Indents", perms: ["indent.view", "indent.create", "indent.approve"], section: "Stores" },
+  { to: "/rfqs", label: "RFQs", perms: ["po.view"], section: "Stores" },
+  { to: "/purchase-orders", label: "Purchase orders", perms: ["po.view"], section: "Stores" },
+  { to: "/grns", label: "Goods receipts (GRN)", perms: ["grn.view"], section: "Stores" },
+  { to: "/stores", label: "Stores & stock", perms: ["store.view"], section: "Stores" },
+  { to: "/transfers", label: "Transfers", perms: ["store.view"], section: "Stores" },
+  { to: "/freight", label: "Site freight", perms: ["po.view", "store.view"], section: "Stores" },
+  { to: "/daily-reports", label: "Daily reports", perms: ["dpr.view"], section: "Site" },
+  { to: "/attendance", label: "Attendance", perms: ["labour.view"], section: "Site" },
   { to: "/labour", label: "Labour", perms: ["labour.view"], section: "Masters" },
   { to: "/subcontractors", label: "Subcontractors", perms: ["subcon.view"], section: "Masters" },
-  { to: "/assets", label: "Tools & equipment", perms: ["asset.view"], section: "Modules" },
+  { to: "/assets", label: "Tools & equipment", perms: ["asset.view"], section: "Site" },
   { to: "/settings/checklists", label: "Checklist templates", perms: ["inspection.view"], section: "Settings" },
-  { to: "/billing", label: "Client billing", perms: ["billing.view"], section: "Modules" },
-  { to: "/payables", label: "Payables", perms: ["payables.view"], section: "Modules" },
-  { to: "/petty-cash", label: "Petty cash", perms: ["expense.create", "expense.approve"], section: "Modules" },
-  { to: "/payroll", label: "Payroll & wages", perms: ["payroll.view", "payables.view"], section: "Modules" },
-  { to: "/site-profit", label: "Site profit", perms: ["tender.margin"], section: "Modules" },
-  { to: "/tally", label: "Tally export", perms: ["finance.export"], section: "Modules" },
+  { to: "/billing", label: "Client billing", perms: ["billing.view"], section: "Billing" },
+  { to: "/payables", label: "Payables", perms: ["payables.view"], section: "Accounts" },
+  { to: "/petty-cash", label: "Petty cash", perms: ["expense.create", "expense.approve"], section: "Accounts" },
+  { to: "/payroll", label: "Payroll & wages", perms: ["payroll.view", "payables.view"], section: "Accounts" },
+  { to: "/site-profit", label: "Site profit", perms: ["tender.margin"], section: "Accounts" },
+  { to: "/tally", label: "Tally export", perms: ["finance.export"], section: "Accounts" },
   { to: "/settings/finance", label: "Finance", perms: ["billing.view", "payables.view", "payroll.view"], section: "Settings" },
   { to: "/admin/users", label: "Users", perms: ["admin.users"], section: "Administration" },
   { to: "/admin/roles", label: "Roles & permissions", perms: ["admin.roles"], section: "Administration" },
   { to: "/admin/audit", label: "Audit log", perms: ["audit.view"], section: "Administration" },
 ];
+
+/** The pages a user may open, by group (groups with none left out). */
+export function visibleGroups(can: (...perms: string[]) => boolean): { group: Group; items: MenuItem[] }[] {
+  const visible = MENU.filter((item) => can(...item.perms) && (item.all ?? []).every((c) => can(c)));
+  return GROUPS.map((group) => ({ group, items: visible.filter((i) => i.section === group) })).filter((g) => g.items.length > 0);
+}
+
+/** The group a path belongs to (the longest matching page). */
+export function groupOf(path: string): Group | null {
+  const hit = MENU.filter((i) => path === i.to || path.startsWith(`${i.to}/`)).sort((a, b) => b.to.length - a.to.length)[0];
+  return hit ? hit.section : null;
+}

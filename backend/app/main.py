@@ -11,6 +11,7 @@ from app.analytics import routers as analytics
 from app.auth.router import router as auth_router
 from app.closeout import portal_routes as closeout_portal
 from app.closeout import routes as closeout
+from app.closeout import screen_routes as closeout_screens
 from app.config import settings
 from app.costing import labour as labour_rates
 from app.costing import prices as price_list
@@ -117,6 +118,7 @@ for _r in (
     methodology.router,
     closeout.router,
     closeout_portal.router,
+    closeout_screens.router,
     analytics.dashboard,
     analytics.router,
     portal_staff.router,

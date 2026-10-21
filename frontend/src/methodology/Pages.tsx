@@ -1049,7 +1049,16 @@ type SiteOut = {
   material_tests: {
     id: number;
     product_name: string;
-    tests: { property: string; standard: string | null; required: string; note?: string }[];
+    tests: {
+      property: string;
+      standard: string | null;
+      required: string;
+      source?: string;
+      page?: number | null;
+      also?: { required: string; source: string }[];
+      prebid_query_id?: number;
+      note?: string;
+    }[];
     frequency: string | null;
     status: string;
     reference: string | null;
@@ -1148,7 +1157,33 @@ export function SiteMethodology() {
               <tr key={t.id}>
                 <td className="small">{t.product_name}</td>
                 <td className="small">
-                  {t.tests.map((x) => `${x.property} ${x.required}${x.standard ? ` (${x.standard})` : ""}${x.note ? ` — ${x.note}` : ""}`).join("; ") || "test certificate"}
+                  {t.tests.length ? (
+                    <table className="spec-lines">
+                      <tbody>
+                        {t.tests.map((x, i) => (
+                          <tr key={i}>
+                            <td>{x.property}</td>
+                            <td>
+                              <b>{x.required}</b>
+                              {x.standard ? ` (${x.standard})` : ""}
+                            </td>
+                            <td className="muted">
+                              {x.source ?? (x.page ? `p.${x.page}` : "")}
+                              {(x.also ?? []).length > 0 && (
+                                <div className="also-asked">
+                                  also asked: {(x.also ?? []).map((a) => `${a.required} (${a.source})`).join("; ")}
+                                  {x.prebid_query_id ? ` · pre-bid query #${x.prebid_query_id}` : ""}; the stricter is used
+                                </div>
+                              )}
+                              {!x.also && x.note && <div className="also-asked">{x.note}</div>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    "test certificate"
+                  )}
                 </td>
                 <td className="small">{t.frequency}</td>
                 <td>{t.status}</td>

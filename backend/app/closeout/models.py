@@ -52,6 +52,26 @@ CLIENT_RIGHTS = (
     "payment.view",  # bills, payments, what is overdue
     "documents.view",
 )
+RIGHT_LABELS = {
+    "progress.view": "See the sites, progress, daily reports, photos and the 3D view",
+    "handover.edit": "Enter and update the promised handover dates",
+    "inspection.sign": "Sign inspections, quality checklists and RFIs",
+    "snag.raise": "Raise snags",
+    "measurement.approve": "Approve or correct measurements",
+    "bill.view": "See the bills",
+    "bill.certify": "Certify or reject bills",
+    "payment.view": "See payments and what is overdue",
+    "documents.view": "See the shared drawings and documents",
+}
+# the defaults (Settings > Client roles resets to these); a change applies to new invites
+CLIENT_ROLE_DEFAULTS = {
+    "project_manager": ["progress.view", "handover.edit", "inspection.sign", "snag.raise", "measurement.approve", "bill.view", "bill.certify", "payment.view", "documents.view"],
+    "planning": ["progress.view", "handover.edit", "documents.view"],
+    "site": ["progress.view", "inspection.sign", "snag.raise", "documents.view"],
+    "billing": ["progress.view", "measurement.approve", "bill.view", "bill.certify", "documents.view"],
+    "accounts": ["bill.view", "payment.view", "documents.view"],
+}
+CLAIM_STATUSES = ("open", "director", "decided")
 CHANGE_STATUSES = ("pending", "accepted", "disputed")
 BILL_STEPS = ("prepared", "submitted_site", "signed_pm", "sent_ho", "with_accounts", "paid")
 BILL_STEP_LABEL = {
@@ -241,6 +261,9 @@ class MeasurementChange(Base):
     field: Mapped[str] = mapped_column(String(20))  # length_m, breadth_m, qty ...
     old_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
     new_value: Mapped[Decimal] = mapped_column(Numeric(14, 3))
+    # as typed (19 ft 5 in): the value columns hold metres
+    old_text: Mapped[str | None] = mapped_column(String(40))
+    new_text: Mapped[str | None] = mapped_column(String(40))
     remark: Mapped[str | None] = mapped_column(Text)
     by_user: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     by_name: Mapped[str] = mapped_column(String(200))
@@ -439,6 +462,7 @@ class LabourClaim(Tracked, Base):
     """What a labour contractor claims per area, against the approved measurement."""
 
     __tablename__ = "labour_claims"
+    __table_args__ = (CheckConstraint(_in("status", CLAIM_STATUSES), name="status_valid"),)
 
     id: Mapped[int] = mapped_column(Identity(), primary_key=True)
     site_id: Mapped[int] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"), index=True)
@@ -452,3 +476,14 @@ class LabourClaim(Tracked, Base):
     unit: Mapped[str | None] = mapped_column(String(20))
     period: Mapped[str | None] = mapped_column(String(7))  # 2026-10
     note: Mapped[str | None] = mapped_column(Text)
+    photos: Mapped[list[Any]] = mapped_column(JSONB, server_default="[]")  # the contractor's
+    # pay the approved quantity, or the claimed one (above approved: the director's approval)
+    status: Mapped[str] = mapped_column(String(10), server_default="open")
+    decision: Mapped[str | None] = mapped_column(String(10))  # approved, claimed
+    decision_reason: Mapped[str | None] = mapped_column(Text)
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    director_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    director_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    director_reason: Mapped[str | None] = mapped_column(Text)
+    pay_qty: Mapped[Decimal | None] = mapped_column(Qty)

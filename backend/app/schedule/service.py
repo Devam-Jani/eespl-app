@@ -16,6 +16,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.closeout import handover
 from app.schedule.models import (
     MaterialLot,
     MaterialLotLine,
@@ -112,6 +113,7 @@ def node_schedule(db: Session, node: SiteNode, on: date | None = None) -> dict:
         "our_delay_days": our_delay,
         "overdue_handover": bool(node.handover_promised_on and not received and on > node.handover_promised_on),
         "overdue_finish": bool(target and not done and on > target),
+        **handover.summary(node),
     }  # fmt: skip
 
 

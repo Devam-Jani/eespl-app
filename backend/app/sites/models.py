@@ -190,6 +190,8 @@ class SiteNode(Tracked, Base):
     )
     handover_client_says_on: Mapped[date | None] = mapped_column(Date)
     handover_status: Mapped[str | None] = mapped_column(String(14))  # received, not_received
+    # the promised date's history: who promised it, who moved it, why ([{kind, on, by, reason}])
+    handover_history: Mapped[list[Any]] = mapped_column(JSONB, server_default="[]")
     handover_received_on: Mapped[date | None] = mapped_column(Date)
     handover_confirmed_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")

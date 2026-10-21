@@ -54,7 +54,7 @@ ALL = [
     "site.location", "knowledge.view", "knowledge.cost", "knowledge.edit",
     "methodology.view", "methodology.edit", "methodology.compliance", "methodology.site",
     "wo.view", "wo.edit", "closeout.billing", "closeout.site", "closeout.payments",
-    "issues.view", "issues.edit",
+    "issues.view", "issues.edit", "portal.roles", "closeout.claim_approve",
 ]  # fmt: skip
 TRACK = {"field.track": "own"}  # every staff user: their own day, map and claim
 
@@ -73,6 +73,7 @@ EXPECTED: dict[str, dict[str, str]] = {
     # sees and decides everything; users, roles and settings stay with office_admin
     "director": _all(*[c for c in ALL if c not in DIRECTOR_EXCLUDES]),
     "office_admin": _all(
+        "portal.roles",
         "wo.view",
         "wo.edit",
         "closeout.billing",
@@ -196,7 +197,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "quotation.edit",
         "ratecontract.view",
     ),  # fmt: skip
-    # Mr. Sunil, Hardeep (Sr Engineer Billing & Planning): enquiries, the status board, material
+    # Sr Engineer Billing & Planning: enquiries, the status board, material
     # planning, new areas, escalations; costs only if the director allows the person
     "planning": TRACK | _all(
         "wo.view",
@@ -529,3 +530,13 @@ def test_permission_matrix(role, make_user, db):
             if response.json() != {"scope": expected[code]}:
                 mismatches.append(f"{code}: scope {response.json()}, want {expected[code]}")
     assert not mismatches, f"{role}:\n" + "\n".join(mismatches)
+
+
+def test_the_menu_fixture_has_each_roles_grants():
+    """frontend/src/menu.test.ts reads tests/role_permissions.json to check each role's menu
+    groups: it must hold the grants above (regenerate it when they change)."""
+    import json
+    from pathlib import Path
+
+    fixture = json.loads((Path(__file__).parent / "role_permissions.json").read_text())
+    assert fixture == {role: sorted(perms) for role, perms in EXPECTED.items()}

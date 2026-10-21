@@ -215,12 +215,18 @@ def create_contract(
                     created_by=principal.user.id,
                 )
             )
+    db.add(c)
+    db.flush()
+    from app.closeout import billing as closeout_billing  # noqa: PLC0415
+    from app.closeout import workorder  # noqa: PLC0415
+
+    wo = closeout_billing.work_order_of(db, site.id)
+    if wo is not None:  # the accepted work order's units, rates and quantities
+        workorder.apply_to_contract(db, wo)
     if body.contract_value is None:
         c.contract_value = svc.money(
             sum((Decimal(ln.qty) * Decimal(ln.rate) for ln in c.lines), ZERO)
         )
-    db.add(c)
-    db.flush()
     record(
         db,
         request,

@@ -10,11 +10,12 @@ lines are locked; RA bills and back-to-back labour bills take only approved quan
 
 import re
 from datetime import date
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.closeout import sizes
 from app.closeout.common import locked, now, unprocessable
 from app.closeout.models import MeasurementChange, MeasurementSet, RfiZone
 from app.sites.models import AreaScope, Site, SiteNode, Task
@@ -25,14 +26,26 @@ SIZE_FIELDS = ("length_m", "breadth_m", "perimeter_m", "height_m", "deductions_s
 
 
 def qty_of(m: Measurement) -> Decimal:
-    """L x B, or perimeter x height, less deductions; the typed qty when there are no sizes."""
-    if m.length_m is not None and m.breadth_m is not None:
-        q = Decimal(m.length_m) * Decimal(m.breadth_m)
-    elif m.perimeter_m is not None and m.height_m is not None:
-        q = Decimal(m.perimeter_m) * Decimal(m.height_m)
-    else:
-        return Decimal(m.qty or 0)
-    return max(Decimal(0), q - Decimal(m.deductions_sqm or 0)).quantize(Q3, ROUND_HALF_UP)
+    """In the line's unit: L x B or perimeter x height for sqm, the running length for rmt, less
+    deductions; the typed qty when there are no sizes (or the unit is counted, nos / cum)."""
+    return sizes.qty_in(m.unit, m.length_m, m.breadth_m, m.perimeter_m, m.height_m, m.deductions_sqm, m.qty)
+
+
+def line_unit(db: Session, contract_line_id: int | None, data: dict, what: str) -> str:
+    """The unit of the contract line (the accepted work order's once there is one); a
+    measurement in another unit is refused with the reason."""
+    from app.closeout.models import ClientWorkOrder, ClientWorkOrderLine  # noqa: PLC0415
+    from app.finance.models import ContractLine  # noqa: PLC0415
+
+    cl = db.get(ContractLine, contract_line_id) if contract_line_id else None
+    if cl is None:
+        return sizes.check_unit(sizes.unit_code(data.get("unit")) or "sqm", data, what, None)
+    source = None
+    if cl.wo_line_id:
+        wl = db.get(ClientWorkOrderLine, cl.wo_line_id)
+        wo = db.get(ClientWorkOrder, wl.work_order_id) if wl else None
+        source = (wo.client_ref or wo.code) if wo else None
+    return sizes.check_unit(cl.unit, data, cl.description, source)
 
 
 def guard(m: Measurement) -> None:
@@ -83,6 +96,8 @@ def in_our_zones(db: Session, site_id: int, node_id: int | None) -> bool | None:
 def write(db: Session, site: Site, data: dict, user) -> tuple[Measurement, str | None]:
     """A measurement line; outside our zones it needs a reason (the warning is returned)."""
     warning = None
+    data = sizes.normalise(dict(data))
+    unit = line_unit(db, data.get("contract_line_id"), data, data["description"])
     ours = in_our_zones(db, site.id, data.get("node_id"))
     if ours is False:
         z = zone_of(db, site.id, data.get("node_id"))
@@ -90,7 +105,7 @@ def write(db: Session, site: Site, data: dict, user) -> tuple[Measurement, str |
         if not (data.get("zone_reason") or "").strip():
             raise unprocessable(f"{warning}: give the reason to measure it")
     m = Measurement(site_id=site.id, contract_line_id=data.get("contract_line_id"), node_id=data.get("node_id"), cad_area_id=data.get("cad_area_id"),
-                    description=data["description"], unit=data.get("unit") or "sqm", source=data.get("source") or "manual",
+                    description=data["description"], unit=unit, entered=data.get("entered"), source=data.get("source") or "manual",
                     measured_on=data.get("measured_on") or now().date(), measured_by=user.id, note=data.get("note"),
                     length_m=data.get("length_m"), breadth_m=data.get("breadth_m"), perimeter_m=data.get("perimeter_m"), height_m=data.get("height_m"),
                     deductions_sqm=data.get("deductions_sqm"), qty=data.get("qty") or 0, zone_reason=data.get("zone_reason"),
@@ -105,7 +120,14 @@ def update(db: Session, m: Measurement, data: dict) -> None:
     guard(m)
     if m.status == "sent":
         raise unprocessable("The client has this line: let them approve or correct it")
-    for k in (*SIZE_FIELDS, "description", "node_id", "contract_line_id", "note", "unit"):
+    data = dict(data)
+    if any(f in data for f in sizes.LENGTH_FIELDS):
+        data["entered"] = m.entered
+        data = sizes.normalise(data)
+    merged = {f: getattr(m, f) for f in SIZE_FIELDS} | {k: v for k, v in data.items() if k in SIZE_FIELDS}
+    merged["unit"] = data.get("unit")
+    m.unit = line_unit(db, data.get("contract_line_id", m.contract_line_id), merged, data.get("description") or m.description)
+    for k in (*SIZE_FIELDS, "description", "node_id", "contract_line_id", "note", "entered"):
         if k in data:
             setattr(m, k, data[k])
     m.qty = qty_of(m)
@@ -173,16 +195,23 @@ def client_approve(db: Session, m: Measurement, user) -> None:
 
 
 def client_correct(
-    db: Session, m: Measurement, field: str, new_value: Decimal, remark: str | None, user
+    db: Session, m: Measurement, field: str, new_value, remark: str | None, user
 ) -> MeasurementChange:
-    """The client's correction (20 ft -> 19 ft 5 in): kept with the old value, name and time;
-    our billing answers it."""
+    """The client's correction (20 ft -> 19 ft 5 in): kept with the old value, name and time, in
+    the unit the person typed; our billing answers it."""
     guard(m)
     if m.status != "sent":
         raise unprocessable(f"Line #{m.id} is {m.status}")
     if field not in SIZE_FIELDS:
         raise unprocessable(f"Correct one of {', '.join(SIZE_FIELDS)}")
-    c = MeasurementChange(measurement_id=m.id, field=field, old_value=getattr(m, field), new_value=new_value, remark=remark,
+    if field in sizes.LENGTH_FIELDS:
+        value, typed = sizes.parse_length(new_value)
+    else:
+        value, typed = Decimal(str(new_value)), None
+    if value is None or value < 0:
+        raise unprocessable("Give the correct value")
+    c = MeasurementChange(measurement_id=m.id, field=field, old_value=getattr(m, field), new_value=value, remark=remark,
+                          old_text=(m.entered or {}).get(field), new_text=typed,
                           by_user=user.id, by_name=user.full_name, side="client", at=now(), status="pending")  # fmt: skip
     db.add(c)
     db.flush()
@@ -201,6 +230,12 @@ def answer(
     if accept:
         c.status = "accepted"
         setattr(m, c.field, c.new_value)
+        entered = dict(m.entered or {})
+        if c.new_text:
+            entered[c.field] = c.new_text
+        else:
+            entered.pop(c.field, None)
+        m.entered = entered or None
         m.qty = qty_of(m)
         if not db.scalar(
             select(MeasurementChange.id).where(
@@ -259,7 +294,10 @@ def stamp_billed(db: Session, ra) -> int:
 
 
 def changes_of(db: Session, m: Measurement) -> list[dict]:
-    return [{"id": c.id, "field": c.field, "old": c.old_value, "new": c.new_value, "remark": c.remark, "by": c.by_name, "side": c.side, "at": c.at,
+    return [{"id": c.id, "field": c.field, "old": c.old_value, "new": c.new_value, "old_text": c.old_text, "new_text": c.new_text,
+             "old_shown": sizes.shown(c.old_value, c.old_text) if c.field in sizes.LENGTH_FIELDS else str(c.old_value),
+             "new_shown": sizes.shown(c.new_value, c.new_text) if c.field in sizes.LENGTH_FIELDS else str(c.new_value),
+             "remark": c.remark, "by": c.by_name, "side": c.side, "at": c.at,
              "status": c.status, "reply": c.reply} for c in db.scalars(select(MeasurementChange).where(MeasurementChange.measurement_id == m.id).order_by(MeasurementChange.id))]  # fmt: skip
 
 
@@ -271,7 +309,8 @@ def line_out(db: Session, m: Measurement) -> dict:
     return {"id": m.id, "description": m.description, "node_id": m.node_id, "place": node.name if node else None, "contract_line_id": m.contract_line_id,
             "length_m": m.length_m, "breadth_m": m.breadth_m, "perimeter_m": m.perimeter_m, "height_m": m.height_m, "deductions_sqm": m.deductions_sqm,
             "qty": m.qty, "unit": m.unit, "status": m.status, "set_id": m.set_id, "measured_on": m.measured_on, "approved_name": m.approved_name,
-            "approved_at": m.approved_at, "recorded_by_staff": m.recorded_by_staff, "zone_reason": m.zone_reason, "photos": len(m.photos or []),
+            "approved_at": m.approved_at, "recorded_by_staff": m.recorded_by_staff, "entered": m.entered or {},
+            "shown": {f: sizes.shown(getattr(m, f), (m.entered or {}).get(f)) for f in sizes.LENGTH_FIELDS if getattr(m, f) is not None}, "zone_reason": m.zone_reason, "photos": len(m.photos or []),
             "billed_in": ra.code if ra else None, "changes": changes_of(db, m)}  # fmt: skip
 
 

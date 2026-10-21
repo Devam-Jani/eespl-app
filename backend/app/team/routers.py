@@ -838,6 +838,8 @@ def add_measurement(
         measured_on=body.measured_on or mywork.today(),
         measured_by=body.measured_by or principal.user.id,
         note=body.note,
+        # a site where the client approves measurements: a draft to send (not billable yet)
+        status="draft" if site.measurements_need_approval else "approved",
         created_by=principal.user.id,
     )
     db.add(m)

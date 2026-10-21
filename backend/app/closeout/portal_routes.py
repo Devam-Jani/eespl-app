@@ -26,7 +26,7 @@ from app.db import DbSession
 from app.finance.models import RaBill
 from app.portal import service as portal
 from app.portal.models import ClientUser
-from app.sites.models import SiteNode
+from app.sites.models import AreaScope, SiteNode
 from app.team.models import Measurement
 
 router = APIRouter(prefix="/api/portal", tags=["portal: close-out"])
@@ -65,13 +65,15 @@ def handover(site_id: int, db: DbSession, ctx: Ctx) -> list[dict]:
         select(SiteNode)
         .where(
             SiteNode.site_id == site.id,
-            SiteNode.kind.in_(("tower", "wing", "floor", "flat", "basement", "terrace", "podium")),
+            SiteNode.kind.in_(("tower", "wing", "floor", "flat", "basement", "terrace", "podium"))
+            | SiteNode.id.in_(select(AreaScope.node_id).where(AreaScope.site_id == site.id)),  # the areas we work on
         )
         .order_by(SiteNode.sort_order, SiteNode.id)
     ):
         s = schedule.node_schedule(db, n)
         out.append({"node_id": n.id, "name": n.name, "kind": n.kind, "parent_id": n.parent_id, "promised_on": n.handover_promised_on, "promised_by": n.handover_promised_by,
-                    "status": n.handover_status, "received_on": n.handover_received_on, "client_delay_days": s.get("client_delay_days")})  # fmt: skip
+                    "status": n.handover_status, "received_on": n.handover_received_on, "client_delay_days": s.get("client_delay_days"),
+                    "client_promised_on": s.get("client_promised_on"), "moved_to": s.get("moved_to"), "moved_because": s.get("moved_because")})  # fmt: skip
     return out
 
 
@@ -97,6 +99,9 @@ def promise(
         f"{ctx.user.full_name} (client, in the portal)",
         ctx.user.id,
     )
+    from app.closeout import handover  # noqa: PLC0415
+
+    handover.note(n, "promised", body.promised_on, f"{ctx.user.full_name} (client, in the portal)")
     portal.tell_staff(
         db,
         site.id,
@@ -175,7 +180,7 @@ def approve(site_id: int, mid: int, request: Request, db: DbSession, ctx: Ctx) -
 
 class CorrectIn(BaseModel):
     field: str
-    new_value: Decimal = Field(ge=0)
+    new_value: Decimal | str  # metres, or feet and inches as typed ("19 ft 5 in")
     remark: str | None = Field(default=None, max_length=1000)
 
 

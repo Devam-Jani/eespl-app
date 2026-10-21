@@ -118,14 +118,30 @@ def rights_of(db: Session, user_id) -> set[str] | None:
     from app.closeout.models import ClientRoleDef  # noqa: PLC0415
 
     roles: set[str] = set()
-    for r in db.scalars(select(ClientUser.roles).where(ClientUser.user_id == user_id)):
-        roles |= set(r or [])
+    out: set[str] = set()
+    live = False
+    for cu in db.scalars(select(ClientUser).where(ClientUser.user_id == user_id)):
+        roles |= set(cu.roles or [])
+        if cu.rights is not None and cu.roles:
+            out |= set(cu.rights)  # as given at the invite
+        elif cu.roles:
+            live = True
     if not roles:
         return None
-    out: set[str] = set()
-    for d in db.scalars(select(ClientRoleDef).where(ClientRoleDef.code.in_(roles))):
-        out |= set(d.rights or [])
+    if live:
+        for d in db.scalars(select(ClientRoleDef).where(ClientRoleDef.code.in_(roles))):
+            out |= set(d.rights or [])
     return out
+
+
+def rights_for_roles(db: Session, roles: list[str]) -> list[str]:
+    """The rights the roles give now (Settings > Client roles): snapshotted at the invite."""
+    from app.closeout.models import ClientRoleDef  # noqa: PLC0415
+
+    out: set[str] = set()
+    for d in db.scalars(select(ClientRoleDef).where(ClientRoleDef.code.in_(roles or ["-"]))):
+        out |= set(d.rights or [])
+    return sorted(out)
 
 
 def has_right(db: Session, ctx: PortalCtx, *rights: str) -> bool:

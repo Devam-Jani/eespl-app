@@ -95,10 +95,18 @@ const SiteMethodology = lazy(() => md().then((m) => ({ default: m.SiteMethodolog
 const co = () => import("./closeout/Pages");
 const WorkOrders = lazy(() => co().then((m) => ({ default: m.WorkOrders })));
 const WorkOrderPage = lazy(() => co().then((m) => ({ default: m.WorkOrderPage })));
-const SiteMeasurements = lazy(() => co().then((m) => ({ default: m.SiteMeasurements })));
 const SiteZones = lazy(() => co().then((m) => ({ default: m.SiteZones })));
 const BillingChecklist = lazy(() => co().then((m) => ({ default: m.BillingChecklist })));
-const BillSteps = lazy(() => co().then((m) => ({ default: m.BillTracking })));
+// the close-out screens (review of Prompt 26): measuring on site, quality, reconciliation, claims, one bill page
+const cs = () => import("./closeout/Screens");
+const MeasureEntry = lazy(() => cs().then((m) => ({ default: m.MeasureEntry })));
+const ClientRolesSettings = lazy(() => cs().then((m) => ({ default: m.ClientRolesSettings })));
+const Reconciliation = lazy(() => cs().then((m) => ({ default: m.Reconciliation })));
+const LabourClaims = lazy(() => cs().then((m) => ({ default: m.LabourClaims })));
+const Bills = lazy(() => cs().then((m) => ({ default: m.Bills })));
+const BillPage = lazy(() => cs().then((m) => ({ default: m.BillPage })));
+const OldBillRedirect = lazy(() => cs().then((m) => ({ default: m.OldBillRedirect })));
+const ChecklistSites = lazy(() => cs().then((m) => ({ default: m.ChecklistSites })));
 const Payments = lazy(() => co().then((m) => ({ default: m.Payments })));
 const SiteWorkCompletions = lazy(() => co().then((m) => ({ default: m.SiteWorkCompletions })));
 const Guarantees = lazy(() => co().then((m) => ({ default: m.Guarantees })));
@@ -114,7 +122,6 @@ const AssignmentPage = lazy(() => tm().then((m) => ({ default: m.AssignmentPage 
 const StatusBoard = lazy(() => tm().then((m) => ({ default: m.StatusBoard })));
 const MaterialPlan = lazy(() => tm().then((m) => ({ default: m.MaterialPlan })));
 const MeasurementBook = lazy(() => tm().then((m) => ({ default: m.MeasurementBook })));
-const BillTracking = lazy(() => tm().then((m) => ({ default: m.BillTracking })));
 const LabourCheck = lazy(() => tm().then((m) => ({ default: m.LabourCheck })));
 const Scorecard = lazy(() => tm().then((m) => ({ default: m.Scorecard })));
 const SupervisorDay = lazy(() => tm().then((m) => ({ default: m.SupervisorDay })));
@@ -191,9 +198,10 @@ const PAGES: Record<string, JSX.Element> = {
   "/enquiries": <Enquiries />,
   "/planning/board": <StatusBoard />,
   "/measurements": <MeasurementBook />,
-  "/bill-tracking": <BillTracking />,
+  "/bills": <Bills />,
+  "/billing/checklist": <ChecklistSites />,
+  "/settings/client-roles": <ClientRolesSettings />,
   "/work-orders": <WorkOrders />,
-  "/billing/tracking": <BillSteps />,
   "/billing/payments": <Payments />,
   "/guarantees": <Guarantees />,
   "/issues": <Issues />,
@@ -386,7 +394,10 @@ export default function App() {
                   ["/purchase-orders/:id", ["po.view"], <PoDetail />],
                   ["/stores/:id", ["store.view"], <StoreDetail />],
                   ["/work-orders/:id", ["wo.view"], <WorkOrderPage />],
-                  ["/sites/:id/measurements", ["closeout.billing"], <SiteMeasurements />],
+                  ["/sites/:id/measurements", ["closeout.billing"], <MeasureEntry />],
+                  ["/sites/:id/reconciliation", ["closeout.billing"], <Reconciliation />],
+                  ["/sites/:id/labour-claims", ["closeout.billing", "closeout.claim_approve"], <LabourClaims />],
+                  ["/bills/:id", ["billing.view", "closeout.billing", "closeout.payments"], <BillPage />],
                   ["/sites/:id/zones", ["closeout.site", "closeout.billing"], <SiteZones />],
                   ["/sites/:id/billing-checklist", ["closeout.billing"], <BillingChecklist />],
                   ["/sites/:id/work-completions", ["closeout.billing"], <SiteWorkCompletions />],
@@ -394,6 +405,9 @@ export default function App() {
               ).map(([path, perms, page]) => (
                 <Route key={path} path={path} element={<RequirePermission perms={perms}>{page}</RequirePermission>} />
               ))}
+              {/* the two old bill pages are one now: their links open it */}
+              <Route path="/bill-tracking" element={<OldBillRedirect />} />
+              <Route path="/billing/tracking" element={<OldBillRedirect />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

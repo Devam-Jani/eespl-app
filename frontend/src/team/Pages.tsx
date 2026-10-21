@@ -696,7 +696,10 @@ export function MeasurementBook() {
           </select>
         </div>
       </div>
-      <p className="muted small">Every billable quantity with its source, date and who measured it. RA bills take their quantities only from here.</p>
+      <p className="muted small">
+        Every billable quantity with its source, date and who measured it. RA bills take their quantities only from here.{" "}
+        {site && can("closeout.billing") && <Link to={`/sites/${site}/measurements`}>Measure on site (L × B, ft + in, photos, sets for the client) →</Link>}
+      </p>
       {error && <div className="alert alert-error">{error}</div>}
       {book && (
         <>
@@ -822,7 +825,7 @@ export function MeasurementBook() {
 
 // --- client bill tracking ------------------------------------------------------------------------
 
-type Tracked = {
+export type Tracked = {
   id: number;
   code: string;
   site_id: number;
@@ -841,7 +844,7 @@ type Tracked = {
   all_lines: { contract_line_id: number; qty: string; certified_qty: string | null }[];
 };
 
-function CertifyForm({ bill, onClose, onSaved }: { bill: Tracked; onClose: () => void; onSaved: () => void }) {
+export function CertifyForm({ bill, onClose, onSaved }: { bill: Tracked; onClose: () => void; onSaved: () => void }) {
   const [f, setF] = useState({ approved_by: "", on_date: new Date().toLocaleDateString("en-CA", { timeZone: TZ }), amount: "" });
   const [qty, setQty] = useState<Record<number, string>>(Object.fromEntries(bill.all_lines.map((l) => [l.contract_line_id, String(Number(l.certified_qty ?? l.qty))])));
   const [file, setFile] = useState<File | null>(null);
@@ -918,107 +921,6 @@ function CertifyForm({ bill, onClose, onSaved }: { bill: Tracked; onClose: () =>
         </div>
       </form>
     </Modal>
-  );
-}
-
-export function BillTracking() {
-  const { can } = useAuth();
-  const [certifying, setCertifying] = useState<Tracked | null>(null);
-  const [rows, setRows] = useState<Tracked[] | null>(null);
-  const [error, setError] = useState("");
-  const load = useCallback(() => api<Tracked[]>("/api/team/bill-tracking").then(setRows, (e) => setError(errorText(e))), []);
-  useEffect(() => {
-    void load();
-  }, [load]);
-  async function reason(lineId: number) {
-    const r = prompt("Why does the certified quantity differ from the billed one?");
-    if (!r) return;
-    try {
-      await api(`/api/team/ra-lines/${lineId}/reason`, { method: "PUT", json: { reason: r } });
-      void load();
-    } catch (e) {
-      setError(errorText(e));
-    }
-  }
-  return (
-    <>
-      <div className="page-header">
-        <h1>Client bill tracking</h1>
-      </div>
-      <p className="muted small">
-        Each RA bill: sent, certified by the client, the difference from what was billed (with the reason) and paid. Selling amounts only.{" "}
-        <a href="/billing/tracking">Each step through the client, with the billing cycle →</a>
-      </p>
-      {error && <div className="alert alert-error">{error}</div>}
-      <div className="table-wrap card">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Bill</th>
-              <th>Site</th>
-              <th>Sent</th>
-              <th className="num">Billed</th>
-              <th className="num">Certified</th>
-              <th className="num">Difference</th>
-              <th className="num">Paid</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(rows ?? []).map((b) => (
-              <tr key={b.id}>
-                <td>{b.code}</td>
-                <td className="small">{b.site}</td>
-                <td className="small">{fmt(b.sent_at)}</td>
-                <td className="num">{money(b.billed)}</td>
-                <td className="num">{money(b.certified)}</td>
-                <td className={`num ${b.difference && Number(b.difference) < 0 ? "text-danger" : ""}`}>
-                  {b.difference === null ? "—" : money(b.difference)}
-                  {b.lines.map((l) => (
-                    <div key={l.id} className="small">
-                      {n(l.qty)} → {n(l.certified_qty)}: {l.reason ?? <span className="text-warn">reason?</span>}{" "}
-                      {can("billing.edit") && (
-                        <button className="btn btn-small btn-ghost" onClick={() => void reason(l.id)}>
-                          ✎
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </td>
-                <td className="num">{money(b.paid)}</td>
-                <td>
-                  <span className="badge badge-info">{b.status.replace(/_/g, " ")}</span>
-                  {b.certified_by && (
-                    <div className="small muted">
-                      by {b.certified_by}
-                      {b.certified_on && ` on ${fmt(b.certified_on)}`} {b.certified_via && `(${b.certified_via})`}
-                      {b.has_document && (
-                        <button className="btn btn-small btn-ghost" onClick={() => void downloadFile(`/api/team/ra-bills/${b.id}/client-certification/document`)}>
-                          ⤓ copy
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  {["submitted", "certified_by_client"].includes(b.status) && (
-                    <button className="btn btn-small" onClick={() => setCertifying(b)}>
-                      Record certification
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {rows && rows.length === 0 && (
-              <tr>
-                <td colSpan={8} className="muted">
-                  No RA bills yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      {certifying && <CertifyForm bill={certifying} onClose={() => setCertifying(null)} onSaved={() => (setCertifying(null), void load())} />}
-    </>
   );
 }
 

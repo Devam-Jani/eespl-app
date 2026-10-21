@@ -290,6 +290,7 @@ def compare(db: Session, wo: ClientWorkOrder) -> list[WoDeviation]:
             continue
         used.add(best.id)
         matched[wl.id] = best
+        wl.quotation_line_id = best.id
         tag = best.description[:80]
         if _unit(wl.unit) and _unit(best.uom) and _unit(wl.unit) != _unit(best.uom):
             found.append(
@@ -472,3 +473,37 @@ def accept(db: Session, wo: ClientWorkOrder, user) -> None:
         raise unprocessable("The work order has no lines")
     wo.status, wo.accepted_by, wo.accepted_at = "accepted", user.id, now()
     db.flush()
+    apply_to_contract(db, wo)
+
+
+def apply_to_contract(db: Session, wo: ClientWorkOrder) -> int:
+    """The accepted work order rules what follows: each of its lines gives the site's contract
+    line (matched by the quotation line, else by the wording) its unit, rate and quantity, so
+    the measurement book, the RA bills and the certificate use them."""
+    from app.closeout.sizes import unit_code  # noqa: PLC0415
+    from app.finance.models import ClientContract  # noqa: PLC0415
+
+    if wo.status != "accepted" or not wo.site_id:
+        return 0
+    c = db.scalar(select(ClientContract).where(ClientContract.site_id == wo.site_id))
+    if c is None:
+        return 0
+    free = [cl for cl in c.lines if cl.wo_line_id is None or cl.wo_line_id in {wl.id for wl in wo.lines}]
+    n = 0
+    for wl in wo.lines:
+        ql = db.get(QuotationLine, wl.quotation_line_id) if wl.quotation_line_id else None
+        cands = sorted(((max(_sim(wl.description, cl.description), _sim(ql.description, cl.description) if ql else 0.0), cl) for cl in free), key=lambda x: -x[0])
+        if not cands or cands[0][0] < 0.3:
+            continue
+        cl = cands[0][1]
+        free.remove(cl)
+        cl.wo_line_id = wl.id
+        if wl.unit:
+            cl.unit = unit_code(wl.unit)
+        if wl.rate is not None:
+            cl.rate = wl.rate
+        if wl.qty is not None:
+            cl.qty = wl.qty
+        n += 1
+    db.flush()
+    return n
