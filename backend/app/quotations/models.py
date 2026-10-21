@@ -151,6 +151,10 @@ class Letterhead(LibraryRow, Base):
     signatory_firm: Mapped[str] = mapped_column(String(200))  # "For BRONCO BUILDWELL PVT. LTD."
     signatory_name: Mapped[str | None] = mapped_column(String(200))
     signatory_designation: Mapped[str | None] = mapped_column(String(200))
+    # a second signatory, and which of the two signs certificates (work completion, guarantee)
+    signatory2_name: Mapped[str | None] = mapped_column(String(200))
+    signatory2_designation: Mapped[str | None] = mapped_column(String(200))
+    certificate_signatory: Mapped[int] = mapped_column(Integer, server_default="1")
     brand: Mapped[str | None] = mapped_column(String(100))  # {brand}: "BRONCO"
     # image letterheads (EESPL): a band across the top, one across the bottom, a faint logo
     header_image_path: Mapped[str | None] = mapped_column(String(300))

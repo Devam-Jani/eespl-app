@@ -145,6 +145,9 @@ const BLANK: Record<Kind, Record<string, unknown>> = {
     signatory_firm: "",
     signatory_name: "",
     signatory_designation: "",
+    signatory2_name: "",
+    signatory2_designation: "",
+    certificate_signatory: 1,
     brand: "",
     header_text: "",
     footer_text: "",
@@ -236,7 +239,16 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
               {input("signatory_firm", "Signatory firm line (For … PVT. LTD.)")}
               {input("brand", "Brand ({brand})")}
               {input("signatory_name", "Default signatory")}
-              {input("signatory_designation", "Designation")}
+              {input("signatory_designation", "Designation (printed under the name)")}
+              {input("signatory2_name", "Second signatory (optional)")}
+              {input("signatory2_designation", "Second signatory's designation")}
+              <label className="field">
+                <span>Signs the certificates (work completion, guarantee)</span>
+                <select value={String(v("certificate_signatory") || 1)} onChange={(e) => set("certificate_signatory", Number(e.target.value))} disabled={ro}>
+                  <option value="1">The default signatory</option>
+                  <option value="2">The second signatory</option>
+                </select>
+              </label>
               {input("primary_color", "Colour", "color")}
               {input("accent_color", "Accent colour", "color")}
               {input("references_state", "References from state")}
@@ -414,7 +426,8 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
                       {ver.note && <span className="muted"> · {ver.note}</span>}
                     </td>
                     <td className="small">
-                      {ver.by ?? "import"} · {new Date(ver.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",  day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                      {ver.by ?? "import"} ·{" "}
+                      {new Date(ver.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                     </td>
                     <td>
                       {edit && ver.version !== row.version && (

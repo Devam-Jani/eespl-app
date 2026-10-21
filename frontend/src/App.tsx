@@ -339,7 +339,7 @@ export default function App() {
                 }
               />
               {MENU.map((item) => (
-                <Route key={item.to} path={item.to} element={<RequirePermission perms={item.perms}>{PAGES[item.to] ?? <Placeholder title={item.label} />}</RequirePermission>} />
+                <Route key={item.to} path={item.to} element={<RequirePermission perms={item.view ?? item.perms}>{PAGES[item.to] ?? <Placeholder title={item.label} />}</RequirePermission>} />
               ))}
               <Route
                 path="/systems/:id"

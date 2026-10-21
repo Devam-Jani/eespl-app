@@ -137,6 +137,8 @@ class ContractLine(Tracked, Base):
     wo_line_id: Mapped[int | None] = mapped_column(
         ForeignKey("client_work_order_lines.id", ondelete="SET NULL")
     )
+    # a line per rmt against a system's consumption per sqm: its width (the reconciliation's need)
+    width_m: Mapped[Decimal | None] = mapped_column(Numeric(8, 3))
     approved_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )

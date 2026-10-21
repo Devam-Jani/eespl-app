@@ -169,8 +169,30 @@ def reconciliation_xlsx(site_id: int, db: DbSession, principal: CurrentPrincipal
 
     site = get_site(db, site_id, scope, principal)
     r = rsvc.material(db, site, None, period)
-    rows = [[x["product"], x["unit"], x["issued"], x["needed"], x["returned"], x["difference"], x["state"], "; ".join(x["basis"])] for x in r["rows"]]
-    return xlsx_response(f"reconciliation-{site.code}", ["Product", "Unit", "Issued", "Needed", "Returned", "Excess (+) / short (-)", "State", "Needed from"], rows)
+    rows = [[x["product"], x["unit"], x["issued"], x["returned"], x["net_used"], x["needed"], x["difference"], x["note"] or x["state"], x["to_godown"], "; ".join(x["basis"])] for x in r["rows"]]
+    cols = ["Product", "Unit", "Issued (gross)", "Returned", "Net used", "Needed", "Excess (+) / short (-)", "State", "Sent to the godown", "Needed from"]
+    return xlsx_response(f"reconciliation-{site.code}", cols, rows)
+
+
+class WidthIn(BaseModel):
+    width_m: Decimal = Field(gt=0, le=50)
+
+
+@router.put("/contract-lines/{lid}/width")
+def line_width(lid: int, body: WidthIn, request: Request, db: DbSession, principal: CurrentPrincipal, scope: Billing) -> dict:
+    """A line per rmt against a consumption per sqm: its width, given once (the reconciliation's
+    need = running length x width x consumption)."""
+    from app.finance.models import ClientContract, ContractLine  # noqa: PLC0415
+
+    cl = db.get(ContractLine, lid)
+    c = db.get(ClientContract, cl.contract_id) if cl else None
+    if cl is None or c is None or not site_ok(db, scope, principal, c.site_id):
+        raise not_found("Contract line not found")
+    before = {"width_m": str(cl.width_m) if cl.width_m is not None else None}
+    cl.width_m = body.width_m
+    record(db, request, principal, "contract_line.width", "contract_line", cl.id, before=before, after={"width_m": str(body.width_m)})
+    db.commit()
+    return rsvc.material(db, db.get(Site, c.site_id))
 
 
 class ReturnIn(BaseModel):

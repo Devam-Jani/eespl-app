@@ -13,26 +13,38 @@ describe("the menu by group", () => {
     expect(new Set(MENU.map((i) => i.to)).size).toBe(MENU.length);
   });
 
-  it("shows each role only its own groups", () => {
-    // what each role may open, from its grants (no Billing for the supervisor, the estimator, stores;
-    // no Stores for billing; nothing for a client login, which uses the portal)
+  it("shows each role only the groups its job needs (the go-live review)", () => {
+    // reviewed per job: site roles see My work and Site; billing sees Site and Billing; stores
+    // see Stores; nothing for a client login (the portal)
     const expected: Record<string, string[]> = {
-      accounts: ["My work", "Sales", "Planning", "Site", "Billing", "Stores", "Accounts", "Analytics", "Masters", "Settings"],
-      billing: ["My work", "Sales", "Planning", "Site", "Billing", "Accounts", "Analytics", "Masters", "Settings"],
+      accounts: ["My work", "Billing", "Accounts", "Analytics", "Settings"],
+      billing: ["My work", "Site", "Billing"],
       client: [],
       director: ["My work", "Sales", "Planning", "Site", "Billing", "Stores", "Accounts", "Analytics", "Masters", "Settings", "Administration"],
-      estimator: ["My work", "Sales", "Planning", "Site", "Accounts", "Analytics", "Masters", "Settings"],
+      estimator: ["My work", "Sales", "Site", "Masters"],
       office_admin: ["My work", "Sales", "Planning", "Site", "Billing", "Stores", "Accounts", "Analytics", "Masters", "Settings", "Administration"],
-      planning: ["My work", "Sales", "Planning", "Site", "Billing", "Stores", "Accounts", "Analytics", "Masters", "Settings"],
-      sales: ["My work", "Sales", "Planning", "Site", "Billing", "Stores", "Accounts", "Analytics", "Masters", "Settings"],
-      site_engineer: ["My work", "Sales", "Planning", "Site", "Billing", "Stores", "Accounts", "Analytics", "Masters", "Settings"],
-      site_receiver: ["My work", "Site", "Settings"],
-      site_supervisor: ["My work", "Sales", "Planning", "Site", "Stores", "Accounts", "Analytics", "Masters", "Settings"],
-      store_purchase: ["My work", "Sales", "Planning", "Site", "Stores", "Accounts", "Analytics", "Masters", "Settings"],
+      planning: ["My work", "Sales", "Planning", "Site", "Billing", "Analytics", "Masters", "Settings"],
+      sales: ["My work", "Sales", "Site", "Billing", "Masters"],
+      site_engineer: ["My work", "Site"],
+      site_receiver: ["My work", "Site"],
+      site_supervisor: ["My work", "Site"],
+      store_purchase: ["My work", "Stores", "Analytics", "Masters"],
       super_admin: ["My work", "Sales", "Planning", "Site", "Billing", "Stores", "Accounts", "Analytics", "Masters", "Settings", "Administration"],
     };
     expect(Object.keys(expected).sort()).toEqual(Object.keys(ROLES).sort());
     Object.entries(expected).forEach(([role, groups]) => expect(groupsFor(role), role).toEqual(groups));
+  });
+
+  it("keeps the pages of other jobs out of each menu, while links still open them", () => {
+    const pages = (role: string) => visibleGroups((...c) => c.some((x) => ROLES[role].includes(x))).flatMap((g) => g.items.map((i) => i.to));
+    expect(pages("billing")).not.toContain("/clients");
+    expect(pages("billing")).not.toContain("/quotations");
+    expect(pages("accounts")).not.toContain("/settings/stage-templates");
+    expect(pages("site_engineer")).not.toContain("/measurements");
+    expect(pages("site_engineer")).toContain("/petty-cash");
+    expect(pages("store_purchase")).toContain("/grns");
+    const clients = MENU.find((i) => i.to === "/clients");
+    expect((clients?.view ?? clients?.perms ?? []).some((c) => ROLES.billing.includes(c))).toBe(true); // a billing user may still open it
   });
 
   it("only office admin and the director (and the super admin) see Settings > Client roles", () => {
