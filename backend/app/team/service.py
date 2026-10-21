@@ -283,10 +283,13 @@ def board_rows(db: Session, site_ids: list[int] | None) -> list[dict]:
 
 
 def book_total(db: Session, contract_line_id: int) -> Decimal:
+    """The approved quantity in the book (a site where the client approves measurements: only
+    the lines the client approved; elsewhere every line is approved when written)."""
     return Decimal(
         db.scalar(
             select(func.coalesce(func.sum(Measurement.qty), 0)).where(
-                Measurement.contract_line_id == contract_line_id
+                Measurement.contract_line_id == contract_line_id,
+                Measurement.status == "approved",
             )
         )
     )

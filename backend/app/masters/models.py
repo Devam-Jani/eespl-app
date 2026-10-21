@@ -144,6 +144,8 @@ class Product(Tracked, Base):
     pack_unit: Mapped[str | None] = mapped_column(String(20))
     gst_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), server_default="18")
     hsn_code: Mapped[str | None] = mapped_column(String(8))  # HSN (goods) / SAC (services)
+    # discontinued by the maker: open methodologies and sites using it get an issue
+    discontinued_on: Mapped[date | None] = mapped_column(Date)
     is_active: Mapped[bool] = mapped_column(server_default=true())
     # invented analytics demo data (python -m app.cli seed-demo-analytics); never real
     is_demo: Mapped[bool] = mapped_column(server_default=false(), index=True)

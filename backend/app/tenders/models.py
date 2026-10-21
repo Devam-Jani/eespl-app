@@ -29,7 +29,8 @@ from app.models import Base, User
 
 TENDER_STATUSES = ("draft", "submitted", "won", "lost", "dropped")
 # why a tender or lead was lost (a pick-list; details go in lost_note)
-LOST_REASONS = ("price", "competitor", "timing", "spec", "relationship", "other")
+# main_job_lost: the civil contractor we quoted lost the main contract (not our loss)
+LOST_REASONS = ("price", "competitor", "timing", "spec", "relationship", "other", "main_job_lost")
 LINE_STATUSES = ("unpriced", "suggested", "priced", "not_quoted")
 PRICE_SOURCES = ("system", "library", "manual", "working")  # working: the rate working sheet
 QTY_NOTES = ("QRO", "NQ")
@@ -96,6 +97,10 @@ class Tender(Tracked, Base):
     client_standard_id: Mapped[int | None] = mapped_column(
         ForeignKey("client_standards.id", ondelete="SET NULL")
     )
+    # quoted to several civil contractors: the one who won the main contract
+    main_contractor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("clients.id", ondelete="SET NULL")
+    )
     # awaiting award: the last follow-up reminder; the lead made for the contractor who won
     award_followup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     winner_lead_id: Mapped[int | None] = mapped_column(ForeignKey("leads.id", ondelete="SET NULL"))
@@ -104,7 +109,7 @@ class Tender(Tracked, Base):
     # invented analytics demo data (python -m app.cli seed-demo-analytics); never real
     is_demo: Mapped[bool] = mapped_column(server_default=false(), index=True)
 
-    client: Mapped[Client | None] = relationship(lazy="joined")
+    client: Mapped[Client | None] = relationship(lazy="joined", foreign_keys=[client_id])
     channel: Mapped[Channel | None] = relationship(lazy="joined")
     owner: Mapped[User | None] = relationship(lazy="joined", foreign_keys=[owner_id])
     members: Mapped[list["TenderMember"]] = relationship(

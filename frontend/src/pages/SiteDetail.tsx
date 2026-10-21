@@ -134,6 +134,28 @@ export default function SiteDetail() {
                 <Link to={`/sites/${site.id}/methodology`}>Methodology</Link>
               </>
             )}
+            {(can("closeout.site") || can("closeout.billing")) && (
+              <>
+                {" · "}
+                <Link to={`/sites/${site.id}/zones`}>RFI zones</Link>
+              </>
+            )}
+            {can("closeout.billing") && (
+              <>
+                {" · "}
+                <Link to={`/sites/${site.id}/measurements`}>Measurements for approval</Link>
+                {" · "}
+                <Link to={`/sites/${site.id}/billing-checklist`}>Billing checklist</Link>
+                {" · "}
+                <Link to={`/sites/${site.id}/work-completions`}>Work completion</Link>
+              </>
+            )}
+            {can("issues.view") && (
+              <>
+                {" · "}
+                <Link to={`/issues?site=${site.id}`}>Issues</Link>
+              </>
+            )}
           </p>
         </div>
         <div className="rate-badge">

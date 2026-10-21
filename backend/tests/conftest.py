@@ -88,6 +88,10 @@ PER_TEST_TABLES = [
     "methodology_items", "methodologies", "standard_contradictions", "standard_rules",
     "standard_documents", "client_standards", "method_system_changes", "method_systems",
     "method_products",
+    "tender_customers", "wo_deviations", "client_work_order_lines", "client_work_orders",
+    "measurement_changes", "measurement_sets", "rfi_zones", "client_billing_cycles",
+    "bill_tracking_steps", "payment_followups", "issue_comments", "issue_log", "labour_claims",
+    "work_completions", "closeout_settings",
 ]  # fmt: skip
 # seeded rows of truncated tables, put back after every test (copied once per run)
 SEED_COPIES = ["finance_settings", "letter_templates", "letterheads", "quotation_settings"]

@@ -12,9 +12,9 @@ run() {
   docker compose exec -T -w /app api alembic "$@"
 }
 
+run upgrade head
 before=$(run current | tail -n 1)
 echo "current: $before"
-run upgrade head
 run downgrade -1
 run upgrade head
 after=$(run current | tail -n 1)

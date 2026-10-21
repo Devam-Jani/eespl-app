@@ -9,6 +9,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.analytics import routers as analytics
 from app.auth.router import router as auth_router
+from app.closeout import portal_routes as closeout_portal
+from app.closeout import routes as closeout
 from app.config import settings
 from app.costing import labour as labour_rates
 from app.costing import prices as price_list
@@ -113,6 +115,8 @@ for _r in (
     field.router,
     knowledge.router,
     methodology.router,
+    closeout.router,
+    closeout_portal.router,
     analytics.dashboard,
     analytics.router,
     portal_staff.router,

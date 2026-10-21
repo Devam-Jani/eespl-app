@@ -952,6 +952,9 @@ def save_version(db: Session, m: Methodology, reason: str, user_id=None) -> Meth
     db.add(v)
     m.version += 1
     db.flush()
+    from app.closeout import issues  # noqa: PLC0415
+
+    issues.methodology_saved(db, m)  # a discontinued product no longer used: its issue closes
     return v
 
 

@@ -5,6 +5,7 @@ negotiations, tender bidders, and the team settings."""
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -192,6 +193,28 @@ class Measurement(Tracked, Base):
         ForeignKey("users.id", ondelete="SET NULL")
     )
     note: Mapped[str | None] = mapped_column(Text)
+    # the sizes behind the quantity: L x B (or perimeter x height) less deductions
+    length_m: Mapped[Decimal | None] = mapped_column(Numeric(12, 3))
+    breadth_m: Mapped[Decimal | None] = mapped_column(Numeric(12, 3))
+    perimeter_m: Mapped[Decimal | None] = mapped_column(Numeric(12, 3))
+    height_m: Mapped[Decimal | None] = mapped_column(Numeric(12, 3))
+    deductions_sqm: Mapped[Decimal | None] = mapped_column(Numeric(12, 3))
+    cad_area_id: Mapped[int | None] = mapped_column(ForeignKey("cad_areas.id", ondelete="SET NULL"))
+    photos: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default="[]")
+    # the client's approval (sites where it is needed): draft -> sent -> approved (locked)
+    status: Mapped[str] = mapped_column(String(10), server_default="approved")
+    set_id: Mapped[int | None] = mapped_column(
+        ForeignKey("measurement_sets.id", ondelete="SET NULL")
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approved_by_user: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    approved_name: Mapped[str | None] = mapped_column(String(200))
+    recorded_by_staff: Mapped[bool] = mapped_column(server_default="false")
+    signed_copy_path: Mapped[str | None] = mapped_column(String(400))
+    zone_reason: Mapped[str | None] = mapped_column(Text)  # outside our RFI zones: why
+    ra_bill_id: Mapped[int | None] = mapped_column(ForeignKey("ra_bills.id", ondelete="SET NULL"))
 
 
 class TenderBidder(Base):

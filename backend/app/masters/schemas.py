@@ -222,6 +222,8 @@ class ProductIn(BaseModel):
 
 class ProductUpdate(BaseModel):
     code: str | None = Field(default=None, min_length=1, max_length=50)
+    # the maker discontinued it: issues on the open methodologies and sites that use it
+    discontinued_on: date | None = None
     name: Name | None = None
     brand: str | None = Field(default=None, max_length=100)
     category_id: int | None = None

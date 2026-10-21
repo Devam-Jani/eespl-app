@@ -4192,7 +4192,9 @@ li.late a {
   border-radius: 50%;
   background: var(--accent);
   color: #fff;
-  font: 700 12px/1 system-ui, sans-serif;
+  font:
+    700 12px/1 system-ui,
+    sans-serif;
   border: 2px solid #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
@@ -4322,4 +4324,155 @@ li.late a {
 }
 .library-proposal {
   margin-top: 0.6rem;
+}
+
+.role-pick {
+  display: block;
+  margin: 4px 0;
+}
+
+/* --- work orders, client approvals, bills, completion (16 Oct review) --- */
+.m-cards {
+  display: grid;
+  gap: 12px;
+}
+.m-card {
+  display: grid;
+  gap: 8px;
+}
+.m-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.m-sizes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 8px;
+}
+.m-change {
+  border-left: 3px solid var(--warn);
+  background: var(--warn-soft);
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+.m-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.m-actions .tap {
+  flex: 1 1 140px;
+}
+.m-edit {
+  display: grid;
+  gap: 8px;
+}
+.stat-label {
+  text-transform: capitalize;
+}
+.card.focus {
+  outline: 2px solid var(--accent);
+}
+.zone-tower + .zone-tower {
+  margin-top: 16px;
+}
+.zone-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+}
+.zone-flat {
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+}
+.zone-flat.ours,
+.zone-key.ours {
+  background: var(--ok-soft);
+  border-color: #2e8b57;
+}
+.zone-flat.theirs,
+.zone-key.theirs {
+  background: #eceff1;
+  border-color: #90a4ae;
+}
+.zone-flat.unmarked,
+.zone-key.unmarked {
+  border-style: dashed;
+}
+.zone-areas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.zone-areas span {
+  font-size: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.zone-key {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-radius: 3px;
+  vertical-align: middle;
+  margin: 0 4px 0 12px;
+}
+.checklist-grid td {
+  text-align: center;
+  font-size: 13px;
+}
+.checklist-grid td:first-child {
+  text-align: left;
+}
+.c-not {
+  background: #eceff1;
+  color: var(--muted);
+}
+.c-wait {
+  background: var(--surface);
+  color: var(--muted);
+}
+.c-prog {
+  background: var(--warn-soft);
+}
+.c-done {
+  background: #e3f2fd;
+}
+.c-meas {
+  background: #ede7f6;
+}
+.c-appr {
+  background: var(--ok-soft);
+}
+.c-bill {
+  background: var(--accent);
+  color: #fff;
+}
+.bill-head {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.bill-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.bill-step {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+}
+.bill-step.done {
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
 }

@@ -10,6 +10,8 @@ import BoqTab from "./tender/BoqTab";
 import RevisionsTab from "./tender/RevisionsTab";
 import { shortDate, StatusBadge, TenderForm } from "./Tenders";
 
+const TenderCustomers = lazy(() => import("../closeout/Pages").then((m) => ({ default: m.TenderCustomers })));
+
 const TenderAward = lazy(() => import("../team/Pages").then((m) => ({ default: m.TenderAward })));
 
 type Tab = "details" | "boq" | "working" | "terms" | "revisions" | "award";
@@ -235,7 +237,14 @@ Send anyway? Give the reason:`);
         ))}
       </div>
       <div className="top-gap">
-        {tab === "details" && <DetailsTab tender={tender} canEdit={canEdit} onChange={setTender} />}
+        {tab === "details" && (
+          <>
+            <DetailsTab tender={tender} canEdit={canEdit} onChange={setTender} />
+            <Suspense fallback={null}>
+              <TenderCustomers tenderId={tender.id} />
+            </Suspense>
+          </>
+        )}
         {tab === "boq" && <BoqTab tender={tender} canEdit={canEdit} onTotalChange={load} />}
         {tab === "working" && (
           <Suspense fallback={<p className="muted">Loading…</p>}>

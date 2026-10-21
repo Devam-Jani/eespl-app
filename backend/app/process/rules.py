@@ -291,6 +291,88 @@ DEFAULT_RULES: list[dict] = [
         "link": "/field/claims/{claim_id}", "closed_by": ["claim_approved"],
         "escalations": [{"after_hours": 5 * D, "to": ["director"]}],
     },
+    # the work order, billing and close-out review (16 Oct)
+    {
+        "code": "wo_amend", "number": 29, "event": "wo_amend",
+        "short": "Ask the client to amend the work order", "ref": "{wo}",
+        "title": "Work order deviation: ask the client to amend it",
+        "recipients": [{"role": "salesperson", "message": "Work order {wo}: {topic}. Send the client: {text}", "action": "Send to the client"}],
+        "link": "/work-orders/{wo_id}", "closed_by": [], "escalations": [],
+    },
+    {
+        "code": "bill_not_submitted", "number": 30, "event": "bill_not_submitted",
+        "short": "Bill not submitted in the window", "ref": "{bill}",
+        "title": "Bill not submitted by the end of the client's billing window",
+        "recipients": [
+            {"role": "billing", "message": "{site}: {bill} was not submitted at site in the client's window ({window} of the month). Submit it or it waits a month.", "action": "Submit the bill"},
+            {"role": "salesperson", "message": "{site}: {bill} missed the client's billing window ({window}).", "info": True},
+        ],
+        "link": "/billing/tracking?bill={ra_bill_id}", "closed_by": [], "escalations": [],
+    },
+    {
+        "code": "bill_stuck", "number": 31, "event": "bill_stuck",
+        "short": "Bill stuck at one step", "ref": "{bill}",
+        "title": "Bill stuck at one step",
+        "recipients": [{"role": "salesperson", "message": "{site}: {bill} has been at '{step}' for {days} days. Follow it up with the client.", "action": "Follow up"}],
+        "link": "/billing/tracking?bill={ra_bill_id}", "closed_by": [], "escalations": [],
+    },
+    {
+        "code": "bill_stuck_long", "number": 32, "event": "bill_stuck_long",
+        "short": "Bill stuck: escalated", "ref": "{bill}",
+        "title": "Bill stuck at one step (escalated)",
+        "recipients": [{"role": "director", "message": "{site}: {bill} has been at '{step}' for {days} days; the salesperson was told.", "action": "Look into it"}],
+        "link": "/billing/tracking?bill={ra_bill_id}", "closed_by": [], "escalations": [],
+    },
+    {
+        "code": "payment_due", "number": 33, "event": "payment_due",
+        "short": "Payment due today", "ref": "{bill}",
+        "title": "Payment due",
+        "recipients": [{"role": "accounts", "message": "{site}: {bill} is due on {due} ({how}), {amount} outstanding. Follow it up and log the call.", "action": "Follow up"}],
+        "link": "/billing/payments?bill={ra_bill_id}", "closed_by": [], "escalations": [],
+    },
+    {
+        "code": "payment_overdue", "number": 34, "event": "payment_overdue",
+        "short": "Payment overdue", "ref": "{bill}",
+        "title": "Payment overdue (5 days)",
+        "recipients": [{"role": "salesperson", "message": "{site}: {bill} is overdue by {days} days (due {due}). Call the client.", "action": "Call the client"}],
+        "link": "/billing/payments?bill={ra_bill_id}", "closed_by": [], "escalations": [],
+    },
+    {
+        "code": "payment_overdue_long", "number": 35, "event": "payment_overdue_long",
+        "short": "Payment overdue 30 days", "ref": "{bill}",
+        "title": "Payment overdue (30 days)",
+        "recipients": [
+            {"role": "director", "message": "{site}: {bill} is overdue by {days} days (due {due}), {amount} outstanding.", "action": "Look into it"},
+            {"role": "salesperson", "message": "{site}: {bill} is overdue by {days} days.", "info": True},
+            {"role": "site_engineer", "message": "{site}: {bill} is overdue by {days} days: raise it with the client's site team.", "info": True},
+        ],
+        "link": "/billing/payments?bill={ra_bill_id}", "closed_by": [], "escalations": [],
+    },
+    {
+        "code": "payment_promised", "number": 36, "event": "payment_promised",
+        "short": "Promised payment date", "ref": "{bill}",
+        "title": "The client's promised payment date",
+        "recipients": [{"role": "accounts", "message": "{site}: {spoke_to} promised to pay {bill} by {promised}. Check it came in.", "action": "Check the payment"}],
+        "link": "/billing/payments?bill={ra_bill_id}", "closed_by": [], "escalations": [],
+    },
+    {
+        "code": "issue_raised", "number": 37, "event": "issue_raised",
+        "short": "Issue on the site", "ref": "{issue}",
+        "title": "Issue raised on a site",
+        "recipients": [
+            {"role": "person", "message": "{site}: {issue} {category}: {title}. It is yours.", "action": "Resolve it"},
+            {"role": "site_engineer", "message": "{site}: {issue} {category}: {title}.", "info": True},
+        ],
+        "link": "/issues?open={issue_id}", "closed_by": ["issue_resolved"], "escalations": [],
+    },
+    {
+        "code": "issue_overdue", "number": 38, "event": "issue_overdue",
+        "short": "Issue past its due date", "ref": "{issue}",
+        "title": "Issue past its due date",
+        "recipients": [{"role": "person", "message": "{site}: {issue} {title} was due on {due}.", "action": "Resolve it"}],
+        "link": "/issues?open={issue_id}", "closed_by": ["issue_resolved"],
+        "escalations": [{"after_hours": 2 * D, "to": ["director"]}],
+    },
 ]  # fmt: skip
 
 # the order of the chain on a site's Process tab

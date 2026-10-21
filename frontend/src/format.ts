@@ -38,6 +38,7 @@ export const LOST_REASONS: Record<string, string> = {
   spec: "Specification",
   relationship: "Relationship",
   other: "Other",
+  main_job_lost: "Main job lost by the contractor",
 };
 
 export function errorText(err: unknown): string {

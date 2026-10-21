@@ -91,6 +91,18 @@ const MethodSystemPage = lazy(() => md().then((m) => ({ default: m.SystemPage })
 const StandardPage = lazy(() => md().then((m) => ({ default: m.StandardPage })));
 const MethodologyPage = lazy(() => md().then((m) => ({ default: m.MethodologyPage })));
 const SiteMethodology = lazy(() => md().then((m) => ({ default: m.SiteMethodology })));
+// work orders, client approvals, bill steps, payments, completion and issues (the 16 Oct review)
+const co = () => import("./closeout/Pages");
+const WorkOrders = lazy(() => co().then((m) => ({ default: m.WorkOrders })));
+const WorkOrderPage = lazy(() => co().then((m) => ({ default: m.WorkOrderPage })));
+const SiteMeasurements = lazy(() => co().then((m) => ({ default: m.SiteMeasurements })));
+const SiteZones = lazy(() => co().then((m) => ({ default: m.SiteZones })));
+const BillingChecklist = lazy(() => co().then((m) => ({ default: m.BillingChecklist })));
+const BillSteps = lazy(() => co().then((m) => ({ default: m.BillTracking })));
+const Payments = lazy(() => co().then((m) => ({ default: m.Payments })));
+const SiteWorkCompletions = lazy(() => co().then((m) => ({ default: m.SiteWorkCompletions })));
+const Guarantees = lazy(() => co().then((m) => ({ default: m.Guarantees })));
+const Issues = lazy(() => co().then((m) => ({ default: m.Issues })));
 const kn = () => import("./knowledge/Pages");
 const KnowledgeHome = lazy(() => kn().then((m) => ({ default: m.KnowledgeHome })));
 const TemplatePage = lazy(() => kn().then((m) => ({ default: m.TemplatePage })));
@@ -180,6 +192,11 @@ const PAGES: Record<string, JSX.Element> = {
   "/planning/board": <StatusBoard />,
   "/measurements": <MeasurementBook />,
   "/bill-tracking": <BillTracking />,
+  "/work-orders": <WorkOrders />,
+  "/billing/tracking": <BillSteps />,
+  "/billing/payments": <Payments />,
+  "/guarantees": <Guarantees />,
+  "/issues": <Issues />,
   "/labour-check": <LabourCheck />,
   "/scorecard": <Scorecard />,
   "/settings/team": <TeamSettings />,
@@ -368,6 +385,11 @@ export default function App() {
                   ["/purchase-orders/new", ["po.edit"], <NewPo />],
                   ["/purchase-orders/:id", ["po.view"], <PoDetail />],
                   ["/stores/:id", ["store.view"], <StoreDetail />],
+                  ["/work-orders/:id", ["wo.view"], <WorkOrderPage />],
+                  ["/sites/:id/measurements", ["closeout.billing"], <SiteMeasurements />],
+                  ["/sites/:id/zones", ["closeout.site", "closeout.billing"], <SiteZones />],
+                  ["/sites/:id/billing-checklist", ["closeout.billing"], <BillingChecklist />],
+                  ["/sites/:id/work-completions", ["closeout.billing"], <SiteWorkCompletions />],
                 ] as [string, string[], JSX.Element][]
               ).map(([path, perms, page]) => (
                 <Route key={path} path={path} element={<RequirePermission perms={perms}>{page}</RequirePermission>} />

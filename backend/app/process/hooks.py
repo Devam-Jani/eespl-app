@@ -687,4 +687,9 @@ def timed_events(db: Session, at: datetime) -> int:
     from app.schedule import service as schedule  # noqa: PLC0415  (handover and target finish)
 
     n += schedule.timed_events(db, at)
+    from app.closeout import billing as closeout_billing  # noqa: PLC0415  (bills and payments)
+    from app.closeout import issues as closeout_issues  # noqa: PLC0415
+
+    n += closeout_billing.timed_events(db, at)
+    n += closeout_issues.timed_events(db, at)
     return n
