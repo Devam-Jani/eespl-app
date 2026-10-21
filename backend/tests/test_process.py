@@ -148,6 +148,9 @@ SAMPLE_DATA = {
     "category": "material late",
     "text": "tiles not delivered",
     "ra_bill_id": 1,
+    "claimed": "11",
+    "approved": "10",
+    "reason": "measured short",
 }
 
 

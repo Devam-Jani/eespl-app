@@ -40,6 +40,8 @@ from app.closeout import workorder as wsvc
 from app.closeout.common import locked, next_code, not_found, today, unprocessable
 from app.closeout.models import (
     CLIENT_RIGHTS,
+    CLIENT_ROLE_DEFAULTS,
+    RIGHT_LABELS,
     ClientBillingCycle,
     ClientRoleDef,
     ClientWorkOrder,
@@ -495,15 +497,33 @@ def delete_wo(
 PortalManage = Annotated[str, Depends(require_permission("portal.manage"))]
 
 
+RolesView = Annotated[str, Depends(require_any_permission("portal.manage", "portal.roles"))]
+RolesEdit = Annotated[str, Depends(require_permission("portal.roles"))]
+
+
 @router.get("/client-roles")
-def client_roles(db: DbSession, _: PortalManage) -> dict:
+def client_roles(db: DbSession, _: RolesView) -> dict:
+    """Settings > Client roles: each role's rights (given at an invite) and its defaults."""
     return {
         "rights": list(CLIENT_RIGHTS),
+        "right_labels": RIGHT_LABELS,
         "roles": [
-            {"code": r.code, "label": r.label, "rights": r.rights}
+            {"code": r.code, "label": r.label, "rights": r.rights, "default_rights": CLIENT_ROLE_DEFAULTS.get(r.code, [])}
             for r in db.scalars(select(ClientRoleDef).order_by(ClientRoleDef.sort_order))
         ],
     }
+
+
+@router.post("/client-roles/{code}/reset")
+def reset_client_role(code: str, request: Request, db: DbSession, principal: CurrentPrincipal, _: RolesEdit) -> dict:
+    r = db.get(ClientRoleDef, code)
+    if r is None or code not in CLIENT_ROLE_DEFAULTS:
+        raise not_found("Client role not found")
+    before = {"rights": r.rights}
+    r.rights = sorted(CLIENT_ROLE_DEFAULTS[code])
+    record(db, request, principal, "client_role.reset", "client_role", code, before=before, after={"rights": r.rights})
+    db.commit()
+    return client_roles(db, "all")
 
 
 class RoleIn(BaseModel):
@@ -518,7 +538,7 @@ def set_client_role(
     request: Request,
     db: DbSession,
     principal: CurrentPrincipal,
-    _: PortalManage,
+    _: RolesEdit,
 ) -> dict:
     r = db.get(ClientRoleDef, code)
     if r is None:
@@ -563,8 +583,10 @@ def set_user_roles(
     rows = list(db.scalars(select(ClientUser).where(ClientUser.user_id == uid)))
     if not rows:
         raise not_found("Client user not found")
+    from app.portal import service as portal_svc  # noqa: PLC0415
+
     for r in rows:
-        r.roles = sorted(set(body.roles))
+        r.roles, r.rights = sorted(set(body.roles)), portal_svc.rights_for_roles(db, body.roles)
     record(db, request, principal, "client_user.roles", "user", uid, after={"roles": body.roles})
     db.commit()
     return {"user_id": uid, "roles": sorted(set(body.roles))}
@@ -595,6 +617,11 @@ def move_handover(
     if node is None or node.site_id != site.id:
         raise not_found("Place not found")
     before = {"promised_on": node.handover_promised_on}
+    from app.closeout import handover  # noqa: PLC0415
+
+    if node.handover_promised_on and not any(h["kind"] == "promised" for h in node.handover_history or []):
+        handover.note(node, "promised", node.handover_promised_on, node.handover_promised_by or "the client")  # the date before history was kept
+    handover.note(node, "moved", body.promised_on, principal.user.full_name, body.reason, was=node.handover_promised_on)
     node.handover_promised_on = body.promised_on
     node.handover_promised_by = f"moved by {principal.user.full_name}: {body.reason}"[:200]
     node.handover_promised_entered_by = principal.user.id

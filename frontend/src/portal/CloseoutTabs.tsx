@@ -216,6 +216,9 @@ export function MeasurementsTab({ siteId }: { siteId: number }) {
 }
 
 type Place = {
+  client_promised_on?: string | null;
+  moved_to?: string | null;
+  moved_because?: string | null;
   node_id: number;
   name: string;
   kind: string;
@@ -266,7 +269,14 @@ export function HandoverTab({ siteId, canEdit }: { siteId: number; canEdit: bool
                 ) : (
                   day(p.promised_on)
                 )}
-                {p.promised_by && <div className="small muted">{p.promised_by}</div>}
+                {p.moved_to ? (
+                  <div className="small moved-note">
+                    Moved by the applicator: {p.moved_because}
+                    {p.client_promised_on ? ` (you had promised ${day(p.client_promised_on)})` : ""}
+                  </div>
+                ) : (
+                  p.promised_by && <div className="small muted">{p.promised_by}</div>
+                )}
               </td>
               <td>{p.status === "received" ? day(p.received_on) : <span className="muted">not yet</span>}</td>
             </tr>

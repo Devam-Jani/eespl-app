@@ -54,6 +54,9 @@ class ClientUser(Base):
     # the client roles (project manager, planning, site, billing, accounts); none: everything
     # the portal permissions allow (logins invited before the roles existed)
     roles: Mapped[list[str]] = mapped_column(JSONB, server_default="[]")
+    # the roles' rights as they were at the invite (Settings > Client roles changes new invites);
+    # none: from the roles as they are now (logins from before the snapshot)
+    rights: Mapped[list[str] | None] = mapped_column(JSONB)
 
 
 class ClientUserSite(Base):

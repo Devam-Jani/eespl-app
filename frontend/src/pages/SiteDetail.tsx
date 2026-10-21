@@ -13,6 +13,7 @@ import TasksTab from "./site/TasksTab";
 const Site3DTab = lazy(() => import("./site/Site3DTab"));
 const MaterialTab = lazy(() => import("./site/MaterialTab"));
 const ProcessTab = lazy(() => import("../process/Pages").then((m) => ({ default: m.ProcessTab })));
+const QualityChecklist = lazy(() => import("../closeout/Screens").then((m) => ({ default: m.QualityChecklist })));
 const HandoverTab = lazy(() => import("../schedule/Pages").then((m) => ({ default: m.HandoverTab })));
 const PlanLots = lazy(() => import("../schedule/Pages").then((m) => ({ default: m.PlanLots })));
 const SiteVisits = lazy(() => import("../team/Pages").then((m) => ({ default: m.SiteVisits })));
@@ -143,9 +144,15 @@ export default function SiteDetail() {
             {can("closeout.billing") && (
               <>
                 {" · "}
-                <Link to={`/sites/${site.id}/measurements`}>Measurements for approval</Link>
+                <Link to={`/sites/${site.id}/measurements`}>Measure</Link>
                 {" · "}
                 <Link to={`/sites/${site.id}/billing-checklist`}>Billing checklist</Link>
+                {" · "}
+                <Link to={`/sites/${site.id}/reconciliation`}>Material reconciliation</Link>
+                {" · "}
+                <Link to={`/sites/${site.id}/labour-claims`}>Labour claims</Link>
+                {" · "}
+                <Link to={`/bills?site=${site.id}`}>Bills</Link>
                 {" · "}
                 <Link to={`/sites/${site.id}/work-completions`}>Work completion</Link>
               </>
@@ -217,7 +224,12 @@ export default function SiteDetail() {
         {tab === "overview" && <Overview site={site} onChange={setSite} />}
         {tab === "structure" && <StructureTab site={site} onChange={load} />}
         {tab === "scope" && <ScopeTab site={site} onChange={load} />}
-        {tab === "tasks" && <TasksTab site={site} onChange={load} />}
+        {tab === "tasks" && (
+          <>
+            <TasksTab site={site} onChange={load} />
+            {(can("closeout.site") || can("closeout.billing")) && <QualityChecklist siteId={site.id} />}
+          </>
+        )}
         {tab === "drawings" && <DrawingsTab site={site} />}
         {tab === "material" && (
           <Suspense fallback={<p className="muted">Loading…</p>}>

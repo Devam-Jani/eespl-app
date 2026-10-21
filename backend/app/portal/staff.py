@@ -223,10 +223,18 @@ def invite(body: InviteIn, request: Request, db: DbSession, principal: CurrentPr
         if set(body.roles) - known:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unknown client role")
     cu = db.get(ClientUser, (user.id, body.client_id))
+    rights = svc.rights_for_roles(db, body.roles) if body.roles else None  # as the defaults are now
     if cu is None:
-        db.add(ClientUser(user_id=user.id, client_id=body.client_id, roles=sorted(set(body.roles))))
+        db.add(
+            ClientUser(
+                user_id=user.id,
+                client_id=body.client_id,
+                roles=sorted(set(body.roles)),
+                rights=rights,
+            )
+        )
     elif body.roles:
-        cu.roles = sorted(set(body.roles))
+        cu.roles, cu.rights = sorted(set(body.roles)), rights
     for s in sites:
         if db.get(ClientUserSite, (user.id, s.id)) is None:
             db.add(ClientUserSite(user_id=user.id, site_id=s.id))

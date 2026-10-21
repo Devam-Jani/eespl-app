@@ -4512,3 +4512,175 @@ li.late a {
   gap: 8px;
 }
 
+/* the menu by group: collapsible, a drawer on a phone */
+.nav-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.nav-toggle span:first-child {
+  flex: 1;
+}
+.nav-caret {
+  opacity: 0.7;
+}
+.nav-section.shut {
+  margin-bottom: 2px;
+}
+.drawer-backdrop {
+  display: none;
+}
+@media (max-width: 760px) {
+  .sidebar,
+  .sidebar.menu-closed,
+  .sidebar.menu-open {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(84vw, 300px);
+    height: 100vh;
+    overflow-y: auto;
+    z-index: 60;
+    transition: transform 0.2s ease;
+    padding-bottom: 1rem;
+  }
+  .sidebar.menu-closed {
+    transform: translateX(-105%);
+  }
+  .sidebar.menu-closed nav {
+    display: block;
+  }
+  .sidebar.menu-open {
+    transform: none;
+    box-shadow: 4px 0 18px rgba(0, 0, 0, 0.25);
+  }
+  .drawer-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 55;
+  }
+}
+
+/* the close-out screens */
+.role-grid td.changed {
+  background: var(--warn-soft);
+}
+.measure-page {
+  max-width: 760px;
+}
+.measure-form {
+  display: grid;
+  gap: 10px;
+}
+.place-pick {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+.size-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.size-input {
+  display: grid;
+  gap: 4px;
+}
+.size-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.seg-small button {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.qty-now {
+  font-size: 16px;
+  padding: 6px 0;
+}
+.m-row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+.m-pick {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.group-row td {
+  background: var(--bg);
+}
+td.indent {
+  padding-left: 24px;
+}
+.total-row td {
+  border-top: 2px solid var(--border);
+}
+.followup {
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.site-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  columns: 2;
+}
+.site-list li {
+  padding: 4px 0;
+}
+.moved-note {
+  color: var(--warn);
+}
+@media (max-width: 760px) {
+  .size-grid {
+    grid-template-columns: 1fr;
+  }
+  .site-list {
+    columns: 1;
+  }
+  .measure-page .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+/* the entry form fits a phone: nothing wider than the card */
+.measure-page,
+.measure-form,
+.measure-form .field,
+.place-pick > *,
+.size-input {
+  min-width: 0;
+}
+.measure-form .tap-input,
+.measure-form select,
+.measure-form input {
+  width: 100%;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+.measure-form .field {
+  margin-bottom: 0;
+}
+@media (max-width: 760px) {
+  .place-pick {
+    grid-template-columns: 1fr;
+  }
+  .measure-page .bill-head .page-actions {
+    flex-wrap: wrap;
+  }
+}

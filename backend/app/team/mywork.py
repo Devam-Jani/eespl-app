@@ -470,11 +470,11 @@ def billing(db: Session, p: Principal) -> list[Item]:
                 str(b.id),
                 f"RA bill {b.code}",
                 "Sent, not certified by the client",
-                f"/bill-tracking?site={b.site_id}",
+                f"/bills?site={b.site_id}",
                 "Chase",
                 b.submitted_at or b.created_at,
                 "normal",
-                "/bill-tracking",
+                "/bills",
             )
         )
     for b in db.scalars(

@@ -2,21 +2,33 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
-import { MENU } from "../menu";
+import type { Group } from "../menu";
+import { groupOf, visibleGroups } from "../menu";
 import Bell from "./Bell";
-import { initialMenuOpen, isPhone } from "./menuState";
+import { initialMenuOpen, isPhone, loadOpenGroups, saveOpenGroups } from "./menuState";
 
 export default function Layout() {
   const { me, can, logout } = useAuth();
-  const visible = MENU.filter((item) => can(...item.perms) && (item.all ?? []).every((c) => can(c)));
-  const sections = ["Modules", "Analytics", "Masters", "Settings", "Administration"] as const;
-  // My work counts on the menu (refreshed on every page change)
+  const groups = visibleGroups(can);
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(() => initialMenuOpen(window.innerWidth));
-  // on a phone the menu closes again after picking a page
+  // each user's open groups are remembered (in this browser); the current page's group is open
+  const userId = me?.user.id ?? "";
+  const [open, setOpen] = useState<Record<string, boolean>>(() => loadOpenGroups(userId));
+  useEffect(() => setOpen(loadOpenGroups(userId)), [userId]);
+  const here = groupOf(location.pathname);
+  // a group the user opened or closed stays so; otherwise My work and the current page's group are open
+  const isOpen = (g: Group) => open[g] ?? (g === here || g === "My work");
+  const toggle = (g: Group) => {
+    const next = { ...open, [g]: !isOpen(g) };
+    setOpen(next);
+    saveOpenGroups(userId, next);
+  };
+  // on a phone the menu (a drawer) closes again after picking a page
   useEffect(() => {
     if (isPhone(window.innerWidth)) setMenuOpen(false);
   }, [location.pathname]);
+  // My work counts on the menu (refreshed on every page change)
   const [counts, setCounts] = useState<Record<string, number>>({});
   useEffect(() => {
     if (!me) return;
@@ -28,6 +40,7 @@ export default function Layout() {
 
   return (
     <div className="shell">
+      {menuOpen && <div className="drawer-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
       <aside className={`sidebar ${menuOpen ? "menu-open" : "menu-closed"}`}>
         <NavLink to="/" className="brand">
           <span className="brand-mark">E</span> EESPL
@@ -38,18 +51,25 @@ export default function Layout() {
           <span>{me?.roles.map((r) => r.name).join(", ") || "No role"}</span>
         </div>
         <nav>
-          {sections.map((section) => {
-            const items = visible.filter((i) => i.section === section);
-            if (items.length === 0) return null;
+          {groups.map(({ group, items }) => {
+            const opened = isOpen(group);
+            const total = items.reduce((n, i) => n + (counts[i.to] ?? 0), 0);
             return (
-              <div key={section} className="nav-section">
-                <div className="nav-heading">{section}</div>
-                {items.map((item) => (
-                  <NavLink key={item.to} to={item.to} className="nav-link">
-                    {item.label}
-                    {counts[item.to] ? <span className="nav-count">{counts[item.to]}</span> : null}
-                  </NavLink>
-                ))}
+              <div key={group} className={`nav-section ${opened ? "open" : "shut"}`}>
+                <button type="button" className="nav-heading nav-toggle" aria-expanded={opened} onClick={() => toggle(group)}>
+                  <span>{group}</span>
+                  {!opened && total > 0 && <span className="nav-count">{total}</span>}
+                  <span className="nav-caret" aria-hidden="true">
+                    {opened ? "▾" : "▸"}
+                  </span>
+                </button>
+                {opened &&
+                  items.map((item) => (
+                    <NavLink key={item.to} to={item.to} className="nav-link">
+                      {item.label}
+                      {counts[item.to] ? <span className="nav-count">{counts[item.to]}</span> : null}
+                    </NavLink>
+                  ))}
               </div>
             );
           })}

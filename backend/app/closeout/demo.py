@@ -127,12 +127,18 @@ def reset(db: Session, site_id: int) -> int:
     site.client_id = site.tender_id = None
     db.flush()
     n = 0
+    store = db.scalar(text("select id from stores where site_id = :s"), {"s": site_id})
+    if store:
+        moved = list(db.scalars(text("select id from transfers where from_store_id = :st or to_store_id = :st"), {"st": store}))
+        n += db.execute(text("delete from stock_ledger where store_id = :st or (ref_type in ('transfer_out', 'transfer_in') and ref_id = any(:t))"), {"st": store, "t": moved}).rowcount
+        n += _purge(db, "transfers", moved, set())
+    n += _purge(db, "site_issues", list(db.scalars(text("select id from site_issues where site_id = :s"), {"s": site_id})), set())
     for table in ("issue_log", "work_completions", "labour_claims", "rfi_zones", "measurement_sets", "measurements", "tax_invoices", "ra_bills",
                   "client_contracts", "client_work_orders", "client_billing_cycles", "tasks", "area_scopes", "drawings", "site_nodes"):  # fmt: skip
         ids = list(db.scalars(text(f'select id from "{table}" where site_id = :s'), {"s": site_id}))
         n += _purge(db, table, ids, set())
     # this demo's process events and notices on the site (the other demos' stay)
-    kinds = ("wo_amend", "bill_not_submitted", "bill_stuck", "bill_stuck_long", "payment_due", "payment_overdue", "payment_overdue_long", "payment_promised", "issue_raised", "issue_overdue", "job_won")
+    kinds = ("labour_claim_above", "labour_claim_decided", "handover_moved", "wo_amend", "bill_not_submitted", "bill_stuck", "bill_stuck_long", "payment_due", "payment_overdue", "payment_overdue_long", "payment_promised", "issue_raised", "issue_overdue", "job_won")
     n += db.execute(text("delete from notifications where site_id = :s and (kind = 'bill_overdue' or rule_code = any(:k) or event_id in (select id from process_events where site_id = :s and type = any(:k)))"), {"s": site_id, "k": list(kinds)}).rowcount
     n += db.execute(text("delete from process_events where site_id = :s and type = any(:k)"), {"s": site_id, "k": list(kinds)}).rowcount
     t = db.scalar(select(Tender.id).where(Tender.name == TENDER, Tender.is_demo))
@@ -211,6 +217,8 @@ def _file(name: str, body: bytes, kind: str = "application/pdf"):
 
 
 SIGNED = b"%PDF-1.4\n% DEMO signed copy (invented)\n"
+# a drawn signature (a small invented mark), as the portal's signature pad sends it
+PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
 
 def price_through_working(c: TestClient, h: dict, tender_id: int, systems: dict[str, int], margin: str = "25") -> dict:
@@ -401,8 +409,8 @@ def run(db: Session) -> dict:
         balcony = SiteNode(site_id=site.id, parent_id=flat.id, kind="balcony", name="Balcony", sort_order=2)
         db.add_all([toilet, balcony])
         db.flush()
-        if f != "104":  # 104 went to another applicator; the rest handed over to us
-            for n in (flat, toilet, balcony):
+        if f != "104":  # 104 went to another applicator; the rest handed over to us (103's balcony not yet)
+            for n in (flat, toilet, balcony) if f != "103" else (flat, toilet):
                 n.handover_status, n.handover_received_on = "received", date(2026, 8, 10)
         nodes[f] = (flat.id, toilet.id, balcony.id)
     site.measurements_need_approval = True
@@ -537,6 +545,64 @@ def run(db: Session) -> dict:
     out["wcc"] = {"code": w["code"], "areas": [(x["area"], x["item"][:30], x["qty"], x["unit"], x["system"], x["products"], x["from"], x["to"], x["dates_from"]) for x in w["areas"]],
                   "completion": str(w["completion_date"]), "expiry": str(w["guarantee_expiry"]), "signed": w["signed_name"],
                   "edit_after_sign": c.put(f"/api/closeout/work-completions/{w['id']}", json={"note": "x"}, headers=hd).status_code}  # fmt: skip
+
+    # the quality checklist of flat 101's toilet: our sign on each stage with its dates; the client
+    # signs the first three on paper (recorded with the copy) and the fourth in the portal
+    from app.execution.models import Inspection
+    from app.sites.models import Task
+
+    tasks = list(db.scalars(select(Task).where(Task.node_id == nodes["101"][1], Task.parent_task_id.is_(None)).order_by(Task.sort_order)))
+    signs = []
+    for i, tk in enumerate(tasks):
+        r = _ok(c.post(f"/api/closeout/tasks/{tk.id}/quality-sign", json={"started_on": str(tk.actual_start), "ended_on": str(tk.actual_end)}, headers=hs), "quality sign")
+        iid = r["stages"][i]["inspection_id"]
+        if i < 3:
+            _ok(c.post(f"/api/closeout/inspections/{iid}/client-sign-record", data={"signed_name": "DEMO Client Project Manager"}, files=_file("qc-signed.pdf", SIGNED), headers=hs), "client sign recorded")
+        elif i == 3:
+            _ok(c.post(f"/api/portal/sites/{site.id}/inspections/{iid}/sign", json={"name": "DEMO Client Project Manager", "signature": PNG}, headers=P["project_manager"]), "client sign in the portal")
+        signs.append((tk.name, str(tk.actual_start), str(tk.actual_end), db.get(Inspection, iid).client_signoff))
+    out["quality"] = signs
+
+    # the handover: the client promised flat 103's balcony for 15 Oct; our engineer moves it
+    _ok(c.put(f"/api/portal/sites/{site.id}/nodes/{nodes['103'][2]}/handover-promise", json={"promised_on": "2026-10-15"}, headers=P["project_manager"]), "client promise")
+    mv = _ok(c.post(f"/api/closeout/sites/{site.id}/nodes/{nodes['103'][2]}/handover-move", json={"promised_on": "2026-10-28",
+                    "reason": "The railing grouting by the civil contractor is not done: the balcony cannot be waterproofed before it"}, headers=hs), "handover moved")  # fmt: skip
+    seen = next(x for x in _ok(c.get(f"/api/portal/sites/{site.id}/handover", headers=P["project_manager"]), "portal handover") if x["node_id"] == nodes["103"][2])
+    out["handover"] = {"client_promised": mv["client_promised_on"], "moved_to": mv["moved_to"], "because": mv["moved_because"], "client_sees": (seen["promised_on"], seen["moved_because"])}
+
+    # material reconciliation: 16 kg of DEMO FLEXCOAT issued to the toilets of 101 and 102; the
+    # approved quantity needs less: the excess goes back to the godown with a transfer
+    from app.masters.models import Product
+    from app.material import service as stock
+    from app.material.models import SiteIssue, SiteIssueLine
+
+    p = db.get(Product, m["product"])
+    store = stock.site_store(db, site)
+    stock.post(db, store_id=store.id, product=p, qty=Decimal(20), rate=Decimal(185), ref_type="opening", ref_id=None, user_id=None, note="DEMO opening stock")
+    iss = SiteIssue(code=stock.next_code(db, "ISS"), kind="issue", store_id=store.id, site_id=site.id, node_id=nodes["101"][1], issued_on=date(2026, 8, 12), remark="DEMO: to the toilets of 101 and 102")
+    db.add(iss)
+    db.flush()
+    stock.take_out(db, store=store, product=p, qty=Decimal(16), ref_type="issue", ref_id=iss.id, user_id=None, note=iss.code)
+    iss.lines.append(SiteIssueLine(product_id=p.id, product=p, qty=Decimal(16), rate=Decimal(185), value=Decimal(2960)))
+    db.commit()
+    rec = _ok(c.get(f"/api/closeout/sites/{site.id}/reconciliation", headers=hb), "reconciliation")
+    row = next(x for x in rec["rows"] if x["product_id"] == p.id)
+    before = {k2: str(row[k2]) for k2 in ("issued", "needed", "difference", "state")}
+    back = _ok(c.post(f"/api/closeout/sites/{site.id}/reconciliation/return", json={"product_id": p.id, "qty": str(row["difference"])}, headers=hb), "return to godown", 201)
+    row = next(x for x in back["rows"] if x["product_id"] == p.id)
+    out["reconciliation"] = {"before": before, "transfer": back["transfer"], "after": {k2: str(row[k2]) for k2 in ("issued", "needed", "returned", "difference", "state")}}
+
+    # labour claims: 10 % above the measured toilet of 101 (billing asks to pay it: the director
+    # decides), and 102's toilet as measured
+    claims = []
+    for f, factor, decision, reason in (("101", Decimal("1.10"), "claimed", "The gang says the toilet's door sill and the shower step were done too"),
+                                        ("102", Decimal("1"), "approved", None)):  # fmt: skip
+        approved = sum(Decimal(str(x[2])) for x in out["measurements"]["lines"] if x[0].startswith(f"Flat {f} toilet") and x[4] == "approved")
+        lst = _ok(c.post(f"/api/closeout/sites/{site.id}/labour-claims", json={"contractor": "DEMO Labour Contractor", "node_id": nodes[f][1], "contract_line_id": lines["toilet"]["id"],
+                                                                               "claimed_qty": str((approved * factor).quantize(Decimal("0.001"))), "unit": "sqm", "period": "2026-08"}, headers=hb), "claim", 201)  # fmt: skip
+        r = _ok(c.post(f"/api/closeout/labour-claims/{lst[-1]['id']}/decide", json={"decision": decision, "reason": reason}, headers=hb), "decide")
+        claims.append((f, str(r["claimed"]), str(r["approved"]), str(r["excess_claim"]), r["status"], str(r["pays"])))
+    out["labour_claims"] = claims
 
     # 10. three issues --------------------------------------------------------------------------------
     late = _ok(c.post("/api/closeout/issues", json={"site_id": site.id, "category": "material_not_arrived", "title": "PU coating for the flat 103 balcony not delivered",
