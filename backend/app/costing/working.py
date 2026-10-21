@@ -405,12 +405,17 @@ def init_from_system(db: Session, g: RateGroup, context: str = "") -> None:
 
 
 SOURCE_LABEL = {
-    "old_boq": "old BOQ",
+    "old_boq": "old BOQs",
     "data_sheet": "data sheet",
     "site_actual": "site actual",
-    "manual": "typed",
+    "manual": "manual",
     "system": "the system",
 }
+
+
+def readable_source(code: str | None) -> str:
+    """"old_boq" -> "old BOQs": the words people read, never the stored code."""
+    return SOURCE_LABEL.get(code or "", (code or "the system").replace("_", " "))
 
 
 def _requirement(g: RateGroup) -> str:

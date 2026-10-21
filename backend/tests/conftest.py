@@ -132,6 +132,8 @@ def _recreate_database() -> None:
     with admin.connect() as conn:
         conn.execute(text(f'DROP DATABASE IF EXISTS "{TEST_DB_NAME}" WITH (FORCE)'))
         conn.execute(text(f'CREATE DATABASE "{TEST_DB_NAME}"'))
+        # a throwaway database: no need to wait for the disk on every commit
+        conn.execute(text(f'ALTER DATABASE "{TEST_DB_NAME}" SET synchronous_commit = off'))
     admin.dispose()
 
 
@@ -178,25 +180,102 @@ def media_in_tmp(tmp_path, monkeypatch) -> Path:
     return media
 
 
+# which of the per-test tables hold rows: one query instead of truncating ~260 empty tables
+_NONEMPTY = " UNION ALL ".join(
+    f"SELECT '{t}' WHERE EXISTS (SELECT 1 FROM {t})" for t in PER_TEST_TABLES
+)
+_PERMS = (
+    "SELECT md5(string_agg(r.code || '/' || rp.permission_code || '/' || rp.scope, ',' "
+    "ORDER BY r.code, rp.permission_code, rp.scope)) FROM role_permissions rp "
+    "JOIN roles r ON r.id = rp.role_id"
+)
+
+
+@pytest.fixture(scope="session")
+def seeded_permissions_md5(seeded_role_permissions) -> str:
+    with engine.connect() as conn:
+        return conn.execute(text(_PERMS)).scalar_one()
+
+
+@pytest.fixture(scope="session")
+def referenced_by(test_database) -> dict[str, set[str]]:
+    """{table: the per-test tables with a foreign key to it}: TRUNCATE needs them in the same
+    statement, even when they are empty."""
+    out: dict[str, set[str]] = {}
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT ref.relname, src.relname FROM pg_constraint c "
+                "JOIN pg_class src ON src.oid = c.conrelid "
+                "JOIN pg_class ref ON ref.oid = c.confrelid "
+                "WHERE c.contype = 'f'"
+            )
+        ).all()
+    per_test = set(PER_TEST_TABLES)
+    for ref, src in rows:
+        if src in per_test and src != ref:
+            out.setdefault(ref, set()).add(src)
+    return out
+
+
+# turning the foreign-key triggers off needs a superuser (the local and CI databases)
+_CAN_SKIP_FK = [False]
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _fk_switch(test_database) -> None:
+    with engine.connect() as conn:
+        _CAN_SKIP_FK[0] = bool(
+            conn.execute(
+                text("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
+            ).scalar()
+        )
+
+
+def _with_referencing(used: list[str], referenced_by: dict[str, set[str]]) -> list[str]:
+    todo, seen = list(used), set(used)
+    while todo:
+        for src in referenced_by.get(todo.pop(), ()):
+            if src not in seen:
+                seen.add(src)
+                todo.append(src)
+    return sorted(seen)
+
+
 @pytest.fixture(autouse=True)
-def clean_state(seeded_role_permissions, seeded_max_category) -> Iterator[None]:
+def clean_state(
+    seeded_role_permissions, seeded_max_category, seeded_permissions_md5, referenced_by
+) -> Iterator[None]:
     yield
     with engine.begin() as conn:
         # Not TRUNCATE users CASCADE: every master table references users (created_by), and
-        # that would also wipe the seeded units table.
-        conn.execute(text(f"TRUNCATE {', '.join(PER_TEST_TABLES)}"))
+        # that would also wipe the seeded units table. Only the tables the test wrote to
+        # (TRUNCATE costs the same for an empty table as for a full one); the settings and
+        # seed-copy tables always hold a row, so they are always reset.
+        used = [r[0] for r in conn.execute(text(_NONEMPTY))]
+        if used and _CAN_SKIP_FK[0]:
+            # the few tables written to, emptied with their foreign-key checks off for this
+            # transaction (every other per-test table is empty already): far cheaper than
+            # TRUNCATE, which costs the same for every table it names
+            conn.execute(text("SET LOCAL session_replication_role = replica"))
+            for t in used:
+                conn.execute(text(f"DELETE FROM {t}"))
+            conn.execute(text("SET LOCAL session_replication_role = origin"))
+        elif used:
+            conn.execute(text(f"TRUNCATE {', '.join(_with_referencing(used, referenced_by))}"))
         for statement in PER_TEST_DELETES:
             conn.execute(text(statement), {"seeded_max_category": seeded_max_category})
         conn.execute(text("DELETE FROM users"))
         conn.execute(text("DELETE FROM roles WHERE NOT is_system"))
-        conn.execute(text("DELETE FROM role_permissions"))
-        conn.execute(
-            text(
-                "INSERT INTO role_permissions (role_id, permission_code, scope) "
-                "SELECT id, :p, :s FROM roles WHERE code = :r"
-            ),
-            [{"r": r, "p": p, "s": s} for r, p, s in seeded_role_permissions],
-        )
+        if conn.execute(text(_PERMS)).scalar_one() != seeded_permissions_md5:
+            conn.execute(text("DELETE FROM role_permissions"))
+            conn.execute(
+                text(
+                    "INSERT INTO role_permissions (role_id, permission_code, scope) "
+                    "SELECT id, :p, :s FROM roles WHERE code = :r"
+                ),
+                [{"r": r, "p": p, "s": s} for r, p, s in seeded_role_permissions],
+            )
 
 
 @pytest.fixture

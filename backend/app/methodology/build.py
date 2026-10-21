@@ -7,6 +7,7 @@ the client's standard (green / red with the gap / to confirm). A make the client
 red with two choices: an approved make, or keep ours and ask for its approval before the bid
 (TPT). The estimator edits steps with a reason; each version is kept."""
 
+import math
 import re
 from collections import Counter
 from datetime import UTC, date, datetime
@@ -103,6 +104,7 @@ def tanks_from_note(text: str, source: str) -> list[dict]:
     area = re.search(r"AREA\s*-?\s*:?\s*([\d.]+)\s*SQ", t)
     depth = re.search(r"([\d.]+)\s*M\s*DEPTH|DEPTH\s*:?\s*([\d.]+)\s*M|HEIGHT\s*:?\s*([\d.]+)", t)
     cap = re.search(r"([\d,]+)\s*LTR|CAP\s*:?\s*([\d,]+)", t)
+    fb = re.search(r"\+\s*([\d.]+)\s*M\s*(?:FREE\s*BOARD|F\.?\s*B)", t)
     if not (area or depth or cap):
         return []
     d = float(next(g for g in depth.groups() if g)) if depth else None
@@ -115,7 +117,7 @@ def tanks_from_note(text: str, source: str) -> list[dict]:
     name = re.split(r"\|", text)[0].strip()
     if re.match(r"^[\d,]+\s*LTR", name.upper()):
         name = text.split("|")[1].strip() if "|" in text else name
-    return [{"name": name, "element": el or "tank", "label": text, "area_sqm": a, "depth_m": d, "capacity_l": capacity, "source": source,
+    return [{"name": name, "element": el or "tank", "label": text, "area_sqm": a, "depth_m": d, "capacity_l": capacity, "source": source, "freeboard_m": float(fb.group(1)) if fb else 0.0,
              "area_from": "the note" if area else ("capacity ÷ height" if a else None)}]  # fmt: skip
 
 
@@ -189,7 +191,62 @@ def set_places(item: MethodologyItem, places: list[dict]) -> None:
             "source": tanks[0]["label"][:120],
         }
         cond["tank_depth_m"] = {"value": tanks[0]["depth_m"], "source": tanks[0]["label"][:120]}
+        if tanks[0].get("area_sqm"):
+            per = 4 * math.sqrt(float(tanks[0]["area_sqm"]))
+            cond["tank_perimeter_m"] = {
+                "value": round(per, 2),
+                "assumed": True,
+                "source": "square plan assumed: to confirm (enter the real perimeter)",
+            }
+            cond["tank_freeboard_m"] = {
+                "value": tanks[0].get("freeboard_m") or 0.0,
+                "source": tanks[0]["label"][:120],
+            }
     item.conditions = cond
+
+
+def tank_qty(
+    area: float, depth: float, freeboard: float, perimeter: float | None = None
+) -> tuple[Decimal, str, bool]:
+    """The inside surface of a tank: the base and the walls (perimeter × wet height). Without
+    the real perimeter the plan is taken as square, and the area is to confirm."""
+    assumed = perimeter is None
+    per = perimeter if perimeter is not None else 4 * math.sqrt(area)
+    walls = per * (depth + freeboard)
+    note = (
+        f"base {area:.2f} sqm + walls {walls:.2f} sqm ({per:.2f} m × {depth + freeboard:.1f} m"
+        + (", square plan assumed: to confirm)" if assumed else ", perimeter given)")
+    )
+    return Decimal(str(round(area + walls, 3))), note, assumed
+
+
+def set_perimeter(
+    db: Session, item: MethodologyItem, perimeter: float, user_name: str, reason: str
+) -> Decimal:
+    """The real perimeter of a tank: its area again, on the item and its BOQ line, no longer to
+    confirm."""
+    from app.tenders.models import BoqLine
+
+    c = dict(item.conditions or {})
+    area, depth = _value(c, "tank_area_sqm"), _value(c, "tank_depth_m")
+    if not area or not depth:
+        raise ValueError("The tank's plan area and depth are not known")
+    qty, note, _assumed = tank_qty(
+        float(area), float(depth), float(_value(c, "tank_freeboard_m") or 0), perimeter
+    )
+    c["tank_perimeter_m"] = {
+        "value": perimeter,
+        "assumed": False,
+        "source": f"by hand ({user_name}): {reason}",
+    }
+    item.conditions = c
+    item.qty = qty
+    for lid in item.boq_line_ids or []:
+        line = db.get(BoqLine, lid)
+        if line is not None and len(item.boq_line_ids) == 1:
+            line.qty = qty
+            line.client_remarks = f"{note}; {reason}"
+    return qty
 
 
 def split_toilets(db: Session, m: Methodology, item: MethodologyItem) -> list[MethodologyItem]:
@@ -628,9 +685,12 @@ def check(
                 }
             )
             main = _main_product(system)
+            alts_note = None
+            if not alts:
+                alts, alts_note = other_sop_makes(std, rule, types)
             rows.append({"topic": "Make", "required": "one of " + ", ".join(std.approved_makes), "ours": f"{brand} ({main or system.name})", "status": "red",
                          "gap": f"{brand} is not on the approved list", "ref": ref,
-                         "choices": [{"key": "approved", "label": "Use an approved make", "options": alts[:8]},
+                         "choices": [{"key": "approved", "label": "Use an approved make", "options": alts[:8], "note": alts_note},
                                      {"key": "keep", "label": f"Keep {brand} and ask before the bid", "query": f"Request approval of {main or brand} ({brand}) as an equivalent make (TPT)"}]})  # fmt: skip
         elif brand:
             rows.append(
@@ -657,6 +717,10 @@ def check(
             have = system.guarantee_years
             rows.append({"topic": "Guarantee", "required": f"{want} years", "ours": f"{have} years" if have else TO_CONFIRM,
                          "status": "confirm" if have is None else ("green" if have >= want else "red"), "gap": None if have and have >= want else ("not in our library" if have is None else f"{want - have} years short")})  # fmt: skip
+    per = (item.conditions or {}).get("tank_perimeter_m")
+    if isinstance(per, dict) and per.get("assumed"):
+        rows.append({"topic": "Tank wall area", "required": "the real perimeter", "ours": f"{per['value']} m from a square plan", "status": "confirm",
+                     "gap": "square plan assumed: enter the real perimeter to recalculate the area"})  # fmt: skip
     counts = Counter(r["status"] for r in rows)
     return {
         "rows": rows,
@@ -665,6 +729,41 @@ def check(
         "confirm": counts["confirm"],
         "checked_at": datetime.now(UTC).isoformat(),
     }
+
+
+def other_sop_makes(
+    std: ClientStandard | None, rule: StandardRule, types: set[str]
+) -> tuple[list[str], str]:
+    """A SOP without a makes table (the new-format toilet, balcony and terrace SOPs): the same
+    client's approved products for the same material from its other SOPs, marked where from."""
+    fams = {vocab.family(t) for t in types}
+    out: dict[str, str] = {}
+    for r in std.rules if std else []:
+        if r.id == rule.id:
+            continue
+        for mk in r.makes:
+            if mk["status"] not in ("approved", "tpt"):
+                continue
+            if vocab.family(vocab.system_type_of(mk.get("system") or "")) not in fams:
+                continue
+            label = f"{mk['brand']} {mk['product']}" + (
+                " (approved as per TPT)" if mk["status"] == "tpt" else ""
+            )
+            sop = r.document.sop_no if r.document else "another SOP"
+            out.setdefault(label, f"from SOP {sop}")
+    if not out:
+        kinds = (
+            ", ".join(sorted(vocab.SYSTEM_LABEL.get(t, t).lower() for t in types))
+            or "this material"
+        )
+        return (
+            [],
+            f"this SOP lists no makes, and no other SOP of the client approves a product for {kinds}",
+        )
+    return (
+        [f"{k} — {v}" for k, v in sorted(out.items())],
+        "this SOP lists no makes: products the client approves for the same material in its other SOPs",
+    )
 
 
 def _n(v: float) -> str:

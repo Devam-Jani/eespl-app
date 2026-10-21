@@ -758,6 +758,46 @@ class SystemPick(BaseModel):
     reason: str = Field(min_length=3, max_length=2000)
 
 
+class PerimeterIn(BaseModel):
+    perimeter_m: float = Field(gt=0, le=10000)
+    reason: str = Field(min_length=3, max_length=2000)
+
+
+@router.put("/items/{iid}/perimeter")
+def set_perimeter(
+    iid: int,
+    body: PerimeterIn,
+    request: Request,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    _: Edit,
+) -> dict:
+    """A tank's real perimeter: its wall area again instead of the square-plan guess."""
+    it = db.get(MethodologyItem, iid)
+    if it is None:
+        raise _404("Item not found")
+    m = db.get(Methodology, it.methodology_id)
+    bld.save_version(
+        db, m, f"{it.name}: perimeter {body.perimeter_m} m — {body.reason}", principal.user.id
+    )
+    try:
+        qty = bld.set_perimeter(db, it, body.perimeter_m, principal.user.full_name, body.reason)
+    except ValueError as e:
+        raise _422(str(e)) from e
+    bld.recheck(db, m)
+    record(
+        db,
+        request,
+        principal,
+        "methodology.perimeter",
+        "methodology_item",
+        it.id,
+        after={**body.model_dump(), "qty": str(qty)},
+    )
+    db.commit()
+    return methodology_out(db, m, principal)
+
+
 @router.put("/items/{iid}/system")
 def pick_system(
     iid: int,

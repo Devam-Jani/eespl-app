@@ -408,7 +408,7 @@ def tests_from(pages: list[Page]) -> list[dict]:
     out = []
     for p in pages:
         sentences = re.split(r"(?<=[.?])\s+|\n\s*•", p.text.replace("\n", " \n"))
-        for s in sentences:
+        for si, s in enumerate(sentences):
             s1 = vocab.clean(s)
             if (
                 not re.search(r"pond|flood|fill\s*the\s*tank|leak\s*test", s1, re.I)
@@ -416,6 +416,15 @@ def tests_from(pages: list[Page]) -> list[dict]:
             ):
                 continue
             h = vocab.hours_in(s1)
+            if not h and re.search(r"fill\s*the\s*tank|tank\s*completely", s1, re.I):
+                # "fill the tank completely and check for leakages. ... If there are no
+                # leakages after 72 hrs ...": the hours in one of the next sentences
+                for nxt in sentences[si + 1 : si + 4]:
+                    n1 = vocab.clean(nxt)
+                    if re.search(r"leak", n1, re.I) and vocab.hours_in(n1):
+                        h = vocab.hours_in(n1)
+                        s1 = f"{s1} {n1}"
+                        break
             if not h or s1.endswith("?"):
                 continue
             if re.search(r"pre[\s-]*pond", s1, re.I):

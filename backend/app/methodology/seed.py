@@ -684,6 +684,7 @@ def _consumption(db: Session, master_id: int | None) -> tuple[str, str] | None:
     if not master_id:
         return None
     from app.costing.models import ProductConsumption
+    from app.costing.working import readable_source
 
     row = db.scalars(
         select(ProductConsumption)
@@ -693,7 +694,7 @@ def _consumption(db: Session, master_id: int | None) -> tuple[str, str] | None:
     return (
         (
             f"{row.consumption.normalize():f}",
-            f"consumption table ({row.source}, used {row.used_count}×)",
+            f"{readable_source(row.source)}, used {row.used_count}×",
         )
         if row
         else None

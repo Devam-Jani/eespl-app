@@ -8,7 +8,6 @@ standard (imported first), exported as Word and PDF.
     docker compose exec api python -m app.cli demo-methodology
 """
 
-import math
 from decimal import Decimal
 from pathlib import Path
 
@@ -37,15 +36,12 @@ def _sum(places: list[dict]) -> Decimal:
 
 
 def _tank_qty(p: dict) -> tuple[Decimal, str]:
-    """Inside surface of a tank from its note: the base, and the walls on a square plan (the
-    drawing gives the area and depth, not the sides: the walls are an estimate to confirm)."""
-    a, d = float(p["area_sqm"]), float(p["depth_m"])
-    free = 0.3  # the free board the notes give (+0.3 m)
-    walls = 4 * math.sqrt(a) * (d + free)
-    return (
-        Decimal(str(round(a + walls, 3))),
-        f"base {a:.2f} sqm + walls {walls:.2f} sqm (4 × √{a:.2f} × {d + free:.1f} m, square plan assumed: to confirm)",
+    """Inside surface of a tank from its note (the drawing gives the area and depth, not the
+    sides: the walls come from a square plan, to confirm)."""
+    qty, note, _assumed = bld.tank_qty(
+        float(p["area_sqm"]), float(p["depth_m"]), float(p.get("freeboard_m") or 0.3)
     )
+    return qty, note
 
 
 def run(db: Session, user_id=None) -> dict:
@@ -225,6 +221,11 @@ def _site(db: Session, t, m: Methodology, user_id=None) -> dict:
     from app.tenders.models import BoqLine
 
     t.status = "won"
+    for old in db.scalars(
+        select(Site).where(Site.name == "DEMO Godrej Phase-11 (B1-B3)", Site.is_demo)
+    ):
+        db.delete(old)  # an earlier run's DEMO site
+    db.flush()
     site = Site(code=site_service.next_code(db), name="DEMO Godrej Phase-11 (B1-B3)", client_id=t.client_id, tender_id=t.id, city="Ahmedabad", state="Gujarat",
                 status="active", start_date=date.today(), is_demo=True, created_by=user_id)  # fmt: skip
     db.add(site)
