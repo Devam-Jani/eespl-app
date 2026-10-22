@@ -230,28 +230,77 @@ def _corner(poly: list[list[float]]) -> tuple[float, float]:
 # --- floors and heights ----------------------------------------------------------------------------
 
 
+def storey_levels(values: list[float]) -> tuple[list[float], int | None]:
+    """The section's levels as one per storey: a pair under 0.3 m apart (slab top and finished
+    floor) is one level (the finished floor, the higher); the ground is the first level at or above
+    -0.5 m (a plinth level such as +0.914 is the ground floor's)."""
+    out: list[float] = []
+    for v in sorted(values):
+        if out and v - out[-1] < 0.3:
+            out[-1] = v
+        else:
+            out.append(v)
+    ground = next((i for i, v in enumerate(out) if v >= -0.5), None)
+    return out, ground
+
+
 def elevations(data: dict) -> list[dict]:
-    """Each floor's bottom (finished floor) and its height, in metres: from the section's levels
-    when it has a ±0 level and one level per floor, else plinth + the floor heights below."""
+    """Each floor's finished level and its height (metres), and where the level came from:
+      hand      typed on the building page (wins)
+      section   the section's level for that storey: from the ground level up (the basements down)
+      default   no level for it: the plinth, then the floor height of the setting
+    A section level that is far from where the floors before it put this floor is flagged."""
     s = {**DEFAULTS, **(data.get("settings") or {})}
     floors = sorted((f for f in data.get("floors", []) if f.get("level") is not None), key=lambda f: f["level"])
     lv = data.get("levels") or {}
-    values = [v for v in lv.get("values_m") or [] if v > -0.01] if lv.get("from_ground") else []
-    out = []
-    z = float(s["plinth_m"])
-    ground_i = next((i for i, f in enumerate(floors) if f["level"] >= 0), 0)
-    below = sum(float(f.get("height_m") or s["floor_height_m"]) for f in floors[:ground_i])
-    z -= below
+    values, g = storey_levels(lv.get("values_m") or []) if lv.get("source") == "section" else ([], None)
+    fh = float(s["floor_height_m"])
+    known: dict[int, tuple[float, str]] = {}
     for f in floors:
-        h = float(f.get("height_m") or s["floor_height_m"])
-        bottom = z
-        if values and 0 <= f["level"] < len(values):
-            bottom = values[f["level"]] + float(s["plinth_m"])
-            if f["level"] + 1 < len(values) and not f.get("height_m"):
-                h = values[f["level"] + 1] - values[f["level"]]
-        out.append({**f, "elevation_m": round(bottom, 3), "height_m": round(h, 3)})
-        z = bottom + h
+        if f.get("elevation_m") is not None and f.get("level_by_hand"):
+            known[f["level"]] = (float(f["elevation_m"]), "hand")
+        elif g is not None and 0 <= g + f["level"] < len(values):
+            known[f["level"]] = (values[g + f["level"]], "section")
+    out = []
+    prev: dict | None = None
+    for f in floors:
+        lvl = f["level"]
+        if lvl in known:
+            bottom, src = known[lvl]
+        elif prev is not None:
+            bottom, src = prev["elevation_m"] + prev["height_m"], "default"
+        else:  # the lowest floor without a level: the plinth, the floors below ground under it
+            below = sum(1 for x in floors if x["level"] < 0 and x["level"] >= lvl) if lvl < 0 else 0
+            bottom, src = float(s["plinth_m"]) - below * fh, "default"
+        nxt = next((x for x in floors if x["level"] > lvl), None)
+        if f.get("height_m"):
+            h = float(f["height_m"])
+        elif nxt is not None and nxt["level"] in known and known[nxt["level"]][0] > bottom:
+            h = known[nxt["level"]][0] - bottom
+        else:
+            h = fh
+        flag = None
+        if src == "section" and prev is not None and abs(bottom - (prev["elevation_m"] + prev["height_m"])) > 0.3 and prev["level_source"] != "section":
+            flag = "the section's level does not follow the floor below: check it"
+        if src == "default" and values:
+            flag = "no level on the section for this floor: the default height is used"
+        if h < 2.0 or h > 8.0:
+            flag = f"a storey of {h:.2f} m: check the levels"
+        row = {**f, "elevation_m": round(bottom, 3), "height_m": round(h, 3), "level_source": src, "level_flag": flag}
+        out.append(row)
+        prev = row
     return out
+
+
+def unmatched_levels(data: dict) -> list[float]:
+    """The section's storey levels no floor uses (basements the site has not got, a tank or a
+    machine room on the roof): shown so the user can see what was left out."""
+    lv = data.get("levels") or {}
+    if lv.get("source") != "section":
+        return []
+    used = {r["elevation_m"] for r in elevations(data) if r["level_source"] == "section"}
+    values, _ = storey_levels(lv.get("values_m") or [])
+    return [v for v in values if round(v, 3) not in used]
 
 
 # --- the 3D payload ----------------------------------------------------------------------------------
@@ -316,7 +365,7 @@ def payload(db: Session, site_id: int, client: bool = False) -> dict | None:
     by_level = {f["level"]: f for f in floors}
     rooms = _rooms(db, site_id, cad, data, unit, origin, by_level) if cad else []
     out = {"version": m.version, "schematic": False, "settings": {k: s[k] for k in ("floor_height_m", "slab_m", "plinth_m", "riser_m", "bloom", "ifc")},
-           "levels": {"source": (data.get("levels") or {}).get("source", "default"), "note": (data.get("levels") or {}).get("note")},
+           "levels": {"source": (data.get("levels") or {}).get("source", "default"), "note": None if client else (data.get("levels") or {}).get("note")},  # the section line is for staff
            "floors": [{k: f.get(k) for k in ("level", "node_id", "name", "type", "elevation_m", "height_m")} for f in floors],
            "types": out_types, "rooms": rooms, "ifc_links": data.get("ifc_links") or {}, "ifc": ifc}  # fmt: skip
     if not client:

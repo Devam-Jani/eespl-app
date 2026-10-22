@@ -13,11 +13,11 @@ type Pt = [number, number];
 type Core = { kind: "stair" | "lift"; outline: Pt[]; risers: number | null };
 type FType = { key: string; name: string; plan: string; title_xy: Pt | null; region: number[] | null; floors: number[]; outline: Pt[]; columns: number[][]; columns_confirmed: boolean; beams: number[][]; cores: Core[]; shift: Pt; shift_fixed?: boolean; walls?: boolean };
 type Settings = { floor_height_m: number; slab_m: number; plinth_m: number; column_min_m: number; column_max_m: number; beams_on_walls: boolean; riser_m: number; bloom: "auto" | "on" | "off"; tower_id: number | null; ifc: boolean; ifc_max_mb: number };
-type Data = { settings: Settings; levels: { source: string; note: string; floor_height_m: number | null }; floor_types: FType[]; floors: { level: number; node_id: number; name: string; type: string | null; height_m: number | null }[]; ifc_links: Record<string, number> };
+type Data = { settings: Settings; levels: { source: string; note: string; floor_height_m: number | null }; floor_types: FType[]; floors: { level: number; node_id: number; name: string; type: string | null; height_m: number | null; elevation_m?: number | null; level_by_hand?: boolean }[]; ifc_links: Record<string, number> };
 type Out = {
   site_id: number;
   can_edit: boolean;
-  model: null | { version: number; cad_file_id: number | null; data: Data; note: string | null; changes: Changes | null; by: string | null; at: string; unit_m: number | null; floors: { level: number; name: string; elevation_m: number; height_m: number; type: string | null }[] };
+  model: null | { version: number; cad_file_id: number | null; data: Data; note: string | null; changes: Changes | null; by: string | null; at: string; unit_m: number | null; floors: { level: number; name: string; elevation_m: number; height_m: number; type: string | null; level_source: "hand" | "section" | "default"; level_flag: string | null }[]; unmatched_levels: number[] };
   drawings: { cad_file_id: number; title: string; rev_no: string; unit_m: number | null; newer: boolean }[];
   plans: { title: string; xy: Pt; floors: number[]; region: number[] }[];
   site_floors: { node_id: number; name: string; level: number | null }[];
@@ -339,6 +339,13 @@ export default function BuildingBuilder() {
                     {type.columns_confirmed ? "Confirmed" : "Confirm"}
                   </button>
                 </div>
+                <div className="builder-row small">
+                  Column sizes from
+                  <input type="number" step="0.05" min={0.1} max={1} style={{ width: "4.5em" }} value={data.settings.column_min_m} onChange={(e) => update((d) => (d.settings.column_min_m = Number(e.target.value)))} aria-label="Smallest column side (m)" />
+                  to
+                  <input type="number" step="0.05" min={0.2} max={2} style={{ width: "4.5em" }} value={data.settings.column_max_m} onChange={(e) => update((d) => (d.settings.column_max_m = Number(e.target.value)))} aria-label="Largest column side (m)" />
+                  m (this site's setting: save, then find again)
+                </div>
                 <div className="builder-row">
                   <b>3. Cores</b>
                   <button className={`btn btn-small${tool === "stair" ? " active" : ""}`} onClick={() => (setTool("stair"), setTrace([]))}>
@@ -437,8 +444,8 @@ export default function BuildingBuilder() {
                 <tr>
                   <th>Floor</th>
                   <th>Type</th>
-                  <th className="num">Height (m)</th>
                   <th className="num">Level (m)</th>
+                  <th className="num">Height (m)</th>
                 </tr>
               </thead>
               <tbody>
@@ -447,10 +454,32 @@ export default function BuildingBuilder() {
                   .map((f) => {
                     const t = data.floor_types.find((x) => x.floors.includes(f.level));
                     const el = out.model?.floors.find((x) => x.level === f.level);
+                    const src = f.level_by_hand ? "hand" : el?.level_source;
                     return (
-                      <tr key={f.node_id}>
-                        <td>{f.name}</td>
+                      <tr key={f.node_id} className={el?.level_flag ? "row-warn" : undefined}>
+                        <td>
+                          {f.name}
+                          {el?.level_flag && <div className="small text-warn">{el.level_flag}</div>}
+                        </td>
                         <td className="small">{t?.name ?? <span className="muted">— (the reference plan)</span>}</td>
+                        <td className="num">
+                          <input
+                            type="number"
+                            step="0.001"
+                            style={{ width: "6.5em" }}
+                            value={f.level_by_hand ? (f.elevation_m ?? "") : (el?.elevation_m ?? "")}
+                            disabled={!out.can_edit}
+                            onChange={(e) =>
+                              update((d) => {
+                                const x = d.floors.find((y) => y.node_id === f.node_id)!;
+                                x.elevation_m = e.target.value === "" ? null : Number(e.target.value);
+                                x.level_by_hand = e.target.value !== "";
+                              })
+                            }
+                            aria-label={`Level of ${f.name}`}
+                          />
+                          <div className="small muted">{src === "section" ? "from the section" : src === "hand" ? "typed" : "default"}</div>
+                        </td>
                         <td className="num">
                           <input
                             type="number"
@@ -463,12 +492,16 @@ export default function BuildingBuilder() {
                             aria-label={`Height of ${f.name}`}
                           />
                         </td>
-                        <td className="num small">{el ? el.elevation_m.toFixed(3) : "—"}</td>
                       </tr>
                     );
                   })}
               </tbody>
             </table>
+            {(out.model?.unmatched_levels.length ?? 0) > 0 && (
+              <p className="small text-warn">
+                Section levels no floor uses: {out.model!.unmatched_levels.map((v) => `${v >= 0 ? "+" : ""}${v.toFixed(3)}`).join(", ")} m (basements, a tank or a roof room the site structure has not got). Add the floor to the structure, or leave them.
+              </p>
+            )}
           </div>
           <div className="card builder-plan">
             {geo && type ? (

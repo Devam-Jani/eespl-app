@@ -5051,3 +5051,18 @@ label.check {
   flex-direction: column;
   gap: 0.4rem;
 }
+.xray-label-moved {
+  z-index: 1;
+}
+.xray-leader {
+  position: absolute;
+  left: 50%;
+  width: 1px;
+  background: currentColor;
+  opacity: 0.6;
+}
+@media (max-width: 500px) {
+  .xray-label {
+    font-size: 0.62rem;
+  }
+}

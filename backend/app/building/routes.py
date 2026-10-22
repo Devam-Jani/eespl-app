@@ -62,7 +62,7 @@ def _out(db, site: Site, principal) -> dict:
         "can_edit": _can_edit(site, principal),
         "model": None if m is None else {"id": m.id, "version": m.version, "cad_file_id": m.cad_file_id, "data": m.data, "note": m.note, "changes": m.changes,
                                           "by": m.created_by_name, "at": m.created_at, "unit_m": cad.unit_m if cad else None,
-                                          "floors": service.elevations(m.data or {})},  # fmt: skip
+                                          "floors": service.elevations(m.data or {}), "unmatched_levels": service.unmatched_levels(m.data or {})},  # fmt: skip
         "drawings": [{"cad_file_id": f.id, "title": title, "rev_no": rev, "unit_m": f.unit_m, "newer": bool(m and m.cad_file_id and f.id > m.cad_file_id)} for f, title, rev in files],
         "plans": service.plans(cad) if cad else [],
         "site_floors": [{"node_id": f.id, "name": f.name, "level": service.level_of(f)} for f in service.site_floors(db, site.id)],
@@ -140,6 +140,8 @@ def _checked(data: dict) -> dict:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Floor {f.get('name')}: unknown floor type {f['type']}")
         if f.get("height_m") is not None and not 2.0 <= float(f["height_m"]) <= 10.0:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Floor {f.get('name')}: height between 2 and 10 m")
+        if f.get("level_by_hand") and f.get("elevation_m") is not None and not -30.0 <= float(f["elevation_m"]) <= 400.0:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Floor {f.get('name')}: a level between -30 and +400 m")
     return {**data, "settings": s}
 
 
