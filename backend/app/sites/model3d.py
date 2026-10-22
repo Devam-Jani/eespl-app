@@ -10,6 +10,9 @@ Per node, from the node's OWN scopes and tasks (top-level tasks only):
   has_scope               the node has at least one area scope, or an accepted AutoCAD area (work
                           to do there, so it shows as not started rather than "no work here")
   template_ids            the stage templates of its scopes (for the template filter)
+  timeline                per top-level task [name, planned_start, planned_end, actual_start,
+                          actual_end, status, hold_point, certified_on]: the date slider shows the
+                          status on a past date from these (no status history is kept)
 
 Nothing is recomputed: percent is what task updates stored; the rest is one read of the site's
 tasks. `version` changes whenever a node, scope or task changes, for cheap polling (ETag).
@@ -40,6 +43,12 @@ def version(db: Session, site_id: int) -> str:
         .where(CadFile.site_id == site_id, CadArea.status == "accepted")
     ).one()
     parts.append(f"cad{cad[0]}:{cad[1].isoformat() if cad[1] else '-'}")
+    from app.building.models import BuildingModel  # noqa: PLC0415
+
+    built = db.scalar(
+        select(func.max(BuildingModel.version)).where(BuildingModel.site_id == site_id)
+    )
+    parts.append(f"b{built or 0}")
     for model in (SiteNode, AreaScope, Task):
         count, latest = db.execute(
             select(func.count(), func.max(model.updated_at)).where(model.site_id == site_id)
@@ -48,7 +57,18 @@ def version(db: Session, site_id: int) -> str:
     return hashlib.sha1("|".join(parts).encode()).hexdigest()[:16]
 
 
-def build(db: Session, site_id: int) -> dict[str, Any]:
+def _d(v: date | None) -> str | None:
+    return v.isoformat() if v else None
+
+
+def _timeline(t) -> list:
+    """[name, planned_start, planned_end, actual_start, actual_end, status, hold, certified]"""
+    certified = t.certified_at.date() if t.certified_at else None
+    return [t.name, _d(t.planned_start), _d(t.planned_end), _d(t.actual_start),
+            _d(t.actual_end), t.status, bool(t.hold_point), _d(certified)]  # fmt: skip
+
+
+def build(db: Session, site_id: int, client: bool = False) -> dict[str, Any]:
     nodes = db.scalars(
         select(SiteNode)
         .where(SiteNode.site_id == site_id)
@@ -60,7 +80,8 @@ def build(db: Session, site_id: int) -> dict[str, Any]:
     ):
         templates[node_id].add(template_id)
     rows = db.execute(
-        select(Task.node_id, Task.name, Task.status, Task.planned_end, Task.sort_order,
+        select(Task.node_id, Task.name, Task.status, Task.planned_start, Task.planned_end,
+               Task.actual_start, Task.actual_end, Task.certified_at, Task.sort_order,
                Task.area_scope_id, StageTemplateStep.hold_point)
         .outerjoin(StageTemplateStep, StageTemplateStep.id == Task.step_id)
         .where(Task.site_id == site_id, Task.parent_task_id.is_(None))
@@ -108,6 +129,9 @@ def build(db: Session, site_id: int) -> dict[str, Any]:
                     "has_scope": n.id in templates or n.id in autocad,
                     "template_ids": sorted(templates.get(n.id, ())),
                 },
+                "timeline": [_timeline(t) for t in own],
             }
         )
-    return {"site_id": site_id, "nodes": out}
+    from app.building.service import payload  # noqa: PLC0415
+
+    return {"site_id": site_id, "nodes": out, "building": payload(db, site_id, client=client)}

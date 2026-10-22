@@ -9,6 +9,7 @@ import type { Drill, Tile } from "./ui";
 import { asOf, DataTable, drillHref, ExportButton, fmtValue, KpiTile, useData, useFilters } from "./ui";
 
 const DelaysCard = lazy(() => import("../schedule/Pages").then((m) => ({ default: m.DelaysCard })));
+const XrayTiles = lazy(() => import("../xray/Tiles")); // the sites in 3D (three.js: its own chunk)
 
 type Home = { dashboards: { key: string; title: string; scope: string }[]; demo_available: boolean; as_of: string | null; can_export: boolean };
 type Section = { key: string; title: string; tiles: Tile[] };
@@ -124,6 +125,11 @@ function ManagementView({ demo }: { demo: boolean }) {
         <Suspense fallback={null}>
           <DelaysCard />
         </Suspense>
+        {!demo && (
+          <Suspense fallback={null}>
+            <XrayTiles />
+          </Suspense>
+        )}
         {data.sections.map((s) => (
           <section key={s.key} className="dash-section">
             <h2 className="section-title">{s.title}</h2>

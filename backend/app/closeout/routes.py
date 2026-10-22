@@ -1482,7 +1482,8 @@ def wcc_out(db: Session, w: WorkCompletion) -> dict:
     return {"id": w.id, "code": w.code, "site_id": w.site_id, "site": f"{site.code} {site.name}" if site else None, "addendum_of_id": w.addendum_of_id,
             "completion_date": w.completion_date, "started_on": w.started_on, "guarantee_years": w.guarantee_years, "guarantee_from": w.guarantee_from,
             "guarantee_expiry": w.guarantee_expiry, "areas": w.areas, "systems": w.systems, "products": w.products, "note": w.note, "status": w.status,
-            "locked": w.status == "signed", "signed_name": w.signed_name, "signed_at": w.signed_at, "recorded_by_staff": w.recorded_by_staff, "is_demo": w.is_demo}  # fmt: skip
+            "locked": w.status == "signed", "signed_name": w.signed_name, "signed_at": w.signed_at, "recorded_by_staff": w.recorded_by_staff, "is_demo": w.is_demo,
+            "image_3d": bool(w.image_3d_path)}  # fmt: skip
 
 
 def _w(db: Session, wid: int, scope: str, principal: Principal) -> WorkCompletion:
@@ -1550,6 +1551,32 @@ def create_wcc(
 @router.get("/work-completions/{wid}")
 def get_wcc(wid: int, db: DbSession, principal: CurrentPrincipal, scope: CompletionEdit) -> dict:
     return wcc_out(db, _w(db, wid, scope, principal))
+
+
+@router.post("/work-completions/{wid}/image-3d")
+async def wcc_image_3d(
+    wid: int, request: Request, db: DbSession, principal: CurrentPrincipal, scope: CompletionEdit,
+    file: Annotated[UploadFile, File()],
+) -> dict:  # fmt: skip
+    """The optional 3D page: the building in the Status view, rendered by the browser (PNG)."""
+    w = _w(db, wid, scope, principal)
+    csvc.guard(w)
+    rel, _name = await save_upload(file, f"sites/{w.site_id}/wcc")
+    w.image_3d_path = rel
+    audit.record(db, "wcc.image_3d", "work_completion", w.id, user_id=principal.user.id, ip=audit.client_ip(request))
+    db.commit()
+    return wcc_out(db, w)
+
+
+@router.delete("/work-completions/{wid}/image-3d")
+def wcc_image_3d_off(
+    wid: int, db: DbSession, principal: CurrentPrincipal, scope: CompletionEdit
+) -> dict:
+    w = _w(db, wid, scope, principal)
+    csvc.guard(w)
+    w.image_3d_path = None
+    db.commit()
+    return wcc_out(db, w)
 
 
 @router.get("/work-completions/{wid}/pdf")

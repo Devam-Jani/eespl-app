@@ -404,6 +404,7 @@ class WorkCompletion(Tracked, Base):
     signed_copy_path: Mapped[str | None] = mapped_column(String(400))
     pdf_path: Mapped[str | None] = mapped_column(String(400))
     bond_path: Mapped[str | None] = mapped_column(String(400))
+    image_3d_path: Mapped[str | None] = mapped_column(String(400))  # the optional 3D page (Status view)
     is_demo: Mapped[bool] = mapped_column(Boolean, server_default="false")
 
 

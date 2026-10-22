@@ -10,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.analytics import routers as analytics
 from app.auth import account as account_routes
 from app.auth.router import router as auth_router
+from app.building import routes as building
 from app.closeout import portal_routes as closeout_portal
 from app.closeout import routes as closeout
 from app.closeout import screen_routes as closeout_screens
@@ -119,6 +120,8 @@ for _r in (
     labour_rates.router,
     schedule.router,
     takeoff.router,
+    building.router,
+    building.tiles,
     field.router,
     knowledge.router,
     methodology.router,

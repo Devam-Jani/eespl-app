@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { api, ApiError, fetchObjectUrl } from "../../api";
@@ -13,9 +14,12 @@ import { composeSnapshot } from "./three/snapshot";
 import type { SnapLabel } from "./three/snapshot";
 import type { Box, LayoutNode } from "./three/layout";
 import { TaskDialog } from "./TasksTab";
+import type { Building, TimelineRow } from "../../xray/geometry";
+
+const XrayView = lazy(() => import("../../xray/XrayView"));
 
 type ModelNode = LayoutNode & { status: NodeStatus };
-type Model = { site_id: number; version: string; site_progress: number; nodes: ModelNode[]; templates?: { id: number; name: string }[] };
+type Model = { site_id: number; version: string; site_progress: number; nodes: (ModelNode & { timeline?: TimelineRow[] })[]; building?: Building | null; templates?: { id: number; name: string }[] };
 /** Client portal: the model comes from the portal API, read-only (no task panel). */
 export type PortalMode = { modelPath: string; headers?: Record<string, string> };
 type Hover = { x: number; y: number; node: ModelNode } | null;
@@ -65,6 +69,9 @@ export default function Site3DTab({
   const [hover, setHover] = useState<Hover>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // a building model from the AutoCAD drawing: the X-ray view; otherwise the schematic boxes
+  const schematic = model !== null && !model.building;
+  const canBuild = !portal && can("building.edit");
 
   const mount = useRef<HTMLDivElement>(null);
   const labelsEl = useRef<HTMLDivElement>(null);
@@ -152,7 +159,7 @@ export default function Site3DTab({
 
   useEffect(() => {
     const el = mount.current;
-    if (!el) return;
+    if (!el || !schematic) return; // the box model only for a site without a building model
     const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(el.clientWidth, el.clientHeight);
@@ -199,7 +206,7 @@ export default function Site3DTab({
       el.removeChild(renderer.domElement);
       three.current = null;
     };
-  }, []);
+  }, [schematic]);
 
   // --- what is drawn, and how ---
 
@@ -402,7 +409,7 @@ export default function Site3DTab({
     t.render();
     // view() only reads refs; rebuild when the drawing inputs change
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, boxes, visible, look, below, mode, cutaway, byId, workBelow, lateBelow]);
+  }, [model, boxes, visible, look, below, mode, cutaway, byId, workBelow, lateBelow, schematic]);
 
   // --- camera ---
 
@@ -544,9 +551,57 @@ export default function Site3DTab({
   const cutNode = cutaway !== null ? byId.get(cutaway) : undefined;
   const hasBelow = boxes.some((b) => b.below);
 
+  if (model?.building)
+    return (
+      <div className="split-3d">
+        <div className="card card-xray">
+          <Suspense fallback={<p className="muted">Loading the building…</p>}>
+            <XrayView
+              site={{ id: site.id, name: site.name, code: site.code, progress: model.site_progress ?? Number(site.progress_percent) }}
+              building={model.building}
+              nodes={model.nodes}
+              portal={!!portal}
+              cover={!!portal}
+              onPick={portal ? undefined : (id) => setSelected(id)}
+              canLink={canBuild}
+              ifcHeaders={portal?.headers}
+            />
+          </Suspense>
+          {canBuild && (
+            <p className="small muted">
+              Built from the AutoCAD drawing (model version {model.building.version}). <Link to={`/sites/${site.id}/building`}>Edit the building model</Link>
+            </p>
+          )}
+        </div>
+        {!portal && selected !== null && byId.get(selected) && (
+          <NodePanel
+            site={site as Site}
+            node={byId.get(selected)!}
+            canUpdate={canUpdate}
+            canEdit={canEdit}
+            onClose={() => setSelected(null)}
+            onChanged={() => {
+              void load();
+              onChange();
+            }}
+          />
+        )}
+      </div>
+    );
+
   return (
     <div className="split-3d">
       <div className="card">
+        {schematic && (
+          <div className="schematic-note">
+            <span className="badge badge-muted">Schematic</span> Boxes from the site structure, not the real building.
+            {canBuild && (
+              <Link className="btn btn-small" to={`/sites/${site.id}/building`}>
+                Build from AutoCAD
+              </Link>
+            )}
+          </div>
+        )}
         <div className="toolbar">
           <div className="page-actions">
             <div className="tabs">

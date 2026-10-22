@@ -11,6 +11,8 @@ from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
@@ -231,10 +233,14 @@ def overview(site_id: int, db: DbSession, ctx: Ctx) -> dict:
 
 
 @router.get("/sites/{site_id}/model")
-def model(site_id: int, db: DbSession, ctx: Ctx) -> dict:
-    """The 3D view's data (read-only)."""
+def model(site_id: int, request: Request, db: DbSession, ctx: Ctx):
+    """The 3D view's data (read-only): the client's copy of the building (no drawing file, no
+    settings, no costs), and 304 while nothing changed."""
     site = svc.portal_site(db, ctx, site_id, "overview")
-    payload = model3d.build(db, site.id)
+    tag = model3d.version(db, site.id)
+    if request.headers.get("if-none-match") == f'"{tag}"':
+        return Response(status_code=304, headers={"ETag": f'"{tag}"'})
+    payload = model3d.build(db, site.id, client=True)
     ids = {t for n in payload["nodes"] for t in n["status"]["template_ids"]}
     templates = [
         {"id": i, "name": n}
@@ -242,12 +248,18 @@ def model(site_id: int, db: DbSession, ctx: Ctx) -> dict:
             select(StageTemplate.id, StageTemplate.name).where(StageTemplate.id.in_(ids or [0]))
         )
     ]
-    return {
-        **payload,
-        "version": model3d.version(db, site.id),
-        "site_progress": float(site.progress_percent or 0),
-        "templates": templates,
-    }
+    progress = float(site.progress_percent or 0)
+    body = {**payload, "version": tag, "site_progress": progress, "templates": templates}
+    headers = {"ETag": f'"{tag}"', "Cache-Control": "no-cache"}
+    return JSONResponse(jsonable_encoder(body), headers=headers)
+
+
+@router.get("/sites/{site_id}/building/ifc")
+def building_ifc(site_id: int, db: DbSession, ctx: Ctx):
+    """The client's own BIM file in the 3D view (the overview section)."""
+    from app.building.routes import ifc_file  # noqa: PLC0415
+
+    return ifc_file(db, svc.portal_site(db, ctx, site_id, "overview"))
 
 
 # --- daily reports -------------------------------------------------------------------------------

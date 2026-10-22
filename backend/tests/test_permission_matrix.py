@@ -55,7 +55,7 @@ ALL = [
     "methodology.view", "methodology.edit", "methodology.compliance", "methodology.site",
     "wo.view", "wo.edit", "closeout.billing", "closeout.site", "closeout.payments",
     "issues.view", "issues.edit", "portal.roles", "closeout.claim_approve", "system.ops",
-    "help.edit",
+    "help.edit", "building.edit",
 ]  # fmt: skip
 TRACK = {"field.track": "own"}  # every staff user: their own day, map and claim
 
@@ -76,6 +76,7 @@ EXPECTED: dict[str, dict[str, str]] = {
     "office_admin": _all(
         "system.ops",
         "help.edit",
+        "building.edit",
         "portal.roles",
         "wo.view",
         "wo.edit",
@@ -203,6 +204,7 @@ EXPECTED: dict[str, dict[str, str]] = {
     # Sr Engineer Billing & Planning: enquiries, the status board, material
     # planning, new areas, escalations; costs only if the director allows the person
     "planning": TRACK | _all(
+        "building.edit",
         "wo.view",
         "wo.edit",
         "closeout.billing",
@@ -252,6 +254,7 @@ EXPECTED: dict[str, dict[str, str]] = {
     ),  # fmt: skip
     # Jr Engineer Billing, Assistant Manager Billing: no vendor payables, no payroll
     "billing": TRACK | _all(
+        "building.edit",
         "wo.view",
         "closeout.billing",
         "issues.view",
@@ -312,6 +315,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "field.track": "own",
         "site.location": "assigned",
         "methodology.site": "assigned",
+        "building.edit": "assigned",
         "closeout.site": "assigned",
         "issues.view": "assigned",
         "issues.edit": "assigned",
