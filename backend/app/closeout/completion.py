@@ -508,13 +508,19 @@ def html(db: Session, w: WorkCompletion) -> str:
 
 
 def signatory(db: Session) -> tuple[str, str | None, str]:
-    """Our signatory from the letterhead (Settings > Letterheads): the firm line, the name and the
-    designation."""
+    """Our signatory from the letterhead (Settings > Quotation library > Letterheads): the firm
+    line, and the name and designation of the signatory chosen for certificates (the first or the
+    second). No designation entered: a line to write it on, never a made-up one."""
     from app.quotations.models import Letterhead  # noqa: PLC0415
 
     head = db.scalars(select(Letterhead).where(Letterhead.is_active).order_by(Letterhead.id)).first()
     firm = (head.signatory_firm if head else None) or "For the applicator"
-    return firm, (head.signatory_name if head else None), ((head.signatory_designation if head else None) or "Authorised signatory")
+    if head is None:
+        return firm, None, "Designation: ______________"
+    second = head.certificate_signatory == 2 and bool(head.signatory2_name)
+    name = head.signatory2_name if second else head.signatory_name
+    role = head.signatory2_designation if second else head.signatory_designation
+    return firm, name, role or "Designation: ______________"
 
 
 def bond_html(db: Session, w: WorkCompletion) -> str:

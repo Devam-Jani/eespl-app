@@ -151,6 +151,8 @@ SAMPLE_DATA = {
     "claimed": "11",
     "approved": "10",
     "reason": "measured short",
+    "last": "20.10.2026 02:00",
+    "why": "no backup ran",
 }
 
 
@@ -533,9 +535,9 @@ def test_rule_edits_are_logged_and_a_switched_off_rule_sends_nothing(boss, team,
 
 def test_no_planner_on_the_site_goes_to_the_default_user(boss, team, db, make_user):
     c, h = boss
-    mr_sunil = make_user("invented-planner@example.com", "planning", name="Invented Planner")
+    planner = make_user("invented-planner@example.com", "planning", name="Invented Planner")
     c.put(
-        "/api/process/settings", json={"default_users": {"planning": str(mr_sunil.id)}}, headers=h
+        "/api/process/settings", json={"default_users": {"planning": str(planner.id)}}, headers=h
     )
     engine.emit(
         db,
@@ -545,7 +547,7 @@ def test_no_planner_on_the_site_goes_to_the_default_user(boss, team, db, make_us
         data={"area": "Invented place", "node_id": 42, "qty": "10", "unit": "sqm", "wastage": "—"},
     )
     db.commit()
-    got = notes(db, mr_sunil)
+    got = notes(db, planner)
     assert got and got[0].note is None  # an office role: the default user is the normal case
 
 

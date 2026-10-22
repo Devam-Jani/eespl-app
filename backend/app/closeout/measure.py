@@ -28,7 +28,9 @@ SIZE_FIELDS = ("length_m", "breadth_m", "perimeter_m", "height_m", "deductions_s
 def qty_of(m: Measurement) -> Decimal:
     """In the line's unit: L x B or perimeter x height for sqm, the running length for rmt, less
     deductions; the typed qty when there are no sizes (or the unit is counted, nos / cum)."""
-    return sizes.qty_in(m.unit, m.length_m, m.breadth_m, m.perimeter_m, m.height_m, m.deductions_sqm, m.qty)
+    return sizes.qty_in(
+        m.unit, m.length_m, m.breadth_m, m.perimeter_m, m.height_m, m.deductions_sqm, m.qty
+    )
 
 
 def line_unit(db: Session, contract_line_id: int | None, data: dict, what: str) -> str:
@@ -124,9 +126,16 @@ def update(db: Session, m: Measurement, data: dict) -> None:
     if any(f in data for f in sizes.LENGTH_FIELDS):
         data["entered"] = m.entered
         data = sizes.normalise(data)
-    merged = {f: getattr(m, f) for f in SIZE_FIELDS} | {k: v for k, v in data.items() if k in SIZE_FIELDS}
+    merged = {f: getattr(m, f) for f in SIZE_FIELDS} | {
+        k: v for k, v in data.items() if k in SIZE_FIELDS
+    }
     merged["unit"] = data.get("unit")
-    m.unit = line_unit(db, data.get("contract_line_id", m.contract_line_id), merged, data.get("description") or m.description)
+    m.unit = line_unit(
+        db,
+        data.get("contract_line_id", m.contract_line_id),
+        merged,
+        data.get("description") or m.description,
+    )
     for k in (*SIZE_FIELDS, "description", "node_id", "contract_line_id", "note", "entered"):
         if k in data:
             setattr(m, k, data[k])
@@ -293,15 +302,35 @@ def stamp_billed(db: Session, ra) -> int:
     return n
 
 
-def changes_of(db: Session, m: Measurement) -> list[dict]:
+def changes_of(db: Session, m: Measurement, preloaded: dict | None = None) -> list[dict]:
+    rows = (
+        preloaded.get(m.id, [])
+        if preloaded is not None
+        else db.scalars(
+            select(MeasurementChange)
+            .where(MeasurementChange.measurement_id == m.id)
+            .order_by(MeasurementChange.id)
+        )
+    )
     return [{"id": c.id, "field": c.field, "old": c.old_value, "new": c.new_value, "old_text": c.old_text, "new_text": c.new_text,
              "old_shown": sizes.shown(c.old_value, c.old_text) if c.field in sizes.LENGTH_FIELDS else str(c.old_value),
              "new_shown": sizes.shown(c.new_value, c.new_text) if c.field in sizes.LENGTH_FIELDS else str(c.new_value),
              "remark": c.remark, "by": c.by_name, "side": c.side, "at": c.at,
-             "status": c.status, "reply": c.reply} for c in db.scalars(select(MeasurementChange).where(MeasurementChange.measurement_id == m.id).order_by(MeasurementChange.id))]  # fmt: skip
+             "status": c.status, "reply": c.reply} for c in rows]  # fmt: skip
 
 
-def line_out(db: Session, m: Measurement) -> dict:
+def changes_by_measurement(db: Session, ids: list[int]) -> dict[int, list[MeasurementChange]]:
+    out: dict[int, list[MeasurementChange]] = {}
+    for c in db.scalars(
+        select(MeasurementChange)
+        .where(MeasurementChange.measurement_id.in_(ids))
+        .order_by(MeasurementChange.id)
+    ):
+        out.setdefault(c.measurement_id, []).append(c)
+    return out
+
+
+def line_out(db: Session, m: Measurement, changes: dict | None = None) -> dict:
     node = db.get(SiteNode, m.node_id) if m.node_id else None
     from app.finance.models import RaBill  # noqa: PLC0415
 
@@ -311,7 +340,7 @@ def line_out(db: Session, m: Measurement) -> dict:
             "qty": m.qty, "unit": m.unit, "status": m.status, "set_id": m.set_id, "measured_on": m.measured_on, "approved_name": m.approved_name,
             "approved_at": m.approved_at, "recorded_by_staff": m.recorded_by_staff, "entered": m.entered or {},
             "shown": {f: sizes.shown(getattr(m, f), (m.entered or {}).get(f)) for f in sizes.LENGTH_FIELDS if getattr(m, f) is not None}, "zone_reason": m.zone_reason, "photos": len(m.photos or []),
-            "billed_in": ra.code if ra else None, "changes": changes_of(db, m)}  # fmt: skip
+            "billed_in": ra.code if ra else None, "changes": changes_of(db, m, changes)}  # fmt: skip
 
 
 # --- the billing checklist ------------------------------------------------------------------------

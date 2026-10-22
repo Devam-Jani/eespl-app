@@ -88,7 +88,9 @@ def _validate_grants(
             )
 
 
-@router.get("", dependencies=[Depends(require_any_permission("admin.roles", "admin.users"))])
+@router.get(
+    "", dependencies=[Depends(require_any_permission("admin.roles", "admin.users", "system.ops"))]
+)
 def list_roles(db: DbSession) -> list[RoleOut]:
     counts = dict(
         db.execute(select(UserRole.role_id, func.count()).group_by(UserRole.role_id)).all()

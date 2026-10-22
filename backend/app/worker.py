@@ -12,8 +12,10 @@ import signal
 import time
 
 from app.analytics import worker as analytics
+from app.config import settings
 from app.crm import worker as kylas
 from app.field import hooks as field
+from app.ops import worker as ops
 from app.process import worker as process
 from app.quotations import worker as quotations
 from app.takeoff import pipeline as takeoff
@@ -36,11 +38,19 @@ def main() -> None:
     signal.signal(signal.SIGINT, _request_stop)
     last_poll = 0.0
     while True:
-        jobs = [kylas.push_sweep, analytics.run_due, quotations.expire_sweep, process.process_sweep]
+        jobs = [
+            ops.worker_round,
+            kylas.push_sweep,
+            analytics.run_due,
+            quotations.expire_sweep,
+            process.process_sweep,
+        ]
         jobs.append(takeoff.sweep)  # AutoCAD drawings left queued (read in the API normally)
         jobs.append(field.sweep)  # auto end of day, road km when OSRM is back, claims, retention
         if time.time() - last_poll >= kylas.POLL_EVERY or args.once:
             jobs.append(kylas.poll_sweep)
+        if settings.training_mode:  # the training company: its heartbeat and nightly rebuild only
+            jobs = [ops.worker_round]
         for job in jobs:
             try:
                 job()

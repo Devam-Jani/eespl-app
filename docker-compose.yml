@@ -30,6 +30,11 @@ services:
       - ./backend:/app
       - ./data:/data:ro
       - eespl_media:/media
+      # the production setup, read by the tests (compose file, Caddyfile, scripts)
+      - ./docker-compose.prod.yml:/repo/docker-compose.prod.yml:ro
+      - ./deploy:/repo/deploy:ro
+      - ./scripts:/repo/scripts:ro
+      - ./.env.prod.example:/repo/.env.prod.example:ro
     depends_on:
       db:
         condition: service_healthy

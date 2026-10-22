@@ -732,11 +732,11 @@ MeasureView = Annotated[str, Depends(require_permission("measurement.view"))]
 MeasureEdit = Annotated[str, Depends(require_permission("measurement.edit"))]
 
 
-def _measure_out(db, m: Measurement) -> dict:
+def _measure_out(db, m: Measurement, who: dict | None = None) -> dict:
     from app.sitecontrol.service import node_label  # noqa: PLC0415
     from app.sites.models import SiteNode  # noqa: PLC0415
 
-    who = names(db, [m.measured_by])
+    who = names(db, [m.measured_by]) if who is None else who
     return jsonable_encoder(
         {
             "id": m.id,
@@ -760,16 +760,22 @@ def measurements(
 ) -> dict:
     from app.finance import service as fsvc  # noqa: PLC0415
     from app.finance.models import ClientContract, ContractLine  # noqa: PLC0415
+    from app.sites.models import SiteNode  # noqa: PLC0415
 
     site = _site(db, site_id, scope, principal)
-    rows = [
-        _measure_out(db, m)
-        for m in db.scalars(
+    ms = list(
+        db.scalars(
             select(Measurement)
             .where(Measurement.site_id == site.id)
             .order_by(Measurement.measured_on.desc(), Measurement.id.desc())
         )
-    ]
+    )
+    places = db.scalars(
+        select(SiteNode).where(SiteNode.site_id == site.id)
+    ).all()  # held: kept weakly
+    who = names(db, [m.measured_by for m in ms])
+    rows = [_measure_out(db, m, who) for m in ms]
+    del places
     lines = []
     c = db.scalar(select(ClientContract).where(ClientContract.site_id == site.id))
     if c is not None:

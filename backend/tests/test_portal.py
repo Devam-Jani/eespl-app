@@ -406,7 +406,7 @@ def test_client_cannot_call_any_staff_endpoint(portal):
         if (
             not isinstance(route, APIRoute)
             or route.path.startswith(CLIENT_PATHS)
-            or route.path == "/api/health"
+            or route.path in ("/api/health", "/api/health/full", "/api/ops/mode")  # states, no data
             # public by design: one delivery's items and counts, behind its receipt token
             or route.path.startswith("/api/receipt/")
         ):

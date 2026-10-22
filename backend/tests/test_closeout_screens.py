@@ -181,7 +181,7 @@ def test_reconciliation_issued_needed_excess_and_the_return_to_godown_makes_a_tr
     t = db.scalar(select(Transfer).where(Transfer.code == r.json()["transfer"]))
     assert t.status == "dispatched" and db.get(Store, t.to_store_id).kind == "godown" and D(t.lines[0].qty_sent) == D(3)
     row = next(x for x in r.json()["rows"] if x["product_id"] == p.id)
-    assert (D(str(row["issued"])), D(str(row["returned"])), row["state"]) == (D(15), D(3), "even")
+    assert (D(str(row["issued"])), D(str(row["returned"])), D(str(row["net_used"])), D(str(row["to_godown"])), row["state"]) == (D(18), D(3), D(15), D(3), "even")
     x = c.get(f"/api/closeout/sites/{w['site']}/reconciliation.xlsx", headers=h)
     assert x.status_code == 200 and x.content[:2] == b"PK"
 

@@ -1,0 +1,58 @@
+# Production front: HTTPS with automatic certificates for APP_DOMAIN (Let's Encrypt; a local
+# certificate when APP_DOMAIN is localhost), the security headers, the API and the static app.
+# training.APP_DOMAIN is the training company (its own api and database, reset every night).
+{
+	email {$ACME_EMAIL}
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+(common) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(self), geolocation=(self), microphone=(), payment=(), usb=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://{$TILE_HOST}; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		-Server
+	}
+	request_body {
+		max_size 60MB
+	}
+	# the static app is cached; index.html never is (a deploy shows at once)
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	@index path / /index.html
+	header @index Cache-Control "no-cache"
+}
+
+{$APP_DOMAIN} {
+	import common
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+	handle /health {
+		rewrite * /api/health/full
+		reverse_proxy api:8000
+	}
+	handle {
+		reverse_proxy web:80
+	}
+}
+
+training.{$APP_DOMAIN} {
+	import common
+	handle /api/* {
+		reverse_proxy api-training:8000
+	}
+	handle /health {
+		rewrite * /api/health/full
+		reverse_proxy api-training:8000
+	}
+	handle {
+		reverse_proxy web:80
+	}
+}

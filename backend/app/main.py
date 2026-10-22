@@ -8,6 +8,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.analytics import routers as analytics
+from app.auth import account as account_routes
 from app.auth.router import router as auth_router
 from app.closeout import portal_routes as closeout_portal
 from app.closeout import routes as closeout
@@ -43,6 +44,8 @@ from app.masters.routers import (
 )
 from app.material import routers as material
 from app.methodology import routes as methodology
+from app.ops import routes as ops
+from app.ops.exports import ExportAudit
 from app.portal import routers as portal
 from app.portal import staff as portal_staff
 from app.process import routers as process
@@ -57,6 +60,9 @@ from app.team import routers as team
 from app.tenders import routers as tenders
 
 app = FastAPI(title="EESPL App")
+
+# every download (Excel, PDF ...) in the audit log
+app.add_middleware(ExportAudit)
 
 app.add_middleware(
     CORSMiddleware,
@@ -119,6 +125,8 @@ for _r in (
     closeout.router,
     closeout_portal.router,
     closeout_screens.router,
+    ops.router,
+    account_routes.router,
     analytics.dashboard,
     analytics.router,
     portal_staff.router,

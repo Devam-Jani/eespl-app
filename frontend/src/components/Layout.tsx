@@ -4,12 +4,19 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import type { Group } from "../menu";
 import { groupOf, visibleGroups } from "../menu";
+import {
+  GoLiveBanner,
+  HelpButton,
+  TrainingBanner,
+  useMode,
+} from "../ops/Pages";
 import Bell from "./Bell";
 import { initialMenuOpen, isPhone, loadOpenGroups, saveOpenGroups } from "./menuState";
 
 export default function Layout() {
   const { me, can, logout } = useAuth();
   const groups = visibleGroups(can);
+  const mode = useMode();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(() => initialMenuOpen(window.innerWidth));
   // each user's open groups are remembered (in this browser); the current page's group is open
@@ -50,6 +57,11 @@ export default function Layout() {
           <strong>{me?.user.full_name}</strong>
           <span>{me?.roles.map((r) => r.name).join(", ") || "No role"}</span>
         </div>
+        {mode && !mode.training && mode.training_url && (
+          <a className="training-link" href={mode.training_url}>
+            Practise in the training company
+          </a>
+        )}
         <nav>
           {groups.map(({ group, items }) => {
             const opened = isOpen(group);
@@ -84,11 +96,14 @@ export default function Layout() {
             <strong title={me?.user.full_name}>{me?.user.full_name}</strong>
             <span className="muted topbar-role">{me?.roles.map((r) => r.name).join(", ") || "No role"}</span>
           </div>
+          <HelpButton />
           <Bell allLink="/notifications" />
           <button className="btn btn-ghost" onClick={() => void logout()}>
             Sign out
           </button>
         </header>
+        <TrainingBanner mode={mode} />
+        <GoLiveBanner />
         <main className="content">
           <Outlet />
         </main>

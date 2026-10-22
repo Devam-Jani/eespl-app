@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app import audit
 from app.auth.deps import CurrentPrincipal, Principal, require_permission
+from app.auth.passwords import set_password
 from app.auth.rbac import CLIENT_ROLE_CODE, client_forbidden, effective_permissions, ungrantable
 from app.auth.router import revoke_all_refresh_tokens
 from app.auth.security import hash_password
@@ -208,10 +209,7 @@ def reset_password(
 ) -> None:
     user = _get_user(db, user_id)
     _check_can_manage(principal, user)
-    user.password_hash = hash_password(body.password)
-    user.failed_logins = 0
-    user.locked_until = None
-    revoke_all_refresh_tokens(db, user)
+    set_password(db, user, body.password)
     audit.record(
         db,
         "user.password_reset",

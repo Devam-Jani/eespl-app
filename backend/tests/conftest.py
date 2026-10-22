@@ -34,7 +34,8 @@ from app.main import app  # noqa: E402
 from app.models import Role, User  # noqa: E402
 
 PER_TEST_TABLES = [
-    "refresh_tokens", "audit_log", "user_roles",
+    "refresh_tokens", "audit_log", "user_roles", "password_links", "system_status", "help_texts",
+    "security_settings",
     "client_contacts", "clients", "library_lines", "library_items",
     "tc_template_clauses", "tc_templates", "tc_clauses",
     "tags", "company_gstins", "company_bank_accounts",
@@ -94,7 +95,10 @@ PER_TEST_TABLES = [
     "work_completions", "closeout_settings",
 ]  # fmt: skip
 # seeded rows of truncated tables, put back after every test (copied once per run)
-SEED_COPIES = ["finance_settings", "letter_templates", "letterheads", "quotation_settings"]
+SEED_COPIES = [
+    "finance_settings", "letter_templates", "letterheads", "quotation_settings",
+    "security_settings",
+]  # fmt: skip
 # Tables that also hold seeded rows (unit conversions, categories), or are referenced by them
 # (products), are cleaned with DELETE so the seed survives.
 PER_TEST_DELETES = [
@@ -111,6 +115,7 @@ PER_TEST_DELETES = [
     "INSERT INTO letter_templates SELECT * FROM letter_templates_seed",
     "INSERT INTO letterheads SELECT * FROM letterheads_seed",
     "INSERT INTO quotation_settings SELECT * FROM quotation_settings_seed",
+    "INSERT INTO security_settings SELECT * FROM security_settings_seed",
     "INSERT INTO company_profile (id) VALUES (1)",
     "INSERT INTO analytics_settings (id) VALUES (1)",
     "INSERT INTO sitecontrol_settings (id) VALUES (1)",

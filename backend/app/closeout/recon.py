@@ -72,7 +72,8 @@ def material(db: Session, site: Site, month: str | None = None, period: str | No
         start, end, label = p["start"], p["end"], p["label"]
     need: dict[int, Decimal] = {}
     basis: dict[int, list[str]] = {}
-    unknown: set[int] = set()  # the line is in another unit than the system's consumption
+    unknown: set[int] = set()  # a line per rmt against a consumption per sqm, its width not given
+    widths: dict[int, dict] = {}  # those lines, to give their width once
     q = select(Measurement).where(Measurement.site_id == site.id, Measurement.status == "approved")
     if start:
         q = q.where(Measurement.measured_on >= start)
@@ -84,28 +85,37 @@ def material(db: Session, site: Site, month: str | None = None, period: str | No
         if bl is None or not bl.system_id:
             continue
         sysm = db.get(System, bl.system_id)
-        other_unit = sysm is not None and unit_code(m.unit) != unit_code(sysm.unit)
+        qty = Decimal(m.qty)
+        how = f"{qty:.3f} {m.unit}"
+        if sysm is not None and unit_code(m.unit) != unit_code(sysm.unit):
+            if unit_code(m.unit) in ("rmt", "rm") and unit_code(sysm.unit) == "sqm":
+                widths[cl.id] = {"contract_line_id": cl.id, "description": cl.description, "unit": cl.unit, "width_m": cl.width_m}
+                if cl.width_m:
+                    qty, how = qty * Decimal(cl.width_m), f"{qty:.3f} {m.unit} x {Decimal(cl.width_m):.3f} m wide"
+            if qty == Decimal(m.qty):  # still per rmt: the width is needed first
+                for c in db.scalars(select(SystemComponent).where(SystemComponent.system_id == bl.system_id)):
+                    unknown.add(c.product_id)
+                    basis.setdefault(c.product_id, []).append(f"{how}: the consumption is per {sysm.unit}, give the width")
+                continue
         for c in db.scalars(select(SystemComponent).where(SystemComponent.system_id == bl.system_id)):
             if c.consumption_per_unit is None:
                 continue
-            if other_unit:  # per rmt against a consumption per sqm: the width is needed first
-                unknown.add(c.product_id)
-                basis.setdefault(c.product_id, []).append(f"{Decimal(m.qty):.3f} {m.unit}: the consumption is per {sysm.unit}, give the width")
-                continue
-            q_ = Decimal(m.qty) * Decimal(c.consumption_per_unit) * (1 + Decimal(c.wastage_percent or 0) / 100)
+            q_ = qty * Decimal(c.consumption_per_unit) * (1 + Decimal(c.wastage_percent or 0) / 100)
             need[c.product_id] = need.get(c.product_id, Decimal(0)) + q_
-            basis.setdefault(c.product_id, []).append(f"{Decimal(m.qty):.3f} {m.unit} x {c.consumption_per_unit} (+{c.wastage_percent or 0} %)")
-    # issued to the work, less what came back from it into the site store
+            basis.setdefault(c.product_id, []).append(f"{how} x {c.consumption_per_unit} (+{c.wastage_percent or 0} %)")
+    # issued to the work (gross) and returned from it into the site store
     iq = select(SiteIssueLine.product_id, SiteIssue.kind, func.sum(SiteIssueLine.qty)).join(SiteIssue, SiteIssue.id == SiteIssueLine.issue_id).where(SiteIssue.site_id == site.id)
     if start:
         iq = iq.where(SiteIssue.issued_on >= start)
     if end:
         iq = iq.where(SiteIssue.issued_on < end)
     issued: dict[int, Decimal] = {}
-    for pid, kind, qty in db.execute(iq.group_by(SiteIssueLine.product_id, SiteIssue.kind)).all():
-        issued[pid] = issued.get(pid, Decimal(0)) + (Decimal(qty) if kind != "return" else -Decimal(qty))
-    # returned: sent from the site store back to a godown
     returned: dict[int, Decimal] = {}
+    for pid, kind, qty_ in db.execute(iq.group_by(SiteIssueLine.product_id, SiteIssue.kind)).all():
+        bucket = returned if kind == "return" else issued
+        bucket[pid] = bucket.get(pid, Decimal(0)) + Decimal(qty_)
+    # sent from the site store back to a godown (the transfers made by "return to godown")
+    to_godown: dict[int, Decimal] = {}
     store = _site_store(db, site)
     if store is not None:
         godowns = select(Store.id).where(Store.kind == "godown")
@@ -115,20 +125,23 @@ def material(db: Session, site: Site, month: str | None = None, period: str | No
             tq = tq.where(Transfer.created_at >= start)
         if end:
             tq = tq.where(func.date(Transfer.created_at) < end)
-        for pid, qty in db.execute(tq.group_by(TransferLine.product_id)).all():
-            returned[pid] = Decimal(qty)
+        for pid, qty_ in db.execute(tq.group_by(TransferLine.product_id)).all():
+            to_godown[pid] = Decimal(qty_)
     rows = []
-    for pid in sorted(set(need) | set(issued) | set(returned)):
+    for pid in sorted(set(need) | set(issued) | set(returned) | unknown):
         p = db.get(Product, pid)
-        n, i, r = (x.get(pid, Decimal(0)).quantize(Q3, ROUND_HALF_UP) for x in (need, issued, returned))
-        diff = i - n
+        n, i, r, g = (x.get(pid, Decimal(0)).quantize(Q3, ROUND_HALF_UP) for x in (need, issued, returned, to_godown))
+        used = i - r
+        diff = used - n
         state = "to check" if pid in unknown else "excess" if diff > 0 else "short" if diff < 0 else "even"
-        rows.append({"product_id": pid, "product": p.name if p else str(pid), "unit": p.unit if p else "", "issued": i, "needed": n, "returned": r, "difference": diff,
-                     "state": state, "basis": basis.get(pid, [])[:6]})  # fmt: skip
+        rows.append({"product_id": pid, "product": p.name if p else str(pid), "unit": p.unit if p else "", "issued": i, "returned": r, "net_used": used, "needed": n,
+                     "difference": diff, "state": state, "to_godown": g, "note": "to check: give the width" if pid in unknown else None,
+                     "basis": basis.get(pid, [])[:6]})  # fmt: skip
     from app.material import service as material_svc  # noqa: PLC0415
 
     return {"site_id": site.id, "site": f"{site.code} {site.name}", "month": month, "period": label,
-            "periods": [{"key": x["key"], "label": x["label"]} for x in plist], "rows": rows, "godown": material_svc.godown(db).name}  # fmt: skip
+            "periods": [{"key": x["key"], "label": x["label"]} for x in plist], "rows": rows, "godown": material_svc.godown(db).name,
+            "widths": list(widths.values())}  # fmt: skip
 
 
 def return_excess(db: Session, site: Site, product_id: int, qty: Decimal, user_id):

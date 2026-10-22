@@ -4684,3 +4684,99 @@ td.indent {
     flex-wrap: wrap;
   }
 }
+
+/* go-live: the settings banner, the training company, the page's help, two-step sign-in */
+.golive-banner {
+  background: var(--warn-soft);
+  border-bottom: 1px solid #f1d58a;
+  padding: 8px 20px;
+  font-size: 13px;
+}
+.golive-banner a {
+  color: var(--warn);
+  font-weight: 600;
+}
+.training-banner {
+  background: #6b2fb3;
+  color: #fff;
+  padding: 8px 20px;
+  font-weight: 600;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.training-switch {
+  color: #fff;
+  text-decoration: underline;
+}
+.training-link {
+  display: block;
+  margin: 6px 4px 10px;
+  padding: 6px 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius);
+  color: #fff;
+  font-size: 13px;
+  text-decoration: none;
+}
+.help-button {
+  font-weight: 700;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  padding: 0;
+}
+.help-panel {
+  position: fixed;
+  top: 64px;
+  right: 16px;
+  width: min(380px, calc(100vw - 32px));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  padding: 12px 14px;
+  z-index: 70;
+}
+.help-panel ol {
+  margin: 8px 0 4px;
+  padding-left: 20px;
+}
+.help-panel li {
+  margin: 4px 0;
+}
+.help-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+img.qr {
+  width: 180px;
+  height: 180px;
+  display: block;
+  margin: 8px auto;
+  background: #fff;
+}
+code.secret {
+  word-break: break-all;
+  user-select: all;
+}
+.two-step p {
+  margin: 6px 0;
+}
+.role-ticks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 4px;
+  margin: 8px 0;
+}
+label.check {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 14px;
+}
+.link-notice {
+  word-break: break-all;
+}

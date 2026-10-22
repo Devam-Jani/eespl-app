@@ -601,8 +601,28 @@ export function QualityChecklist({ siteId }: { siteId: number }) {
 
 // --- material reconciliation ---------------------------------------------------------------------------
 
-type ReconRow = { product_id: number; product: string; unit: string; issued: string; needed: string; returned: string; difference: string; state: string; basis: string[] };
-type Recon = { site: string; period: string; periods: { key: string; label: string }[]; rows: ReconRow[]; godown: string };
+type ReconRow = {
+  product_id: number;
+  product: string;
+  unit: string;
+  issued: string;
+  returned: string;
+  net_used: string;
+  needed: string;
+  difference: string;
+  state: string;
+  to_godown: string;
+  note: string | null;
+  basis: string[];
+};
+type Recon = {
+  site: string;
+  period: string;
+  periods: { key: string; label: string }[];
+  rows: ReconRow[];
+  godown: string;
+  widths: { contract_line_id: number; description: string; unit: string; width_m: string | null }[];
+};
 
 export function Reconciliation() {
   const { id } = useParams();
@@ -612,6 +632,10 @@ export function Reconciliation() {
   const { data, error, setError, load } = useLoad<Recon>(`/api/closeout/sites/${id}/reconciliation${period ? `?period=${period}` : ""}`);
   const [done, setDone] = useState<string | null>(null);
   if (!data) return error ? <div className="alert alert-error">{error}</div> : <p className="muted">Loading…</p>;
+  const width = (w: Recon["widths"][number]) => {
+    const v = window.prompt(`Width of "${w.description.slice(0, 60)}" in metres (measured per ${w.unit}; the consumption is per sqm)`, w.width_m ?? "");
+    if (v) void run(api(`/api/closeout/contract-lines/${w.contract_line_id}/width`, { method: "PUT", json: { width_m: v } }), setError).then(load);
+  };
   const ret = (r: ReconRow) => {
     const q = window.prompt(`Return to ${data.godown}: quantity of ${r.product} (${r.unit})`, String(Number(r.difference)));
     if (!q) return;
@@ -629,7 +653,8 @@ export function Reconciliation() {
           </p>
           <h1>Material reconciliation</h1>
           <p className="muted">
-            Product by product: issued to the work, needed by the approved quantity (× the system's consumption and wastage), returned, and the excess or short.
+            Product by product: issued to the work, returned from it, the net used, what the approved quantity needs (× the system's consumption and wastage), and the excess or
+            short of the net used.
           </p>
         </div>
         <div className="page-actions">
@@ -648,14 +673,33 @@ export function Reconciliation() {
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {done && <div className="alert alert-ok">{done}</div>}
+      {data.widths.length > 0 && (
+        <div className="card top-gap-small">
+          <h2 className="section-title">Lines measured per running metre</h2>
+          <p className="small muted">Their system's consumption is per sqm: give each line's width once (running length × width = the area that needs material).</p>
+          {data.widths.map((w) => (
+            <div key={w.contract_line_id} className="inline-form small">
+              <span className="grow">
+                {w.description} · per {w.unit} · width {w.width_m ? `${num(w.width_m, 3)} m` : <b className="text-warn">not given</b>}
+              </span>
+              {can("closeout.billing") && (
+                <button className="btn btn-small" onClick={() => width(w)}>
+                  {w.width_m ? "Change the width" : "Give the width"}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
       <div className="card table-wrap">
         <table className="table">
           <thead>
             <tr>
               <th>Product</th>
-              <th className="num">Issued</th>
-              <th className="num">Needed</th>
+              <th className="num">Issued (gross)</th>
               <th className="num">Returned</th>
+              <th className="num">Net used</th>
+              <th className="num">Needed</th>
               <th className="num">Excess / short</th>
               <th>Needed from</th>
               <th />
@@ -668,11 +712,15 @@ export function Reconciliation() {
                 <td className="num">
                   {num(r.issued, 3)} {r.unit}
                 </td>
-                <td className="num">{num(r.needed, 3)}</td>
-                <td className="num">{num(r.returned, 3)}</td>
                 <td className="num">
-                  <span className={`badge ${r.state === "excess" ? "badge-warn" : r.state === "short" ? "badge-danger" : "badge-ok"}`}>
-                    {r.state === "even" ? "even" : `${r.state} ${num(Math.abs(Number(r.difference)), 3)}`}
+                  {num(r.returned, 3)}
+                  {Number(r.to_godown) > 0 && <div className="small muted">{num(r.to_godown, 3)} sent to the godown</div>}
+                </td>
+                <td className="num">{num(r.net_used, 3)}</td>
+                <td className="num">{r.state === "to check" ? "—" : num(r.needed, 3)}</td>
+                <td className="num">
+                  <span className={`badge ${r.state === "excess" ? "badge-warn" : r.state === "short" ? "badge-danger" : r.state === "to check" ? "badge-info" : "badge-ok"}`}>
+                    {r.state === "to check" ? (r.note ?? "to check") : r.state === "even" ? "even" : `${r.state} ${num(Math.abs(Number(r.difference)), 3)}`}
                   </span>
                 </td>
                 <td className="small muted">{r.basis.join("; ")}</td>

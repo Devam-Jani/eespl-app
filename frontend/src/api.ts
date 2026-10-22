@@ -24,10 +24,39 @@ export function setSessionLostHandler(handler: () => void) {
   onSessionLost = handler;
 }
 
+// The session ends after inactivity (Settings > Security: 12 hours on a phone, 8 on a desktop):
+// the app tells the server, on each refresh, how long ago the person last used it (a background
+// poll is not use).
+let lastActivity = Date.now();
+if (typeof window !== "undefined") {
+  for (const ev of ["pointerdown", "keydown", "touchstart", "wheel"]) {
+    window.addEventListener(ev, () => (lastActivity = Date.now()), {
+      passive: true,
+      capture: true,
+    });
+  }
+}
+
+export function deviceKind(width: number, agent: string): "phone" | "desktop" {
+  return width <= 760 || /Mobi|Android|iPhone/.test(agent)
+    ? "phone"
+    : "desktop";
+}
+
+function sessionHeaders(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  return {
+    "X-Idle-Seconds": String(
+      Math.max(0, Math.floor((Date.now() - lastActivity) / 1000)),
+    ),
+    "X-Device": deviceKind(window.innerWidth, navigator.userAgent),
+  };
+}
+
 /** Exchange the refresh cookie for a new access token. Concurrent callers share one request. */
 export function refreshAccessToken(): Promise<boolean> {
   if (!refreshing) {
-    refreshing = fetch("/api/auth/refresh", { method: "POST", credentials: "same-origin" })
+    refreshing = fetch("/api/auth/refresh", { method: "POST", credentials: "same-origin", headers: sessionHeaders() })
       .then(async (res) => {
         if (!res.ok) {
           accessToken = null;
@@ -69,6 +98,8 @@ export async function api<T>(path: string, options: Options = {}, retry = true):
   const headers = new Headers(init.headers);
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
   if (json !== undefined) headers.set("Content-Type", "application/json");
+  if (typeof window !== "undefined")
+    headers.set("X-Device", deviceKind(window.innerWidth, navigator.userAgent));
 
   const res = await fetch(path, {
     ...init,

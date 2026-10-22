@@ -28,6 +28,7 @@ def send(to: str, subject: str, text: str, html: str | None = None) -> None:
                     settings.smtp_password.get_secret_value() if settings.smtp_password else "",
                 )
             smtp.send_message(msg)
-    else:  # development: the local Mailpit catches it
+    elif settings.mailpit_host:  # development: the local Mailpit catches it
         with smtplib.SMTP(settings.mailpit_host, settings.mailpit_port, timeout=10) as smtp:
             smtp.send_message(msg)
+    # production with EMAIL_ENABLED off (and no Mailpit): nothing is sent to anyone

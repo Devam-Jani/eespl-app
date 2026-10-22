@@ -97,6 +97,15 @@ const WorkOrders = lazy(() => co().then((m) => ({ default: m.WorkOrders })));
 const WorkOrderPage = lazy(() => co().then((m) => ({ default: m.WorkOrderPage })));
 const SiteZones = lazy(() => co().then((m) => ({ default: m.SiteZones })));
 const BillingChecklist = lazy(() => co().then((m) => ({ default: m.BillingChecklist })));
+// go-live: the account, set password, security, backups, user import, roles report, help
+const ops = () => import("./ops/Pages");
+const SetPassword = lazy(() => ops().then((m) => ({ default: m.SetPassword })));
+const Account = lazy(() => ops().then((m) => ({ default: m.Account })));
+const SecuritySettings = lazy(() => ops().then((m) => ({ default: m.SecuritySettings })));
+const BackupsPage = lazy(() => ops().then((m) => ({ default: m.BackupsPage })));
+const UserImport = lazy(() => ops().then((m) => ({ default: m.UserImport })));
+const RolesReport = lazy(() => ops().then((m) => ({ default: m.RolesReport })));
+const HelpSettings = lazy(() => ops().then((m) => ({ default: m.HelpSettings })));
 // the close-out screens (review of Prompt 26): measuring on site, quality, reconciliation, claims, one bill page
 const cs = () => import("./closeout/Screens");
 const MeasureEntry = lazy(() => cs().then((m) => ({ default: m.MeasureEntry })));
@@ -199,6 +208,12 @@ const PAGES: Record<string, JSX.Element> = {
   "/planning/board": <StatusBoard />,
   "/measurements": <MeasurementBook />,
   "/bills": <Bills />,
+  "/account": <Account />,
+  "/admin/user-import": <UserImport />,
+  "/admin/backups": <BackupsPage />,
+  "/settings/security": <SecuritySettings />,
+  "/settings/roles-report": <RolesReport />,
+  "/settings/help": <HelpSettings />,
   "/billing/checklist": <ChecklistSites />,
   "/settings/client-roles": <ClientRolesSettings />,
   "/work-orders": <WorkOrders />,
@@ -267,6 +282,7 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/portal/invite/:token" element={<InviteAccept />} />
+            <Route path="/set-password/:token" element={<SetPassword />} />
             {/* the delivery receipt page: no login, opened from the QR code on the delivery note */}
             <Route path="/r/:token" element={<ReceiptPage />} />
             <Route
@@ -339,7 +355,7 @@ export default function App() {
                 }
               />
               {MENU.map((item) => (
-                <Route key={item.to} path={item.to} element={<RequirePermission perms={item.perms}>{PAGES[item.to] ?? <Placeholder title={item.label} />}</RequirePermission>} />
+                <Route key={item.to} path={item.to} element={<RequirePermission perms={item.view ?? item.perms}>{PAGES[item.to] ?? <Placeholder title={item.label} />}</RequirePermission>} />
               ))}
               <Route
                 path="/systems/:id"

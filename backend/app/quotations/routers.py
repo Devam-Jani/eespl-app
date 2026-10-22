@@ -481,6 +481,9 @@ class LetterheadIn(BaseModel):
     signatory_firm: str | None = None
     signatory_name: str | None = None
     signatory_designation: str | None = None
+    signatory2_name: str | None = None
+    signatory2_designation: str | None = None
+    certificate_signatory: int | None = Field(None, ge=1, le=2)
     brand: str | None = None
     primary_color: str | None = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
     accent_color: str | None = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")

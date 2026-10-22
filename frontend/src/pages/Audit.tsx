@@ -6,8 +6,8 @@ import type { AuditEntry } from "../types";
 
 const PAGE_SIZE = 50;
 
-type Filters = { user: string; entity: string; action: string; date_from: string; date_to: string };
-const EMPTY: Filters = { user: "", entity: "", action: "", date_from: "", date_to: "" };
+type Filters = { category: string; user: string; entity: string; action: string; date_from: string; date_to: string };
+const EMPTY: Filters = { category: "", user: "", entity: "", action: "", date_from: "", date_to: "" };
 
 export default function Audit() {
   const [form, setForm] = useState<Filters>(EMPTY);
@@ -59,6 +59,17 @@ export default function Audit() {
         <ExportButton path={`/api/audit/export${queryString({ ...filters })}`} />
       </div>
       <form className="card filters" onSubmit={apply}>
+        <label className="field">
+          <span>Kind</span>
+          <select {...field("category")}>
+            <option value="">Everything</option>
+            <option value="logins">Sign-ins</option>
+            <option value="exports">Exports and downloads</option>
+            <option value="permissions">Permission changes</option>
+            <option value="deletes">Deletions</option>
+            <option value="route_views">Views of someone's route</option>
+          </select>
+        </label>
         <label className="field">
           <span>User (email)</span>
           <input placeholder="e.g. admin@" {...field("user")} />

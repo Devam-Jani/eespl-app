@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 import json
 import uuid
 from datetime import UTC, date, datetime, time, timedelta
@@ -24,8 +25,21 @@ def _start_of(day: date) -> datetime:
     return datetime.combine(day, time.min, tzinfo=UTC)
 
 
-def _filters(user, entity, entity_id, action, date_from, date_to) -> list:
+# the viewer's kinds of entry (director and office admin)
+CATEGORIES = {
+    "logins": lambda: or_(AuditLog.action.startswith("auth.")),
+    "exports": lambda: or_(AuditLog.action == "export", AuditLog.action.endswith(".export")),
+    "permissions": lambda: or_(AuditLog.action.startswith("role."), AuditLog.action == "user.roles_set", AuditLog.action.like("%grant%"),
+                               AuditLog.action.startswith("client_role."), AuditLog.action == "user.unlock", AuditLog.action.startswith("security.")),
+    "deletes": lambda: or_(AuditLog.action.like("%.delete%"), AuditLog.action == "user.deactivate"),
+    "route_views": lambda: AuditLog.action == "field.route_view",
+}  # fmt: skip
+
+
+def _filters(user, entity, entity_id, action, date_from, date_to, category=None) -> list:
     filters: list = []
+    if category in CATEGORIES:
+        filters.append(CATEGORIES[category]())
     if user:
         try:
             filters.append(AuditLog.user_id == uuid.UUID(user))
@@ -58,11 +72,12 @@ def export_audit(
     action: str | None = None,
     date_from: DateFrom = None,
     date_to: DateTo = None,
+    category: str | None = None,
 ):
     rows = db.scalars(
         select(AuditLog)
         .options(joinedload(AuditLog.user))
-        .where(*_filters(user, entity, entity_id, action, date_from, date_to))
+        .where(*_filters(user, entity, entity_id, action, date_from, date_to, category))
         .order_by(AuditLog.at.desc(), AuditLog.id.desc())
         .limit(EXPORT_ROW_LIMIT)
     )
@@ -86,8 +101,9 @@ def list_audit(
     date_to: Annotated[date | None, Query(description="Inclusive, UTC")] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
+    category: Annotated[str | None, Query(description="logins, exports, permissions, deletes, route_views")] = None,
 ) -> AuditPage:
-    filters = _filters(user, entity, entity_id, action, date_from, date_to)
+    filters = _filters(user, entity, entity_id, action, date_from, date_to, category)
 
     total = db.scalar(select(func.count()).select_from(AuditLog).where(*filters))
     rows = db.scalars(

@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     Identity,
     Index,
+    Integer,
     MetaData,
     Numeric,
     String,
@@ -65,6 +66,15 @@ class User(Base):
     bank_ifsc: Mapped[str | None] = mapped_column(String(11))
     failed_logins: Mapped[int] = mapped_column(server_default="0")
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # lockouts in a row: the third waits for the office admin to unlock (an attacker cannot keep
+    # a person out for long by guessing, nor guess for long)
+    lockouts: Mapped[int] = mapped_column(server_default="0")
+    locked_by_failures: Mapped[bool] = mapped_column(server_default=false())
+    # sessions started before this are over (a password change ends every session)
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # two-step login (an authenticator app): the secret encrypted with DATA_KEY
+    totp_secret: Mapped[str | None] = mapped_column(String(300))
+    totp_enabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -143,8 +153,47 @@ class RefreshToken(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # phone or desktop (its own inactivity limit); the session's last activity carries over
+    device: Mapped[str] = mapped_column(String(8), server_default="desktop")
+    active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped[User] = relationship()
+
+
+class SecuritySettings(Base):
+    """One row: two-step login required for some roles, and the inactivity limits."""
+
+    __tablename__ = "security_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, server_default="1")
+    totp_required: Mapped[bool] = mapped_column(server_default=false())
+    totp_roles: Mapped[list[str]] = mapped_column(
+        JSONB, server_default='["director", "office_admin", "accounts"]'
+    )
+    idle_hours_phone: Mapped[int] = mapped_column(Integer, server_default="12")
+    idle_hours_desktop: Mapped[int] = mapped_column(Integer, server_default="8")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class PasswordLink(Base):
+    """A one-time link to set a password (an imported user, or a reset by the admin): the admin
+    copies it and sends it; only its hash is kept; it works once, for 7 days."""
+
+    __tablename__ = "password_links"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class AuditLog(Base):

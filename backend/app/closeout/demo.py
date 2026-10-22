@@ -584,13 +584,26 @@ def run(db: Session) -> dict:
     db.flush()
     stock.take_out(db, store=store, product=p, qty=Decimal(16), ref_type="issue", ref_id=iss.id, user_id=None, note=iss.code)
     iss.lines.append(SiteIssueLine(product_id=p.id, product=p, qty=Decimal(16), rate=Decimal(185), value=Decimal(2960)))
+    # the balconies' PU: per rmt in the work order, its consumption per sqm: the width given once
+    pu = db.get(Product, m["pu_product"])
+    stock.post(db, store_id=store.id, product=pu, qty=Decimal(15), rate=Decimal(310), ref_type="opening", ref_id=None, user_id=None, note="DEMO opening stock")
+    iss2 = SiteIssue(code=stock.next_code(db, "ISS"), kind="issue", store_id=store.id, site_id=site.id, node_id=nodes["101"][2], issued_on=date(2026, 8, 13), remark="DEMO: to the balconies of 101 and 102")
+    db.add(iss2)
+    db.flush()
+    stock.take_out(db, store=store, product=pu, qty=Decimal("13.5"), ref_type="issue", ref_id=iss2.id, user_id=None, note=iss2.code)
+    iss2.lines.append(SiteIssueLine(product_id=pu.id, product=pu, qty=Decimal("13.5"), rate=Decimal(310), value=Decimal("4185")))
     db.commit()
+    rec0 = _ok(c.get(f"/api/closeout/sites/{site.id}/reconciliation", headers=hb), "reconciliation")
+    pu_before = next(x for x in rec0["rows"] if x["product_id"] == pu.id)["note"]
+    _ok(c.put(f"/api/closeout/contract-lines/{lines['balcony']['id']}/width", json={"width_m": "1.2"}, headers=hb), "balcony width")
     rec = _ok(c.get(f"/api/closeout/sites/{site.id}/reconciliation", headers=hb), "reconciliation")
     row = next(x for x in rec["rows"] if x["product_id"] == p.id)
-    before = {k2: str(row[k2]) for k2 in ("issued", "needed", "difference", "state")}
+    before = {k2: str(row[k2]) for k2 in ("issued", "returned", "net_used", "needed", "difference", "state")}
     back = _ok(c.post(f"/api/closeout/sites/{site.id}/reconciliation/return", json={"product_id": p.id, "qty": str(row["difference"])}, headers=hb), "return to godown", 201)
     row = next(x for x in back["rows"] if x["product_id"] == p.id)
-    out["reconciliation"] = {"before": before, "transfer": back["transfer"], "after": {k2: str(row[k2]) for k2 in ("issued", "needed", "returned", "difference", "state")}}
+    pu_row = next(x for x in back["rows"] if x["product_id"] == pu.id)
+    out["reconciliation"] = {"before": before, "transfer": back["transfer"], "after": {k2: str(row[k2]) for k2 in ("issued", "returned", "net_used", "needed", "difference", "state")},
+                             "pu_before_width": pu_before, "pu_after_width": {k2: str(pu_row[k2]) for k2 in ("issued", "returned", "net_used", "needed", "difference", "state")}}  # fmt: skip
 
     # labour claims: 10 % above the measured toilet of 101 (billing asks to pay it: the director
     # decides), and 102's toilet as measured

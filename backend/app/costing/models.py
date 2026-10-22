@@ -1,5 +1,5 @@
 """Rate working, the master price list's freight, and labour paid back to back (the director's
-review with Ankur Sir, 12 Oct).
+review with the director, 12 Oct).
 
 - Freight per unit per product (or per vendor and godown), with its own history; the price
   history itself is masters.ProductPrice (source, unit, vendor, who and when).

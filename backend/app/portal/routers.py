@@ -15,7 +15,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from app import audit
-from app.auth.security import hash_password, utcnow
+from app.auth.passwords import set_password
+from app.auth.security import utcnow
 from app.db import DbSession
 from app.execution import pdf as xpdf
 from app.execution.common import CAD_TYPES, media, names, pdf_response, save_upload, send_file
@@ -81,7 +82,7 @@ def accept_invite(token: str, body: AcceptIn, request: Request, db: DbSession) -
     """Set the password from a one-time link; then sign in on the normal login page."""
     inv = _invite(db, token)
     user = db.get(User, inv.user_id)
-    user.password_hash = hash_password(body.password)
+    set_password(db, user, body.password)
     user.is_active = True
     inv.used_at = utcnow()
     audit.record(

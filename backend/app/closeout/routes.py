@@ -508,20 +508,36 @@ def client_roles(db: DbSession, _: RolesView) -> dict:
         "rights": list(CLIENT_RIGHTS),
         "right_labels": RIGHT_LABELS,
         "roles": [
-            {"code": r.code, "label": r.label, "rights": r.rights, "default_rights": CLIENT_ROLE_DEFAULTS.get(r.code, [])}
+            {
+                "code": r.code,
+                "label": r.label,
+                "rights": r.rights,
+                "default_rights": CLIENT_ROLE_DEFAULTS.get(r.code, []),
+            }
             for r in db.scalars(select(ClientRoleDef).order_by(ClientRoleDef.sort_order))
         ],
     }
 
 
 @router.post("/client-roles/{code}/reset")
-def reset_client_role(code: str, request: Request, db: DbSession, principal: CurrentPrincipal, _: RolesEdit) -> dict:
+def reset_client_role(
+    code: str, request: Request, db: DbSession, principal: CurrentPrincipal, _: RolesEdit
+) -> dict:
     r = db.get(ClientRoleDef, code)
     if r is None or code not in CLIENT_ROLE_DEFAULTS:
         raise not_found("Client role not found")
     before = {"rights": r.rights}
     r.rights = sorted(CLIENT_ROLE_DEFAULTS[code])
-    record(db, request, principal, "client_role.reset", "client_role", code, before=before, after={"rights": r.rights})
+    record(
+        db,
+        request,
+        principal,
+        "client_role.reset",
+        "client_role",
+        code,
+        before=before,
+        after={"rights": r.rights},
+    )
     db.commit()
     return client_roles(db, "all")
 
@@ -619,9 +635,20 @@ def move_handover(
     before = {"promised_on": node.handover_promised_on}
     from app.closeout import handover  # noqa: PLC0415
 
-    if node.handover_promised_on and not any(h["kind"] == "promised" for h in node.handover_history or []):
-        handover.note(node, "promised", node.handover_promised_on, node.handover_promised_by or "the client")  # the date before history was kept
-    handover.note(node, "moved", body.promised_on, principal.user.full_name, body.reason, was=node.handover_promised_on)
+    if node.handover_promised_on and not any(
+        h["kind"] == "promised" for h in node.handover_history or []
+    ):
+        handover.note(
+            node, "promised", node.handover_promised_on, node.handover_promised_by or "the client"
+        )  # the date before history was kept
+    handover.note(
+        node,
+        "moved",
+        body.promised_on,
+        principal.user.full_name,
+        body.reason,
+        was=node.handover_promised_on,
+    )
     node.handover_promised_on = body.promised_on
     node.handover_promised_by = f"moved by {principal.user.full_name}: {body.reason}"[:200]
     node.handover_promised_entered_by = principal.user.id
@@ -689,7 +716,13 @@ def measurements(site_id: int, db: DbSession, principal: CurrentPrincipal, scope
             .order_by(Measurement.measured_on, Measurement.id)
         )
     )
-    return {"site_id": site.id, "needs_approval": site.measurements_need_approval, "lines": [msvc.line_out(db, m) for m in rows],
+    places = db.scalars(
+        select(SiteNode).where(SiteNode.site_id == site.id)
+    ).all()  # held: kept weakly
+    changes = msvc.changes_by_measurement(db, [m.id for m in rows])
+    lines = [msvc.line_out(db, m, changes) for m in rows]
+    del places
+    return {"site_id": site.id, "needs_approval": site.measurements_need_approval, "lines": lines,
             "zones": db.scalar(select(RfiZone.id).where(RfiZone.site_id == site.id).limit(1)) is not None}  # fmt: skip
 
 

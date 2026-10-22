@@ -1,4 +1,4 @@
-"""The systems Ankur Sir named in the director's review (12 Oct): Cemguard and Cemguard Plus
+"""The systems the director named in the director's review (12 Oct): Cemguard and Cemguard Plus
 ("Samgard" in the meeting is Bronco Cemguard), Ultra Flex and Hybrid PU, with the products our
 data has for them (the products master and rate library v2), and the suitable systems per area
 type (sunken, toilet, terrace).
@@ -14,7 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 NOT_FOUND = (
-    "Named by Ankur Sir in the director's review (12 Oct). Not in the products master or rate "
+    "Named by the director in the director's review (12 Oct). Not in the products master or rate "
     "library v2: its products, consumption and coats are to confirm."
 )
 
@@ -62,7 +62,7 @@ NAMED = [
     {
         "code": "ULTRA-FLEX",
         "name": "Ultra Flex",
-        "note": "Named by Ankur Sir (12 Oct). Our BOQs use Brushbond Ultraflex (Fosroc) for "
+        "note": "Named by the director (12 Oct). Our BOQs use Brushbond Ultraflex (Fosroc) for "
         "toilets, sunken slabs and wet areas.",
         "products": [
             {
@@ -78,7 +78,7 @@ NAMED = [
     {
         "code": "HYBRID-PU",
         "name": "Hybrid PU",
-        "note": "Named by Ankur Sir (12 Oct). Bronco Hybrid PU, as in our terrace offers.",
+        "note": "Named by the director (12 Oct). Bronco Hybrid PU, as in our terrace offers.",
         "products": [
             {
                 "code": "BRONCO-HYBRID-PU",

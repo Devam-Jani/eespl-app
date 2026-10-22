@@ -1,5 +1,5 @@
 # ruff: noqa: E501  (rule texts read better unwrapped)
-"""The process chain Mr. Sunil described in the 9 Oct meeting (enquiry to payment): one rule per
+"""The process chain the planning head described in the 9 Oct meeting (enquiry to payment): one rule per
 step. Each rule turns an event into notifications: who is told (by role, resolved from the
 event's site), the message and the one-tap action, which events close it, and the escalation
 (after how many hours, to whom). All of it is editable in Settings > Process rules; these are the
@@ -372,6 +372,16 @@ DEFAULT_RULES: list[dict] = [
         "recipients": [{"role": "person", "message": "{site}: {issue} {title} was due on {due}.", "action": "Resolve it"}],
         "link": "/issues?open={issue_id}", "closed_by": ["issue_resolved"],
         "escalations": [{"after_hours": 2 * D, "to": ["director"]}],
+    },
+    {
+        "code": "backup_missed", "number": 40, "event": "backup_missed",
+        "short": "Backup missed", "ref": "{last}",
+        "title": "A night without a backup",
+        "recipients": [
+            {"role": "director", "message": "Last night's backup did not run or failed ({why}). The last good one: {last}.", "action": "Check the backups"},
+            {"role": "office_admin", "message": "Last night's backup did not run or failed ({why}). The last good one: {last}.", "action": "Check the backups"},
+        ],
+        "link": "/admin/backups", "closed_by": ["backup_done"], "escalations": [],
     },
     {
         "code": "labour_claim_above", "number": 39, "event": "labour_claim_above",
