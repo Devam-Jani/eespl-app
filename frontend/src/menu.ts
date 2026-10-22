@@ -7,6 +7,8 @@ export type MenuItem = {
   view?: string[];
   /** ...and all of these as well (e.g. tender.margin for pages that show cost). */
   all?: string[];
+  /** ...and none of these (a page for one job only, e.g. sales' read-only bills). */
+  none?: string[];
   section: Group;
 };
 
@@ -38,6 +40,9 @@ export const MENU: MenuItem[] = [
   { to: "/quotations", label: "Quotations", perms: ["quotation.edit"], view: ["quotation.view"], section: "Sales" },
   { to: "/tenders", label: "Tenders", perms: ["tender.edit"], view: ["tender.view"], section: "Sales" },
   { to: "/scorecard", label: "Closure scorecard", perms: ["scorecard.view"], all: ["leads.edit"], section: "Sales" },
+  // sales follows its own clients' bills and payments, read-only; billing works them in Billing
+  { to: "/sales/bills", label: "Bills and payments", perms: ["closeout.payments"], all: ["leads.edit"], none: ["closeout.billing", "billing.edit"], section: "Sales" },
+  { to: "/sales/work-orders", label: "Client work orders", perms: ["wo.edit"], all: ["leads.edit"], none: ["closeout.billing"], section: "Sales" },
   // planning
   { to: "/enquiries", label: "Enquiries to allocate", perms: ["leads.allocate"], section: "Planning" },
   { to: "/planning/board", label: "Site status board", perms: ["planning.view"], view: ["planning.view", "site.view"], section: "Planning" },
@@ -57,14 +62,14 @@ export const MENU: MenuItem[] = [
   {
     to: "/bills",
     label: "Bills",
-    perms: ["billing.edit", "closeout.billing", "closeout.payments"],
+    perms: ["billing.edit", "closeout.billing"],
     view: ["billing.view", "closeout.billing", "closeout.payments"],
     section: "Billing",
   },
   { to: "/billing", label: "Client billing", perms: ["billing.edit"], view: ["billing.view"], section: "Billing" },
   { to: "/ready-to-bill", label: "Ready to bill", perms: ["billing.edit"], view: ["billing.view"], all: ["closeout.billing"], section: "Billing" },
   { to: "/billing/checklist", label: "Billing checklist", perms: ["closeout.billing"], section: "Billing" },
-  { to: "/work-orders", label: "Client work orders", perms: ["wo.view"], section: "Billing" },
+  { to: "/work-orders", label: "Client work orders", perms: ["wo.view"], all: ["closeout.billing"], section: "Billing" },
   { to: "/guarantees", label: "Guarantee register", perms: ["closeout.billing"], view: ["closeout.billing", "closeout.payments"], section: "Billing" },
   { to: "/labour-check", label: "Labour bill check", perms: ["labourcheck.check"], section: "Billing" },
   { to: "/labour-rates", label: "Labour rates and bills", perms: ["subcon.view"], view: ["subcon.view", "payables.view"], all: ["billing.edit"], section: "Billing" },
@@ -142,8 +147,12 @@ export const MENU: MenuItem[] = [
 ];
 
 /** The pages a user may open, by group (groups with none left out). */
+export function shows(item: MenuItem, can: (...perms: string[]) => boolean): boolean {
+  return can(...item.perms) && (item.all ?? []).every((c) => can(c)) && !(item.none ?? []).some((c) => can(c));
+}
+
 export function visibleGroups(can: (...perms: string[]) => boolean): { group: Group; items: MenuItem[] }[] {
-  const visible = MENU.filter((item) => can(...item.perms) && (item.all ?? []).every((c) => can(c)));
+  const visible = MENU.filter((item) => shows(item, can));
   return GROUPS.map((group) => ({ group, items: visible.filter((i) => i.section === group) })).filter((g) => g.items.length > 0);
 }
 

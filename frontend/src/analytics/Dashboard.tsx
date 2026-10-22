@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
 import { errorText } from "../format";
-import { MENU } from "../menu";
+import { MENU, shows } from "../menu";
 import { HBarChart, PALETTE } from "./charts";
 import type { Drill, Tile } from "./ui";
 import { asOf, DataTable, drillHref, ExportButton, fmtValue, KpiTile, useData, useFilters } from "./ui";
@@ -370,7 +370,7 @@ function PurchaseView({ demo }: { demo: boolean }) {
 
 function Modules() {
   const { me, can } = useAuth();
-  const modules = MENU.filter((m) => can(...m.perms) && (m.all ?? []).every((c) => can(c)));
+  const modules = MENU.filter((m) => shows(m, can));
   return (
     <>
       <h1>Welcome, {me?.user.full_name.split(" ")[0]}</h1>

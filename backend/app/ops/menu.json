@@ -170,6 +170,28 @@
   ]
  },
  {
+  "to": "/sales/bills",
+  "label": "Bills and payments",
+  "section": "Sales",
+  "perms": [
+   "closeout.payments"
+  ],
+  "all": [
+   "leads.edit"
+  ]
+ },
+ {
+  "to": "/sales/work-orders",
+  "label": "Client work orders",
+  "section": "Sales",
+  "perms": [
+   "wo.edit"
+  ],
+  "all": [
+   "leads.edit"
+  ]
+ },
+ {
   "to": "/enquiries",
   "label": "Enquiries to allocate",
   "section": "Planning",
@@ -299,8 +321,7 @@
   "section": "Billing",
   "perms": [
    "billing.edit",
-   "closeout.billing",
-   "closeout.payments"
+   "closeout.billing"
   ]
  },
  {
@@ -336,6 +357,9 @@
   "section": "Billing",
   "perms": [
    "wo.view"
+  ],
+  "all": [
+   "closeout.billing"
   ]
  },
  {

@@ -1005,6 +1005,70 @@ export function Bills() {
   );
 }
 
+type SalesBill = { id: number; bill_no: string; ra_code: string; date: string; site: string | null; client: string | null; amount: string; certified: string | null; received: string; overdue_days: number };
+
+/** Sales: its own clients' bills and payments, read-only (billing works them in Billing > Bills). */
+export function SalesBills() {
+  const { data, error } = useLoad<SalesBill[]>("/api/closeout/sales-bills");
+  const [q, setQ] = useState("");
+  const rows = (data ?? []).filter((b) => !q || `${b.bill_no} ${b.site ?? ""} ${b.client ?? ""}`.toLowerCase().includes(q.toLowerCase()));
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1>Bills and payments</h1>
+          <p className="muted">Your clients' bills: what was billed, what the client certified, what has come in, and how late the rest is. To chase a payment, speak to billing.</p>
+        </div>
+        <div className="page-actions">
+          <input placeholder="Search bill, site or client" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search bills" />
+        </div>
+      </div>
+      {error && <div className="alert alert-error">{error}</div>}
+      <div className="card table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Bill no.</th>
+              <th>Date</th>
+              <th>Client and site</th>
+              <th className="num">Amount</th>
+              <th className="num">Certified</th>
+              <th className="num">Received</th>
+              <th className="num">Overdue</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={7} className="muted">
+                  No bills for your clients yet.
+                </td>
+              </tr>
+            )}
+            {rows.map((b) => (
+              <tr key={b.id}>
+                <td>
+                  {b.bill_no}
+                  {b.bill_no !== b.ra_code && <div className="small muted">{b.ra_code}</div>}
+                </td>
+                <td className="small">{d(b.date)}</td>
+                <td className="small">
+                  {b.client}
+                  <div className="muted">{b.site}</div>
+                </td>
+                <td className="num">{inr(b.amount)}</td>
+                <td className="num">{b.certified != null ? inr(b.certified) : "—"}</td>
+                <td className="num">{inr(b.received)}</td>
+                <td className="num">{b.overdue_days > 0 ? <span className="badge badge-danger">{b.overdue_days} d</span> : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
 export function BillPage() {
   const { id } = useParams();
   const { can } = useAuth();

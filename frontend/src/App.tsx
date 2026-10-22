@@ -113,6 +113,7 @@ const ClientRolesSettings = lazy(() => cs().then((m) => ({ default: m.ClientRole
 const Reconciliation = lazy(() => cs().then((m) => ({ default: m.Reconciliation })));
 const LabourClaims = lazy(() => cs().then((m) => ({ default: m.LabourClaims })));
 const Bills = lazy(() => cs().then((m) => ({ default: m.Bills })));
+const SalesBills = lazy(() => cs().then((m) => ({ default: m.SalesBills })));
 const BillPage = lazy(() => cs().then((m) => ({ default: m.BillPage })));
 const OldBillRedirect = lazy(() => cs().then((m) => ({ default: m.OldBillRedirect })));
 const ChecklistSites = lazy(() => cs().then((m) => ({ default: m.ChecklistSites })));
@@ -208,6 +209,8 @@ const PAGES: Record<string, JSX.Element> = {
   "/planning/board": <StatusBoard />,
   "/measurements": <MeasurementBook />,
   "/bills": <Bills />,
+  "/sales/bills": <SalesBills />,
+  "/sales/work-orders": <WorkOrders />,
   "/account": <Account />,
   "/admin/user-import": <UserImport />,
   "/admin/backups": <BackupsPage />,

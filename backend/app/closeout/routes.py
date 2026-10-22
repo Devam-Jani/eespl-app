@@ -1350,6 +1350,39 @@ def bills(
     return out
 
 
+@router.get("/sales-bills")
+def sales_bills(db: DbSession, principal: CurrentPrincipal, scope: Payments) -> list[dict]:
+    """Sales' read-only view: the bills and payments of its own clients' sites (the sites it is
+    on or in charge of, and those from its own tenders). Bill no., date, amount, certified,
+    received and overdue days only: no costs, steps or follow-up notes."""
+    from sqlalchemy import func  # noqa: PLC0415
+
+    from app.finance.models import ReceiptAllocation  # noqa: PLC0415
+    from app.masters.models import Client  # noqa: PLC0415
+    from app.tenders.models import Tender  # noqa: PLC0415
+
+    q = select(RaBill).where(RaBill.status.notin_(("cancelled", "draft"))).order_by(RaBill.id.desc())
+    allowed = allowed_sites(db, scope, principal)
+    if allowed is not None:
+        own_tenders = select(Site.id).join(Tender, Tender.id == Site.tender_id).where(Tender.owner_id == principal.user.id)
+        allowed = list(set(allowed) | set(db.scalars(own_tenders)))
+        q = q.where(RaBill.site_id.in_(allowed or [0]))
+    day = today()
+    out = []
+    for b in db.scalars(q.limit(300)):
+        site = db.get(Site, b.site_id)
+        inv = bsvc.invoice_of(db, b)
+        due, _ = bsvc.due_of(db, b)
+        owed = bsvc.outstanding(db, b)
+        received = db.scalar(select(func.coalesce(func.sum(ReceiptAllocation.amount), 0)).where(ReceiptAllocation.invoice_id == inv.id)) if inv else 0
+        client = db.get(Client, site.client_id) if site and site.client_id else None
+        out.append({"id": b.id, "bill_no": inv.number if inv else b.code, "ra_code": b.code, "date": inv.invoice_date if inv else b.period_to,
+                    "site": f"{site.code} {site.name}" if site else None, "client": client.name if client else None,
+                    "amount": b.gross, "certified": b.certified_gross, "received": received,
+                    "overdue_days": (day - due).days if due and owed > 0 and day > due else 0})  # fmt: skip
+    return out
+
+
 def _bill(db: Session, rid: int, scope: str, principal: Principal) -> RaBill:
     b = db.get(RaBill, rid)
     if b is None or not site_ok(db, scope, principal, b.site_id):

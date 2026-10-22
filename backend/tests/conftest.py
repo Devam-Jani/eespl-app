@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 
-TEST_DB_NAME = "eespl_test"
+TEST_DB_NAME = os.environ.get("TEST_DB_NAME", "eespl_test")  # a second run alongside: its own name
 DEV_DB_NAME = make_url(settings.database_url).database
 _test_url = make_url(os.environ.get("TEST_DATABASE_URL") or settings.database_url).set(
     database=TEST_DB_NAME
