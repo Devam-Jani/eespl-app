@@ -1350,6 +1350,39 @@ def bills(
     return out
 
 
+@router.get("/sales-bills")
+def sales_bills(db: DbSession, principal: CurrentPrincipal, scope: Payments) -> list[dict]:
+    """Sales' read-only view: the bills and payments of its own clients' sites (the sites it is
+    on or in charge of, and those from its own tenders). Bill no., date, amount, certified,
+    received and overdue days only: no costs, steps or follow-up notes."""
+    from sqlalchemy import func  # noqa: PLC0415
+
+    from app.finance.models import ReceiptAllocation  # noqa: PLC0415
+    from app.masters.models import Client  # noqa: PLC0415
+    from app.tenders.models import Tender  # noqa: PLC0415
+
+    q = select(RaBill).where(RaBill.status.notin_(("cancelled", "draft"))).order_by(RaBill.id.desc())
+    allowed = allowed_sites(db, scope, principal)
+    if allowed is not None:
+        own_tenders = select(Site.id).join(Tender, Tender.id == Site.tender_id).where(Tender.owner_id == principal.user.id)
+        allowed = list(set(allowed) | set(db.scalars(own_tenders)))
+        q = q.where(RaBill.site_id.in_(allowed or [0]))
+    day = today()
+    out = []
+    for b in db.scalars(q.limit(300)):
+        site = db.get(Site, b.site_id)
+        inv = bsvc.invoice_of(db, b)
+        due, _ = bsvc.due_of(db, b)
+        owed = bsvc.outstanding(db, b)
+        received = db.scalar(select(func.coalesce(func.sum(ReceiptAllocation.amount), 0)).where(ReceiptAllocation.invoice_id == inv.id)) if inv else 0
+        client = db.get(Client, site.client_id) if site and site.client_id else None
+        out.append({"id": b.id, "bill_no": inv.number if inv else b.code, "ra_code": b.code, "date": inv.invoice_date if inv else b.period_to,
+                    "site": f"{site.code} {site.name}" if site else None, "client": client.name if client else None,
+                    "amount": b.gross, "certified": b.certified_gross, "received": received,
+                    "overdue_days": (day - due).days if due and owed > 0 and day > due else 0})  # fmt: skip
+    return out
+
+
 def _bill(db: Session, rid: int, scope: str, principal: Principal) -> RaBill:
     b = db.get(RaBill, rid)
     if b is None or not site_ok(db, scope, principal, b.site_id):
@@ -1449,7 +1482,8 @@ def wcc_out(db: Session, w: WorkCompletion) -> dict:
     return {"id": w.id, "code": w.code, "site_id": w.site_id, "site": f"{site.code} {site.name}" if site else None, "addendum_of_id": w.addendum_of_id,
             "completion_date": w.completion_date, "started_on": w.started_on, "guarantee_years": w.guarantee_years, "guarantee_from": w.guarantee_from,
             "guarantee_expiry": w.guarantee_expiry, "areas": w.areas, "systems": w.systems, "products": w.products, "note": w.note, "status": w.status,
-            "locked": w.status == "signed", "signed_name": w.signed_name, "signed_at": w.signed_at, "recorded_by_staff": w.recorded_by_staff, "is_demo": w.is_demo}  # fmt: skip
+            "locked": w.status == "signed", "signed_name": w.signed_name, "signed_at": w.signed_at, "recorded_by_staff": w.recorded_by_staff, "is_demo": w.is_demo,
+            "image_3d": bool(w.image_3d_path)}  # fmt: skip
 
 
 def _w(db: Session, wid: int, scope: str, principal: Principal) -> WorkCompletion:
@@ -1517,6 +1551,32 @@ def create_wcc(
 @router.get("/work-completions/{wid}")
 def get_wcc(wid: int, db: DbSession, principal: CurrentPrincipal, scope: CompletionEdit) -> dict:
     return wcc_out(db, _w(db, wid, scope, principal))
+
+
+@router.post("/work-completions/{wid}/image-3d")
+async def wcc_image_3d(
+    wid: int, request: Request, db: DbSession, principal: CurrentPrincipal, scope: CompletionEdit,
+    file: Annotated[UploadFile, File()],
+) -> dict:  # fmt: skip
+    """The optional 3D page: the building in the Status view, rendered by the browser (PNG)."""
+    w = _w(db, wid, scope, principal)
+    csvc.guard(w)
+    rel, _name = await save_upload(file, f"sites/{w.site_id}/wcc")
+    w.image_3d_path = rel
+    audit.record(db, "wcc.image_3d", "work_completion", w.id, user_id=principal.user.id, ip=audit.client_ip(request))
+    db.commit()
+    return wcc_out(db, w)
+
+
+@router.delete("/work-completions/{wid}/image-3d")
+def wcc_image_3d_off(
+    wid: int, db: DbSession, principal: CurrentPrincipal, scope: CompletionEdit
+) -> dict:
+    w = _w(db, wid, scope, principal)
+    csvc.guard(w)
+    w.image_3d_path = None
+    db.commit()
+    return wcc_out(db, w)
 
 
 @router.get("/work-completions/{wid}/pdf")

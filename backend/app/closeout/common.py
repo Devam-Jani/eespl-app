@@ -4,7 +4,6 @@ lookups."""
 from datetime import UTC, date, datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -35,12 +34,9 @@ def not_found(msg: str = "Not found") -> HTTPException:
 
 
 def next_code(db: Session, model, prefix: str) -> str:
-    """PREFIX-2026-0001, the next free number of the year."""
+    """PREFIX-2026-0001 by year, from the series' counter row (app.numbering): counting the rows
+    let two requests take the same number. The model is kept for the callers."""
+    from app.numbering import next_value  # noqa: PLC0415
+
     year = today().year
-    stem = f"{prefix}-{year}-"
-    n = db.scalar(select(func.count()).select_from(model).where(model.code.like(stem + "%"))) or 0
-    while True:
-        n += 1
-        code = f"{stem}{n:04d}"
-        if not db.scalar(select(model.id).where(model.code == code)):
-            return code
+    return f"{prefix}-{year}-{next_value(db, prefix, str(year)):04d}"

@@ -499,12 +499,25 @@ def html(db: Session, w: WorkCompletion) -> str:
 <p><b>Guarantee:</b> {w.guarantee_years} years from {w.completion_date:%d.%m.%Y} to {w.guarantee_expiry:%d.%m.%Y}{' (' + escape(w.guarantee_from) + ')' if w.guarantee_from else ''}.</p>
 {('<p><b>Note:</b> ' + escape(w.note) + '</p>') if w.note else ''}
 <h3>MARKED PLAN</h3><div class="plan">{plan_svg(db, site, w)}</div>
+{_image_3d(w)}
 <table class="sigs"><tr>
 <td><b>{escape(firm)}</b><div class="space"></div>____________________<br>{escape(sig_name or '')}<br>{escape(sig_role)}<br>Date: {w.completion_date:%d.%m.%Y}</td>
 <td><b>For {escape(client.name if client else 'the client')}</b><div class="space"></div>____________________<br>Name: ____________________<br>Designation: ______________<br>Date: ____________________
 {('<div class="small">' + signed + '</div>') if signed else ''}</td></tr></table>
 """
     return _page(db, w.code, body)
+
+
+def _image_3d(w: WorkCompletion) -> str:
+    """The optional page with the building in 3D (the Status view, saved from the 3D tab)."""
+    from app.quotations.render import _media  # noqa: PLC0415
+
+    p = _media(w.image_3d_path)
+    if p is None:
+        return ""
+    return (f'<div style="page-break-before: always"><h3>THE BUILDING IN 3D</h3><img src="{p.as_uri()}" style="width:100%">'
+            '<p class="small">The building raised from the AutoCAD drawing, our areas in their stage colours '
+            "(green done, amber in progress, purple waiting at a hold point, red blocked, grey not started).</p></div>")  # fmt: skip
 
 
 def signatory(db: Session) -> tuple[str, str | None, str]:

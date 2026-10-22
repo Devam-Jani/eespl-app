@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 
-TEST_DB_NAME = "eespl_test"
+TEST_DB_NAME = os.environ.get("TEST_DB_NAME", "eespl_test")  # a second run alongside: its own name
 DEV_DB_NAME = make_url(settings.database_url).database
 _test_url = make_url(os.environ.get("TEST_DATABASE_URL") or settings.database_url).set(
     database=TEST_DB_NAME
@@ -35,6 +35,7 @@ from app.models import Role, User  # noqa: E402
 
 PER_TEST_TABLES = [
     "refresh_tokens", "audit_log", "user_roles", "password_links", "system_status", "help_texts",
+    "building_models",
     "security_settings",
     "client_contacts", "clients", "library_lines", "library_items",
     "tc_template_clauses", "tc_templates", "tc_clauses",

@@ -50,7 +50,7 @@ def report(db: Session) -> list[dict]:
         can = _holder(have)
         groups: dict[str, list[str]] = {}
         for item in menu:
-            if can(*item["perms"]) and all(c in have for c in item.get("all", [])):
+            if can(*item["perms"]) and all(c in have for c in item.get("all", [])) and not any(c in have for c in item.get("none", [])):
                 groups.setdefault(item["section"], []).append(item["label"])
         actions: dict[str, list[dict]] = {}
         for code, scope in sorted(have.items()):

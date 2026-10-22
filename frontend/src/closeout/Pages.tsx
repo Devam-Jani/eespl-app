@@ -716,7 +716,21 @@ type Wcc = {
   signed_name: string | null;
   areas: { area: string; qty: string; unit: string }[];
   addendum_of_id: number | null;
+  image_3d: boolean;
 };
+
+/** The optional 3D page of the certificate: the building in the Status view, drawn here and kept. */
+async function addImage3d(siteId: string | undefined, wid: number): Promise<void> {
+  const model = await api<import("../xray/picture").PictureModel>(`/api/sites/${siteId}/model`);
+  if (!model.building) throw new Error("This site has no building model yet: build it from the AutoCAD drawing (3D tab) first.");
+  const { renderPicture } = await import("../xray/picture");
+  const canvas = await renderPicture(model, "status", 1600, 1000);
+  const blob = await new Promise<Blob | null>((r) => canvas?.toBlob(r, "image/png"));
+  if (!blob) throw new Error("The 3D picture could not be made in this browser.");
+  const form = new FormData();
+  form.append("file", blob, "building-3d.png");
+  await api(`/api/closeout/work-completions/${wid}/image-3d`, { method: "POST", form });
+}
 
 export function SiteWorkCompletions() {
   const { id } = useParams();
@@ -773,7 +787,17 @@ export function SiteWorkCompletions() {
                   </button>{" "}
                   <button className="btn btn-small" onClick={() => void downloadFile(`/api/closeout/work-completions/${w.id}/bond.pdf`)}>
                     Guarantee bond
-                  </button>
+                  </button>{" "}
+                  {w.status !== "signed" &&
+                    (w.image_3d ? (
+                      <button className="btn btn-small" title="Leave the 3D page out of the certificate" onClick={() => void run(api(`/api/closeout/work-completions/${w.id}/image-3d`, { method: "DELETE" }), setError).then(load)}>
+                        Remove the 3D page
+                      </button>
+                    ) : (
+                      <button className="btn btn-small" title="Add a page with the building in 3D (Status view)" onClick={() => void run(addImage3d(id, w.id), setError).then(load)}>
+                        Add the 3D page
+                      </button>
+                    ))}
                 </td>
               </tr>
             ))}

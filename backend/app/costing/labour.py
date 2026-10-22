@@ -342,12 +342,10 @@ def gang_lines(db: Session, contractor_id: int, start: date, end: date) -> list[
 
 
 def _number(db: Session, on: date) -> str:
-    fy = on.year if on.month >= 4 else on.year - 1
-    prefix = f"LB/{fy % 100:02d}-{(fy + 1) % 100:02d}/"
-    n = db.scalar(
-        select(func.count()).select_from(LabourBill).where(LabourBill.number.like(f"{prefix}%"))
-    )
-    return f"{prefix}{n + 1:04d}"
+    """LB/26-27/0001 from the series' counter row (counting the bills raced)."""
+    from app.finance.service import next_number  # noqa: PLC0415
+
+    return next_number(db, "LB", on, "LB")
 
 
 def make_bill(

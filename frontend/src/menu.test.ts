@@ -24,7 +24,7 @@ describe("the menu by group", () => {
       estimator: ["My work", "Sales", "Site", "Masters"],
       office_admin: ["My work", "Sales", "Planning", "Site", "Billing", "Stores", "Accounts", "Analytics", "Masters", "Settings", "Administration"],
       planning: ["My work", "Sales", "Planning", "Site", "Billing", "Analytics", "Masters", "Settings"],
-      sales: ["My work", "Sales", "Site", "Billing", "Masters"],
+      sales: ["My work", "Sales", "Site", "Masters"],
       site_engineer: ["My work", "Site"],
       site_receiver: ["My work", "Site"],
       site_supervisor: ["My work", "Site"],
@@ -50,6 +50,14 @@ describe("the menu by group", () => {
   it("only office admin and the director (and the super admin) see Settings > Client roles", () => {
     const who = Object.keys(ROLES).filter((r) => visibleGroups((...c) => c.some((x) => ROLES[r].includes(x))).some((g) => g.items.some((i) => i.to === "/settings/client-roles")));
     expect(who.sort()).toEqual(["director", "office_admin", "super_admin"]);
+  });
+
+  it("gives sales its clients' bills read-only under Sales, and nobody else (Part 0 of the X-ray prompt)", () => {
+    const holders = (to: string) => Object.keys(ROLES).filter((r) => visibleGroups((...c) => c.some((x) => ROLES[r].includes(x))).some((g) => g.items.some((i) => i.to === to)));
+    expect(holders("/sales/bills")).toEqual(["sales"]);
+    expect(holders("/sales/work-orders")).toEqual(["sales"]);
+    expect(holders("/bills")).not.toContain("sales");
+    expect(groupOf("/sales/bills")).toBe("Sales");
   });
 
   it("finds the group of the page open", () => {

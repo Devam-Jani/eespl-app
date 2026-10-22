@@ -490,6 +490,7 @@ def main(argv: list[str] | None = None) -> None:
         help="comma-separated: products,vendors,clients,library,knowledge,methodology,sites",
     )
     p.add_argument("--dry-run", action="store_true")
+    sub.add_parser("demo-xray", help="DEMO: the X-ray 3D building from the sample drawing")
     p = sub.add_parser(
         "training-guides", help="The training PDF per role from the help texts and DEMO screenshots"
     )
@@ -614,6 +615,13 @@ def main(argv: list[str] | None = None) -> None:
         print(
             f"{'DRY RUN: ' if out['dry_run'] else ''}added {out['added']}, left out {out['left_out']}"  # noqa: E501
         )
+    elif args.command == "demo-xray":
+        import json  # noqa: PLC0415
+
+        from app.building import demo as xray_demo  # noqa: PLC0415
+
+        with SessionLocal() as db:
+            print(json.dumps(xray_demo.run(db), indent=1, default=str))
     elif args.command == "training-guides":
         from app.ops import training_guide  # noqa: PLC0415
 

@@ -64,15 +64,10 @@ def next_code(db: Session, kind: str, on: date | None = None) -> str:
     """IND-2026-0001, RFQ-, GRN-, TO-, ISS-, FR- by calendar year; PO-2026-27-000001 by
     financial year. One atomic statement, so two users never get the same number."""
     on = on or date.today()
+    from app.numbering import next_value  # noqa: PLC0415
+
     period = financial_year(on) if kind == "PO" else str(on.year)
-    value = db.execute(
-        text(
-            "INSERT INTO doc_sequences (kind, period, last_value) VALUES (:k, :p, 1) "
-            "ON CONFLICT (kind, period) DO UPDATE SET last_value = doc_sequences.last_value + 1 "
-            "RETURNING last_value"
-        ),
-        {"k": kind, "p": period},
-    ).scalar_one()
+    value = next_value(db, kind, period)
     return f"PO-{period}-{value:06d}" if kind == "PO" else f"{kind}-{period}-{value:04d}"
 
 

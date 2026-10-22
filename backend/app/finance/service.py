@@ -21,7 +21,7 @@ from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth.deps import Principal
@@ -85,15 +85,9 @@ def fy_short(on: date) -> str:
 
 def next_number(db: Session, prefix: str, on: date, kind: str | None = None) -> str:
     """PREFIX/26-27/0001, per financial year, never reused (one atomic statement)."""
-    period = material.financial_year(on)
-    value = db.execute(
-        text(
-            "INSERT INTO doc_sequences (kind, period, last_value) VALUES (:k, :p, 1) "
-            "ON CONFLICT (kind, period) DO UPDATE SET last_value = doc_sequences.last_value + 1 "
-            "RETURNING last_value"
-        ),
-        {"k": kind or prefix[:10], "p": period},
-    ).scalar_one()
+    from app.numbering import next_value  # noqa: PLC0415
+
+    value = next_value(db, kind or prefix[:10], material.financial_year(on))
     return f"{prefix}/{fy_short(on)}/{value:04d}"
 
 

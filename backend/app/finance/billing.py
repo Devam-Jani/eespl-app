@@ -526,6 +526,10 @@ def create_ra(
         select(RaBill.id).where(RaBill.contract_id == c.id, RaBill.status.in_(("draft",)))
     ):
         raise svc.conflict("Finish (submit or cancel) the draft RA bill first")
+    # the contract row locked: a second request waits here, then sees this draft (409)
+    db.execute(select(ClientContract.id).where(ClientContract.id == c.id).with_for_update())
+    if db.scalar(select(RaBill.id).where(RaBill.contract_id == c.id, RaBill.status == "draft")):
+        raise svc.conflict("Finish (submit or cancel) the draft RA bill first")
     seq = (db.scalar(select(func.max(RaBill.seq)).where(RaBill.contract_id == c.id)) or 0) + 1
     site = db.get(Site, c.site_id)
     b = RaBill(

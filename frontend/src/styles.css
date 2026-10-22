@@ -4780,3 +4780,274 @@ label.check {
 .link-notice {
   word-break: break-all;
 }
+
+/* --- the X-ray building (xray/XrayView.tsx) --------------------------------------------------- */
+.card-xray {
+  padding: 0.75rem;
+}
+.xray {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.xray-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+}
+.xray-seg {
+  display: inline-flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+.xray-seg .btn.active,
+.builder-row .btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.xray-floor {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.85rem;
+}
+.xray-actions {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+.xray-stage {
+  position: relative;
+  height: 68vh;
+  min-height: 420px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #03070d;
+  touch-action: none;
+}
+.xray-status .xray-stage {
+  background: #f3f5f6;
+}
+.xray-real .xray-stage {
+  background: #dfe8ef;
+}
+.xray-stage canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+}
+.xray-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  font-size: 0.72rem;
+  line-height: 1.15;
+  text-align: center;
+  color: #e9f6ff;
+  text-shadow: 0 0 4px #000, 0 0 2px #000;
+  white-space: nowrap;
+}
+.xray-status .xray-label,
+.xray-real .xray-label {
+  color: #1c2b28;
+  text-shadow: 0 0 3px #fff, 0 0 2px #fff;
+}
+.xray-label small {
+  display: block;
+  opacity: 0.8;
+}
+.xray-tip {
+  position: absolute;
+  pointer-events: none;
+  max-width: 260px;
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  background: rgba(8, 18, 28, 0.92);
+  color: #e9f6ff;
+  border: 1px solid rgba(95, 184, 255, 0.45);
+}
+.xray-tip .muted {
+  color: #a8c3d6;
+}
+.xray-legend {
+  position: absolute;
+  left: 0.6rem;
+  bottom: 0.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.8rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  background: rgba(8, 18, 28, 0.72);
+  color: #e9f6ff;
+  max-width: calc(100% - 1.2rem);
+}
+.xray-status .xray-legend,
+.xray-real .xray-legend {
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--text);
+}
+.xray-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.xray-legend i {
+  display: inline-block;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 2px;
+}
+.xray-time {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.xray-time input[type="range"] {
+  flex: 1;
+}
+.xray-date {
+  min-width: 7.5rem;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.xray-note {
+  margin: 0;
+}
+.xray-compact .xray-stage {
+  height: 180px;
+  min-height: 180px;
+}
+.schematic-note {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+/* the director's dashboard: a small live tile per active site */
+.xray-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
+}
+.xray-tile {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.xray-tile img {
+  width: 100%;
+  height: 170px;
+  object-fit: cover;
+  display: block;
+  background: #03070d;
+}
+.xray-tile div {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+/* --- building the model (xray/Builder.tsx) ------------------------------------------------------ */
+.builder-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.builder-side {
+  max-height: 82vh;
+  overflow: auto;
+}
+.builder-type {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 0.45rem 0.6rem;
+  margin-bottom: 0.35rem;
+  cursor: pointer;
+}
+.builder-type.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.builder-type span {
+  display: block;
+  color: var(--muted);
+}
+.builder-steps {
+  margin: 0.6rem 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.builder-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+.builder-row > b {
+  min-width: 5.5rem;
+}
+.builder-settings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem 0.6rem;
+  margin-bottom: 0.8rem;
+}
+.builder-canvas {
+  height: 78vh;
+}
+@media (max-width: 760px) {
+  .split-3d {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .xray-stage {
+    height: 62vh;
+    min-height: 300px;
+  }
+  .xray-actions {
+    margin-left: 0;
+  }
+  .xray-legend {
+    font-size: 0.68rem;
+    gap: 0.2rem 0.5rem;
+  }
+  .builder-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.xray-over {
+  position: absolute;
+  top: 0.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(520px, calc(100% - 1.2rem));
+  padding: 0.6rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--text);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+.xray-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
