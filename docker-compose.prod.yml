@@ -1,0 +1,225 @@
+# Production: the whole company on one server. Caddy in front (HTTPS with automatic certificates
+# for APP_DOMAIN, the security headers); only ports 80 and 443 are open. No Mailpit, no dev ports,
+# no bind-mounted code, no LAN HTTPS profile. The settings come from .env (made from
+# .env.prod.example with scripts/make-prod-secrets.py; never the dev .env).
+#
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+#   (a local trial: ENV_FILE=.env.prod.local and --env-file .env.prod.local)
+#
+# See docs/DEPLOY.md for the first deploy, updates, rollbacks and restores.
+name: eespl-prod
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-api-env: &api-env
+  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+  MAILPIT_HOST: ""  # no Mailpit here: staff email only when EMAIL_ENABLED is set
+  COOKIE_SECURE: "true"
+  BACKUP_ENABLED: "true"
+
+services:
+  db:
+    image: postgres:16
+    restart: always
+    logging: *logging
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/prod/initdb:/docker-entrypoint-initdb.d:ro  # the training company's database
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    restart: always
+    logging: *logging
+    env_file: ${ENV_FILE:-.env}
+    environment:
+      <<: *api-env
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 3 --proxy-headers --forwarded-allow-ips='*'"
+    volumes:
+      - media:/media
+      - ./data:/data:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4).status == 200 else 1)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 60s
+
+  worker:
+    build: ./backend
+    restart: always
+    logging: *logging
+    env_file: ${ENV_FILE:-.env}
+    environment:
+      <<: *api-env
+    command: python -m app.worker
+    volumes:
+      - media:/media
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:  # its heartbeat in the database, at most three minutes old
+      test: ["CMD", "python", "-m", "app.ops.check", "worker"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  # the training company: the same app on its own database (eespl_training), reset every night
+  # with the DEMO data and the real users' logins; reached at training.APP_DOMAIN
+  api-training:
+    build: ./backend
+    restart: always
+    logging: *logging
+    env_file: ${ENV_FILE:-.env}
+    environment:
+      <<: *api-env
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/eespl_training
+      TRAINING_MODE: "true"
+      BACKUP_ENABLED: "false"
+      EMAIL_ENABLED: "false"
+      KYLAS_ENABLED: "false"
+      MAIN_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    command: sh -c "alembic upgrade head && python -m app.cli training-reset --if-empty && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips='*'"
+    volumes:
+      - media-training:/media
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4).status == 200 else 1)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 120s
+
+  # the training company's worker: only its heartbeat and the nightly reset (03:30)
+  worker-training:
+    build: ./backend
+    restart: always
+    logging: *logging
+    env_file: ${ENV_FILE:-.env}
+    environment:
+      <<: *api-env
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/eespl_training
+      TRAINING_MODE: "true"
+      BACKUP_ENABLED: "false"
+      EMAIL_ENABLED: "false"
+      KYLAS_ENABLED: "false"
+      MAIN_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    command: python -m app.worker
+    volumes:
+      - media-training:/media
+    depends_on:
+      api-training:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.ops.check", "worker"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    restart: always
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/index.html"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # road distances for travel claims: our own OSRM, never a third-party routing service
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend:v5.27.1
+    restart: always
+    logging: *logging
+    command: osrm-routed --algorithm mld --max-table-size 200 /data/western-zone-latest.osrm
+    volumes:
+      - ./data/osrm:/data:ro
+    healthcheck:  # the routing port answers (no curl in the image)
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/5000' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  # nightly: pg_dump (custom format) and the media volume, encrypted, kept 14 daily / 8 weekly /
+  # 12 monthly, copied off-site when BACKUP_REMOTE is set
+  backup:
+    build:
+      context: ./backend
+      dockerfile: ../deploy/backup/Dockerfile
+    restart: always
+    logging: *logging
+    env_file: ${ENV_FILE:-.env}
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+    command: python3 /opt/backup/backup.py loop
+    volumes:
+      - media:/media:ro
+      - backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "/opt/backup/backup.py", "check"]
+      interval: 5m
+      timeout: 30s
+      retries: 2
+      start_period: 2m
+
+  caddy:
+    image: caddy:2.8
+    restart: always
+    logging: *logging
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+      TILE_HOST: ${TILE_HOST:-tile.openstreetmap.org}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/prod/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  pgdata:
+  media:
+  media-training:
+  backups:
+  caddy-data:
+  caddy-config:

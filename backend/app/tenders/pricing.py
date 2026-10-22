@@ -29,7 +29,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from sqlalchemy import select, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, lazyload
 
 from app.masters.conversions import ConversionError, Rule, convert_with
 from app.masters.models import CompanyProfile, System, UnitConversion
@@ -94,7 +94,9 @@ class Totals:
 
 
 def tender_totals(db: Session, tender: Tender) -> Totals:
-    lines = db.scalars(select(BoqLine).where(BoqLine.tender_id == tender.id)).all()
+    lines = db.scalars(
+        select(BoqLine).where(BoqLine.tender_id == tender.id).options(lazyload("*"))
+    ).all()
     profile = db.get(CompanyProfile, 1)
     gst_percent = profile.default_gst_percent if profile else Decimal(18)
     sections: dict[int | None, Decimal] = {}

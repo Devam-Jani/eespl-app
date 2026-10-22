@@ -46,13 +46,18 @@ def create_access_token(user_id: uuid.UUID) -> str:
 
 def decode_access_token(token: str) -> uuid.UUID:
     """Return the user id, or raise jwt.InvalidTokenError."""
+    return decode_access(token)[0]
+
+
+def decode_access(token: str) -> tuple[uuid.UUID, int]:
+    """The user id and when the token was issued (epoch seconds), or jwt.InvalidTokenError."""
     payload = jwt.decode(
         token, settings.jwt_secret, algorithms=[JWT_ALGORITHM], options={"require": ["exp", "sub"]}
     )
     if payload.get("type") != "access":
         raise jwt.InvalidTokenError("not an access token")
     try:
-        return uuid.UUID(payload["sub"])
+        return uuid.UUID(payload["sub"]), int(payload.get("iat") or 0)
     except ValueError as exc:
         raise jwt.InvalidTokenError("bad subject") from exc
 

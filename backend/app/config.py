@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5174"]
 
     jwt_secret: str = Field(min_length=32)
+    # encrypts two-step login secrets (the JWT secret's hash when not set, as in development)
+    data_key: SecretStr | None = None
     access_token_minutes: int = 15
     refresh_token_days: int = 7
     # Set to true when served over HTTPS so the refresh cookie is never sent in clear text.
@@ -27,9 +29,9 @@ class Settings(BaseSettings):
     kylas_api_key: SecretStr | None = None
     # demo users (seed-demo-team), read from .env and never printed
     demo_user_password: SecretStr | None = None
-    # the director (Ankur Sir): his user is made only when DIRECTOR_EMAIL is set in .env
+    # the director: their user is made only when DIRECTOR_EMAIL (and DIRECTOR_NAME) are set in .env
     director_email: str | None = None
-    director_name: str = "Ankur Shah"
+    director_name: str = "Director"
     # email to our staff only: Mailpit catches everything until go-live (EMAIL_ENABLED=true)
     email_enabled: bool = False
     smtp_host: str = ""
@@ -57,6 +59,17 @@ class Settings(BaseSettings):
     anthropic_timeout_seconds: float = 60
     # the address phones reach the app on (set at go-live): delivery receipt links and QR codes
     public_base_url: str = "http://localhost:5174"
+    # the nightly backup (its own container in production): the alert when a night is missed, and
+    # how many archives are kept (daily, weekly on Sundays, monthly on the 1st)
+    backup_enabled: bool = False
+    backup_keep_daily: int = 14
+    backup_keep_weekly: int = 8
+    backup_keep_monthly: int = 12
+    # the training company (a second api on its own database, reset every night): set on that api
+    training_mode: bool = False
+    # where users switch between the real app and the training one (set on the server)
+    training_url: str = ""
+    main_url: str = ""
 
 
 settings = Settings()

@@ -1,5 +1,5 @@
 """Rate working, labour piece rates, material in lots and handover dates (the director's review
-with Ankur Sir, 12 Oct): the master price list (source, unit, vendor, reference) and freight
+with the director, 12 Oct): the master price list (source, unit, vendor, reference) and freight
 history, the rate working sheet per BOQ (main items, their products and the client lines), labour
 rate cards and bills, the project plan and its lots, stage days per site, the handover dates per
 place, an area's finish date and a gang's hours per day.

@@ -57,6 +57,49 @@ def safe_name(name: str) -> str:
 CAD_TYPES = frozenset({".dwg", ".dxf"})
 
 
+# what each kind of file starts with: an upload whose content is not of its kind is refused
+def _is_text(data: bytes) -> bool:
+    try:
+        data[:4096].decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            data[:4096].decode("latin-1")
+        except UnicodeDecodeError:
+            return False
+    return b"\x00" not in data[:4096]
+
+
+SIGNATURES = {
+    ".jpg": lambda d: d[:2] == b"\xff\xd8",
+    ".jpeg": lambda d: d[:2] == b"\xff\xd8",
+    ".png": lambda d: d[:4] == b"\x89PNG",
+    ".gif": lambda d: d[:4] == b"GIF8",
+    ".webp": lambda d: d[:4] == b"RIFF" and d[8:12] == b"WEBP",
+    ".heic": lambda d: d[4:8] == b"ftyp",
+    ".heif": lambda d: d[4:8] == b"ftyp",
+    ".pdf": lambda d: b"%PDF" in d[:1024],
+    ".xlsx": lambda d: d[:4] == b"PK\x03\x04",
+    ".xlsm": lambda d: d[:4] == b"PK\x03\x04",
+    ".docx": lambda d: d[:4] == b"PK\x03\x04",
+    ".zip": lambda d: d[:4] == b"PK\x03\x04",
+    # old Excel, or an export saved as .xls text
+    ".xls": lambda d: d[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" or _is_text(d),
+    ".doc": lambda d: d[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1",
+    ".dwg": lambda d: d[:4] == b"AC10",
+    ".dxf": _is_text,
+    ".csv": _is_text,
+    ".txt": _is_text,
+}
+
+
+def check_content(name: str, data: bytes) -> None:
+    """The file is what its name says (a renamed program or page is refused)."""
+    ext = Path(name).suffix.lower()
+    check = SIGNATURES.get(ext)
+    if check is not None and data and not check(data):
+        raise unprocessable(f"The file's content is not a {ext} file")
+
+
 async def save_upload(
     file: UploadFile, folder: str, extra: frozenset[str] = frozenset()
 ) -> tuple[str, str]:
@@ -73,6 +116,7 @@ async def save_upload(
         raise unprocessable("The file is larger than 15 MB")
     if not data:
         raise unprocessable("The file is empty")
+    check_content(name, data)
     rel = str(Path(folder) / f"{uuid.uuid4().hex}__{name}")
     media(rel).parent.mkdir(parents=True, exist_ok=True)
     media(rel).write_bytes(data)

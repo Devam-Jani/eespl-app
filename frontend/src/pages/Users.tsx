@@ -36,6 +36,30 @@ export default function Users() {
     void load();
   }, [load]);
 
+  async function act(path: string, done: string) {
+    try {
+      await api(path, { method: "POST" });
+      setNotice(done);
+      void load();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : String(err));
+    }
+  }
+  async function passwordLink(u: { id: string; full_name: string }) {
+    try {
+      const r = await api<{ link: string; expires_in_days: number }>(
+        `/api/admin/users/${u.id}/password-link`,
+        { method: "POST" },
+      );
+      const url = window.location.origin + r.link;
+      void navigator.clipboard?.writeText(url);
+      setNotice(
+        `One-time link for ${u.full_name} (copied; works once, ${r.expires_in_days} days): ${url}`,
+      );
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : String(err));
+    }
+  }
   async function toggleActive(user: User) {
     setError(null);
     try {
@@ -69,7 +93,7 @@ export default function Users() {
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      {notice && <div className="alert alert-ok">{notice}</div>}
+      {notice && <div className="alert alert-ok link-notice">{notice}</div>}
 
       <div className="card table-wrap">
         <table className="table">
@@ -86,7 +110,7 @@ export default function Users() {
           </thead>
           <tbody>
             {shown.map((u) => {
-              const locked = u.locked_until && new Date(u.locked_until) > new Date();
+              const locked = u.locked_by_failures || (u.locked_until && new Date(u.locked_until) > new Date());
               return (
                 <tr key={u.id} className={u.is_active ? "" : "row-muted"}>
                   <td>{u.full_name}</td>
@@ -110,7 +134,11 @@ export default function Users() {
                     ) : !u.is_active ? (
                       <span className="badge badge-muted">Inactive</span>
                     ) : locked ? (
-                      <span className="badge badge-warn">Locked</span>
+                      <span className="badge badge-warn">
+                        {u.locked_by_failures
+                          ? "Locked: unlock"
+                          : "Locked 15 min"}
+                      </span>
                     ) : (
                       <span className="badge badge-ok">Active</span>
                     )}
@@ -123,6 +151,42 @@ export default function Users() {
                     <button className="btn btn-small" onClick={() => setDialog({ kind: "password", user: u })}>
                       Reset password
                     </button>
+                    <button
+                      className="btn btn-small"
+                      onClick={() => void passwordLink(u)}
+                      title="A one-time link for the person to set their own password"
+                    >
+                      Set-password link
+                    </button>
+                    {locked && (
+                      <button
+                        className="btn btn-small"
+                        onClick={() =>
+                          void act(
+                            `/api/admin/users/${u.id}/unlock`,
+                            `${u.full_name} unlocked`,
+                          )
+                        }
+                      >
+                        Unlock
+                      </button>
+                    )}
+                    {u.totp_enabled_at && (
+                      <button
+                        className="btn btn-small"
+                        onClick={() =>
+                          confirm(
+                            `Turn two-step sign-in off for ${u.full_name} (a lost phone)?`,
+                          ) &&
+                          void act(
+                            `/api/admin/users/${u.id}/two-step-reset`,
+                            `Two-step sign-in reset for ${u.full_name}`,
+                          )
+                        }
+                      >
+                        Reset two-step
+                      </button>
+                    )}
                     {u.id !== me?.user.id && (
                       <button className="btn btn-small" onClick={() => void toggleActive(u)}>
                         {u.is_active ? "Deactivate" : "Activate"}

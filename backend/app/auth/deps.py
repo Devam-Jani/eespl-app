@@ -8,7 +8,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 
 from app.auth.rbac import effective_permissions, widest
-from app.auth.security import decode_access_token
+from app.auth.security import decode_access
 from app.db import DbSession
 from app.models import User
 
@@ -45,12 +45,15 @@ def get_principal(
     if credentials is None:
         raise _unauthorized()
     try:
-        user_id = decode_access_token(credentials.credentials)
+        user_id, issued = decode_access(credentials.credentials)
     except jwt.InvalidTokenError as exc:
         raise _unauthorized("Invalid or expired token") from exc
     user = db.get(User, user_id)
     if user is None or not user.is_active:
         raise _unauthorized("Invalid or expired token")
+    # a password change ends every session, including the access tokens already handed out
+    if user.password_changed_at is not None and issued < int(user.password_changed_at.timestamp()):
+        raise _unauthorized("Your password was changed: sign in again")
     # Permissions are read from the database on every request, so role changes apply at once.
     permissions = effective_permissions(user.roles)
     # what the director allowed this person on top of their roles (costs, deciding won jobs)

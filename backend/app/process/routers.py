@@ -464,7 +464,7 @@ def put_settings(
     body: SettingsIn, request: Request, db: DbSession, principal: CurrentPrincipal, _: RulesEdit
 ) -> dict:
     """The default user per role, the wastage per application and the stage-bill limit (days),
-    so Mr. Sunil can change them."""
+    so the planning head can change them."""
     engine.ensure_rules(db)
     s = engine.settings(db)
     before = _settings_out(db)

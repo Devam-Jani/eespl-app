@@ -4,10 +4,19 @@ import { useNavigate } from "react-router-dom";
 import { api, refreshAccessToken, setAccessToken, setSessionLostHandler } from "./api";
 import type { Me } from "./types";
 
+/** The password was right; the second step: a code from the authenticator app, or setting it up (QR). */
+export type TwoStep = {
+  two_step: "code" | "enroll";
+  ticket: string;
+  secret?: string;
+  qr?: string;
+};
+
 type AuthState = {
   me: Me | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<TwoStep | null>;
+  finishTwoStep: (ticket: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
   /** True if the user holds any of the given permissions. */
   can: (...codes: string[]) => boolean;
@@ -48,11 +57,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const tokens = await api<{ access_token: string }>("/api/auth/login", {
-      method: "POST",
-      json: { email, password },
-    });
+  const login = useCallback(
+    async (email: string, password: string): Promise<TwoStep | null> => {
+      const out = await api<{ access_token?: string } & Partial<TwoStep>>(
+        "/api/auth/login",
+        {
+          method: "POST",
+          json: { email, password },
+        },
+      );
+      if (out.two_step && out.ticket) return out as TwoStep; // the code from the authenticator app comes next
+      setAccessToken(out.access_token ?? null);
+      setMe(await api<Me>("/api/auth/me"));
+      return null;
+    },
+    [],
+  );
+
+  const finishTwoStep = useCallback(async (ticket: string, code: string) => {
+    const tokens = await api<{ access_token: string }>(
+      "/api/auth/login/two-step",
+      { method: "POST", json: { ticket, code } },
+    );
     setAccessToken(tokens.access_token);
     setMe(await api<Me>("/api/auth/me"));
   }, []);
@@ -72,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [me],
   );
 
-  const value = useMemo(() => ({ me, loading, login, logout, can }), [me, loading, login, logout, can]);
+  const value = useMemo(() => ({ me, loading, login, finishTwoStep, logout, can }), [me, loading, login, finishTwoStep, logout, can]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

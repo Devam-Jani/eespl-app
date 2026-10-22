@@ -1,0 +1,880 @@
+[
+ {
+  "to": "/my-work",
+  "label": "My work",
+  "section": "My work",
+  "perms": [
+   "dashboard.view",
+   "site.view",
+   "leads.view",
+   "tender.view",
+   "billing.view",
+   "payables.view",
+   "po.view",
+   "admin.users",
+   "store.view",
+   "delivery.view"
+  ]
+ },
+ {
+  "to": "/notifications",
+  "label": "Notifications",
+  "section": "My work",
+  "perms": [
+   "dashboard.view",
+   "site.view",
+   "leads.view",
+   "tender.view",
+   "billing.view",
+   "payables.view",
+   "po.view",
+   "admin.users",
+   "store.view",
+   "delivery.view"
+  ]
+ },
+ {
+  "to": "/dashboard",
+  "label": "Dashboard",
+  "section": "My work",
+  "perms": [
+   "dashboard.company",
+   "dashboard.sales",
+   "dashboard.site",
+   "dashboard.finance",
+   "dashboard.purchase"
+  ]
+ },
+ {
+  "to": "/alerts",
+  "label": "Alerts",
+  "section": "My work",
+  "perms": [
+   "dashboard.company",
+   "dashboard.sales",
+   "dashboard.site",
+   "dashboard.finance",
+   "dashboard.purchase"
+  ]
+ },
+ {
+  "to": "/field",
+  "label": "My day (check-in)",
+  "section": "My work",
+  "perms": [
+   "field.track"
+  ]
+ },
+ {
+  "to": "/field/claims",
+  "label": "Travel claims",
+  "section": "My work",
+  "perms": [
+   "field.track",
+   "field.claims"
+  ]
+ },
+ {
+  "to": "/field/gangs",
+  "label": "Gang check-in",
+  "section": "My work",
+  "perms": [
+   "field.gang"
+  ]
+ },
+ {
+  "to": "/petty-cash",
+  "label": "Petty cash",
+  "section": "My work",
+  "perms": [
+   "expense.create",
+   "expense.approve"
+  ]
+ },
+ {
+  "to": "/escalated",
+  "label": "Escalated (all sites)",
+  "section": "My work",
+  "perms": [
+   "process.escalations",
+   "process.rules"
+  ]
+ },
+ {
+  "to": "/my-notifications",
+  "label": "My notifications",
+  "section": "My work",
+  "perms": [
+   "dashboard.view",
+   "site.view",
+   "leads.view",
+   "tender.view",
+   "billing.view",
+   "payables.view",
+   "po.view",
+   "admin.users",
+   "store.view",
+   "delivery.view"
+  ]
+ },
+ {
+  "to": "/account",
+  "label": "My account",
+  "section": "My work",
+  "perms": [
+   "dashboard.view",
+   "site.view",
+   "leads.view",
+   "tender.view",
+   "billing.view",
+   "payables.view",
+   "po.view",
+   "admin.users",
+   "store.view",
+   "delivery.view"
+  ]
+ },
+ {
+  "to": "/leads",
+  "label": "Leads",
+  "section": "Sales",
+  "perms": [
+   "leads.edit"
+  ]
+ },
+ {
+  "to": "/quotations",
+  "label": "Quotations",
+  "section": "Sales",
+  "perms": [
+   "quotation.edit"
+  ]
+ },
+ {
+  "to": "/tenders",
+  "label": "Tenders",
+  "section": "Sales",
+  "perms": [
+   "tender.edit"
+  ]
+ },
+ {
+  "to": "/scorecard",
+  "label": "Closure scorecard",
+  "section": "Sales",
+  "perms": [
+   "scorecard.view"
+  ],
+  "all": [
+   "leads.edit"
+  ]
+ },
+ {
+  "to": "/enquiries",
+  "label": "Enquiries to allocate",
+  "section": "Planning",
+  "perms": [
+   "leads.allocate"
+  ]
+ },
+ {
+  "to": "/planning/board",
+  "label": "Site status board",
+  "section": "Planning",
+  "perms": [
+   "planning.view"
+  ]
+ },
+ {
+  "to": "/new-areas",
+  "label": "New areas (planning)",
+  "section": "Planning",
+  "perms": [
+   "sitearea.approve"
+  ]
+ },
+ {
+  "to": "/sites",
+  "label": "Sites",
+  "section": "Site",
+  "perms": [
+   "site.update",
+   "closeout.billing",
+   "closeout.site",
+   "planning.view"
+  ],
+  "all": [
+   "site.view"
+  ]
+ },
+ {
+  "to": "/surveys",
+  "label": "Site surveys",
+  "section": "Site",
+  "perms": [
+   "survey.edit"
+  ]
+ },
+ {
+  "to": "/daily-reports",
+  "label": "Daily reports",
+  "section": "Site",
+  "perms": [
+   "dpr.edit",
+   "dpr.approve"
+  ]
+ },
+ {
+  "to": "/attendance",
+  "label": "Attendance",
+  "section": "Site",
+  "perms": [
+   "attendance.manage"
+  ],
+  "all": [
+   "site.update"
+  ]
+ },
+ {
+  "to": "/labour",
+  "label": "Labour",
+  "section": "Site",
+  "perms": [
+   "labour.edit"
+  ]
+ },
+ {
+  "to": "/deliveries",
+  "label": "Deliveries at site",
+  "section": "Site",
+  "perms": [
+   "delivery.confirm"
+  ]
+ },
+ {
+  "to": "/snags",
+  "label": "Snags",
+  "section": "Site",
+  "perms": [
+   "site.update",
+   "closeout.site"
+  ],
+  "all": [
+   "site.view"
+  ]
+ },
+ {
+  "to": "/issues",
+  "label": "Issue log",
+  "section": "Site",
+  "perms": [
+   "site.update",
+   "closeout.site",
+   "closeout.billing",
+   "planning.view"
+  ],
+  "all": [
+   "issues.view"
+  ]
+ },
+ {
+  "to": "/field/team",
+  "label": "Team map",
+  "section": "Site",
+  "perms": [
+   "field.team"
+  ]
+ },
+ {
+  "to": "/measurements",
+  "label": "Measurement book",
+  "section": "Billing",
+  "perms": [
+   "closeout.billing"
+  ]
+ },
+ {
+  "to": "/bills",
+  "label": "Bills",
+  "section": "Billing",
+  "perms": [
+   "billing.edit",
+   "closeout.billing",
+   "closeout.payments"
+  ]
+ },
+ {
+  "to": "/billing",
+  "label": "Client billing",
+  "section": "Billing",
+  "perms": [
+   "billing.edit"
+  ]
+ },
+ {
+  "to": "/ready-to-bill",
+  "label": "Ready to bill",
+  "section": "Billing",
+  "perms": [
+   "billing.edit"
+  ],
+  "all": [
+   "closeout.billing"
+  ]
+ },
+ {
+  "to": "/billing/checklist",
+  "label": "Billing checklist",
+  "section": "Billing",
+  "perms": [
+   "closeout.billing"
+  ]
+ },
+ {
+  "to": "/work-orders",
+  "label": "Client work orders",
+  "section": "Billing",
+  "perms": [
+   "wo.view"
+  ]
+ },
+ {
+  "to": "/guarantees",
+  "label": "Guarantee register",
+  "section": "Billing",
+  "perms": [
+   "closeout.billing"
+  ]
+ },
+ {
+  "to": "/labour-check",
+  "label": "Labour bill check",
+  "section": "Billing",
+  "perms": [
+   "labourcheck.check"
+  ]
+ },
+ {
+  "to": "/labour-rates",
+  "label": "Labour rates and bills",
+  "section": "Billing",
+  "perms": [
+   "subcon.view"
+  ],
+  "all": [
+   "billing.edit"
+  ]
+ },
+ {
+  "to": "/indents",
+  "label": "Indents",
+  "section": "Stores",
+  "perms": [
+   "indent.approve",
+   "po.edit"
+  ]
+ },
+ {
+  "to": "/rfqs",
+  "label": "RFQs",
+  "section": "Stores",
+  "perms": [
+   "po.edit"
+  ]
+ },
+ {
+  "to": "/purchase-orders",
+  "label": "Purchase orders",
+  "section": "Stores",
+  "perms": [
+   "po.edit"
+  ]
+ },
+ {
+  "to": "/grns",
+  "label": "Goods receipts (GRN)",
+  "section": "Stores",
+  "perms": [
+   "grn.approve"
+  ]
+ },
+ {
+  "to": "/stores",
+  "label": "Stores & stock",
+  "section": "Stores",
+  "perms": [
+   "grn.approve"
+  ]
+ },
+ {
+  "to": "/transfers",
+  "label": "Transfers",
+  "section": "Stores",
+  "perms": [
+   "grn.approve"
+  ]
+ },
+ {
+  "to": "/freight",
+  "label": "Site freight",
+  "section": "Stores",
+  "perms": [
+   "po.edit"
+  ]
+ },
+ {
+  "to": "/rate-contracts",
+  "label": "Rate contracts",
+  "section": "Stores",
+  "perms": [
+   "ratecontract.edit"
+  ]
+ },
+ {
+  "to": "/assets",
+  "label": "Tools & equipment",
+  "section": "Stores",
+  "perms": [
+   "asset.edit"
+  ]
+ },
+ {
+  "to": "/billing/payments",
+  "label": "Payment follow-up",
+  "section": "Accounts",
+  "perms": [
+   "closeout.payments"
+  ],
+  "all": [
+   "finance.view"
+  ]
+ },
+ {
+  "to": "/payables",
+  "label": "Payables",
+  "section": "Accounts",
+  "perms": [
+   "payables.edit"
+  ]
+ },
+ {
+  "to": "/payroll",
+  "label": "Payroll & wages",
+  "section": "Accounts",
+  "perms": [
+   "payroll.edit"
+  ]
+ },
+ {
+  "to": "/site-profit",
+  "label": "Site profit",
+  "section": "Accounts",
+  "perms": [
+   "tender.margin"
+  ],
+  "all": [
+   "finance.view"
+  ]
+ },
+ {
+  "to": "/tally",
+  "label": "Tally export",
+  "section": "Accounts",
+  "perms": [
+   "finance.export"
+  ]
+ },
+ {
+  "to": "/analytics/sites",
+  "label": "Sites",
+  "section": "Analytics",
+  "perms": [
+   "dashboard.company",
+   "planning.view"
+  ]
+ },
+ {
+  "to": "/analytics/finance",
+  "label": "Finance",
+  "section": "Analytics",
+  "perms": [
+   "dashboard.company",
+   "dashboard.finance"
+  ]
+ },
+ {
+  "to": "/analytics/profitability",
+  "label": "Profitability",
+  "section": "Analytics",
+  "perms": [
+   "dashboard.company",
+   "dashboard.finance"
+  ],
+  "all": [
+   "tender.margin"
+  ]
+ },
+ {
+  "to": "/analytics/purchase",
+  "label": "Purchase",
+  "section": "Analytics",
+  "perms": [
+   "dashboard.company",
+   "dashboard.purchase"
+  ]
+ },
+ {
+  "to": "/analytics/labour",
+  "label": "Labour",
+  "section": "Analytics",
+  "perms": [
+   "dashboard.company",
+   "planning.view"
+  ]
+ },
+ {
+  "to": "/analytics/strategy",
+  "label": "Strategy: win more sites",
+  "section": "Analytics",
+  "perms": [
+   "dashboard.company"
+  ]
+ },
+ {
+  "to": "/reports/productivity",
+  "label": "Labour productivity",
+  "section": "Analytics",
+  "perms": [
+   "dashboard.company",
+   "planning.view"
+  ]
+ },
+ {
+  "to": "/consumption",
+  "label": "Consumption variance",
+  "section": "Analytics",
+  "perms": [
+   "dashboard.company",
+   "planning.view"
+  ]
+ },
+ {
+  "to": "/reports",
+  "label": "Reports",
+  "section": "Analytics",
+  "perms": [
+   "dashboard.company"
+  ]
+ },
+ {
+  "to": "/clients",
+  "label": "Clients",
+  "section": "Masters",
+  "perms": [
+   "clients.edit"
+  ]
+ },
+ {
+  "to": "/channels",
+  "label": "Channels",
+  "section": "Masters",
+  "perms": [
+   "clients.edit"
+  ],
+  "all": [
+   "leads.allocate"
+  ]
+ },
+ {
+  "to": "/products",
+  "label": "Products",
+  "section": "Masters",
+  "perms": [
+   "library.edit"
+  ]
+ },
+ {
+  "to": "/systems",
+  "label": "Systems (rate calculator)",
+  "section": "Masters",
+  "perms": [
+   "library.edit"
+  ]
+ },
+ {
+  "to": "/rate-library",
+  "label": "Rate library",
+  "section": "Masters",
+  "perms": [
+   "library.edit"
+  ]
+ },
+ {
+  "to": "/knowledge",
+  "label": "BOQ knowledge",
+  "section": "Masters",
+  "perms": [
+   "knowledge.edit"
+  ]
+ },
+ {
+  "to": "/methodology",
+  "label": "Methodology builder",
+  "section": "Masters",
+  "perms": [
+   "methodology.edit"
+  ]
+ },
+ {
+  "to": "/tc-library",
+  "label": "T&C library",
+  "section": "Masters",
+  "perms": [
+   "library.edit"
+  ]
+ },
+ {
+  "to": "/vendors",
+  "label": "Vendors",
+  "section": "Masters",
+  "perms": [
+   "vendors.edit"
+  ]
+ },
+ {
+  "to": "/subcontractors",
+  "label": "Subcontractors",
+  "section": "Masters",
+  "perms": [
+   "subcon.edit"
+  ]
+ },
+ {
+  "to": "/settings/company",
+  "label": "Company profile",
+  "section": "Settings",
+  "perms": [
+   "settings.company"
+  ]
+ },
+ {
+  "to": "/settings/gstins",
+  "label": "GSTIN addresses",
+  "section": "Settings",
+  "perms": [
+   "settings.company"
+  ]
+ },
+ {
+  "to": "/settings/bank-accounts",
+  "label": "Bank accounts",
+  "section": "Settings",
+  "perms": [
+   "settings.company"
+  ]
+ },
+ {
+  "to": "/settings/categories",
+  "label": "Categories",
+  "section": "Settings",
+  "perms": [
+   "library.edit"
+  ],
+  "all": [
+   "settings.company"
+  ]
+ },
+ {
+  "to": "/settings/tags",
+  "label": "Tags",
+  "section": "Settings",
+  "perms": [
+   "library.edit"
+  ],
+  "all": [
+   "settings.company"
+  ]
+ },
+ {
+  "to": "/settings/units",
+  "label": "Units & conversions",
+  "section": "Settings",
+  "perms": [
+   "library.edit"
+  ],
+  "all": [
+   "settings.company"
+  ]
+ },
+ {
+  "to": "/settings/kylas",
+  "label": "Integrations: Kylas",
+  "section": "Settings",
+  "perms": [
+   "admin.settings"
+  ]
+ },
+ {
+  "to": "/settings/purchase",
+  "label": "Purchase",
+  "section": "Settings",
+  "perms": [
+   "process.rules"
+  ]
+ },
+ {
+  "to": "/settings/stage-templates",
+  "label": "Stage templates",
+  "section": "Settings",
+  "perms": [
+   "planning.edit",
+   "process.rules"
+  ]
+ },
+ {
+  "to": "/settings/checklists",
+  "label": "Checklist templates",
+  "section": "Settings",
+  "perms": [
+   "planning.edit",
+   "process.rules"
+  ]
+ },
+ {
+  "to": "/settings/quotation-library",
+  "label": "Quotation library",
+  "section": "Settings",
+  "perms": [
+   "quotation.view"
+  ],
+  "all": [
+   "quotation.template.edit"
+  ]
+ },
+ {
+  "to": "/settings/site-control",
+  "label": "Site control",
+  "section": "Settings",
+  "perms": [
+   "process.rules"
+  ]
+ },
+ {
+  "to": "/settings/survey",
+  "label": "Site survey",
+  "section": "Settings",
+  "perms": [
+   "survey.view"
+  ],
+  "all": [
+   "settings.company"
+  ]
+ },
+ {
+  "to": "/settings/finance",
+  "label": "Finance",
+  "section": "Settings",
+  "perms": [
+   "finance.edit"
+  ]
+ },
+ {
+  "to": "/settings/client-roles",
+  "label": "Client roles",
+  "section": "Settings",
+  "perms": [
+   "portal.roles"
+  ]
+ },
+ {
+  "to": "/settings/team",
+  "label": "Team",
+  "section": "Settings",
+  "perms": [
+   "planning.edit",
+   "grants.manage",
+   "process.rules"
+  ]
+ },
+ {
+  "to": "/settings/process",
+  "label": "Process rules",
+  "section": "Settings",
+  "perms": [
+   "process.rules"
+  ]
+ },
+ {
+  "to": "/settings/field",
+  "label": "Field tracking",
+  "section": "Settings",
+  "perms": [
+   "field.admin"
+  ]
+ },
+ {
+  "to": "/admin/users",
+  "label": "Users",
+  "section": "Administration",
+  "perms": [
+   "admin.users"
+  ]
+ },
+ {
+  "to": "/admin/roles",
+  "label": "Roles & permissions",
+  "section": "Administration",
+  "perms": [
+   "admin.roles"
+  ]
+ },
+ {
+  "to": "/admin/audit",
+  "label": "Audit log",
+  "section": "Administration",
+  "perms": [
+   "audit.view"
+  ]
+ },
+ {
+  "to": "/admin/user-import",
+  "label": "User import",
+  "section": "Administration",
+  "perms": [
+   "admin.users"
+  ]
+ },
+ {
+  "to": "/admin/backups",
+  "label": "Backups and storage",
+  "section": "Administration",
+  "perms": [
+   "system.ops"
+  ]
+ },
+ {
+  "to": "/settings/security",
+  "label": "Security",
+  "section": "Administration",
+  "perms": [
+   "admin.users",
+   "system.ops"
+  ]
+ },
+ {
+  "to": "/settings/roles-report",
+  "label": "Who sees what (roles)",
+  "section": "Administration",
+  "perms": [
+   "system.ops"
+  ]
+ },
+ {
+  "to": "/settings/help",
+  "label": "Help texts",
+  "section": "Administration",
+  "perms": [
+   "help.edit"
+  ]
+ }
+]

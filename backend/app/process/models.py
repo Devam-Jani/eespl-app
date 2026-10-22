@@ -95,7 +95,7 @@ class ProcessSettings(Base):
     __tablename__ = "process_settings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    # role -> the user told when a site has nobody in that role (planning: Mr. Sunil's user)
+    # role -> the user told when a site has nobody in that role (planning: the planning head's user)
     default_users: Mapped[dict[str, str]] = mapped_column(JSONB, server_default="{}")
     # application -> {min, max} wastage percent (raft 5-7, footing 12-15); planning uses max
     wastage: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")

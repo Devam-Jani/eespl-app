@@ -444,11 +444,13 @@ def test_a_bad_or_too_new_file_gives_a_plain_message_and_a_slow_converter_is_sto
         dwg.version(b"AC1035")
     assert dwg.version(b"AC1032").name == "AutoCAD 2018"
     c, h = boss
-    _d, rev = upload(
-        c, h, place["site"], b"this is not a drawing at all", name="broken.dwg", title="Broken"
+    r = c.post(
+        f"/api/sites/{place['site']}/drawings",
+        data={"title": "Broken", "discipline": "architectural"},
+        files={"file": ("broken.dwg", b"this is not a drawing at all", "application/octet-stream")},
+        headers=h,
     )
-    f = read(c, h, rev)
-    assert f["status"] == "failed" and "not an AutoCAD drawing" in f["error"]
+    assert r.status_code == 422 and "not a .dwg file" in r.json()["detail"]  # refused at upload
     _d, rev = upload(c, h, place["site"], b"AC1035" + b"\0" * 200, name="new.dwg", title="Too new")
     f = read(c, h, rev)
     assert f["status"] == "failed" and "save it as AutoCAD 2018" in f["error"]

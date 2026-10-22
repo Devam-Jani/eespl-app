@@ -33,7 +33,7 @@ from app import audit
 from app.auth.deps import CurrentPrincipal, require_permission
 from app.config import settings
 from app.db import DbSession
-from app.execution.common import save_upload, send_file
+from app.execution.common import check_content, save_upload, send_file
 from app.export import EXPORT_ROW_LIMIT, xlsx_response
 from app.masters.models import Category, Channel, Client, System
 from app.masters.routers.common import Limit, Offset, Search, like, paginate, unprocessable
@@ -1327,6 +1327,7 @@ async def add_photo(
     if Path(name).suffix.lower() not in PHOTO_TYPES:
         raise unprocessable("Upload a photo (.jpg, .png, .webp or .heic)")
     data = await file.read(PHOTO_MAX + 1)
+    check_content(name, data)
     if len(data) > PHOTO_MAX:
         raise unprocessable("The photo is larger than 15 MB")
     rel = Path("sites") / str(site.id) / "tasks" / str(task.id) / f"{uuid.uuid4().hex}__{name}"
@@ -1431,6 +1432,7 @@ async def _store_revision(
     if Path(name).suffix.lower() not in DRAWING_TYPES:
         raise unprocessable("Upload a drawing as PDF, PNG, JPG, DWG or DXF")
     data = await file.read(DRAWING_MAX + 1)
+    check_content(name, data)
     if len(data) > DRAWING_MAX:
         raise unprocessable("The drawing is larger than 50 MB")
     rel = Path("sites") / str(site.id) / "drawings" / str(drawing.id) / f"R{rev_no}__{name}"

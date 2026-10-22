@@ -30,6 +30,7 @@ from app import audit
 from app.auth.deps import CurrentPrincipal, Principal, require_permission
 from app.config import settings
 from app.db import DbSession
+from app.execution.common import check_content
 from app.export import EXPORT_ROW_LIMIT, xlsx_response
 from app.masters.models import Channel, Client, LibraryItem, System, TcClause, TcTemplate
 from app.masters.rate import MissingPriceError, system_rate
@@ -1183,6 +1184,7 @@ async def upload_boq(
     if Path(name).suffix.lower() not in UPLOAD_TYPES:
         raise unprocessable("Upload an .xlsx, .xls, .csv or .pdf file")
     data = await file.read(UPLOAD_MAX_BYTES + 1)
+    check_content(name, data)
     if len(data) > UPLOAD_MAX_BYTES:
         raise unprocessable("The file is larger than 20 MB")
     folder = _upload_dir(tender)

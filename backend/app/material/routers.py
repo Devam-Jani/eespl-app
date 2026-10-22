@@ -37,6 +37,7 @@ from app.auth.deps import CurrentPrincipal, Principal, require_any_permission, r
 from app.auth.rbac import widest
 from app.config import settings
 from app.db import DbSession
+from app.execution.common import check_content
 from app.masters.models import (
     CompanyGstin,
     CompanyProfile,
@@ -2093,6 +2094,7 @@ async def add_grn_photo(
     if Path(name).suffix.lower() not in PHOTO_TYPES:
         raise unprocessable("Upload a photo (.jpg, .png, .webp, .heic) or a PDF")
     data = await file.read(PHOTO_MAX + 1)
+    check_content(name, data)
     if len(data) > PHOTO_MAX:
         raise unprocessable("The file is larger than 15 MB")
     rel = Path("grns") / str(g.id) / f"{uuid.uuid4().hex}__{name}"

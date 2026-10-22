@@ -77,7 +77,7 @@ def create_admin(email: str, name: str, phone: str | None) -> None:
 
 
 def create_director() -> None:
-    """Ankur Sir's user with the director role, only when DIRECTOR_EMAIL is set in .env. It can
+    """The director's user (the director role), only when DIRECTOR_EMAIL is set in .env. It can
     log in once a password is set (python -m app.cli set-password <email>)."""
     from app.config import settings  # noqa: PLC0415
 
@@ -475,6 +475,31 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser(
         "demo-methodology", help="DEMO: the Godrej Phase-11 methodology (built, checked, exported)"
     )
+    p = sub.add_parser(
+        "go-live", help="A clean production database: made, migrated with the seed, no DEMO rows"
+    )
+    p.add_argument("--database", required=True)
+    p = sub.add_parser(
+        "carry-over",
+        help="Our real data (masters, libraries, active sites) from the development database, no DEMO rows",  # noqa: E501
+    )
+    p.add_argument("--from", dest="source", required=True, help="the development database's URL")
+    p.add_argument(
+        "--only",
+        default=None,
+        help="comma-separated: products,vendors,clients,library,knowledge,methodology,sites",
+    )
+    p.add_argument("--dry-run", action="store_true")
+    p = sub.add_parser(
+        "training-guides", help="The training PDF per role from the help texts and DEMO screenshots"
+    )
+    p.add_argument("--screens", default="/data/training/screens")
+    p.add_argument("--out", required=True)
+    p = sub.add_parser(
+        "training-reset",
+        help="Rebuild the training company (TRAINING_MODE only): DEMO data and the users' logins",
+    )
+    p.add_argument("--if-empty", action="store_true")
     sub.add_parser(
         "demo-closeout",
         help="DEMO: work order, approved measurements, bill tracking, WCC, issues (DEMO Shela)",
@@ -561,6 +586,46 @@ def main(argv: list[str] | None = None) -> None:
             out = mdemo.run(db)
             db.commit()
         print(json.dumps(out, indent=1, default=str))
+    elif args.command == "go-live":
+        import json  # noqa: PLC0415
+
+        import app.main  # noqa: F401, PLC0415
+        from app.ops import golive  # noqa: PLC0415
+
+        out = golive.run(args.database)
+        print(json.dumps(out, indent=1))
+        if not out["ok"]:
+            sys.exit("Not ready: DEMO rows found or the seed is missing")
+    elif args.command == "carry-over":
+        import json  # noqa: PLC0415
+
+        import app.main  # noqa: F401, PLC0415
+        from app.db import engine  # noqa: PLC0415
+        from app.ops import carryover  # noqa: PLC0415
+
+        groups = [g.strip() for g in args.only.split(",")] if args.only else None
+        out = carryover.run(args.source, engine, groups, dry_run=args.dry_run)
+        for t in out["tables"]:
+            print(
+                f"{t['table']:28} source {t['source']:6}  {'would add' if out['dry_run'] else 'added'} {t['added']:6}  already there {t['already_there']:6}  left out {sum(t['skipped'].values()):5} {json.dumps(t['skipped']) if t['skipped'] else ''}"  # noqa: E501
+            )
+            for e in t["examples"]:
+                print(f"    {e}")
+        print(
+            f"{'DRY RUN: ' if out['dry_run'] else ''}added {out['added']}, left out {out['left_out']}"  # noqa: E501
+        )
+    elif args.command == "training-guides":
+        from app.ops import training_guide  # noqa: PLC0415
+
+        with SessionLocal() as db:
+            for row in training_guide.build_all(db, Path(args.screens), Path(args.out)):
+                print(f"{row['file']}: {row['pages']} pages, {row['screens']} screenshots")
+    elif args.command == "training-reset":
+        import json  # noqa: PLC0415
+
+        from app.ops import training  # noqa: PLC0415
+
+        print(json.dumps(training.reset(if_empty=args.if_empty), indent=1))
     elif args.command == "demo-closeout":
         import json  # noqa: PLC0415
 

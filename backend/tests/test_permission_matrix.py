@@ -54,7 +54,8 @@ ALL = [
     "site.location", "knowledge.view", "knowledge.cost", "knowledge.edit",
     "methodology.view", "methodology.edit", "methodology.compliance", "methodology.site",
     "wo.view", "wo.edit", "closeout.billing", "closeout.site", "closeout.payments",
-    "issues.view", "issues.edit", "portal.roles", "closeout.claim_approve",
+    "issues.view", "issues.edit", "portal.roles", "closeout.claim_approve", "system.ops",
+    "help.edit",
 ]  # fmt: skip
 TRACK = {"field.track": "own"}  # every staff user: their own day, map and claim
 
@@ -73,6 +74,8 @@ EXPECTED: dict[str, dict[str, str]] = {
     # sees and decides everything; users, roles and settings stay with office_admin
     "director": _all(*[c for c in ALL if c not in DIRECTOR_EXCLUDES]),
     "office_admin": _all(
+        "system.ops",
+        "help.edit",
         "portal.roles",
         "wo.view",
         "wo.edit",

@@ -32,6 +32,7 @@ export const MENU: MenuItem[] = [
   { to: "/petty-cash", label: "Petty cash", perms: ["expense.create", "expense.approve"], section: "My work" },
   { to: "/escalated", label: "Escalated (all sites)", perms: ["process.escalations", "process.rules"], section: "My work" },
   { to: "/my-notifications", label: "My notifications", perms: STAFF, section: "My work" },
+  { to: "/account", label: "My account", perms: STAFF, section: "My work" },
   // sales
   { to: "/leads", label: "Leads", perms: ["leads.edit"], view: ["leads.view"], section: "Sales" },
   { to: "/quotations", label: "Quotations", perms: ["quotation.edit"], view: ["quotation.view"], section: "Sales" },
@@ -133,6 +134,11 @@ export const MENU: MenuItem[] = [
   { to: "/admin/users", label: "Users", perms: ["admin.users"], section: "Administration" },
   { to: "/admin/roles", label: "Roles & permissions", perms: ["admin.roles"], section: "Administration" },
   { to: "/admin/audit", label: "Audit log", perms: ["audit.view"], section: "Administration" },
+  { to: "/admin/user-import", label: "User import", perms: ["admin.users"], section: "Administration" },
+  { to: "/admin/backups", label: "Backups and storage", perms: ["system.ops"], section: "Administration" },
+  { to: "/settings/security", label: "Security", perms: ["admin.users", "system.ops"], section: "Administration" },
+  { to: "/settings/roles-report", label: "Who sees what (roles)", perms: ["system.ops"], section: "Administration" },
+  { to: "/settings/help", label: "Help texts", perms: ["help.edit"], section: "Administration" },
 ];
 
 /** The pages a user may open, by group (groups with none left out). */

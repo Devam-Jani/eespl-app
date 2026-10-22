@@ -72,6 +72,9 @@ class UserOut(BaseModel):
     has_password: bool = False
     is_active: bool
     locked_until: datetime | None
+    # after repeated failed sign-ins: waits for the office admin's unlock
+    locked_by_failures: bool = False
+    totp_enabled_at: datetime | None = None
     last_login_at: datetime | None
     created_at: datetime
     roles: list[RoleRef]

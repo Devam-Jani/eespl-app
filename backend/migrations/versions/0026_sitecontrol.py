@@ -776,7 +776,7 @@ NEW_PERMISSIONS = [
 ALL = [c for c, _, _ in NEW_PERMISSIONS]
 GRANTS = {
     "super_admin": dict.fromkeys(ALL, "all"),
-    # "all" but the labour check override, which is Sir's decision (super_admin only by default)
+    # "all" but the labour check override: the director's decision (super_admin only by default)
     "office_admin": dict.fromkeys([c for c in ALL if c != "labourcheck.override"], "all"),
     "site_supervisor": {"delivery.view": "assigned", "delivery.confirm": "assigned"},
     "store_purchase": {

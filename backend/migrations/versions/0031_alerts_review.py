@@ -1,6 +1,6 @@
 """From the process alerts review: the places a notification is about (one per line), the reason
 when a to-do is closed by hand, and systems whose products, consumption or coats are still to
-confirm (blank, never guessed), with the systems Ankur Sir named and the suitable systems per area
+confirm (blank, never guessed), with the systems the director named and the systems suited per area
 type.
 
 Revision ID: 0031

@@ -18,6 +18,8 @@ export type User = {
   has_password: boolean;
   is_active: boolean;
   locked_until: string | null;
+  locked_by_failures?: boolean;
+  totp_enabled_at?: string | null;
   last_login_at: string | null;
   created_at: string;
   roles: RoleRef[];
