@@ -6,6 +6,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
+import { ReadProgress } from "./ReadProgress";
+import { decodeGeometry, useGlPlan } from "./glplan";
+import type { Geo as PlanGeo, GeoV2 } from "./glplan";
 import { useAuth } from "../auth";
 import { errorText, num } from "../format";
 
@@ -18,6 +21,8 @@ type CadFile = {
   filename: string;
   status: "queued" | "reading" | "ready" | "failed";
   error: string | null;
+  progress: string | null;
+  progress_at: string | null;
   version: string | null;
   units_code: number | null;
   unit_name: string | null;
@@ -90,13 +95,7 @@ type Area = {
   group_ids?: number[]; // the same name without a size, found again on this sheet
   count?: number;
 };
-type Geo = {
-  extents: [number, number, number, number] | null;
-  unit_m: number | null;
-  layers: Layer[];
-  geometry: Record<string, { s: number[] }>;
-  texts: [number, number, number, string, string, boolean?][];
-};
+type Geo = PlanGeo;
 type DrawingRow = { drawing_id: number; title: string; revisions: { revision_id: number; rev: string; filename: string; file: CadFile | null }[] };
 type SiteNode = { id: number; parent_id: number | null; kind: string; name: string; path: string };
 
@@ -260,15 +259,15 @@ function Workspace({
     const t = setTimeout(() => {
       void loadFile();
       reloadList();
-    }, 3000);
+    }, 1500);
     return () => clearTimeout(t);
   }, [file, loadFile, reloadList]);
   useEffect(() => {
     if (file?.status !== "ready") return;
     void loadAreas();
-    api<Geo>(`/api/takeoff/files/${fileId}/geometry`).then(
-      (g) => {
-        setGeo(g);
+    api<GeoV2 | Geo>(`/api/takeoff/files/${fileId}/geometry`).then(
+      (raw) => {
+        setGeo(decodeGeometry(raw));
         setHidden(new Set(file.layers.filter((l) => l.role === "hide" || l.off || l.frozen).map((l) => l.name)));
       },
       (e) => onError(errorText(e)),
@@ -342,7 +341,7 @@ function Workspace({
   }
 
   if (!file) return <p className="muted">Loading…</p>;
-  if (file.status === "queued" || file.status === "reading") return <div className="alert alert-warn">Reading {file.filename}: a large drawing takes a minute or two…</div>;
+  if (file.status === "queued" || file.status === "reading") return <ReadProgress filename={file.filename} progress={file.progress} since={file.progress_at} />;
   if (file.status === "failed") return <div className="alert alert-error">{file.error}</div>;
   const traceOutline = trace ? trace.points : null;
   return (
@@ -510,10 +509,12 @@ function DrawingCanvas({
   onPickArea: (a: Area) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const glRef = useRef<HTMLCanvasElement>(null);
   const [view, setView] = useState(() => {
     const e = geo.extents ?? [0, 0, 1000, 1000];
     return { cx: (e[0] + e[2]) / 2, cy: (e[1] + e[3]) / 2, scale: 0 };
   });
+  const glOk = useGlPlan(glRef, geo, view, hidden);
   const drag = useRef<{ x: number; y: number; cx: number; cy: number; moved: boolean } | null>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<number | null>(null);
@@ -544,8 +545,7 @@ function DrawingCanvas({
     if (c.height !== h * dpr) c.height = h * dpr;
     const ctx = c.getContext("2d")!;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, w, h);
+    ctx.clearRect(0, 0, w, h);
     const { cx, cy, scale } = view;
     const X = (x: number) => (x - cx) * scale + w / 2;
     const Y = (y: number) => h / 2 - (y - cy) * scale;
@@ -555,7 +555,11 @@ function DrawingCanvas({
     const maxY = cy + h / 2 / scale;
     const colors = new Map(geo.layers.map((l) => [l.name, l.color]));
     ctx.lineWidth = 1;
-    for (const [layer, g] of Object.entries(geo.geometry)) {
+    if (!glOk.current) {
+      ctx.fillStyle = "#fff"; // no WebGL here: the lines on this canvas
+      ctx.fillRect(0, 0, w, h);
+    }
+    for (const [layer, g] of glOk.current ? [] : Object.entries(geo.geometry)) {
       if (hidden.has(layer)) continue;
       ctx.strokeStyle = ACI[Math.abs(colors.get(layer) ?? 7)] ?? "#999";
       ctx.beginPath();
@@ -616,7 +620,7 @@ function DrawingCanvas({
     };
     if (proposed) poly(proposed, "#c218c2", true);
     if (tracePoints && tracePoints.length) poly(tracePoints, "#d62728", tracePoints.length > 2);
-  }, [geo, hidden, areas, selected, view, tracePoints, proposed]);
+  }, [geo, hidden, areas, selected, view, tracePoints, proposed, glOk]);
   useEffect(() => {
     const id = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(id);
@@ -676,6 +680,7 @@ function DrawingCanvas({
   }
   return (
     <div className="takeoff-canvas">
+      <canvas ref={glRef} className="plan-gl" aria-hidden="true" />
       <canvas
         ref={ref}
         onPointerDown={down}

@@ -45,12 +45,12 @@ def main() -> None:
             quotations.expire_sweep,
             process.process_sweep,
         ]
-        jobs.append(takeoff.sweep)  # AutoCAD drawings left queued (read in the API normally)
+        jobs.append(takeoff.sweep)  # AutoCAD drawings queued to be read
         jobs.append(field.sweep)  # auto end of day, road km when OSRM is back, claims, retention
         if time.time() - last_poll >= kylas.POLL_EVERY or args.once:
             jobs.append(kylas.poll_sweep)
-        if settings.training_mode:  # the training company: its heartbeat and nightly rebuild only
-            jobs = [ops.worker_round]
+        if settings.training_mode:  # the training company: its heartbeat, nightly rebuild, drawings
+            jobs = [ops.worker_round, takeoff.sweep]
         for job in jobs:
             try:
                 job()
@@ -60,10 +60,15 @@ def main() -> None:
                 last_poll = time.time()
         if args.once or _stop:
             return
-        for _ in range(TICK):
+        for i in range(TICK):
             if _stop:
                 return
             time.sleep(1)
+            if i % 2 == 1:  # a drawing someone just asked to read starts within two seconds
+                try:
+                    takeoff.sweep()
+                except Exception:  # noqa: BLE001
+                    logging.getLogger("eespl.worker").exception("drawing read failed")
 
 
 if __name__ == "__main__":

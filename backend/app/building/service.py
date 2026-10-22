@@ -49,6 +49,7 @@ def save(db: Session, site_id: int, data: dict, cad_file_id: int | None, user, n
                       changes=changes, created_by=getattr(user, "id", None), created_by_name=getattr(user, "full_name", None))  # fmt: skip
     db.add(m)
     db.flush()
+    m.built = build(db, m, db.get(CadFile, cad_file_id) if cad_file_id else None)  # the 3D geometry, once
     return m
 
 
@@ -310,6 +311,44 @@ def _to_m(poly: list[list[float]], shift: list[float], unit_m: float, origin: tu
     return [[round((x + shift[0] - origin[0]) * unit_m, 3), round((y + shift[1] - origin[1]) * unit_m, 3)] for x, y in poly]
 
 
+BUILT_VERSION = 1  # raise it when what build() makes changes: older models are built again
+
+
+def build(db: Session, m: BuildingModel, cad: CadFile | None) -> dict:
+    """The floor types' geometry for the 3D view (metres, from the reference plan's corner): the
+    slab outline, the walls cut out of the drawing, columns, beams, cores. Made once when the model
+    is saved (the drawing's lines are read only then), kept with the version."""
+    unit = (cad.unit_m if cad else None) or 0.001
+    data = m.data or {}
+    s = {**DEFAULTS, **(data.get("settings") or {})}
+    types = [t for t in data.get("floor_types", []) if t.get("outline")]
+    if not types:
+        return {"version": BUILT_VERSION, "types": {}, "origin": [0, 0], "ref": None}
+    ref = max(types, key=lambda t: len(t.get("floors") or []))
+    ox, oy = _corner([[x + ref["shift"][0], y + ref["shift"][1]] for x, y in ref["outline"]])
+    origin = (ox, oy)
+    walls_all = layer_segments(db, cad, "walls") if cad else []
+    out_types = {}
+    for t in types:
+        sh = t.get("shift") or [0, 0]
+        outline_m = _to_m(t["outline"], sh, unit, origin)
+        xs, ys = [p[0] for p in t["outline"]], [p[1] for p in t["outline"]]
+        pad = 0.5 / unit
+        box = (min(xs) - pad, min(ys) - pad, max(xs) + pad, max(ys) + pad)
+        walls = []
+        for i in range(0, len(walls_all) - 3, 4) if t.get("walls", True) else ():
+            x1, y1, x2, y2 = walls_all[i:i + 4]
+            if box[0] <= x1 <= box[2] and box[1] <= y1 <= box[3] and box[0] <= x2 <= box[2] and box[1] <= y2 <= box[3] and math.hypot(x2 - x1, y2 - y1) * unit > 0.15:
+                walls.append([round((x1 + sh[0] - ox) * unit, 3), round((y1 + sh[1] - oy) * unit, 3), round((x2 + sh[0] - ox) * unit, 3), round((y2 + sh[1] - oy) * unit, 3)])
+        cols = [[round((c[0] + sh[0] - ox) * unit, 3), round((c[1] + sh[1] - oy) * unit, 3), round(c[2] * unit, 3), round(c[3] * unit, 3)] for c in t.get("columns") or []]
+        beams = [list(b) for b in t.get("beams") or [] if max(b) < len(cols)]
+        if s.get("beams_on_walls") and not beams:
+            beams = beams_on_column_lines(cols)
+        out_types[t["key"]] = {"name": t["name"], "outline": outline_m, "area_sqm": round(detect.area(outline_m), 2), "walls": walls[:6000], "columns": cols, "beams": beams,
+                               "cores": [{"kind": c.get("kind", "stair"), "outline": _to_m(c.get("outline") or [], sh, unit, origin), "risers": c.get("risers")} for c in t.get("cores") or []]}  # fmt: skip
+    return {"version": BUILT_VERSION, "types": out_types, "origin": list(origin), "ref": ref["key"]}
+
+
 def payload(db: Session, site_id: int, client: bool = False) -> dict | None:
     """The building for the 3D view, in metres with y up from the plinth: floors with their type,
     elevation and height; per type the slab outline, the walls, columns, beams and cores; the
@@ -335,28 +374,13 @@ def payload(db: Session, site_id: int, client: bool = False) -> dict | None:
             return None
         return {"version": m.version, "schematic": False, "settings": {k: s[k] for k in ("floor_height_m", "slab_m", "plinth_m", "riser_m", "bloom", "ifc")},
                 "levels": {"source": "default", "note": None}, "floors": [], "types": {}, "rooms": [], "ifc_links": data.get("ifc_links") or {}, "ifc": ifc}  # fmt: skip
-    ref = max(types, key=lambda t: len(t.get("floors") or []))
-    ox, oy = _corner([[x + ref["shift"][0], y + ref["shift"][1]] for x, y in ref["outline"]])
-    origin = (ox, oy)
-    walls_all = layer_segments(db, cad, "walls") if cad else []
-    out_types = {}
-    for t in types:
-        sh = t.get("shift") or [0, 0]
-        outline_m = _to_m(t["outline"], sh, unit, origin)
-        xs, ys = [p[0] for p in t["outline"]], [p[1] for p in t["outline"]]
-        pad = 0.5 / unit
-        box = (min(xs) - pad, min(ys) - pad, max(xs) + pad, max(ys) + pad)
-        walls = []
-        for i in range(0, len(walls_all) - 3, 4) if t.get("walls", True) else ():
-            x1, y1, x2, y2 = walls_all[i:i + 4]
-            if box[0] <= x1 <= box[2] and box[1] <= y1 <= box[3] and box[0] <= x2 <= box[2] and box[1] <= y2 <= box[3] and math.hypot(x2 - x1, y2 - y1) * unit > 0.15:
-                walls.append([round((x1 + sh[0] - ox) * unit, 3), round((y1 + sh[1] - oy) * unit, 3), round((x2 + sh[0] - ox) * unit, 3), round((y2 + sh[1] - oy) * unit, 3)])
-        cols = [[round((c[0] + sh[0] - ox) * unit, 3), round((c[1] + sh[1] - oy) * unit, 3), round(c[2] * unit, 3), round(c[3] * unit, 3)] for c in t.get("columns") or []]
-        beams = [list(b) for b in t.get("beams") or [] if max(b) < len(cols)]
-        if s.get("beams_on_walls") and not beams:
-            beams = beams_on_column_lines(cols)
-        out_types[t["key"]] = {"name": t["name"], "outline": outline_m, "area_sqm": round(detect.area(outline_m), 2), "walls": walls[:6000], "columns": cols, "beams": beams,
-                               "cores": [{"kind": c.get("kind", "stair"), "outline": _to_m(c.get("outline") or [], sh, unit, origin), "risers": c.get("risers")} for c in t.get("cores") or []]}  # fmt: skip
+    built = m.built if m.built and m.built.get("version") == BUILT_VERSION else None
+    if built is None:  # an older model: built now, once, and kept
+        built = build(db, m, cad)
+        m.built = built
+        db.commit()
+    out_types, origin = built["types"], tuple(built["origin"])
+    ref = {"key": built["ref"]}
     floors = elevations(data)
     _assign_types(floors, [t for t in data.get("floor_types", []) if t.get("outline")])
     for f in floors:

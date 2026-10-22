@@ -5066,3 +5066,26 @@ label.check {
     font-size: 0.62rem;
   }
 }
+/* the drawing: WebGL lines under a transparent 2D canvas (texts, traces, areas) */
+.takeoff-canvas canvas {
+  position: absolute;
+  inset: 0;
+}
+.takeoff-canvas .plan-gl {
+  pointer-events: none;
+}
+.read-progress ol {
+  margin: 0.4rem 0 0 1.2rem;
+  padding: 0;
+}
+.read-progress li {
+  color: var(--muted);
+}
+.read-progress li.done {
+  color: var(--text);
+  text-decoration: line-through;
+}
+.read-progress li.now {
+  color: var(--text);
+  font-weight: 600;
+}

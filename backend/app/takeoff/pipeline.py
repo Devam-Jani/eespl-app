@@ -21,6 +21,12 @@ def media(rel: str) -> Path:
     return Path(settings.media_dir) / rel
 
 
+def _stage(db: Session, f: CadFile, stage: str) -> None:
+    """The read's stage, committed at once so the page polling it sees it."""
+    f.progress, f.progress_at = stage, datetime.now(UTC)
+    db.commit()
+
+
 def process(db: Session, f: CadFile) -> CadFile:
     from app.sites.models import DrawingRevision  # noqa: PLC0415
 
@@ -28,7 +34,7 @@ def process(db: Session, f: CadFile) -> CadFile:
     src = media(rev.stored_path)
     suffix = src.suffix.lower()
     f.status, f.error = "reading", None
-    db.commit()
+    _stage(db, f, "converting")
     try:
         if suffix not in READABLE:
             raise dwg.CadError("Only AutoCAD drawings (.dwg or .dxf) can be read for areas.")
@@ -43,6 +49,7 @@ def process(db: Session, f: CadFile) -> CadFile:
             dxf_rel = str(Path(rev.stored_path).with_suffix(".dxf"))
             warnings = dwg.to_dxf(src, media(dxf_rel))
             f.dxf_path = dxf_rel
+            _stage(db, f, "reading")
         else:
             f.dwg_version = "DXF"
             f.dxf_path = rev.stored_path
@@ -58,17 +65,18 @@ def process(db: Session, f: CadFile) -> CadFile:
         f.dimensions = parsed.dimensions
         f.warnings = len(warnings)
         f.read_at = datetime.now(UTC)
+        _stage(db, f, "finding areas")
         service.build_areas(db, f)
-        f.status = "ready"
+        f.status, f.progress, f.progress_at = "ready", "done", datetime.now(UTC)
     except dwg.CadError as exc:
         db.rollback()
         f = db.get(CadFile, f.id)
-        f.status, f.error = "failed", str(exc)
+        f.status, f.error, f.progress = "failed", str(exc), "failed"
     except Exception as exc:  # noqa: BLE001  (never a crash: the message says what happened)
         log.exception("reading cad file %s failed", f.id)
         db.rollback()
         f = db.get(CadFile, f.id)
-        f.status = "failed"
+        f.status, f.progress = "failed", "failed"
         f.error = (
             f"The drawing could not be read ({type(exc).__name__}). "
             "Try saving it as AutoCAD 2018 DWG and upload again."
@@ -88,10 +96,12 @@ def process_id(cad_file_id: int) -> None:
 
 
 def sweep() -> None:
-    """The worker: drawings left queued (an API restart mid-read)."""
+    """The worker's job: the drawings queued to be read, oldest first (the API only queues them,
+    so a large drawing never slows other people's pages)."""
     from app.db import SessionLocal  # noqa: PLC0415
 
     with SessionLocal() as db:
-        ids = list(db.scalars(select(CadFile.id).where(CadFile.status == "queued").limit(3)))
+        queued = select(CadFile.id).where(CadFile.status == "queued").order_by(CadFile.id)
+        ids = list(db.scalars(queued.limit(3)))
     for i in ids:
         process_id(i)

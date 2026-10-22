@@ -71,6 +71,38 @@ function merged(list: THREE.BufferGeometry[]): THREE.BufferGeometry | null {
   return clean.length ? mergeGeometries(clean, false) : null;
 }
 
+export const MAX_MERGED_FLOORS = 64;
+
+/** A floor's copy of a floor type's geometry: lifted to its level, each vertex marked with the
+ *  floor (the shader moves it in the explode view and hides it in a cutaway). */
+export function floorCopy(geo: THREE.BufferGeometry, y: number, floorIndex: number, keepNormals: boolean): THREE.BufferGeometry {
+  const c = geo.index ? geo.toNonIndexed() : geo.clone();
+  for (const name of Object.keys(c.attributes)) if (name !== "position" && !(keepNormals && name === "normal")) c.deleteAttribute(name);
+  if (keepNormals && !c.getAttribute("normal")) c.computeVertexNormals();
+  c.translate(0, y, 0);
+  c.setAttribute("aFloor", new THREE.Float32BufferAttribute(new Float32Array(c.getAttribute("position").count).fill(floorIndex), 1));
+  return c;
+}
+
+/** The floors of one material merged into one object: one draw call for the whole building. */
+export function mergeFloors(parts: THREE.BufferGeometry[]): THREE.BufferGeometry | null {
+  return parts.length ? mergeGeometries(parts, false) : null;
+}
+
+type FloorUniforms = { uOff: { value: Float32Array }; uVis: { value: Float32Array } };
+
+/** The per-floor offset (explode) and visibility (cutaway) applied in the vertex shader. */
+function hookFloors(mat: THREE.Material, u: FloorUniforms): void {
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uOff = u.uOff;
+    shader.uniforms.uVis = u.uVis;
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", `#include <common>\nattribute float aFloor;\nuniform float uOff[${MAX_MERGED_FLOORS}];\nuniform float uVis[${MAX_MERGED_FLOORS}];`)
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nint fl = int(aFloor + 0.5);\ntransformed.y += uOff[fl];\nif (uVis[fl] < 0.5) transformed = vec3(0.0, -1.0e6, 0.0);");
+  };
+  mat.customProgramCacheKey = () => "floors";
+}
+
 type TypeGeo = { slab: THREE.BufferGeometry; cutFace: THREE.BufferGeometry; slabEdges: THREE.BufferGeometry; shell: LineSegmentsGeometry; walls: THREE.BufferGeometry | null; wallFaces: THREE.BufferGeometry | null; cols: THREE.BufferGeometry | null; colEdges: THREE.BufferGeometry | null; detail: THREE.BufferGeometry | null; detailEdges: THREE.BufferGeometry | null; height: number };
 
 /** The shared geometry of one floor type, at a given storey height (local: slab top at 0). */
@@ -225,6 +257,8 @@ export class XrayScene {
   private states = new Map<number, RoomState>();
   private fps = { frames: 0, since: performance.now(), value: 0, slow: 0 };
   private ifcGroup: THREE.Group | null = null;
+  private floorU: FloorUniforms = { uOff: { value: new Float32Array(MAX_MERGED_FLOORS) }, uVis: { value: new Float32Array(MAX_MERGED_FLOORS).fill(1) } };
+  private merged: THREE.Object3D[] = []; // the building's structure, one object per material
   private preset: Preset = "iso";
   private touched = false; // the user moved the camera: a resize keeps their view
   private ifcLinked: { el: IfcElement; mesh: THREE.Mesh }[] = [];
@@ -282,6 +316,8 @@ export class XrayScene {
     m("late", new THREE.LineBasicMaterial({ color: LATE_COLOR }));
     m("cutFace", new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.14, depthWrite: false, side: THREE.DoubleSide }));
     let all: THREE.Box3 | null = null;
+    const merge = sorted.length <= MAX_MERGED_FLOORS;
+    const parts: Record<"line" | "slab" | "glass" | "face", THREE.BufferGeometry[]> = { line: [], slab: [], glass: [], face: [] };
     sorted.forEach((f, index) => {
       const t = f.type ? b.types[f.type] : undefined;
       const group = new THREE.Group();
@@ -298,19 +334,28 @@ export class XrayScene {
           obj.userData.role = role;
           group.add(obj);
         };
-        add(new THREE.Mesh(g.slab, this.mats.slab), "slab");
         const cut = new THREE.Mesh(g.cutFace, this.mats.cutFace);
         cut.visible = false; // the floor's face, shown when the floor is opened (cutaway)
         add(cut, "cutface");
-        add(new THREE.LineSegments(g.slabEdges, this.mats.line), "line");
         const shell = new LineSegments2(g.shell, this.shellMat);
         add(shell, "shell");
-        if (g.walls) add(new THREE.LineSegments(g.walls, this.mats.line), "line");
-        if (g.wallFaces) add(new THREE.Mesh(g.wallFaces, this.mats.glass), "glass");
-        if (g.cols) add(new THREE.Mesh(g.cols, this.mats.face), "column");
-        if (g.colEdges) add(new THREE.LineSegments(g.colEdges, this.mats.line), "line");
-        if (g.detail) add(new THREE.Mesh(g.detail, this.mats.face), "column");
-        if (g.detailEdges) add(new THREE.LineSegments(g.detailEdges, this.mats.line), "line");
+        if (merge) {
+          // the slab, walls, columns, beams and cores: into the building's merged objects
+          const y = f.elevation_m;
+          parts.slab.push(floorCopy(g.slab, y, index, true));
+          for (const l of [g.slabEdges, g.walls, g.colEdges, g.detailEdges]) if (l) parts.line.push(floorCopy(l, y, index, false));
+          if (g.wallFaces) parts.glass.push(floorCopy(g.wallFaces, y, index, true));
+          for (const m2 of [g.cols, g.detail]) if (m2) parts.face.push(floorCopy(m2, y, index, true));
+        } else {
+          add(new THREE.Mesh(g.slab, this.mats.slab), "slab");
+          add(new THREE.LineSegments(g.slabEdges, this.mats.line), "line");
+          if (g.walls) add(new THREE.LineSegments(g.walls, this.mats.line), "line");
+          if (g.wallFaces) add(new THREE.Mesh(g.wallFaces, this.mats.glass), "glass");
+          if (g.cols) add(new THREE.Mesh(g.cols, this.mats.face), "column");
+          if (g.colEdges) add(new THREE.LineSegments(g.colEdges, this.mats.line), "line");
+          if (g.detail) add(new THREE.Mesh(g.detail, this.mats.face), "column");
+          if (g.detailEdges) add(new THREE.LineSegments(g.detailEdges, this.mats.line), "line");
+        }
       }
       const rg = roomsGeometry(roomsBy.get(f.level) ?? [], f, slab);
       let rooms: THREE.Mesh | null = null;
@@ -334,6 +379,20 @@ export class XrayScene {
       const bb = new THREE.Box3().setFromObject(group);
       if (!bb.isEmpty()) all = all ? all.union(bb) : bb;
     });
+    if (merge) {
+      for (const k of ["line", "slab", "glass", "face"] as const) {
+        hookFloors(this.mats[k], this.floorU);
+        const geo = mergeFloors(parts[k]);
+        if (!geo) continue;
+        const obj = k === "line" ? new THREE.LineSegments(geo, this.mats.line) : new THREE.Mesh(geo, this.mats[k]);
+        obj.userData.role = k === "face" ? "column" : k;
+        obj.frustumCulled = false; // its floors move apart in the explode view
+        this.scene.add(obj);
+        this.merged.push(obj);
+        const bb = new THREE.Box3().setFromObject(obj);
+        if (!bb.isEmpty()) all = all ? all.union(bb) : bb;
+      }
+    }
     const box3 = all ?? new THREE.Box3(new THREE.Vector3(-10, 0, -10), new THREE.Vector3(10, 10, 10));
     box3.getCenter(this.center);
     this.size = box3.getSize(new THREE.Vector3()).length();
@@ -383,13 +442,14 @@ export class XrayScene {
     this.sun.intensity = mode === "real" ? 1.6 : 0.8;
     this.renderer.shadowMap.enabled = mode === "real";
     this.sun.castShadow = mode === "real";
-    for (const f of this.floors)
-      f.group.traverse((o) => {
-        if (o instanceof THREE.Mesh) {
-          o.castShadow = mode === "real" && o.userData.role !== "glass";
-          o.receiveShadow = mode === "real";
-        }
-      });
+    const shade = (o: THREE.Object3D) => {
+      if (o instanceof THREE.Mesh) {
+        o.castShadow = mode === "real" && o.userData.role !== "glass";
+        o.receiveShadow = mode === "real";
+      }
+    };
+    for (const f of this.floors) f.group.traverse(shade);
+    for (const o of this.merged) shade(o);
     for (const k of Object.keys(this.mats)) this.mats[k].needsUpdate = true;
     this.paint();
     if (this.bloomPass) this.bloomPass.enabled = this.bloom && mode === "xray";
@@ -466,7 +526,11 @@ export class XrayScene {
     this.ifcLinked = [];
     this.ifcPickables = [];
     for (const f of this.floors) f.group.visible = !elements;
+    for (const o of this.merged) o.visible = !elements;
     if (!elements) return;
+    const ifcGlass = (this.mats.glass as THREE.MeshStandardMaterial).clone(); // without the floors' shader hook
+    const ifcLine = (this.mats.line as THREE.LineBasicMaterial).clone();
+    ifcGlass.onBeforeCompile = ifcLine.onBeforeCompile = () => undefined;
     const g = new THREE.Group();
     const loose: THREE.BufferGeometry[] = [];
     for (const el of elements) {
@@ -481,7 +545,7 @@ export class XrayScene {
         this.ifcLinked.push({ el, mesh });
         this.ifcPickables.push(mesh);
       } else {
-        const mesh = new THREE.Mesh(geo, this.mats.glass);
+        const mesh = new THREE.Mesh(geo, ifcGlass);
         mesh.userData.el = el;
         this.ifcPickables.push(mesh);
         mesh.visible = false; // picked only; drawn merged below
@@ -491,8 +555,8 @@ export class XrayScene {
     }
     const all = merged(loose);
     if (all) {
-      g.add(new THREE.Mesh(all, this.mats.glass));
-      g.add(new THREE.LineSegments(new THREE.EdgesGeometry(all, 25), this.mats.line));
+      g.add(new THREE.Mesh(all, ifcGlass));
+      g.add(new THREE.LineSegments(new THREE.EdgesGeometry(all, 25), ifcLine));
     }
     this.ifcGroup = g;
     this.scene.add(g);
@@ -528,6 +592,7 @@ export class XrayScene {
     // the opened floor alone (the floors above hidden, and the ones below, seen through, too)
     for (const f of this.floors) {
       f.group.visible = level == null || f.floor.level === level;
+      if (f.index < MAX_MERGED_FLOORS) this.floorU.uVis.value[f.index] = f.group.visible ? 1 : 0;
       f.group.traverse((o) => o.userData.role === "cutface" && (o.visible = level != null && f.floor.level === level));
     }
     if (level == null) return;
@@ -641,7 +706,11 @@ export class XrayScene {
     }
     if (Math.abs(this.explode.now - this.explode.want) > 1e-3) {
       this.explode.now += (this.explode.want - this.explode.now) * 0.12;
-      for (const f of this.floors) f.group.position.y = f.floor.elevation_m + explodeOffset(f.index, this.explode.now, Math.max(3, this.size / 25));
+      for (const f of this.floors) {
+        const off = explodeOffset(f.index, this.explode.now, Math.max(3, this.size / 25));
+        f.group.position.y = f.floor.elevation_m + off;
+        if (f.index < MAX_MERGED_FLOORS) this.floorU.uOff.value[f.index] = off;
+      }
     }
     this.controls.update();
     if (this.composer && this.bloomPass?.enabled) this.composer.render();
