@@ -71,9 +71,10 @@ export default function Sites() {
     api<SiteLookups>("/api/sites/lookups").then(setLookups, () => setLookups(null));
   }, []);
 
+  const pageIds = (page?.items ?? []).map((s) => s.id).join(",");
   useEffect(() => {
-    if (showMargin) api<typeof margins>("/api/finance/site-margins").then(setMargins, () => setMargins({}));
-  }, [showMargin]);
+    if (showMargin && pageIds) api<typeof margins>(`/api/finance/site-margins?ids=${pageIds}`).then(setMargins, () => setMargins({}));
+  }, [showMargin, pageIds]);
 
   const setFilter = (key: keyof typeof filters) => (e: { target: { value: string } }) => {
     setOffset(0);

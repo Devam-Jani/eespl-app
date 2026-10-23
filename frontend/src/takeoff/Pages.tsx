@@ -128,10 +128,13 @@ export function TakeoffPage() {
     if (fileId || !drawings) return;
     for (const d of drawings) for (const r of d.revisions) if (r.file?.status === "ready") return setParam("file", String(r.file.id));
   }, [drawings, fileId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a new read of the open file starts its workspace again (it shows the read's progress)
+  const [reads, setReads] = useState(0);
   async function read(revisionId: number) {
     const architect = window.prompt("Architect (their layer mapping is saved and reused)", "") ?? "";
     try {
       const f = await api<CadFile>(`/api/takeoff/revisions/${revisionId}/read`, { method: "POST", json: { architect: architect || null } });
+      setReads((n) => n + 1);
       setParam("file", String(f.id));
       void loadDrawings();
     } catch (e) {
@@ -192,7 +195,7 @@ export function TakeoffPage() {
       </div>
       {fileId && (
         <Workspace
-          key={fileId}
+          key={`${fileId}-${reads}`}
           fileId={fileId}
           siteId={siteId}
           tab={tab}

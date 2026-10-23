@@ -15,6 +15,7 @@ from app.analytics import worker as analytics
 from app.config import settings
 from app.crm import worker as kylas
 from app.field import hooks as field
+from app.issues import worker as issues
 from app.ops import worker as ops
 from app.process import worker as process
 from app.quotations import worker as quotations
@@ -47,6 +48,7 @@ def main() -> None:
         ]
         jobs.append(takeoff.sweep)  # AutoCAD drawings queued to be read
         jobs.append(field.sweep)  # auto end of day, road km when OSRM is back, claims, retention
+        jobs.append(issues.sweep)  # the nightly open.md, the Monday summary of the issue log
         if time.time() - last_poll >= kylas.POLL_EVERY or args.once:
             jobs.append(kylas.poll_sweep)
         if settings.training_mode:  # the training company: its heartbeat, nightly rebuild, drawings

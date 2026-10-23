@@ -511,6 +511,18 @@ export function BillingChecklist() {
   if (params.get("month")) q.set("month", params.get("month")!);
   const { data, error } = useLoad<Checklist>(`/api/closeout/sites/${id}/billing-checklist?${q}`);
   if (!data) return error ? <div className="alert alert-error">{error}</div> : <p className="muted">Loading…</p>;
+  if (!data.towers?.length)
+    return (
+      <>
+        <p className="small muted">
+          <Link to={`/sites/${id}`}>Site</Link> / billing checklist
+        </p>
+        <h1>Billing checklist</h1>
+        <div className="alert alert-warn">
+          This site has no towers or wings yet, so there is nothing to check. Add them under <Link to={`/sites/${id}/zones`}>Zones</Link>.
+        </div>
+      </>
+    );
   const set = (k: string, v: string) => {
     const n = new URLSearchParams(params);
     if (v) n.set(k, v);

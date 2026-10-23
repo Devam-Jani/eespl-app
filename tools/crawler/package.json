@@ -1,0 +1,11 @@
+{
+  "name": "eespl-nightly-check",
+  "private": true,
+  "description": "The nightly check: every role's pages on the training company (docs/DEPLOY.md section 12)",
+  "scripts": {
+    "crawl": "node crawl.cjs"
+  },
+  "dependencies": {
+    "playwright": "1.49.1"
+  }
+}

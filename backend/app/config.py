@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = None
     anthropic_base_url: str = "https://api.anthropic.com"
     anthropic_timeout_seconds: float = 60
+    # "Ask the helper" (Claude explains an error): off until HELPER_AI_ENABLED; never changes data
+    helper_ai_enabled: bool = False
+    helper_ai_model: str = "claude-sonnet-5-5"
+    # the nightly crawler on the training company posts what it finds with this (CRAWLER_TOKEN)
+    crawler_token: SecretStr | None = None
     # the address phones reach the app on (set at go-live): delivery receipt links and QR codes
     public_base_url: str = "http://localhost:5174"
     # the nightly backup (its own container in production): the alert when a night is missed, and

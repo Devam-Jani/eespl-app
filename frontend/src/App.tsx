@@ -4,40 +4,45 @@ import { AuthProvider } from "./auth";
 import { RequireAuth, RequirePermission } from "./components/Guards";
 import Layout from "./components/Layout";
 import { MENU } from "./menu";
-import Audit from "./pages/Audit";
-import Channels from "./pages/Channels";
-import Clients from "./pages/Clients";
-import LeadDetail from "./pages/LeadDetail";
-import Leads from "./pages/Leads";
 import Login from "./pages/Login";
 import Placeholder from "./pages/Placeholder";
-import Products from "./pages/Products";
-import RateLibrary from "./pages/RateLibrary";
-import Roles from "./pages/Roles";
-import SiteDetail from "./pages/SiteDetail";
-import Sites from "./pages/Sites";
-import SystemDetail from "./pages/SystemDetail";
-import Systems from "./pages/Systems";
-import TcLibrary from "./pages/TcLibrary";
-import TenderDetail from "./pages/TenderDetail";
-import Tenders from "./pages/Tenders";
-import Users from "./pages/Users";
-import Vendors from "./pages/Vendors";
-import Categories from "./pages/settings/Categories";
-import CompanyBanks from "./pages/settings/CompanyBanks";
-import CompanyProfile from "./pages/settings/CompanyProfile";
-import GstinAddresses from "./pages/settings/GstinAddresses";
-import KylasSettingsPage from "./pages/settings/KylasSettings";
-import PurchaseSettings from "./pages/settings/PurchaseSettings";
-import StageTemplates from "./pages/settings/StageTemplates";
-import Tags from "./pages/settings/Tags";
-import UnitsConversions from "./pages/settings/UnitsConversions";
+// every page in its own chunk: the first load carries the shell, the sign-in and the menu only
+const Audit = lazy(() => import("./pages/Audit"));
+const Channels = lazy(() => import("./pages/Channels"));
+const Clients = lazy(() => import("./pages/Clients"));
+const LeadDetail = lazy(() => import("./pages/LeadDetail"));
+const Leads = lazy(() => import("./pages/Leads"));
+const Products = lazy(() => import("./pages/Products"));
+const RateLibrary = lazy(() => import("./pages/RateLibrary"));
+const Roles = lazy(() => import("./pages/Roles"));
+const SiteDetail = lazy(() => import("./pages/SiteDetail"));
+const Sites = lazy(() => import("./pages/Sites"));
+const SystemDetail = lazy(() => import("./pages/SystemDetail"));
+const Systems = lazy(() => import("./pages/Systems"));
+const TcLibrary = lazy(() => import("./pages/TcLibrary"));
+const TenderDetail = lazy(() => import("./pages/TenderDetail"));
+const Tenders = lazy(() => import("./pages/Tenders"));
+const Users = lazy(() => import("./pages/Users"));
+const Vendors = lazy(() => import("./pages/Vendors"));
+const Categories = lazy(() => import("./pages/settings/Categories"));
+const CompanyBanks = lazy(() => import("./pages/settings/CompanyBanks"));
+const CompanyProfile = lazy(() => import("./pages/settings/CompanyProfile"));
+const GstinAddresses = lazy(() => import("./pages/settings/GstinAddresses"));
+const KylasSettingsPage = lazy(() => import("./pages/settings/KylasSettings"));
+const PurchaseSettings = lazy(() => import("./pages/settings/PurchaseSettings"));
+const StageTemplates = lazy(() => import("./pages/settings/StageTemplates"));
+const Tags = lazy(() => import("./pages/settings/Tags"));
+const UnitsConversions = lazy(() => import("./pages/settings/UnitsConversions"));
 
 // the client portal is its own chunk (and its own phone-first layout)
 const portal = () => import("./portal/Portal");
 const PortalLayout = lazy(() => portal().then((m) => ({ default: m.PortalLayout })));
 const PortalHome = lazy(() => portal().then((m) => ({ default: m.PortalHome })));
 const PortalSitePage = lazy(() => portal().then((m) => ({ default: m.PortalSitePage })));
+const helperPages = () => import("./helper/Pages");
+const IssueLog = lazy(() => helperPages().then((m) => ({ default: m.IssueLog })));
+const IssuePage = lazy(() => helperPages().then((m) => ({ default: m.IssuePage })));
+const MyReports = lazy(() => helperPages().then((m) => ({ default: m.MyReports })));
 const InviteAccept = lazy(() => portal().then((m) => ({ default: m.InviteAccept })));
 const Snags = lazy(() => import("./pages/Snags"));
 // site survey (with its measuring camera) is its own chunk
@@ -277,6 +282,8 @@ const PAGES: Record<string, JSX.Element> = {
   "/admin/users": <Users />,
   "/admin/roles": <Roles />,
   "/admin/audit": <Audit />,
+  "/settings/issue-log": <IssueLog />,
+  "/my-reports": <MyReports />,
 };
 
 export default function App() {
@@ -300,6 +307,7 @@ export default function App() {
             >
               <Route index element={<PortalHome />} />
               <Route path="sites/:id" element={<PortalSitePage />} />
+              <Route path="reports" element={<MyReports />} />
               <Route path="*" element={<Navigate to="/portal" replace />} />
             </Route>
             <Route
@@ -423,6 +431,7 @@ export default function App() {
                   ["/sites/:id/zones", ["closeout.site", "closeout.billing"], <SiteZones />],
                   ["/sites/:id/billing-checklist", ["closeout.billing"], <BillingChecklist />],
                   ["/sites/:id/work-completions", ["closeout.billing"], <SiteWorkCompletions />],
+                  ["/settings/issue-log/:id", ["issuelog.view"], <IssuePage />],
                 ] as [string, string[], JSX.Element][]
               ).map(([path, perms, page]) => (
                 <Route key={path} path={path} element={<RequirePermission perms={perms}>{page}</RequirePermission>} />

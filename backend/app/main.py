@@ -1,11 +1,13 @@
 from typing import Annotated
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import DataError, IntegrityError, SQLAlchemyError
 
 from app.analytics import routers as analytics
 from app.auth import account as account_routes
@@ -32,6 +34,8 @@ from app.finance import payables as fin_payables
 from app.finance import payroll as fin_payroll
 from app.finance import petty as fin_petty
 from app.finance import reports as fin_reports
+from app.issues import routes as issues
+from app.issues.fields import db_problem
 from app.knowledge import routes as knowledge
 from app.masters.routers import (
     admin_settings,
@@ -63,7 +67,35 @@ from app.tenders import routers as tenders
 app = FastAPI(title="EESPL App")
 
 # every download (Excel, PDF ...) in the audit log
+
+
+@app.exception_handler(RequestValidationError)
+async def wrong_entry(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """A wrong entry: each field's problem and its fix in plain words (app.issues.fields)."""
+    from app.issues.fields import to_detail  # noqa: PLC0415
+
+    detail = to_detail(list(exc.errors()))
+    return JSONResponse(status_code=422, content=jsonable_encoder({"detail": detail}))
+
+
+@app.exception_handler(DataError)
+async def out_of_range(request: Request, exc: DataError) -> JSONResponse:
+    """A number too large for its column, or a value the database cannot take: a wrong entry."""
+    return JSONResponse(status_code=422, content={"detail": db_problem(exc)[1]})
+
+
+@app.exception_handler(IntegrityError)
+async def broken_reference(request: Request, exc: IntegrityError) -> JSONResponse:
+    """A record that does not exist (or was removed), a duplicate, a missing value: said
+    plainly. Anything else stays a 5xx (recorded in the issue log)."""
+    code, message = db_problem(exc)
+    if code is None:
+        raise exc
+    return JSONResponse(status_code=code, content={"detail": message})
+
+
 app.add_middleware(ExportAudit)
+app.add_middleware(issues.RequestIds)  # every request's id; every 5xx in the issue log book
 
 app.add_middleware(
     CORSMiddleware,
@@ -122,6 +154,8 @@ for _r in (
     takeoff.router,
     building.router,
     building.tiles,
+    issues.me,
+    issues.router,
     field.router,
     knowledge.router,
     methodology.router,

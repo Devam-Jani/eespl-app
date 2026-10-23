@@ -204,7 +204,7 @@ def xlsx(doc: Document) -> bytes:
                 buf = io.BytesIO()
                 im.resize((max(1, int(im.width * ratio)), 48)).save(buf, format="PNG")
             ws.add_image(XlImage(io.BytesIO(buf.getvalue())), "A1")
-        except Exception:  # an unreadable logo never blocks the export
+        except (OSError, ValueError):  # an unreadable logo never blocks the export
             pass
     merged(1, doc.company.name, start=2, font=Font(bold=True, size=14))
     ws.row_dimensions[1].height = 24

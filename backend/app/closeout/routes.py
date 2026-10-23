@@ -1139,7 +1139,8 @@ def billing_checklist(
         )
     )
     if not towers:
-        return {"site_id": site.id, "towers": [], "columns": [], "rows": [], "counts": {}}
+        # the same shape as with towers (the page draws every list)
+        return {"site_id": site.id, "tower": None, "tower_id": None, "towers": [], "months": [], "columns": [], "rows": [], "counts": {}}
     t = next((x for x in towers if x.id == tower_id), towers[0])
     from app.finance.models import RaBill as RB  # noqa: PLC0415
 

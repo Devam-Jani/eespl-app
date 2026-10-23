@@ -28,7 +28,7 @@ def _unauthorized(detail: str = "Not authenticated") -> HTTPException:
 
 
 # A client login (only client portal permissions) may call these and nothing else.
-CLIENT_PATHS = ("/api/portal/", "/api/auth/", "/api/notifications")
+CLIENT_PATHS = ("/api/portal/", "/api/auth/", "/api/notifications", "/api/me/")
 
 
 def is_client_login(permissions: dict[str, str]) -> bool:

@@ -10,7 +10,10 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5173,
     strictPort: true,
-    watch: { usePolling: true },
+    // a Windows bind mount does not pass file events into the container: polled, but once a second
+    // (the default 100 ms kept the dev server at ~11% CPU doing nothing) and not the build output
+    watch: { usePolling: true, interval: 1000, binaryInterval: 3000, ignored: ["**/dist/**", "**/node_modules/**"] },
+    warmup: { clientFiles: ["./src/main.tsx", "./src/App.tsx", "./src/components/Layout.tsx"] },
     proxy: {
       "/api": { target: apiTarget, changeOrigin: true },
     },

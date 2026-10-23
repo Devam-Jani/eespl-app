@@ -5089,3 +5089,136 @@ label.check {
   color: var(--text);
   font-weight: 600;
 }
+
+/* the helper card (src/helper): a wrong entry's fields, or "Something went wrong" */
+.helper-card {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1200;
+  width: min(380px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--warn);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(16, 24, 22, 0.18);
+  padding: 12px 14px;
+  font-size: 0.92rem;
+}
+.helper-card.helper-error {
+  border-left-color: var(--danger);
+}
+.helper-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.helper-fields {
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+.helper-fields li {
+  margin: 3px 0;
+}
+.helper-text {
+  margin: 0 0 8px;
+}
+.helper-rid {
+  display: block;
+  font-size: 0.8rem;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+.helper-note {
+  background: var(--ok-soft);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin: 6px 0;
+}
+.helper-form {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+.helper-actions {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.helper-answer {
+  background: var(--accent-soft);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-top: 6px;
+}
+.helper-answer p {
+  margin: 0 0 4px;
+}
+label.field-wrong input,
+label.field-wrong select,
+label.field-wrong textarea,
+.field-wrong[aria-invalid] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 2px var(--danger-soft);
+}
+.field-msg {
+  display: block;
+  color: var(--danger);
+  font-size: 0.8rem;
+  margin-top: 3px;
+}
+.page-crash .row {
+  margin-top: 8px;
+}
+@media (max-width: 480px) {
+  .helper-card {
+    right: 8px;
+    left: 8px;
+    bottom: 8px;
+    width: auto;
+  }
+}
+/* the issue log book */
+.issue-week {
+  margin-bottom: 12px;
+}
+.issue-table td {
+  vertical-align: top;
+}
+.issue-error,
+.issue-stack {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.8rem;
+  background: var(--bg);
+  padding: 8px;
+  border-radius: 6px;
+  max-height: 320px;
+  overflow: auto;
+}
+.badge.issue-new {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.badge.issue-guided {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+.badge.issue-bug,
+.badge.issue-fixing {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.badge.issue-fixed {
+  background: var(--ok-soft);
+  color: var(--accent-dark);
+}
+.badge.issue-wont_fix {
+  background: var(--bg);
+  color: var(--muted);
+}
+.mono {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}

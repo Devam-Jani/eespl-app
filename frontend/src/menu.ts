@@ -35,6 +35,7 @@ export const MENU: MenuItem[] = [
   { to: "/escalated", label: "Escalated (all sites)", perms: ["process.escalations", "process.rules"], section: "My work" },
   { to: "/my-notifications", label: "My notifications", perms: STAFF, section: "My work" },
   { to: "/account", label: "My account", perms: STAFF, section: "My work" },
+  { to: "/my-reports", label: "My reports", perms: STAFF, section: "My work" },
   // sales
   { to: "/leads", label: "Leads", perms: ["leads.edit"], view: ["leads.view"], section: "Sales" },
   { to: "/quotations", label: "Quotations", perms: ["quotation.edit"], view: ["quotation.view"], section: "Sales" },
@@ -144,6 +145,7 @@ export const MENU: MenuItem[] = [
   { to: "/settings/security", label: "Security", perms: ["admin.users", "system.ops"], section: "Administration" },
   { to: "/settings/roles-report", label: "Who sees what (roles)", perms: ["system.ops"], section: "Administration" },
   { to: "/settings/help", label: "Help texts", perms: ["help.edit"], section: "Administration" },
+  { to: "/settings/issue-log", label: "Issue log", perms: ["issuelog.edit"], view: ["issuelog.view"], section: "Settings" },
 ];
 
 /** The pages a user may open, by group (groups with none left out). */
