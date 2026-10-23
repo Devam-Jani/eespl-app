@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
@@ -10,6 +10,7 @@ import {
   TrainingBanner,
   useMode,
 } from "../ops/Pages";
+import { HelperCard, PageErrorBoundary } from "../helper/Helper";
 import Bell from "./Bell";
 import { initialMenuOpen, isPhone, loadOpenGroups, saveOpenGroups } from "./menuState";
 
@@ -37,8 +38,11 @@ export default function Layout() {
   }, [location.pathname]);
   // My work counts on the menu (refreshed on every page change)
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const countedAt = useRef(0);
   useEffect(() => {
     if (!me) return;
+    if (location.pathname !== "/my-work" && Date.now() - countedAt.current < 15_000) return;
+    countedAt.current = Date.now();
     void api<{ counts: Record<string, number> }>("/api/team/my-work").then(
       (r) => setCounts(r.counts),
       () => setCounts({}),
@@ -105,7 +109,10 @@ export default function Layout() {
         <TrainingBanner mode={mode} />
         <GoLiveBanner />
         <main className="content">
-          <Outlet />
+          <PageErrorBoundary key={location.pathname}>
+            <Outlet />
+          </PageErrorBoundary>
+          <HelperCard />
         </main>
       </div>
     </div>

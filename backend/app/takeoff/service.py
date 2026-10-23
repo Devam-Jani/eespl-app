@@ -69,6 +69,16 @@ def clean(text: str) -> str:
     return " ".join(re.sub(r"%%[UuOoCcDdPp]", "", text or "").split())
 
 
+def layer_roles(db: Session, f: CadFile) -> dict[str, str]:
+    """The architect's layer mapping {layer: role} for this drawing (empty when none)."""
+    m = (
+        db.scalar(select(CadLayerMap).where(CadLayerMap.architect == f.architect))
+        if f.architect
+        else None
+    )
+    return dict(m.roles) if m else {}
+
+
 def hidden_layers(db: Session, f: CadFile) -> set[str]:
     m = (
         db.scalar(select(CadLayerMap).where(CadLayerMap.architect == f.architect))

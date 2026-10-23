@@ -5,6 +5,7 @@ needs payroll.view (without it the salary is left out and the result says so). T
 needs finance.export.
 """
 
+import time
 from datetime import date
 from decimal import Decimal
 from typing import Annotated, Any
@@ -64,22 +65,41 @@ def profit_table(db: DbSession, principal: CurrentPrincipal, scope: BillingView)
     return out
 
 
+_MARGINS: dict[tuple[int, bool], tuple[float, dict | None]] = {}
+MARGIN_TTL_S = 120  # a badge on the Sites list: a margin two minutes old is good enough
+
+
 @router.get("/site-margins")
-def site_margins(db: DbSession, principal: CurrentPrincipal) -> dict:
-    """For the Sites list: margin % and the over-cost flag per site (needs tender.margin)."""
+def site_margins(db: DbSession, principal: CurrentPrincipal, ids: str | None = None) -> dict:
+    """For the Sites list: margin % and the over-cost flag per site (needs tender.margin). ids:
+    the sites on the page (up to 100); each site's figure is kept two minutes (the full profit
+    of every open site took half a second and more)."""
     if not svc.sees_cost(principal) or principal.permissions.get("billing.view") is None:
         return {}
     scope = principal.permissions["billing.view"]
     salary = principal.permissions.get("payroll.view") is not None
+    visible = material.by_site(scope, principal, Site.id, Site.created_by)
+    q = select(Site).where(Site.status != "closed", visible)
+    if ids:
+        try:
+            wanted = [int(x) for x in ids.split(",") if x.strip()][:100]
+        except ValueError as exc:
+            raise svc.unprocessable("ids: site numbers separated by commas") from exc
+        q = q.where(Site.id.in_(wanted or [0]))
     out = {}
-    for site in db.scalars(
-        select(Site).where(
-            Site.status != "closed", material.by_site(scope, principal, Site.id, Site.created_by)
-        )
-    ):
-        p = svc.site_profit(db, site, salary)
-        if p["billed"] or p["cost_total"]:
-            out[str(site.id)] = {"margin_percent": p["margin_percent"], "over_cost": p["over_cost"]}
+    now = time.monotonic()
+    for site in db.scalars(q):
+        hit = _MARGINS.get((site.id, salary))
+        if hit and now - hit[0] < MARGIN_TTL_S:
+            row = hit[1]
+        else:
+            p = svc.site_profit(db, site, salary)
+            row = None
+            if p["billed"] or p["cost_total"]:
+                row = {"margin_percent": p["margin_percent"], "over_cost": p["over_cost"]}
+            _MARGINS[(site.id, salary)] = (now, row)
+        if row:
+            out[str(site.id)] = row
     return out
 
 

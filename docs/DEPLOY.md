@@ -208,9 +208,12 @@ docker compose -f docker-compose.prod.yml exec -T db dropdb -U eespl eespl_check
 ```sh
 cd /srv/eespl
 docker compose -f docker-compose.prod.yml exec backup python3 /opt/backup/backup.py run   # a backup first
+PREV=$(git rev-parse HEAD)                                    # the release running now
 git fetch --tags && git checkout <new release tag>
 docker compose -f docker-compose.prod.yml up -d --build      # the api migrates on start
 curl -s https://app.<company-domain>/health
+# the issue log book: the issues fixed by a commit of this release are marked released
+docker compose -f docker-compose.prod.yml exec api python -m app.cli issues-released $(git log --format=%h $PREV..HEAD)
 ```
 
 Write down the previous tag first (`git describe --tags`). Updates go in the evening, after
@@ -256,7 +259,50 @@ users' logins (same passwords), reset every night at 03:30. Nothing done there r
 company, and it sends nothing. Everyone reaches it from the menu: "Practise in the training
 company".
 
-## 12. Pre-go-live checklist
+## 12. The helper and the issue log book
+
+Every request has an id (`X-Request-ID`); every 5xx is kept in the issue log book with it and its
+trace (Settings > Issue log: the director, the office admin and the super admin). The browser adds
+crashes and failed requests (the page, the role, the last button pressed, the error, the browser:
+never what was typed, unless the user ticks "also send what I typed"; never a password or token).
+Each user follows their own reports under My work > My reports (clients: "My reports" in the portal).
+
+In `.env`:
+
+- `HELPER_AI_ENABLED=true` turns on "Ask the helper" (Claude, `HELPER_AI_MODEL`, default
+  claude-sonnet-5-5) with `ANTHROPIC_API_KEY`. Off by default. It only answers: it never changes
+  data. What it is sent is scrubbed: no password, key, token, email, phone or place, and for a
+  client user no amount, cost, rate, price or margin. Its answers are kept with the issue.
+- `CRAWLER_TOKEN` (a long random value, `python scripts/make-prod-secrets.py` style): the nightly
+  check's key to add its findings, and the GitHub workflow's key to read the open bugs. It opens
+  nothing else.
+
+Nightly at 02:00 the worker writes the open bugs (no personal data) to
+`media/issues/open.md`; `python -m app.cli issues-open-md` writes it now. Mondays at 08:00 the
+week's summary goes to the bell of the log book's keepers.
+
+**The nightly check** (`tools/crawler`): after the training company's 03:30 rebuild, it signs in
+there as each role's DEMO user and the DEMO client, opens every page of the menu, and reports
+console errors, failed requests, blank screens, buttons that do nothing and pages over 2 s, as
+"found by the nightly check". On the server, from cron at 04:30:
+
+```sh
+30 4 * * * cd /srv/eespl/tools/crawler && docker run --rm --network host -v "$PWD":/c -w /c   -e BASE=https://training.<company-domain> -e REPORT_URL=https://app.<company-domain>/api/issues/nightly   --env-file /srv/eespl/.env mcr.microsoft.com/playwright:v1.49.1-noble   sh -c "npm ci --silent && node crawl.cjs" >> /var/log/eespl-crawler.log 2>&1
+```
+
+(`.env` gives it `DEMO_USER_PASSWORD` and `CRAWLER_TOKEN`; it prints neither.)
+
+**The developer agent** (`.github/workflows/fix-issues.yml`, claude-code-action pinned by its
+commit): on weekdays at 06:00 IST, or by hand from the Actions tab (optionally one issue number),
+it reads the open bugs from `/api/issues/nightly/open.md`, reproduces each with a failing test,
+fixes it and opens a pull request "Fixes issue #N". It never merges or deploys. Set in GitHub
+(Settings > Secrets and variables > Actions): the secret `ANTHROPIC_API_KEY` (a key for the agent,
+separate from the app's), the secret `CRAWLER_TOKEN` (the same value as the server's) and the
+variable `EESPL_URL` (`https://app.<company-domain>`). After review and merge, write the cause, the
+fix, the pull request link and the commit on the issue (Settings > Issue log); the deploy that
+carries the commit marks it released (section 8).
+
+## 13. Pre-go-live checklist
 
 - [ ] The server, the domain and the off-site target confirmed by the director
 - [ ] DNS for the domain and `training.` resolves to the server

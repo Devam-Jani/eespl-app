@@ -47,23 +47,52 @@ def _cad(db, site: Site, cad_file_id: int) -> CadFile:
     return f
 
 
+def drawing_state(f: CadFile | None) -> str:
+    """not read, queued, reading, ready, failed, or missing (read, but its geometry is not on the
+    server: read it again)."""
+    from app.takeoff import pipeline  # noqa: PLC0415
+
+    if f is None:
+        return "not read"
+    if f.status == "ready" and not (f.geometry_path and pipeline.media(f.geometry_path).exists()):
+        return "missing"
+    return f.status
+
+
 def _out(db, site: Site, principal) -> dict:
+    from pathlib import Path  # noqa: PLC0415
+
     m = service.current(db, site.id)
-    files = db.execute(
-        select(CadFile, Drawing.title, DrawingRevision.rev_no)
-        .join(DrawingRevision, DrawingRevision.id == CadFile.revision_id)
-        .join(Drawing, Drawing.id == CadFile.drawing_id)
-        .where(CadFile.site_id == site.id, CadFile.status == "ready")
-        .order_by(CadFile.id.desc())
+    revs = db.execute(
+        select(DrawingRevision, Drawing.title, CadFile)
+        .join(Drawing, Drawing.id == DrawingRevision.drawing_id)
+        .outerjoin(CadFile, CadFile.revision_id == DrawingRevision.id)
+        .where(Drawing.site_id == site.id)
+        .order_by(DrawingRevision.id.desc())
     ).all()
+    files = [(f, title, r.rev_no) for r, title, f in revs if f is not None and drawing_state(f) == "ready"]
     cad = db.get(CadFile, m.cad_file_id) if m and m.cad_file_id else None
+    can_read = principal.permissions.get("takeoff.edit") is not None and sites.covers(principal.permissions["takeoff.edit"], principal, site)
+    readable = [(r, title, f) for r, title, f in revs if Path(r.filename or "").suffix.lower() in (".dwg", ".dxf")]
+    model_rev = next(((r, title, f) for r, title, f in revs if cad is not None and f is not None and f.id == cad.id), None)
+    state = None
+    if model_rev is not None:
+        r, title, f = model_rev
+        state = {"revision_id": r.id, "cad_file_id": f.id, "title": title, "filename": r.filename, "rev_no": r.rev_no, "state": drawing_state(f),
+                 "progress": f.progress, "progress_at": f.progress_at, "error": f.error}  # fmt: skip
     return {
         "site_id": site.id,
         "can_edit": _can_edit(site, principal),
         "model": None if m is None else {"id": m.id, "version": m.version, "cad_file_id": m.cad_file_id, "data": m.data, "note": m.note, "changes": m.changes,
                                           "by": m.created_by_name, "at": m.created_at, "unit_m": cad.unit_m if cad else None,
-                                          "floors": service.elevations(m.data or {})},  # fmt: skip
+                                          "floors": service.elevations(m.data or {}), "unmatched_levels": service.unmatched_levels(m.data or {})},  # fmt: skip
         "drawings": [{"cad_file_id": f.id, "title": title, "rev_no": rev, "unit_m": f.unit_m, "newer": bool(m and m.cad_file_id and f.id > m.cad_file_id)} for f, title, rev in files],
+        # every AutoCAD revision of the site with how far it is read (the page shows it, and a
+        # "Read the drawing" button to those who may read drawings)
+        "revisions": [{"revision_id": r.id, "title": title, "rev_no": r.rev_no, "filename": r.filename, "cad_file_id": f.id if f else None, "state": drawing_state(f),
+                       "progress": f.progress if f else None, "progress_at": f.progress_at if f else None, "error": f.error if f else None} for r, title, f in readable],  # fmt: skip
+        "model_drawing": state,
+        "can_read": can_read,
         "plans": service.plans(cad) if cad else [],
         "site_floors": [{"node_id": f.id, "name": f.name, "level": service.level_of(f)} for f in service.site_floors(db, site.id)],
     }
@@ -140,6 +169,8 @@ def _checked(data: dict) -> dict:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Floor {f.get('name')}: unknown floor type {f['type']}")
         if f.get("height_m") is not None and not 2.0 <= float(f["height_m"]) <= 10.0:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Floor {f.get('name')}: height between 2 and 10 m")
+        if f.get("level_by_hand") and f.get("elevation_m") is not None and not -30.0 <= float(f["elevation_m"]) <= 400.0:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Floor {f.get('name')}: a level between -30 and +400 m")
     return {**data, "settings": s}
 
 

@@ -504,7 +504,8 @@ def team(db: DbSession, principal: CurrentPrincipal, _: Track) -> dict:
 class PlanIn(BaseModel):
     site_ids: list[int] = Field(max_length=25)
     keep_order: bool = False  # the user reordered: just the legs in this order
-    start: list[float] | None = None  # where the person is now (else home)
+    # where the person is now, [lat, lng] (else home)
+    start: list[float] | None = Field(None, min_length=2, max_length=2)
 
 
 @router.post("/plan")

@@ -35,5 +35,8 @@ def training_night(db, now: datetime | None = None) -> bool:
         return False
     from app.ops import training  # noqa: PLC0415
 
+    # the reset drops the schema on its own connection: this session's read must not hold a lock
+    # on it (it waited for itself forever, and every later query queued behind it)
+    db.rollback()
     training.reset()
     return True

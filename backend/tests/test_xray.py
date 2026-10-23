@@ -102,7 +102,8 @@ def test_level_texts_of_a_section_set_the_floor_heights_and_without_them_the_def
     # the floors from those levels: ±0 ground, one level per floor; 3 m above the last
     data = {"settings": {"plinth_m": 0.45, "floor_height_m": 3.2}, "levels": lv, "floors": [{"level": n, "type": "t"} for n in range(0, 6)]}
     el = {f["level"]: f for f in service.elevations(data)}
-    assert el[1]["elevation_m"] == pytest.approx(3.45) and el[2]["height_m"] == pytest.approx(3.0)
+    assert el[1]["elevation_m"] == pytest.approx(3.0) and el[1]["level_source"] == "section" and el[2]["height_m"] == pytest.approx(3.0)
+    assert el[4]["level_source"] == "default" and "no level on the section" in el[4]["level_flag"]
     assert el[4]["elevation_m"] - el[3]["elevation_m"] == pytest.approx(3.2)  # past the section: the setting
     default = {f["level"]: f for f in service.elevations({**data, "levels": none})}
     assert default[5]["elevation_m"] == pytest.approx(0.45 + 5 * 3.2)
@@ -143,7 +144,7 @@ def test_the_model_from_a_drawing_repeats_the_typical_floor_on_floors_3_to_12_wi
     b = m.json()["building"]
     assert len(b["floors"]) == 10 and [f["level"] for f in b["floors"]] == list(range(3, 13))
     heights = {f["level"]: f for f in b["floors"]}
-    assert heights[3]["elevation_m"] == pytest.approx(9.45) and heights[12]["elevation_m"] - heights[11]["elevation_m"] == pytest.approx(3.0)
+    assert heights[3]["elevation_m"] == pytest.approx(9.0) and heights[12]["elevation_m"] - heights[11]["elevation_m"] == pytest.approx(3.0)
     (typ,) = b["types"].values()
     assert typ["area_sqm"] == pytest.approx(152) and len(typ["columns"]) == 3 and len(typ["cores"]) == 1
     (room,) = b["rooms"]
@@ -202,6 +203,7 @@ def test_the_client_gets_the_building_of_its_own_site_only_without_the_drawing_o
     body = a.get(f"/api/portal/sites/{sa}/model").json()
     assert body["building"]["types"]["g"]["area_sqm"] == pytest.approx(200)
     assert "source" not in body["building"] and not forbidden_keys(body) and "cad_file_id" not in json.dumps(body)
+    assert body["building"]["levels"]["note"] is None  # the section line is for staff
     assert b.get(f"/api/portal/sites/{sa}/model").status_code == 404
     assert b.get(f"/api/portal/sites/{sb}/model").json()["building"] is None  # no model: the schematic boxes
     for path in (f"/api/sites/{sa}/building", f"/api/sites/{sa}/building/versions", f"/api/sites/{sa}/model"):
@@ -259,3 +261,21 @@ def test_the_completion_certificate_has_its_3d_page_only_when_one_was_added(medi
     w.image_3d_path = "wcc/building-3d.png"
     page = _image_3d(w)
     assert "THE BUILDING IN 3D" in page and "building-3d.png" in page and "page-break-before" in page
+
+
+def test_the_section_levels_map_to_the_floors_from_the_ground_up_and_the_rest_are_flagged():
+    """The sample office drawing's section: basement pairs, a +0.914 plinth for the ground floor,
+    one level per storey (slab top and finished floor pairs), a tank level above the terrace."""
+    values = [-11.049, -10.973, -7.087, -7.01, -3.124, -3.048, 0.914, 6.172, 9.982, 10.135, 13.945, 17.907, 21.869, 25.832, 29.794, 33.757, 37.719, 41.681, 45.72, 48.692]
+    lv = {"source": "section", "values_m": values}
+    data = {"settings": {"floor_height_m": 3.962}, "levels": lv, "floors": [{"level": n, "name": f"F{n}", "type": "t"} for n in range(0, 12)]}
+    el = {f["level"]: f for f in service.elevations(data)}
+    assert el[0]["elevation_m"] == pytest.approx(0.914) and el[0]["height_m"] == pytest.approx(5.258)  # a tall ground floor
+    assert el[2]["elevation_m"] == pytest.approx(10.135)  # the finished floor of the 32'9" / 33'3" pair
+    assert el[10]["elevation_m"] == pytest.approx(41.681) and el[11]["elevation_m"] == pytest.approx(45.72)
+    assert all(f["level_source"] == "section" and f["level_flag"] is None for f in el.values())
+    assert service.unmatched_levels(data) == [-10.973, -7.01, -3.048, 48.692]  # basements the site has not, the tank
+    # corrected by hand on the building page: that floor's level wins, the floor below takes its height from it
+    data["floors"][3] |= {"elevation_m": 14.2, "level_by_hand": True}
+    el = {f["level"]: f for f in service.elevations(data)}
+    assert el[3]["elevation_m"] == pytest.approx(14.2) and el[3]["level_source"] == "hand" and el[2]["height_m"] == pytest.approx(4.065)

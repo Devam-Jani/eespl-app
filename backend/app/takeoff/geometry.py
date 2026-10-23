@@ -80,10 +80,18 @@ class Snap:
     kind: str  # end, intersection, perpendicular, none
 
 
-def snap(p: Point, segments: list[Segment], radius: float, previous: Point | None = None) -> Snap:
+def snap(
+    p: Point, segments: list[Segment], radius: float, previous: Point | None = None, index=None
+) -> Snap:
     """The point the click means: the nearest end point, else intersection, else the foot of
-    the perpendicular from the previous corner onto a nearby wall, within the radius."""
-    close = near(segments, p, radius)
+    the perpendicular from the previous corner onto a nearby wall, within the radius. With the
+    drawing's grid index only the segments around the click are looked at."""
+    pool = (
+        index.box(p[0] - radius, p[1] - radius, p[0] + radius, p[1] + radius)
+        if index is not None
+        else segments
+    )
+    close = near(pool, p, radius)
     best: tuple[float, Snap] | None = None
     for s in close:
         for e in ((s[0], s[1]), (s[2], s[3])):
@@ -129,13 +137,21 @@ def _ray(p: Point, dx: float, dy: float, segments: list[Segment], reach: float) 
     return best
 
 
-def propose(p: Point, segments: list[Segment], reach: float) -> list[Point] | None:
+def propose(p: Point, segments: list[Segment], reach: float, index=None) -> list[Point] | None:
     """For a click inside a room: the rectangle up to the nearest wall in each of the four
-    directions (None when a direction meets no wall within the reach)."""
-    right = _ray(p, 1, 0, segments, reach)
-    left = _ray(p, -1, 0, segments, reach)
-    up = _ray(p, 0, 1, segments, reach)
-    down = _ray(p, 0, -1, segments, reach)
+    directions (None when a direction meets no wall within the reach). With the grid index each
+    ray looks only along its own row or column of cells."""
+
+    def along(dx: int, dy: int) -> list[Segment]:
+        if index is None:
+            return segments
+        x2, y2 = p[0] + dx * reach, p[1] + dy * reach
+        return index.box(min(p[0], x2), min(p[1], y2), max(p[0], x2), max(p[1], y2))
+
+    right = _ray(p, 1, 0, along(1, 0), reach)
+    left = _ray(p, -1, 0, along(-1, 0), reach)
+    up = _ray(p, 0, 1, along(0, 1), reach)
+    down = _ray(p, 0, -1, along(0, -1), reach)
     if None in (right, left, up, down):
         return None
     x0, x1, y0, y1 = p[0] - left, p[0] + right, p[1] - down, p[1] + up

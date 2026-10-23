@@ -68,6 +68,9 @@ class CadFile(Tracked, Base):
     warnings: Mapped[int] = mapped_column(Integer, server_default="0")
     architect: Mapped[str | None] = mapped_column(String(200))  # whose layer mapping applies
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # where the worker's read is: converting, reading, finding areas, done (or failed)
+    progress: Mapped[str | None] = mapped_column(String(30))
+    progress_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class CadLayerMap(Tracked, Base):

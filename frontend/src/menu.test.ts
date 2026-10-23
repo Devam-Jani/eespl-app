@@ -52,6 +52,13 @@ describe("the menu by group", () => {
     expect(who.sort()).toEqual(["director", "office_admin", "super_admin"]);
   });
 
+  it("puts Settings > Issue log in the director's, office admin's and super admin's menus, My reports in every staff menu", () => {
+    const holders = (to: string) => Object.keys(ROLES).filter((r) => visibleGroups((...c) => c.some((x) => ROLES[r].includes(x))).some((g) => g.items.some((i) => i.to === to)));
+    expect(holders("/settings/issue-log").sort()).toEqual(["director", "office_admin", "super_admin"]);
+    expect(groupOf("/settings/issue-log")).toBe("Settings");
+    expect(holders("/my-reports").sort()).toEqual(Object.keys(ROLES).filter((r) => r !== "client").sort());
+  });
+
   it("gives sales its clients' bills read-only under Sales, and nobody else (Part 0 of the X-ray prompt)", () => {
     const holders = (to: string) => Object.keys(ROLES).filter((r) => visibleGroups((...c) => c.some((x) => ROLES[r].includes(x))).some((g) => g.items.some((i) => i.to === to)));
     expect(holders("/sales/bills")).toEqual(["sales"]);

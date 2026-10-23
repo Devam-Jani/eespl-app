@@ -515,6 +515,14 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--client", default=None)
     p.add_argument("--demo", action="store_true")
     p.add_argument("--limit", type=int, default=None)
+    p = sub.add_parser(
+        "issues-open-md", help="Write the open bugs of the issue log (no personal data)"
+    )
+    p.add_argument("--out", default=None, help="the file (default MEDIA_DIR/issues/open.md)")
+    p = sub.add_parser(
+        "issues-released", help="A deploy: the issues fixed by these commits are released"
+    )
+    p.add_argument("commits", nargs="+", help="commit hashes, or @file (one per line)")
     sub.add_parser(
         "seed-demo-team",
         help="One invented demo user per role (password from DEMO_USER_PASSWORD in .env)",
@@ -615,6 +623,23 @@ def main(argv: list[str] | None = None) -> None:
         print(
             f"{'DRY RUN: ' if out['dry_run'] else ''}added {out['added']}, left out {out['left_out']}"  # noqa: E501
         )
+    elif args.command == "issues-open-md":
+        import app.main  # noqa: F401, PLC0415  (every model registered)
+        from app.issues import worker as issues_worker  # noqa: PLC0415
+
+        with SessionLocal() as db:
+            print(issues_worker.write_open_md(db, Path(args.out) if args.out else None))
+    elif args.command == "issues-released":
+        import app.main  # noqa: F401, PLC0415
+        from app.issues import service as issues_svc  # noqa: PLC0415
+
+        commits = []
+        for c in args.commits:
+            commits += Path(c[1:]).read_text().split() if c.startswith("@") else [c]
+        with SessionLocal() as db:
+            done = issues_svc.released(db, commits)
+            db.commit()
+        print(f"released: {', '.join(f'#{i}' for i in done) or 'none'}")
     elif args.command == "demo-xray":
         import json  # noqa: PLC0415
 

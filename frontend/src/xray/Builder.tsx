@@ -8,22 +8,38 @@ import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent }
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api";
 import { errorText } from "../format";
+import { decodeGeometry, useGlPlan } from "../takeoff/glplan";
+import type { Geo as PlanGeo, GeoV2 } from "../takeoff/glplan";
+import { ReadProgress } from "../takeoff/ReadProgress";
 
 type Pt = [number, number];
 type Core = { kind: "stair" | "lift"; outline: Pt[]; risers: number | null };
 type FType = { key: string; name: string; plan: string; title_xy: Pt | null; region: number[] | null; floors: number[]; outline: Pt[]; columns: number[][]; columns_confirmed: boolean; beams: number[][]; cores: Core[]; shift: Pt; shift_fixed?: boolean; walls?: boolean };
 type Settings = { floor_height_m: number; slab_m: number; plinth_m: number; column_min_m: number; column_max_m: number; beams_on_walls: boolean; riser_m: number; bloom: "auto" | "on" | "off"; tower_id: number | null; ifc: boolean; ifc_max_mb: number };
-type Data = { settings: Settings; levels: { source: string; note: string; floor_height_m: number | null }; floor_types: FType[]; floors: { level: number; node_id: number; name: string; type: string | null; height_m: number | null }[]; ifc_links: Record<string, number> };
+type Data = { settings: Settings; levels: { source: string; note: string; floor_height_m: number | null }; floor_types: FType[]; floors: { level: number; node_id: number; name: string; type: string | null; height_m: number | null; elevation_m?: number | null; level_by_hand?: boolean }[]; ifc_links: Record<string, number> };
 type Out = {
   site_id: number;
   can_edit: boolean;
-  model: null | { version: number; cad_file_id: number | null; data: Data; note: string | null; changes: Changes | null; by: string | null; at: string; unit_m: number | null; floors: { level: number; name: string; elevation_m: number; height_m: number; type: string | null }[] };
+  model: null | { version: number; cad_file_id: number | null; data: Data; note: string | null; changes: Changes | null; by: string | null; at: string; unit_m: number | null; floors: { level: number; name: string; elevation_m: number; height_m: number; type: string | null; level_source: "hand" | "section" | "default"; level_flag: string | null }[]; unmatched_levels: number[] };
   drawings: { cad_file_id: number; title: string; rev_no: string; unit_m: number | null; newer: boolean }[];
+  revisions: DrawingRev[];
+  model_drawing: DrawingRev | null;
+  can_read: boolean;
   plans: { title: string; xy: Pt; floors: number[]; region: number[] }[];
   site_floors: { node_id: number; name: string; level: number | null }[];
 };
+type DrawingRev = { revision_id: number; title: string; rev_no: number | string; filename: string | null; cad_file_id: number | null; state: "not read" | "queued" | "reading" | "ready" | "failed" | "missing"; progress: string | null; progress_at: string | null; error: string | null };
+const STATE_TEXT: Record<DrawingRev["state"], string> = {
+  "not read": "This drawing has not been read yet.",
+  queued: "Waiting to be read.",
+  reading: "Being read.",
+  ready: "Read.",
+  failed: "The drawing could not be read.",
+  missing: "The drawing was read, but its lines are no longer on the server: read it again.",
+};
+
 type Changes = { plans_kept: string[]; plans_missing: string[]; columns: Record<string, { kept: number; added: number; removed: number }>; rooms: { kept: number; added: string[]; resized: string[]; removed: string[] } };
-type Geo = { extents: [number, number, number, number] | null; unit_m: number | null; layers: { name: string; role: string | null; color: number }[]; geometry: Record<string, { s: number[] }> };
+type Geo = PlanGeo;
 type Tool = "none" | "outline" | "columns" | "stair" | "lift" | "beam";
 
 /** "2,3,5-9" -> [2, 3, 5, 6, 7, 8, 9]; "G" or "0" is the ground floor. */
@@ -56,6 +72,7 @@ export default function BuildingBuilder() {
   const [out, setOut] = useState<Out | null>(null);
   const [data, setData] = useState<Data | null>(null);
   const [geo, setGeo] = useState<Geo | null>(null);
+  const [geoError, setGeoError] = useState<string | null>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [tool, setTool] = useState<Tool>("none");
   const [trace, setTrace] = useState<Pt[]>([]);
@@ -78,9 +95,26 @@ export default function BuildingBuilder() {
   }, [siteId]);
   useEffect(load, [load]);
   const fileId = out?.model?.cad_file_id ?? null;
+  const drawingReady = out?.model_drawing?.state === "ready";
   useEffect(() => {
-    if (fileId) api<Geo>(`/api/takeoff/files/${fileId}/geometry`).then(setGeo, (e) => setError(errorText(e)));
-  }, [fileId]);
+    setGeoError(null);
+    if (fileId && drawingReady)
+      api<GeoV2 | Geo>(`/api/takeoff/files/${fileId}/geometry`).then(
+        (raw) => setGeo(decodeGeometry(raw)),
+        (e) => setGeoError(errorText(e)), // never a page stuck on loading: the reason instead
+      );
+  }, [fileId, drawingReady]);
+  // a drawing being read: its stage, polled
+  const reading = !!out && [out.model_drawing, ...out.revisions].some((r) => r && (r.state === "queued" || r.state === "reading"));
+  useEffect(() => {
+    if (!reading) return;
+    const t = setTimeout(load, 1500);
+    return () => clearTimeout(t);
+  }, [reading, out, load]);
+  async function readDrawing(revisionId: number) {
+    await run(() => api(`/api/takeoff/revisions/${revisionId}/read`, { method: "POST", json: { architect: null } }), "Queued: the drawing is being read");
+    load();
+  }
 
   const type = data?.floor_types.find((t) => t.key === sel) ?? null;
   const unit = out?.model?.unit_m ?? geo?.unit_m ?? 0.001;
@@ -232,9 +266,17 @@ export default function BuildingBuilder() {
       {!out.model && (
         <div className="card">
           <h2>Start from a drawing</h2>
+          {out.revisions
+            .filter((r) => r.state !== "ready")
+            .map((r) => (
+              <DrawingStateCard key={r.revision_id} rev={r} canRead={out.can_read} busy={busy} onRead={(id) => void readDrawing(id)} />
+            ))}
           {out.drawings.length === 0 ? (
             <p>
-              No drawing read for this site yet: upload it and read it in the <Link to={`/sites/${siteId}/takeoff`}>AutoCAD takeoff</Link> first.
+              {out.revisions.length
+                ? "Read the drawing first (above); then build from it."
+                : "No AutoCAD drawing on this site yet: upload it in the site's Drawings, then read it here or in the AutoCAD takeoff."}{" "}
+              <Link to={`/sites/${siteId}/takeoff`}>AutoCAD takeoff</Link>
             </p>
           ) : (
             out.drawings.map((d) => (
@@ -339,6 +381,13 @@ export default function BuildingBuilder() {
                     {type.columns_confirmed ? "Confirmed" : "Confirm"}
                   </button>
                 </div>
+                <div className="builder-row small">
+                  Column sizes from
+                  <input type="number" step="0.05" min={0.1} max={1} style={{ width: "4.5em" }} value={data.settings.column_min_m} onChange={(e) => update((d) => (d.settings.column_min_m = Number(e.target.value)))} aria-label="Smallest column side (m)" />
+                  to
+                  <input type="number" step="0.05" min={0.2} max={2} style={{ width: "4.5em" }} value={data.settings.column_max_m} onChange={(e) => update((d) => (d.settings.column_max_m = Number(e.target.value)))} aria-label="Largest column side (m)" />
+                  m (this site's setting: save, then find again)
+                </div>
                 <div className="builder-row">
                   <b>3. Cores</b>
                   <button className={`btn btn-small${tool === "stair" ? " active" : ""}`} onClick={() => (setTool("stair"), setTrace([]))}>
@@ -437,8 +486,8 @@ export default function BuildingBuilder() {
                 <tr>
                   <th>Floor</th>
                   <th>Type</th>
-                  <th className="num">Height (m)</th>
                   <th className="num">Level (m)</th>
+                  <th className="num">Height (m)</th>
                 </tr>
               </thead>
               <tbody>
@@ -447,10 +496,32 @@ export default function BuildingBuilder() {
                   .map((f) => {
                     const t = data.floor_types.find((x) => x.floors.includes(f.level));
                     const el = out.model?.floors.find((x) => x.level === f.level);
+                    const src = f.level_by_hand ? "hand" : el?.level_source;
                     return (
-                      <tr key={f.node_id}>
-                        <td>{f.name}</td>
+                      <tr key={f.node_id} className={el?.level_flag ? "row-warn" : undefined}>
+                        <td>
+                          {f.name}
+                          {el?.level_flag && <div className="small text-warn">{el.level_flag}</div>}
+                        </td>
                         <td className="small">{t?.name ?? <span className="muted">— (the reference plan)</span>}</td>
+                        <td className="num">
+                          <input
+                            type="number"
+                            step="0.001"
+                            style={{ width: "6.5em" }}
+                            value={f.level_by_hand ? (f.elevation_m ?? "") : (el?.elevation_m ?? "")}
+                            disabled={!out.can_edit}
+                            onChange={(e) =>
+                              update((d) => {
+                                const x = d.floors.find((y) => y.node_id === f.node_id)!;
+                                x.elevation_m = e.target.value === "" ? null : Number(e.target.value);
+                                x.level_by_hand = e.target.value !== "";
+                              })
+                            }
+                            aria-label={`Level of ${f.name}`}
+                          />
+                          <div className="small muted">{src === "section" ? "from the section" : src === "hand" ? "typed" : "default"}</div>
+                        </td>
                         <td className="num">
                           <input
                             type="number"
@@ -463,21 +534,64 @@ export default function BuildingBuilder() {
                             aria-label={`Height of ${f.name}`}
                           />
                         </td>
-                        <td className="num small">{el ? el.elevation_m.toFixed(3) : "—"}</td>
                       </tr>
                     );
                   })}
               </tbody>
             </table>
+            {(out.model?.unmatched_levels.length ?? 0) > 0 && (
+              <p className="small text-warn">
+                Section levels no floor uses: {out.model!.unmatched_levels.map((v) => `${v >= 0 ? "+" : ""}${v.toFixed(3)}`).join(", ")} m (basements, a tank or a roof room the site structure has not got). Add the floor to the structure, or leave them.
+              </p>
+            )}
           </div>
           <div className="card builder-plan">
-            {geo && type ? (
+            {out.model_drawing && out.model_drawing.state !== "ready" ? (
+              <DrawingStateCard rev={out.model_drawing} canRead={out.can_read} busy={busy} onRead={(id) => void readDrawing(id)} />
+            ) : geoError ? (
+              <div className="alert alert-error">
+                The drawing could not be shown: {geoError}
+                {out.can_read && out.model_drawing && (
+                  <div>
+                    <button className="btn btn-small" disabled={busy} onClick={() => void readDrawing(out.model_drawing!.revision_id)}>
+                      Read the drawing again
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : geo && type ? (
               <PlanCanvas geo={geo} type={type} trace={trace} tool={tool} beamFrom={beamFrom} onClick={(x, y, r) => void onPlanClick(x, y, r)} />
+            ) : !type ? (
+              <p className="muted">Pick a floor type on the left.</p>
             ) : (
               <p className="muted">Loading the drawing…</p>
             )}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/** A drawing that is not ready: its state, its stage while it is read, the reason when it failed,
+ *  and "Read the drawing" for those who may read drawings. */
+function DrawingStateCard({ rev, canRead, busy, onRead }: { rev: DrawingRev; canRead: boolean; busy: boolean; onRead: (revisionId: number) => void }) {
+  if (rev.state === "queued" || rev.state === "reading") return <ReadProgress filename={rev.filename} progress={rev.progress} since={rev.progress_at} />;
+  return (
+    <div className={`alert ${rev.state === "failed" || rev.state === "missing" ? "alert-error" : "alert-warn"} drawing-state`}>
+      <b>
+        {rev.title} (R{rev.rev_no})
+      </b>{" "}
+      {STATE_TEXT[rev.state]}
+      {rev.error && <div className="small">{rev.error}</div>}
+      {canRead ? (
+        <div>
+          <button className="btn btn-small btn-primary" disabled={busy} onClick={() => onRead(rev.revision_id)}>
+            {rev.state === "not read" ? "Read the drawing" : "Read the drawing again"}
+          </button>
+        </div>
+      ) : (
+        <div className="small">Ask billing or planning to read it.</div>
       )}
     </div>
   );
@@ -520,6 +634,7 @@ function ChangesNote({ changes }: { changes: Changes }) {
 /** The plan with the outline, columns, cores and beams over it: pan, zoom, click. */
 function PlanCanvas({ geo, type, trace, tool, beamFrom, onClick }: { geo: Geo; type: FType; trace: Pt[]; tool: Tool; beamFrom: number | null; onClick: (x: number, y: number, radius: number) => void }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const glRef = useRef<HTMLCanvasElement>(null);
   const fitTo = useMemo(() => {
     const r = type.outline.length ? boundsOf(type.outline, 0.08) : type.region ? (type.region as [number, number, number, number]) : (geo.extents ?? [0, 0, 1000, 1000]);
     return r;
@@ -535,6 +650,7 @@ function PlanCanvas({ geo, type, trace, tool, beamFrom, onClick }: { geo: Geo; t
     setView({ cx: (x1 + x2) / 2, cy: (y1 + y2) / 2, scale });
   }, [fitTo, view.scale]);
   const hidden = useMemo(() => new Set(geo.layers.filter((l) => l.role === "hide" || /FUR|HATCH|ELE|PHE|FFTG|DIM|TITLE/i.test(l.name)).map((l) => l.name)), [geo.layers]);
+  const glOk = useGlPlan(glRef, geo, view, hidden);
 
   const draw = useCallback(() => {
     const c = ref.current;
@@ -546,8 +662,7 @@ function PlanCanvas({ geo, type, trace, tool, beamFrom, onClick }: { geo: Geo; t
     if (c.height !== h * dpr) c.height = h * dpr;
     const ctx = c.getContext("2d")!;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, w, h);
+    ctx.clearRect(0, 0, w, h);
     const { cx, cy, scale } = view;
     const X = (x: number) => (x - cx) * scale + w / 2;
     const Y = (y: number) => h / 2 - (y - cy) * scale;
@@ -555,7 +670,11 @@ function PlanCanvas({ geo, type, trace, tool, beamFrom, onClick }: { geo: Geo; t
     ctx.strokeStyle = "#9aa2a6";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    for (const [layer, g] of Object.entries(geo.geometry)) {
+    if (!glOk.current) {
+      ctx.fillStyle = "#fff"; // no WebGL here: the lines on this canvas
+      ctx.fillRect(0, 0, w, h);
+    }
+    for (const [layer, g] of glOk.current ? [] : Object.entries(geo.geometry)) {
       if (hidden.has(layer)) continue;
       const s = g.s;
       for (let i = 0; i < s.length; i += 4) {
@@ -604,7 +723,7 @@ function PlanCanvas({ geo, type, trace, tool, beamFrom, onClick }: { geo: Geo; t
         ctx.fillRect(X(p[0]) - 4, Y(p[1]) - 4, 8, 8);
       }
     }
-  }, [geo, hidden, view, type, trace, beamFrom]);
+  }, [geo, hidden, view, type, trace, beamFrom, glOk]);
   useEffect(() => {
     const id = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(id);
@@ -640,6 +759,7 @@ function PlanCanvas({ geo, type, trace, tool, beamFrom, onClick }: { geo: Geo; t
   }
   return (
     <div className="takeoff-canvas builder-canvas">
+      <canvas ref={glRef} className="plan-gl" aria-hidden="true" />
       <canvas ref={ref} onPointerDown={down} onPointerMove={move} onPointerUp={up} onWheel={wheel} aria-label="The plan" style={{ cursor: tool === "none" ? "grab" : "crosshair" }} />
       <div className="takeoff-zoom">
         <button className="btn btn-small" onClick={() => setView((v) => ({ ...v, scale: v.scale * 1.5 }))} aria-label="Zoom in">

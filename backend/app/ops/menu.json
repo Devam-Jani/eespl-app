@@ -135,6 +135,23 @@
   ]
  },
  {
+  "to": "/my-reports",
+  "label": "My reports",
+  "section": "My work",
+  "perms": [
+   "dashboard.view",
+   "site.view",
+   "leads.view",
+   "tender.view",
+   "billing.view",
+   "payables.view",
+   "po.view",
+   "admin.users",
+   "store.view",
+   "delivery.view"
+  ]
+ },
+ {
   "to": "/leads",
   "label": "Leads",
   "section": "Sales",
@@ -899,6 +916,14 @@
   "section": "Administration",
   "perms": [
    "help.edit"
+  ]
+ },
+ {
+  "to": "/settings/issue-log",
+  "label": "Issue log",
+  "section": "Settings",
+  "perms": [
+   "issuelog.edit"
   ]
  }
 ]

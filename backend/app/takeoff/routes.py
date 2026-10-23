@@ -7,12 +7,13 @@ their own sites: read a drawing, map layers, trace, map to the site, accept into
 Accepting into the measurement book also needs measurement.edit (billing). Client logins never
 hold these permissions."""
 
+from datetime import UTC, datetime
 from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -21,7 +22,7 @@ from app.auth.deps import CurrentPrincipal, require_permission
 from app.db import DbSession
 from app.execution.common import names, record
 from app.sites import service as site_service
-from app.takeoff import geometry, pipeline, service
+from app.takeoff import compact, geometry, pipeline, service
 from app.takeoff.models import LAYER_ROLES, CadArea, CadFile, CadLayerMap
 from app.takeoff.reader import UNITS
 
@@ -85,6 +86,7 @@ def file_out(db, f: CadFile) -> dict:
         "candidates": s.get("candidates"), "loose_notes": s.get("loose_notes", []),
         "count_sets": s.get("count_sets"), "plan_titles": s.get("plan_titles", []), "sheet_unknown": s.get("sheet_unknown"), "sheet_guessed": s.get("sheet_guessed"),
         "warnings": f.warnings, "dxf_repairs": s.get("dxf_repairs", 0), "read_at": f.read_at,
+        "progress": f.progress, "progress_at": f.progress_at,
     }  # fmt: skip
 
 
@@ -124,12 +126,12 @@ def read_revision(
     revision_id: int,
     body: ReadIn,
     request: Request,
-    background: BackgroundTasks,
     db: DbSession,
     principal: CurrentPrincipal,
     _: View,
 ) -> dict:
-    """Read the drawing (in the background: a large DWG takes a minute or two)."""
+    """Queue the drawing for the worker to read (a large DWG takes a minute or two); the page
+    polls GET /files/{id} for its stage."""
     from app.sites.models import Drawing, DrawingRevision  # noqa: PLC0415
 
     rev = db.get(DrawingRevision, revision_id)
@@ -163,13 +165,12 @@ def read_revision(
         f.architect = body.architect
     if f.status == "reading":
         raise HTTPException(status.HTTP_409_CONFLICT, "It is being read now")
-    f.status, f.error = "queued", None
+    f.status, f.error, f.progress, f.progress_at = "queued", None, "queued", datetime.now(UTC)
     db.flush()
     record(
         db, request, principal, "takeoff.read", "cad_file", f.id, after={"revision": revision_id}
     )
     db.commit()
-    background.add_task(pipeline.process_id, f.id)
     return jsonable_encoder(file_out(db, f))
 
 
@@ -182,17 +183,29 @@ def get_file(fid: int, db: DbSession, principal: CurrentPrincipal, scope: View) 
 
 
 @router.get("/files/{fid}/geometry")
-def get_geometry(fid: int, db: DbSession, principal: CurrentPrincipal, scope: View) -> Response:
-    """The viewer's drawing: segments per layer, texts and dimensions (gzip JSON)."""
+def get_geometry(fid: int, request: Request, db: DbSession, principal: CurrentPrincipal, scope: View) -> Response:
+    """The viewer's drawing, compact (app.takeoff.compact, version 2): only the layers the mapping
+    shows, coordinates to 1 mm, lines chained into polylines; gzip JSON with an ETag that changes
+    with the revision and the mapping (304 while it has not)."""
     f = _file(db, fid, scope, principal)
     if f.status != "ready" or not f.geometry_path:
         raise HTTPException(status.HTTP_409_CONFLICT, "The drawing has not been read yet")
-    data = pipeline.media(f.geometry_path).read_bytes()
-    return Response(
-        data,
-        media_type="application/json",
-        headers={"Content-Encoding": "gzip", "Cache-Control": "private, max-age=3600"},
-    )
+    path = pipeline.media(f.geometry_path)
+    if not path.exists():
+        raise HTTPException(status.HTTP_409_CONFLICT, "The drawing's geometry is missing on the server: read the drawing again")
+    roles = service.layer_roles(db, f)
+    tag = f'"{compact.etag(f.revision_id, path, roles)}"'
+    if request.headers.get("if-none-match") == tag:
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": tag})
+    hidden = {k for k, v in roles.items() if v == "hide"}
+
+    def build() -> dict:
+        from app.takeoff.reader import load_geometry  # noqa: PLC0415
+
+        return compact.encode(load_geometry(path), hidden, roles, (f.summary or {}).get("layers", []))
+
+    data = compact.cached(path, tag.strip('"'), build)
+    return Response(data, media_type="application/json", headers={"Content-Encoding": "gzip", "ETag": tag, "Cache-Control": "private, no-cache"})
 
 
 class UnitsIn(BaseModel):
@@ -384,6 +397,17 @@ def segments(db, f: CadFile) -> list[tuple]:
     )
 
 
+@lru_cache(maxsize=8)
+def _index(path: str, mtime: float, layers: frozenset, only: frozenset) -> compact.GridIndex:
+    return compact.GridIndex(_segments(path, mtime, layers, only))
+
+
+def index(db, f: CadFile) -> compact.GridIndex:
+    """The drawing's grid index for snap and propose, built once per drawing and mapping."""
+    p = pipeline.media(f.geometry_path)
+    return _index(str(p), p.stat().st_mtime, frozenset(service.hidden_layers(db, f)), frozenset(service.wall_layers(db, f)))
+
+
 class SnapIn(BaseModel):
     x: float
     y: float
@@ -396,11 +420,13 @@ def snap(fid: int, body: SnapIn, db: DbSession, principal: CurrentPrincipal, sco
     """The point a click means: an end point, an intersection, or the foot of the perpendicular
     from the previous corner (walls only, when the architect's walls layers are mapped)."""
     f = _file(db, fid, scope, principal)
+    idx = index(db, f)
     s = geometry.snap(
         (body.x, body.y),
-        segments(db, f),
+        idx.segments,
         body.radius,
         tuple(body.previous) if body.previous else None,
+        index=idx,
     )
     return {"x": s.point[0], "y": s.point[1], "kind": s.kind}
 
@@ -418,7 +444,8 @@ def propose(
     trust: the walls have gaps at doors)."""
     f = _file(db, fid, scope, principal)
     reach = 30 / f.unit_m if f.unit_m else 1e9  # 30 m
-    out = geometry.propose((body.x, body.y), segments(db, f), reach)
+    idx = index(db, f)
+    out = geometry.propose((body.x, body.y), idx.segments, reach, index=idx)
     if out is None:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,

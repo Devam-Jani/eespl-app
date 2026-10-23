@@ -12,6 +12,9 @@ import type { Building, TimelineRow, XRoom } from "./geometry";
 import type { IfcElement } from "./ifc";
 import { tooBig } from "./ifc";
 import { addDays, bloomOn, daysBetween, replayRange, statusAt } from "./geometry";
+import type { Placed } from "./labels";
+import { placeLabels } from "./labels";
+import { roomsFirstByDefault, showsSectionLine } from "./views";
 import type { Label, Mode, Preset, RoomState } from "./scene";
 import { XrayScene } from "./scene";
 
@@ -46,6 +49,7 @@ export default function XrayView({ site, building, nodes, portal, cover, compact
   const [mode, setMode] = useState<Mode>("xray");
   const [cut, setCut] = useState<number | null>(null);
   const [explode, setExplode] = useState(false);
+  const [roomsFirst, setRoomsFirst] = useState(roomsFirstByDefault(portal));
   const [labels, setLabels] = useState<Label[]>([]);
   const [fps, setFps] = useState(0);
   const [bloom, setBloom] = useState<Building["settings"]["bloom"]>(building.settings.bloom);
@@ -130,6 +134,12 @@ export default function XrayView({ site, building, nodes, portal, cover, compact
   useEffect(() => scene.current?.setMode(mode), [mode]);
   useEffect(() => scene.current?.setCutaway(cut), [cut]);
   useEffect(() => scene.current?.setExplode(explode), [explode]);
+  useEffect(() => scene.current?.setRoomsFirst(roomsFirst), [roomsFirst]);
+  const stage = useRef<HTMLDivElement>(null);
+  const placed: Placed[] = useMemo(() => {
+    const w = stage.current?.clientWidth ?? 800;
+    return placeLabels(labels, w < 500 ? 10 : 12, { width: w, height: stage.current?.clientHeight ?? 600 });
+  }, [labels]);
   useEffect(() => {
     if (bloom === "auto") scene.current?.setBloom(prefersBloom("auto"), true);
     else scene.current?.setBloom(bloom === "on", false);
@@ -272,6 +282,9 @@ export default function XrayView({ site, building, nodes, portal, cover, compact
             <button className={`btn btn-small${explode ? " active" : ""}`} onClick={() => setExplode(!explode)} title="Spread the floors apart">
               Explode
             </button>
+            <button className={`btn btn-small${roomsFirst ? " active" : ""}`} onClick={() => setRoomsFirst(!roomsFirst)} title="Dim the building, light up our rooms">
+              Rooms first
+            </button>
           </div>
           <label className="xray-floor">
             Floor
@@ -303,14 +316,17 @@ export default function XrayView({ site, building, nodes, portal, cover, compact
           </div>
         </div>
       )}
-      <div className="xray-stage">
+      <div className="xray-stage" ref={stage}>
         <canvas ref={canvas} onPointerMove={move} onPointerLeave={() => setHover(null)} onClick={click} aria-label={`${site.name}: the building in 3D`} />
-        {labels.map((l, i) => (
-          <div key={i} className="xray-label" style={{ left: l.x, top: l.y }}>
-            {l.text}
-            <small>{l.sub}</small>
-          </div>
-        ))}
+        {placed.map((l, i) =>
+          l.hidden && hover?.room.node_id !== l.nodeId ? null : (
+            <div key={i} className={`xray-label${l.dy ? " xray-label-moved" : ""}`} style={{ left: l.x, top: l.y + l.dy }}>
+              {l.text}
+              <small>{l.sub}</small>
+              {l.dy !== 0 && <i className="xray-leader" style={{ height: Math.abs(l.dy) - l.h / 2, [l.dy < 0 ? "top" : "bottom"]: "100%" }} />}
+            </div>
+          ),
+        )}
         {hover && hs && (
           <div className="xray-tip" style={{ left: hover.x + 14, top: hover.y + 10 }}>
             <b>{hover.room.name}</b>
@@ -377,7 +393,7 @@ export default function XrayView({ site, building, nodes, portal, cover, compact
           <span className="xray-date">{on >= now ? "Today" : new Date(`${on}T12:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
         </div>
       )}
-      {!compact && (
+      {showsSectionLine(portal, compact) && (
         <p className="xray-note muted small">
           {building.levels.source === "section" ? building.levels.note : `Heights: the defaults (${building.settings.floor_height_m} m floor to floor) — ${building.levels.note ?? "no levels on the drawing"}`}
         </p>

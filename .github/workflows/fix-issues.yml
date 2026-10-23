@@ -1,0 +1,107 @@
+# The developer agent: reads the open bugs of the app's issue log book (no personal data), and for
+# each it can, reproduces it with a failing test, fixes it and opens a pull request that names the
+# issue. It never merges, deploys or touches production data: a person reviews every pull request.
+#
+# Needs (Settings > Secrets and variables > Actions):
+#   secret   ANTHROPIC_API_KEY  the Claude API key the agent runs on (its own key, not the app's)
+#   secret   CRAWLER_TOKEN      the app's CRAWLER_TOKEN (reads /api/issues/nightly/open.md only)
+#   variable EESPL_URL          the app's address, e.g. https://app.example.com
+# Without CRAWLER_TOKEN / EESPL_URL it works from docs/issues/open.md as committed.
+name: Fix open issues
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Only this issue number (empty: the open bugs, most frequent first)"
+        required: false
+  schedule:
+    - cron: "30 0 * * 1-5" # 06:00 IST on weekdays, after the nightly open.md
+
+permissions:
+  contents: write # its own branch only; main is protected
+  pull-requests: write
+  issues: read
+
+concurrency:
+  group: fix-issues
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: eespl
+          POSTGRES_USER: eespl
+          POSTGRES_PASSWORD: eespl
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eespl -d eespl"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://eespl:eespl@localhost:5432/eespl
+      JWT_SECRET: ci-only-secret-not-used-anywhere-else-0123456789
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: The open bugs from the app
+        env:
+          EESPL_URL: ${{ vars.EESPL_URL }}
+          CRAWLER_TOKEN: ${{ secrets.CRAWLER_TOKEN }}
+        run: |
+          mkdir -p docs/issues
+          if [ -n "$EESPL_URL" ] && [ -n "$CRAWLER_TOKEN" ]; then
+            curl -fsS -H "X-Crawler-Token: $CRAWLER_TOKEN" "$EESPL_URL/api/issues/nightly/open.md" -o docs/issues/open.md
+          fi
+          test -s docs/issues/open.md || { echo "No docs/issues/open.md"; exit 0; }
+          if grep -q "^Nothing open\." docs/issues/open.md; then echo "nothing open" >> "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core
+          pip install -r backend/requirements.txt
+          (cd frontend && npm ci)
+          (cd backend && alembic upgrade head)
+      - name: Reproduce, fix, open a pull request
+        if: ${{ hashFiles('docs/issues/open.md') != '' }}
+        # pinned: v1.0.258
+        uses: anthropics/claude-code-action@6b6870e649b5ff408753befeaee5fc7989d4e6a9
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_args: >-
+            --max-turns 80
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(cd backend && pytest:*),Bash(cd backend && ruff:*),Bash(cd frontend && npm run lint:*),Bash(cd frontend && npm test:*),Bash(cd frontend && npx tsc:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git checkout -b:*),Bash(git add:*),Bash(git commit:*),Bash(git push origin fix/*:*),Bash(gh pr create:*),Bash(gh pr list:*)"
+          prompt: |
+            You are the developer agent of this repository. Read docs/issues/open.md: the open bugs
+            from the app's issue log book (roles only, no personal data).
+            ${{ github.event.inputs.issue && format('Work only on issue #{0}.', github.event.inputs.issue) || 'Take the bugs in order (most frequent first), at most three, skipping any that already has an open pull request (gh pr list --search "issue #N").' }}
+            For each bug:
+            1. Find the cause from the page, the error, the HTTP status and the stack.
+            2. Reproduce it with a failing test first (backend: pytest in backend/tests; frontend: vitest next to the code).
+            3. Fix it with the smallest change that reads like the code around it; run that test, then
+               the module's tests, ruff check (backend) or npm run lint (frontend).
+            4. On a branch fix/issue-N, commit ("Fixes issue #N: <what was wrong>"), push it, and open a
+               pull request into main titled "Fixes issue #N: ..." whose body gives the cause, the fix,
+               the test and how to check it by hand.
+            If you cannot reproduce a bug, open no pull request for it; say so in your summary.
+            Never merge, never push to main, never deploy, never change migrations already released,
+            never touch production data or secrets, never put a person's name, email or phone in code,
+            tests or text. The issue log is updated by a person after review (cause, fix, PR link).

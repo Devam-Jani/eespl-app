@@ -141,10 +141,10 @@ def read(c, h, revision_id, architect="Invented Architects"):
         f"/api/takeoff/revisions/{revision_id}/read", json={"architect": architect}, headers=h
     )
     assert r.status_code == 202, r.text
-    f = c.get(
-        f"/api/takeoff/files/{r.json()['id']}", headers=h
-    ).json()  # read by the background task
-    return f
+    from app.takeoff import pipeline  # noqa: PLC0415
+
+    pipeline.sweep()  # the worker reads it (the API only queues it)
+    return c.get(f"/api/takeoff/files/{r.json()['id']}", headers=h).json()
 
 
 def areas(c, h, fid, show="all"):

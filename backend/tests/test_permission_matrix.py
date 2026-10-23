@@ -55,7 +55,7 @@ ALL = [
     "methodology.view", "methodology.edit", "methodology.compliance", "methodology.site",
     "wo.view", "wo.edit", "closeout.billing", "closeout.site", "closeout.payments",
     "issues.view", "issues.edit", "portal.roles", "closeout.claim_approve", "system.ops",
-    "help.edit", "building.edit",
+    "help.edit", "building.edit", "issuelog.view", "issuelog.edit",
 ]  # fmt: skip
 TRACK = {"field.track": "own"}  # every staff user: their own day, map and claim
 
@@ -77,6 +77,8 @@ EXPECTED: dict[str, dict[str, str]] = {
         "system.ops",
         "help.edit",
         "building.edit",
+        "issuelog.view",
+        "issuelog.edit",
         "portal.roles",
         "wo.view",
         "wo.edit",

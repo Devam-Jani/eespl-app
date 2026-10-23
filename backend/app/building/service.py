@@ -49,6 +49,7 @@ def save(db: Session, site_id: int, data: dict, cad_file_id: int | None, user, n
                       changes=changes, created_by=getattr(user, "id", None), created_by_name=getattr(user, "full_name", None))  # fmt: skip
     db.add(m)
     db.flush()
+    m.built = build(db, m, db.get(CadFile, cad_file_id) if cad_file_id else None)  # the 3D geometry, once
     return m
 
 
@@ -230,28 +231,77 @@ def _corner(poly: list[list[float]]) -> tuple[float, float]:
 # --- floors and heights ----------------------------------------------------------------------------
 
 
+def storey_levels(values: list[float]) -> tuple[list[float], int | None]:
+    """The section's levels as one per storey: a pair under 0.3 m apart (slab top and finished
+    floor) is one level (the finished floor, the higher); the ground is the first level at or above
+    -0.5 m (a plinth level such as +0.914 is the ground floor's)."""
+    out: list[float] = []
+    for v in sorted(values):
+        if out and v - out[-1] < 0.3:
+            out[-1] = v
+        else:
+            out.append(v)
+    ground = next((i for i, v in enumerate(out) if v >= -0.5), None)
+    return out, ground
+
+
 def elevations(data: dict) -> list[dict]:
-    """Each floor's bottom (finished floor) and its height, in metres: from the section's levels
-    when it has a ±0 level and one level per floor, else plinth + the floor heights below."""
+    """Each floor's finished level and its height (metres), and where the level came from:
+      hand      typed on the building page (wins)
+      section   the section's level for that storey: from the ground level up (the basements down)
+      default   no level for it: the plinth, then the floor height of the setting
+    A section level that is far from where the floors before it put this floor is flagged."""
     s = {**DEFAULTS, **(data.get("settings") or {})}
     floors = sorted((f for f in data.get("floors", []) if f.get("level") is not None), key=lambda f: f["level"])
     lv = data.get("levels") or {}
-    values = [v for v in lv.get("values_m") or [] if v > -0.01] if lv.get("from_ground") else []
-    out = []
-    z = float(s["plinth_m"])
-    ground_i = next((i for i, f in enumerate(floors) if f["level"] >= 0), 0)
-    below = sum(float(f.get("height_m") or s["floor_height_m"]) for f in floors[:ground_i])
-    z -= below
+    values, g = storey_levels(lv.get("values_m") or []) if lv.get("source") == "section" else ([], None)
+    fh = float(s["floor_height_m"])
+    known: dict[int, tuple[float, str]] = {}
     for f in floors:
-        h = float(f.get("height_m") or s["floor_height_m"])
-        bottom = z
-        if values and 0 <= f["level"] < len(values):
-            bottom = values[f["level"]] + float(s["plinth_m"])
-            if f["level"] + 1 < len(values) and not f.get("height_m"):
-                h = values[f["level"] + 1] - values[f["level"]]
-        out.append({**f, "elevation_m": round(bottom, 3), "height_m": round(h, 3)})
-        z = bottom + h
+        if f.get("elevation_m") is not None and f.get("level_by_hand"):
+            known[f["level"]] = (float(f["elevation_m"]), "hand")
+        elif g is not None and 0 <= g + f["level"] < len(values):
+            known[f["level"]] = (values[g + f["level"]], "section")
+    out = []
+    prev: dict | None = None
+    for f in floors:
+        lvl = f["level"]
+        if lvl in known:
+            bottom, src = known[lvl]
+        elif prev is not None:
+            bottom, src = prev["elevation_m"] + prev["height_m"], "default"
+        else:  # the lowest floor without a level: the plinth, the floors below ground under it
+            below = sum(1 for x in floors if x["level"] < 0 and x["level"] >= lvl) if lvl < 0 else 0
+            bottom, src = float(s["plinth_m"]) - below * fh, "default"
+        nxt = next((x for x in floors if x["level"] > lvl), None)
+        if f.get("height_m"):
+            h = float(f["height_m"])
+        elif nxt is not None and nxt["level"] in known and known[nxt["level"]][0] > bottom:
+            h = known[nxt["level"]][0] - bottom
+        else:
+            h = fh
+        flag = None
+        if src == "section" and prev is not None and abs(bottom - (prev["elevation_m"] + prev["height_m"])) > 0.3 and prev["level_source"] != "section":
+            flag = "the section's level does not follow the floor below: check it"
+        if src == "default" and values:
+            flag = "no level on the section for this floor: the default height is used"
+        if h < 2.0 or h > 8.0:
+            flag = f"a storey of {h:.2f} m: check the levels"
+        row = {**f, "elevation_m": round(bottom, 3), "height_m": round(h, 3), "level_source": src, "level_flag": flag}
+        out.append(row)
+        prev = row
     return out
+
+
+def unmatched_levels(data: dict) -> list[float]:
+    """The section's storey levels no floor uses (basements the site has not got, a tank or a
+    machine room on the roof): shown so the user can see what was left out."""
+    lv = data.get("levels") or {}
+    if lv.get("source") != "section":
+        return []
+    used = {r["elevation_m"] for r in elevations(data) if r["level_source"] == "section"}
+    values, _ = storey_levels(lv.get("values_m") or [])
+    return [v for v in values if round(v, 3) not in used]
 
 
 # --- the 3D payload ----------------------------------------------------------------------------------
@@ -259,6 +309,44 @@ def elevations(data: dict) -> list[dict]:
 
 def _to_m(poly: list[list[float]], shift: list[float], unit_m: float, origin: tuple[float, float]) -> list[list[float]]:
     return [[round((x + shift[0] - origin[0]) * unit_m, 3), round((y + shift[1] - origin[1]) * unit_m, 3)] for x, y in poly]
+
+
+BUILT_VERSION = 1  # raise it when what build() makes changes: older models are built again
+
+
+def build(db: Session, m: BuildingModel, cad: CadFile | None) -> dict:
+    """The floor types' geometry for the 3D view (metres, from the reference plan's corner): the
+    slab outline, the walls cut out of the drawing, columns, beams, cores. Made once when the model
+    is saved (the drawing's lines are read only then), kept with the version."""
+    unit = (cad.unit_m if cad else None) or 0.001
+    data = m.data or {}
+    s = {**DEFAULTS, **(data.get("settings") or {})}
+    types = [t for t in data.get("floor_types", []) if t.get("outline")]
+    if not types:
+        return {"version": BUILT_VERSION, "types": {}, "origin": [0, 0], "ref": None}
+    ref = max(types, key=lambda t: len(t.get("floors") or []))
+    ox, oy = _corner([[x + ref["shift"][0], y + ref["shift"][1]] for x, y in ref["outline"]])
+    origin = (ox, oy)
+    walls_all = layer_segments(db, cad, "walls") if cad else []
+    out_types = {}
+    for t in types:
+        sh = t.get("shift") or [0, 0]
+        outline_m = _to_m(t["outline"], sh, unit, origin)
+        xs, ys = [p[0] for p in t["outline"]], [p[1] for p in t["outline"]]
+        pad = 0.5 / unit
+        box = (min(xs) - pad, min(ys) - pad, max(xs) + pad, max(ys) + pad)
+        walls = []
+        for i in range(0, len(walls_all) - 3, 4) if t.get("walls", True) else ():
+            x1, y1, x2, y2 = walls_all[i:i + 4]
+            if box[0] <= x1 <= box[2] and box[1] <= y1 <= box[3] and box[0] <= x2 <= box[2] and box[1] <= y2 <= box[3] and math.hypot(x2 - x1, y2 - y1) * unit > 0.15:
+                walls.append([round((x1 + sh[0] - ox) * unit, 3), round((y1 + sh[1] - oy) * unit, 3), round((x2 + sh[0] - ox) * unit, 3), round((y2 + sh[1] - oy) * unit, 3)])
+        cols = [[round((c[0] + sh[0] - ox) * unit, 3), round((c[1] + sh[1] - oy) * unit, 3), round(c[2] * unit, 3), round(c[3] * unit, 3)] for c in t.get("columns") or []]
+        beams = [list(b) for b in t.get("beams") or [] if max(b) < len(cols)]
+        if s.get("beams_on_walls") and not beams:
+            beams = beams_on_column_lines(cols)
+        out_types[t["key"]] = {"name": t["name"], "outline": outline_m, "area_sqm": round(detect.area(outline_m), 2), "walls": walls[:6000], "columns": cols, "beams": beams,
+                               "cores": [{"kind": c.get("kind", "stair"), "outline": _to_m(c.get("outline") or [], sh, unit, origin), "risers": c.get("risers")} for c in t.get("cores") or []]}  # fmt: skip
+    return {"version": BUILT_VERSION, "types": out_types, "origin": list(origin), "ref": ref["key"]}
 
 
 def payload(db: Session, site_id: int, client: bool = False) -> dict | None:
@@ -286,28 +374,13 @@ def payload(db: Session, site_id: int, client: bool = False) -> dict | None:
             return None
         return {"version": m.version, "schematic": False, "settings": {k: s[k] for k in ("floor_height_m", "slab_m", "plinth_m", "riser_m", "bloom", "ifc")},
                 "levels": {"source": "default", "note": None}, "floors": [], "types": {}, "rooms": [], "ifc_links": data.get("ifc_links") or {}, "ifc": ifc}  # fmt: skip
-    ref = max(types, key=lambda t: len(t.get("floors") or []))
-    ox, oy = _corner([[x + ref["shift"][0], y + ref["shift"][1]] for x, y in ref["outline"]])
-    origin = (ox, oy)
-    walls_all = layer_segments(db, cad, "walls") if cad else []
-    out_types = {}
-    for t in types:
-        sh = t.get("shift") or [0, 0]
-        outline_m = _to_m(t["outline"], sh, unit, origin)
-        xs, ys = [p[0] for p in t["outline"]], [p[1] for p in t["outline"]]
-        pad = 0.5 / unit
-        box = (min(xs) - pad, min(ys) - pad, max(xs) + pad, max(ys) + pad)
-        walls = []
-        for i in range(0, len(walls_all) - 3, 4) if t.get("walls", True) else ():
-            x1, y1, x2, y2 = walls_all[i:i + 4]
-            if box[0] <= x1 <= box[2] and box[1] <= y1 <= box[3] and box[0] <= x2 <= box[2] and box[1] <= y2 <= box[3] and math.hypot(x2 - x1, y2 - y1) * unit > 0.15:
-                walls.append([round((x1 + sh[0] - ox) * unit, 3), round((y1 + sh[1] - oy) * unit, 3), round((x2 + sh[0] - ox) * unit, 3), round((y2 + sh[1] - oy) * unit, 3)])
-        cols = [[round((c[0] + sh[0] - ox) * unit, 3), round((c[1] + sh[1] - oy) * unit, 3), round(c[2] * unit, 3), round(c[3] * unit, 3)] for c in t.get("columns") or []]
-        beams = [list(b) for b in t.get("beams") or [] if max(b) < len(cols)]
-        if s.get("beams_on_walls") and not beams:
-            beams = beams_on_column_lines(cols)
-        out_types[t["key"]] = {"name": t["name"], "outline": outline_m, "area_sqm": round(detect.area(outline_m), 2), "walls": walls[:6000], "columns": cols, "beams": beams,
-                               "cores": [{"kind": c.get("kind", "stair"), "outline": _to_m(c.get("outline") or [], sh, unit, origin), "risers": c.get("risers")} for c in t.get("cores") or []]}  # fmt: skip
+    built = m.built if m.built and m.built.get("version") == BUILT_VERSION else None
+    if built is None:  # an older model: built now, once, and kept
+        built = build(db, m, cad)
+        m.built = built
+        db.commit()
+    out_types, origin = built["types"], tuple(built["origin"])
+    ref = {"key": built["ref"]}
     floors = elevations(data)
     _assign_types(floors, [t for t in data.get("floor_types", []) if t.get("outline")])
     for f in floors:
@@ -316,7 +389,7 @@ def payload(db: Session, site_id: int, client: bool = False) -> dict | None:
     by_level = {f["level"]: f for f in floors}
     rooms = _rooms(db, site_id, cad, data, unit, origin, by_level) if cad else []
     out = {"version": m.version, "schematic": False, "settings": {k: s[k] for k in ("floor_height_m", "slab_m", "plinth_m", "riser_m", "bloom", "ifc")},
-           "levels": {"source": (data.get("levels") or {}).get("source", "default"), "note": (data.get("levels") or {}).get("note")},
+           "levels": {"source": (data.get("levels") or {}).get("source", "default"), "note": None if client else (data.get("levels") or {}).get("note")},  # the section line is for staff
            "floors": [{k: f.get(k) for k in ("level", "node_id", "name", "type", "elevation_m", "height_m")} for f in floors],
            "types": out_types, "rooms": rooms, "ifc_links": data.get("ifc_links") or {}, "ifc": ifc}  # fmt: skip
     if not client:

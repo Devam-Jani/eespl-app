@@ -3,11 +3,12 @@
 // render the same pages for one client user, read-only ("preview as client").
 import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { Link, Navigate, Outlet, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, Outlet, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { HandoverTab, MeasurementsTab, OverdueList } from "./CloseoutTabs";
 import { api, ApiError, downloadFile, fetchObjectUrl } from "../api";
 import { useAuth } from "../auth";
 import Bell from "../components/Bell";
+import { HelperCard, PageErrorBoundary } from "../helper/Helper";
 import { isClientLogin } from "../components/Guards";
 import Modal from "../components/Modal";
 import { errorText, inr, num } from "../format";
@@ -89,6 +90,7 @@ function Logo() {
 
 export function PortalLayout() {
   const { me, logout } = useAuth();
+  const location = useLocation();
   if (me && !isClientLogin(me.permissions)) return <Navigate to="/" replace />;
   return (
     <div className="portal">
@@ -98,13 +100,19 @@ export function PortalLayout() {
         </Link>
         <div className="portal-actions">
           <Bell />
+          <Link to="/portal/reports" className="btn btn-ghost btn-small">
+            My reports
+          </Link>
           <button className="btn btn-ghost btn-small" onClick={() => void logout()}>
             Sign out
           </button>
         </div>
       </header>
       <main className="portal-main">
-        <Outlet />
+        <PageErrorBoundary key={location.pathname}>
+          <Outlet />
+        </PageErrorBoundary>
+        <HelperCard portal />
       </main>
     </div>
   );

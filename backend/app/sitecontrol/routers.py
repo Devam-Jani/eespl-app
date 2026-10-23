@@ -1343,6 +1343,8 @@ def site_flags(site_id: int, db: DbSession, principal: CurrentPrincipal, scope: 
     if allowed is not None and site_id not in allowed:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Site not found")
     site = db.get(Site, site_id)
+    if site is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Site not found")
     return jsonable_encoder(
         {
             **sc.site_flags(db, site_id),
@@ -1370,6 +1372,8 @@ def set_receiver(
     if not _may(db, principal, "site.edit", site_id):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot change this site")
     site = db.get(Site, site_id)
+    if site is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Site not found")
     site.receiver_name, site.receiver_phone = (
         body.receiver_name or None,
         body.receiver_phone or None,
