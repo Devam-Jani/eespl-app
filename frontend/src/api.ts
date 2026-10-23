@@ -18,6 +18,12 @@ export class ApiError extends Error {
   ) {
     super(message);
   }
+
+  /** Shown by the helper card already: a wrong entry beside its fields, or a failure on our side
+   * (one notice with the request id). The page shows nothing more (one error, shown once). */
+  get shownByHelper(): boolean {
+    return (this.status === 422 && this.fields.length > 0) || this.status >= 500 || this.status === 0;
+  }
 }
 
 /** Told of every failed request (the helper card listens): never the request's body. */
@@ -137,10 +143,6 @@ export async function readError(res: Response): Promise<{ message: string; field
   return { message: res.statusText || `HTTP ${res.status}`, fields: [] };
 }
 
-async function errorMessage(res: Response): Promise<string> {
-  return (await readError(res)).message;
-}
-
 type Options = Omit<RequestInit, "body"> & { json?: unknown; form?: FormData };
 
 const inFlight = new Map<string, Promise<unknown>>();
@@ -213,7 +215,10 @@ export async function downloadFile(path: string, retry = true, method: "GET" | "
     onSessionLost();
     throw new ApiError(401, "Your session has expired. Please sign in again.");
   }
-  if (!res.ok) throw new ApiError(res.status, await errorMessage(res));
+  if (!res.ok) {
+    const { message, fields } = await readError(res);
+    throw failed(new ApiError(res.status, message, res.headers.get("X-Request-ID"), fields, `${method} ${path.split("?")[0]}`));
+  }
   const disposition = res.headers.get("Content-Disposition") ?? "";
   const name = /filename="?([^";]+)"?/.exec(disposition)?.[1] ?? "export.xlsx";
   const url = URL.createObjectURL(await res.blob());

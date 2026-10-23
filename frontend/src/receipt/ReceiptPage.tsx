@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { S } from "./strings";
 import type { Key } from "./strings";
+import { errorText } from "../format";
 
 type Item = { line_id: number; product: string; qty: string; unit: string; packs: string | null; pack_unit: string | null };
 type View = {
@@ -88,7 +89,7 @@ export default function ReceiptPage() {
   useEffect(() => {
     fetch(`/api/receipt/${token}`)
       .then(async (r) => (r.ok ? r.json() : Promise.reject((await r.json().catch(() => ({}))).detail ?? r.statusText)))
-      .then(setView, (e) => setError(String(e)));
+      .then(setView, (e) => setError(errorText(e)));
     navigator.geolocation?.getCurrentPosition(
       (p) => setGps(p.coords),
       () => undefined,

@@ -6,6 +6,7 @@ import Layout from "./components/Layout";
 import { MENU } from "./menu";
 import Login from "./pages/Login";
 import Placeholder from "./pages/Placeholder";
+import { HelperCard } from "./helper/Helper";
 // every page in its own chunk: the first load carries the shell, the sign-in and the menu only
 const Audit = lazy(() => import("./pages/Audit"));
 const Channels = lazy(() => import("./pages/Channels"));
@@ -443,6 +444,7 @@ export default function App() {
             </Route>
           </Routes>
         </Suspense>
+        <HelperCard />
       </AuthProvider>
     </BrowserRouter>
   );

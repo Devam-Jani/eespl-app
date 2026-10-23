@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { api, downloadFile } from "../../api";
 import { useAuth } from "../../auth";
 import Modal from "../../components/Modal";
-import { errorText, inr, num } from "../../format";
+import { errorText, inr, num, showError } from "../../format";
 import type { AttendanceStatus, DaySheet, MusterRow, Subcontractor, Worker } from "../../execution/types";
 import type { Site } from "../../types";
 import { localToday } from "./DprTab";
@@ -381,7 +381,7 @@ export default function LabourTab({ site }: { site: Site }) {
       await api(out ? "/api/execution/check-out" : `/api/execution/sites/${site.id}/check-in`, { method: "POST", json: out ? undefined : {} });
       alert(out ? "Checked out." : `Checked in at ${site.code}.`);
     } catch (err) {
-      alert(errorText(err));
+      showError(err);
     }
   }
 

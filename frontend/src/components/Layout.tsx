@@ -10,7 +10,7 @@ import {
   TrainingBanner,
   useMode,
 } from "../ops/Pages";
-import { HelperCard, PageErrorBoundary } from "../helper/Helper";
+import { PageErrorBoundary } from "../helper/Helper";
 import Bell from "./Bell";
 import { initialMenuOpen, isPhone, loadOpenGroups, saveOpenGroups } from "./menuState";
 
@@ -112,7 +112,6 @@ export default function Layout() {
           <PageErrorBoundary key={location.pathname}>
             <Outlet />
           </PageErrorBoundary>
-          <HelperCard />
         </main>
       </div>
     </div>

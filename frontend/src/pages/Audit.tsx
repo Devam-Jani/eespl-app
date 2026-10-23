@@ -1,8 +1,9 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { api, ApiError, queryString } from "../api";
+import { api, queryString } from "../api";
 import ExportButton from "../components/ExportButton";
 import type { AuditEntry } from "../types";
+import { errorText } from "../format";
 
 const PAGE_SIZE = 50;
 
@@ -29,7 +30,7 @@ export default function Audit() {
       setItems(page.items);
       setTotal(page.total);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : String(err));
+      setError(errorText(err));
     } finally {
       setLoading(false);
     }

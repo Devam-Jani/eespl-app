@@ -5,10 +5,10 @@ import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useM
 import type { FormEvent, ReactNode } from "react";
 import { Link, Navigate, Outlet, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { HandoverTab, MeasurementsTab, OverdueList } from "./CloseoutTabs";
-import { api, ApiError, downloadFile, fetchObjectUrl } from "../api";
+import { api, downloadFile, fetchObjectUrl } from "../api";
 import { useAuth } from "../auth";
 import Bell from "../components/Bell";
-import { HelperCard, PageErrorBoundary } from "../helper/Helper";
+import { PageErrorBoundary } from "../helper/Helper";
 import { isClientLogin } from "../components/Guards";
 import Modal from "../components/Modal";
 import { errorText, inr, num } from "../format";
@@ -112,7 +112,6 @@ export function PortalLayout() {
         <PageErrorBoundary key={location.pathname}>
           <Outlet />
         </PageErrorBoundary>
-        <HelperCard portal />
       </main>
     </div>
   );
@@ -1271,7 +1270,7 @@ export function InviteAccept() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   useEffect(() => {
-    api<{ full_name: string; email: string }>(`/api/portal/invite/${token}`).then(setInfo, (err) => setError(err instanceof ApiError ? err.message : errorText(err)));
+    api<{ full_name: string; email: string }>(`/api/portal/invite/${token}`).then(setInfo, (err) => setError(errorText(err)));
   }, [token]);
   async function submit(e: FormEvent) {
     e.preventDefault();

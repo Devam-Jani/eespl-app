@@ -4,6 +4,7 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { ApiError } from "../api";
 import type { TwoStep } from "../auth";
 import { useAuth } from "../auth";
+import { errorText } from "../format";
 
 export default function Login() {
   const { me, login, finishTwoStep } = useAuth();
@@ -36,7 +37,7 @@ export default function Login() {
       }
       navigate(from, { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not reach the server");
+      setError(err instanceof ApiError ? errorText(err) : "Could not reach the server");
     } finally {
       setBusy(false);
     }

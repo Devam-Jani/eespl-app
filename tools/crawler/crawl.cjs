@@ -41,6 +41,20 @@ const pathOf = (u) => {
   }
 };
 
+// what a client must never be sent: our costs and margins, places (GPS), another client's records
+const STAFF_ONLY = /(^|_)(costs?|margins?|markup|profit|purchase_rate|lat|lng|latitude|longitude|gps|accuracy_m)(_|$)/i;
+function staffOnly(value, path = "", out = [], clients = new Set()) {
+  if (Array.isArray(value)) value.forEach((v, i) => staffOnly(v, `${path}[${i}]`, out, clients));
+  else if (value && typeof value === "object") {
+    for (const [k, v] of Object.entries(value)) {
+      if (STAFF_ONLY.test(k) && v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && !v.length)) out.push(`${path}.${k}`);
+      if (k === "client_id" && v !== null) clients.add(v);
+      staffOnly(v, `${path}.${k}`, out, clients);
+    }
+  }
+  return { out, clients };
+}
+
 async function crawlRole(browser, role, pw, findings, timings) {
   const ctx = await browser.newContext({ viewport: { width: WIDTH, height: 1000 }, ignoreHTTPSErrors: true });
   const page = await ctx.newPage();
@@ -54,10 +68,20 @@ async function crawlRole(browser, role, pw, findings, timings) {
     add("console error", t);
   });
   page.on("pageerror", (e) => add("page crash", `${e.name}: ${e.message}`, { stack: e.stack }));
-  page.on("response", (r) => {
+  const clientIds = new Set();
+  page.on("response", async (r) => {
     const u = r.url();
-    if (!u.includes("/api/") || r.status() < 500) return;
-    add("failed request", `HTTP ${r.status()} ${r.request().method()} ${pathOf(u)}`, { status_code: r.status(), request_id: r.headers()["x-request-id"] || null });
+    if (!u.includes("/api/")) return;
+    if (r.status() >= 500) {
+      add("failed request", `HTTP ${r.status()} ${r.request().method()} ${pathOf(u)}`, { status_code: r.status(), request_id: r.headers()["x-request-id"] || null });
+      return;
+    }
+    // a client login: nothing staff-only in any answer the portal gets
+    if (role !== "client" || !(r.headers()["content-type"] || "").includes("json")) return;
+    const body = await r.json().catch(() => null);
+    const { out } = staffOnly(body, "", [], clientIds);
+    if (out.length) add("staff-only data in the portal", `${r.request().method()} ${pathOf(u)} sent ${out.slice(0, 5).join(", ")}`);
+    if (clientIds.size > 1) add("another client's data in the portal", `${pathOf(u)}: records of ${clientIds.size} clients`);
   });
   page.on("requestfailed", (r) => {
     const u = r.url();
@@ -105,6 +129,17 @@ async function crawlRole(browser, role, pw, findings, timings) {
       const main = document.querySelector("main") || document.body;
       return { text: main.innerText.trim().length, crash: !!document.querySelector(".page-crash"), path: location.pathname };
     });
+    if (role === "client") {
+      // every site and every tab of the portal; no cost, margin or place on screen
+      const more = await page.evaluate(() => {
+        const sites = [...document.querySelectorAll("a[href^='/portal/sites/']")].map((a) => a.getAttribute("href").split("?")[0]);
+        const tabs = [...document.querySelectorAll("select.tab-select option")].map((o) => `${location.pathname}?tab=${o.value}`);
+        return [...sites, ...tabs];
+      });
+      for (const m of more) if (!seen.has(m)) queue.push(m);
+      const words = await page.evaluate(() => (document.querySelector("main")?.innerText || "").match(/(margin|our cost|cost price|purchase rate|latitude|longitude)/i)?.[0] || null);
+      if (words) add("staff-only data in the portal", `The page shows "${words}"`);
+    }
     if (state.crash) add("page crash", "The page showed 'This page hit a problem'");
     else if (state.text < 15) add("blank screen", "The page showed nothing");
     if (state.path !== path && !path.includes("?")) here = `${path} → ${state.path}`;

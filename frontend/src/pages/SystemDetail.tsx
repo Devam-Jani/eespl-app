@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, ApiError } from "../api";
+import { api } from "../api";
 import { useAuth } from "../auth";
 import { errorText, inr, num } from "../format";
 import type { Page, Product, RateBreakdown, System } from "../types";
@@ -133,7 +133,7 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
         },
         (err) => {
           setBreakdown(null);
-          setCalcError(err instanceof ApiError ? err.message : String(err));
+          setCalcError(errorText(err));
         },
       );
     }, 250);
