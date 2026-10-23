@@ -57,3 +57,18 @@ def test_the_billing_checklist_of_a_site_without_towers_has_every_list(boss, db)
     for key in ("towers", "months", "columns", "rows"):
         assert body[key] == [], key
     assert body["counts"] == {} and body["tower"] is None
+
+
+def test_the_training_reset_starts_with_no_transaction_open(db, monkeypatch):
+    """The nightly rebuild drops the schema on its own connection: the worker's session must not
+    hold a lock then (it waited for itself, and the database ran out of connections)."""
+    from datetime import datetime
+
+    from app.execution.service import IST
+    from app.ops import training
+    from app.ops import worker as ops_worker
+
+    seen = []
+    monkeypatch.setattr(training, "reset", lambda: seen.append(db.in_transaction()))
+    assert ops_worker.training_night(db, datetime(2026, 10, 23, 3, 45, tzinfo=IST)) is True
+    assert seen == [False]
