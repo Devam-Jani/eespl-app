@@ -13,6 +13,7 @@
 const { chromium } = require("playwright");
 const fs = require("fs");
 
+const { extraPages, followsTabs } = require("./pages.cjs");
 const BASE = (process.env.BASE || "https://training.localhost").replace(/\/$/, "");
 const SLOW_MS = Number(process.env.SLOW_MS || 2000);
 const CLICKS = process.env.CLICKS !== "0";
@@ -116,7 +117,7 @@ async function crawlRole(browser, role, pw, findings, timings) {
   const seen = new Set();
   while (queue.length) {
     const path = queue.shift();
-    if (seen.has(path) || seen.size > 120) continue;
+    if (seen.has(path) || seen.size > 200) continue;
     seen.add(path);
     here = path;
     const t0 = Date.now();
@@ -143,6 +144,14 @@ async function crawlRole(browser, role, pw, findings, timings) {
     if (state.crash) add("page crash", "The page showed 'This page hit a problem'");
     else if (state.text < 15) add("blank screen", "The page showed nothing");
     if (state.path !== path && !path.includes("?")) here = `${path} → ${state.path}`;
+    // a site's (or tender's) tabs, the sections under More and the pages under Open (Measure and
+    // bill, AutoCAD takeoff ...): not in the menu, so followed from the record's page
+    if (role !== "client" && followsTabs(state.path) && !path.includes("?")) {
+      const values = await page
+        .$$eval("select.tab-select option, select.tab-more option", (os) => os.map((o) => o.value))
+        .catch(() => []);
+      for (const m of extraPages(state.path, values)) if (!seen.has(m)) queue.push(m);
+    }
     // the first record of a list (one level deep)
     if (DETAILS && !/\/\d+/.test(path)) {
       const first = await page

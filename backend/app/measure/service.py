@@ -182,28 +182,35 @@ def refresh(db: Session, site_id: int) -> None:
         ar, per, _ = geom.trim(a.outline, others)
         a.net_area_sqm, a.net_periphery_m = geom.d(ar), geom.d(per)
     old = {(e.area_a_id, e.area_b_id, _key(e.line)): e for e in db.scalars(select(MeasureEdge).where(MeasureEdge.site_id == site_id))}
-    keep = set()
+    found: dict[tuple, tuple[float, list[float]]] = {}
     for i, a in enumerate(areas):
         for b in areas[i + 1 :]:
-            for seq, (length, line) in enumerate(geom.shared_edges(a.outline, b.outline)):
-                k = (a.id, b.id, _key(line))
-                e = old.get(k)
-                if e is None:
-                    e = MeasureEdge(site_id=site_id, area_a_id=a.id, area_b_id=b.id, seq=seq, length_m=geom.d(length), line=list(line))
-                    db.add(e)
-                    old[k] = e
-                e.length_m, e.line = geom.d(length), list(line)
-                keep.add(k)
+            for length, line in geom.shared_paths(a.outline, b.outline, a_trims_b=a.id in (b.trim_with or []), b_trims_a=b.id in (a.trim_with or [])):
+                found[(a.id, b.id, _key(line))] = (length, line)
+    # the edges gone first (their numbers free), then the ones kept updated and the new ones added
     for k, e in old.items():
-        if k not in keep:
+        if k not in found:
             db.delete(e)
+    db.flush()
+    used: dict[tuple[int, int], set[int]] = {}
+    for (a_id, b_id, _), e in old.items():
+        used.setdefault((a_id, b_id), set()).add(e.seq)
+    for k, (length, line) in found.items():
+        e = old.get(k)
+        if e is None:
+            taken = used.setdefault(k[:2], set())
+            seq = next(n for n in range(len(taken) + 1) if n not in taken)
+            taken.add(seq)
+            e = MeasureEdge(site_id=site_id, area_a_id=k[0], area_b_id=k[1], seq=seq, line=line, length_m=geom.d(length))
+            db.add(e)
+        e.length_m, e.line = geom.d(length), line
     db.flush()
 
 
 def _key(line) -> tuple:
-    """An edge's ends to the millimetre, in either direction."""
-    a = (round(line[0], 3), round(line[1], 3))
-    b = (round(line[2], 3), round(line[3], 3))
+    """An edge's ends to the centimetre, in either direction (its path is [x1, y1, ..., xn, yn])."""
+    a = (round(line[0], 2), round(line[1], 2))
+    b = (round(line[-2], 2), round(line[-1], 2))
     return tuple(sorted((a, b)))
 
 
@@ -424,20 +431,49 @@ def totals(lines: list[MeasureLine]) -> dict[int, Decimal]:
     return out
 
 
+def approved(db: Session, sheet: MeasureSheet) -> dict[int, Decimal] | None:
+    """Per item, what the client approved of this sheet in the measurement book (a correction
+    included); None until every line of it is approved (a draft, or still with the client)."""
+    from app.finance.models import ContractLine  # noqa: PLC0415
+    from app.team.models import Measurement  # noqa: PLC0415
+
+    book = list(db.scalars(select(Measurement).where(Measurement.site_id == sheet.site_id, Measurement.note.like(f"{sheet.code}:%"))))
+    if not book or any(m.status != "approved" for m in book):
+        return None
+    wo_of = dict(db.execute(select(ContractLine.id, ContractLine.wo_line_id).where(ContractLine.id.in_({m.contract_line_id for m in book if m.contract_line_id}))).all())
+    out: dict[int, Decimal] = {}
+    for m in book:
+        w = wo_of.get(m.contract_line_id)
+        if w:
+            out[w] = out.get(w, ZERO) + Decimal(m.qty)
+    return out
+
+
+def billed_totals(db: Session, sheet: MeasureSheet) -> dict[int, Decimal]:
+    """What the sheet bills per item: the client's approved figures once they approved it, else
+    the drawing's. The sheet's Abstract, the RA bill, the Excel and the PDF all take this."""
+    ok = approved(db, sheet)
+    return ok if ok is not None else totals(lines_of(db, sheet.id))
+
+
 def cumulative(db: Session, sheet: MeasureSheet, wo_lines: list[ClientWorkOrderLine]) -> list[dict]:
-    """Per item: the previous sheets' totals (sent or later, imported ones included), this
-    sheet's, and up to date."""
-    earlier = list(db.scalars(select(MeasureSheet.id).where(MeasureSheet.site_id == sheet.site_id, MeasureSheet.seq < sheet.seq, MeasureSheet.status != "draft")))
+    """Per item: the previous sheets' (sent or later, imported ones included), this sheet's and up
+    to date, as billed (the client's approved figure); this sheet's drawing figure beside it."""
+    earlier = list(db.scalars(select(MeasureSheet).where(MeasureSheet.site_id == sheet.site_id, MeasureSheet.seq < sheet.seq, MeasureSheet.status.in_(("sent", "approved", "billed")))))
     prev: dict[int, Decimal] = {}
-    for sid in earlier:
-        for k, v in totals(lines_of(db, sid)).items():
+    for s in earlier:
+        for k, v in billed_totals(db, s).items():
             prev[k] = prev.get(k, ZERO) + v
-    this = totals(lines_of(db, sheet.id))
+    drawing = totals(lines_of(db, sheet.id))
+    ok = approved(db, sheet)
     rows = []
     for w in wo_lines:
-        p, t = prev.get(w.id, ZERO), this.get(w.id, ZERO)
+        p, d = prev.get(w.id, ZERO), drawing.get(w.id, ZERO)
+        a = ok.get(w.id, ZERO) if ok is not None else None
+        t = a if a is not None else d
+        note = f"{_n(d, 3)} on the drawing, {_n(a, 3)} approved by the client" if a is not None and a != d else None
         rows.append({"wo_line_id": w.id, "item_no": w.item_no, "description": w.description, "unit": w.unit, "wo_qty": w.qty, "rate": w.rate,
-                     "previous": p, "this": t, "upto": p + t})  # fmt: skip
+                     "previous": p, "drawing": d, "approved": a, "this": t, "upto": p + t, "note": note})  # fmt: skip
     return rows
 
 

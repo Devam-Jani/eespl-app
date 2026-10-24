@@ -4487,7 +4487,7 @@ label.field-wrong textarea,
 .m-area path { fill-opacity: 0.22; cursor: pointer; }
 .m-area.on path { fill-opacity: 0.45; stroke: var(--accent); }
 .m-code { fill: var(--text); font-weight: 700; pointer-events: none; }
-.m-edge { stroke-linecap: round; cursor: pointer; }
+.m-edge { fill: none; stroke-linecap: round; stroke-linejoin: round; cursor: pointer; }
 .m-edge.open { stroke: var(--hold); }
 .m-edge.answered { stroke: var(--done); }
 .m-edge.on { stroke: var(--accent); }
@@ -4532,7 +4532,8 @@ label.field-wrong textarea,
   .m-card { border: 1px solid var(--border); border-radius: var(--r-card-sm); padding: var(--space-2) var(--space-3); background: var(--surface); }
   .m-card-area { font-weight: 700; padding: var(--space-2) 0 0; }
   .m-card-qty { text-align: right; font-weight: 700; }
-  .m-abstract th:nth-child(2), .m-abstract td:nth-child(2), .m-abstract th:nth-child(7), .m-abstract td:nth-child(7) { display: none; }
+  .m-abstract th:nth-child(5), .m-abstract td:nth-child(5), .m-abstract th:nth-child(9), .m-abstract td:nth-child(9) { display: none; }
   .mb-page .card-head { flex-wrap: wrap; }
   .mb-page .card-actions { flex-wrap: wrap; }
 }
+.m-corrected { color: var(--hold-ink); }

@@ -340,7 +340,8 @@ def sheet_out(db, s: MeasureSheet) -> dict:
                 this[ln["wo_line_id"]] = this.get(ln["wo_line_id"], Decimal(0)) + Decimal(ln["total"])
         cum = ms.cumulative(db, s, wo)
         for r in cum:
-            r["this"] = this.get(r["wo_line_id"], Decimal(0))
+            r["this"] = r["drawing"] = this.get(r["wo_line_id"], Decimal(0))
+            r["approved"], r["note"] = None, None
             r["upto"] = r["previous"] + r["this"]
     else:
         cum = ms.cumulative(db, s, wo)

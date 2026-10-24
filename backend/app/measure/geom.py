@@ -171,6 +171,64 @@ def shared_edges(a: Outline, b: Outline, tol: float = EDGE_TOL_M) -> list[tuple[
     return out
 
 
+SHARE_TOL_M = 0.005  # outlines drawn side by side within 5 mm of each other share that edge
+COINCIDE_TOL_M = 1e-9  # ... measured where they coincide (the same arc flattened the same way: a nanometre)
+MIN_SHARED_M = 0.05  # shorter than 50 mm: a corner touching, not an edge
+
+
+def _pieces(geometry) -> list:
+    from shapely.geometry import LineString, MultiLineString  # noqa: PLC0415
+    from shapely.ops import linemerge  # noqa: PLC0415
+
+    lines = [g for g in getattr(geometry, "geoms", [geometry]) if isinstance(g, LineString | MultiLineString)]
+    if not lines:
+        return []
+    joined = unary_union(lines)
+    merged = linemerge(joined) if isinstance(joined, MultiLineString) else joined
+    return [g for g in getattr(merged, "geoms", [merged]) if g.length >= MIN_SHARED_M]
+
+
+def _path(line, most: int = 96) -> list[float]:
+    """A shared edge's path for drawing it: [x1, y1, x2, y2, ...], at most `most` points."""
+    pts = list(line.coords)
+    step = max(1, len(pts) // most)
+    keep = pts[::step]
+    if keep[-1] != pts[-1]:
+        keep.append(pts[-1])
+    return [round(v, 6) for p in keep for v in p]
+
+
+def shared_paths(a: Outline, b: Outline, a_trims_b: bool = False, b_trims_a: bool = False) -> list[tuple[float, list[float]]]:
+    """Every edge two outlines share, straight or along an arc: (its true length, its path).
+
+    Trimmed by the other (a slope drawn into the pool and cut back to it): the edge is the trimming
+    outline inside the trimmed one, exactly. Side by side: the stretch of one outline within a few
+    millimetres of the other, measured where the two coincide (within a micron) when they do. The
+    arcs are measured on chords a hundredth of a micron off them: the true arc length."""
+    pa, pb = polygon(a), polygon(b)
+    if a_trims_b or b_trims_a:
+        cutter, cut = (pa, pb) if a_trims_b else (pb, pa)
+        pieces = _pieces(cutter.exterior.intersection(cut))
+        return [(p.length, _path(p)) for p in pieces]
+    if pa.intersection(pb).area > 1e-6:
+        return []  # overlapping without a trim: not side by side
+    from shapely.geometry import LineString  # noqa: PLC0415
+
+    # straight edges on one line: exactly, as before; the rest (arcs) by how close the outlines run
+    out = [(length, [round(v, 6) for v in line]) for length, line in shared_edges(a, b)]
+    ra, rb = pa.exterior, pb.exterior
+    rest = ra.difference(unary_union([LineString([s[1][:2], s[1][2:]]) for s in shared_edges(a, b)]).buffer(1e-6)) if out else ra
+    near = _pieces(rest.intersection(rb.buffer(SHARE_TOL_M)))
+    for p in near:
+        exact = _pieces(p.intersection(rb.buffer(COINCIDE_TOL_M)))
+        length = sum(x.length for x in exact)
+        if length < 0.9 * p.length:
+            # a few millimetres apart: the stretch within 5 mm, less its ends running past the corners
+            length = max(0.0, p.length - 2 * SHARE_TOL_M)
+        out.append((length, _path(p)))
+    return out
+
+
 def slope_factor(rise_m: Decimal, run_m: Decimal) -> Decimal:
     """Slope length / horizontal run: a sloped face's plan area times this is its true area."""
     rise, run = Decimal(rise_m), Decimal(run_m)

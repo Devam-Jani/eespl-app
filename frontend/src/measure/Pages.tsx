@@ -22,7 +22,7 @@ type Area = {
   height_mm: string | null; height_source: string | null; height2_mm: string | null; height2_source: string | null; wall_top_mm: string;
   rise_mm: string | null; run_mm: string | null; slope_source: string | null; counts: Record<string, number>; billed: boolean;
 }; // prettier-ignore
-type Edge = { id: number; area_a_id: number; area_b_id: number; a: string; b: string; length_m: string; line: [number, number, number, number]; answer: "both" | "open" | "weir" | null; weir_mm: string | null };
+type Edge = { id: number; area_a_id: number; area_b_id: number; a: string; b: string; length_m: string; line: number[]; answer: "both" | "open" | "weir" | null; weir_mm: string | null };
 type Item = {
   wo_line_id: number; item_no: string | null; description: string; unit: string | null; qty: string | null; rate: string | null; per_layer: boolean; wo_layers: number;
   sac: string | null; parts: string[]; count_of: string | null; layers: number; layers_answer: "each" | "once" | null; areas: number[] | null; measured: boolean;
@@ -36,7 +36,10 @@ type Line = {
   part: string | null; particulars: string; no: string | null; length_m: string | null; width_m: string | null; height_m: string | null; qty: string | null;
   total: string | null; unit: string | null; formula: string | null; reason: string | null;
 }; // prettier-ignore
-type Cum = { wo_line_id: number; item_no: string | null; description: string; unit: string | null; wo_qty: string | null; rate: string | null; previous: string; this: string; upto: string };
+type Cum = {
+  wo_line_id: number; item_no: string | null; description: string; unit: string | null; wo_qty: string | null; rate: string | null; previous: string;
+  drawing: string; approved: string | null; this: string; upto: string; note: string | null;
+}; // prettier-ignore
 type Sheet = {
   id: number; code: string; title: string | null; measured_on: string; status: string; site_id: number; not_done: [number, number, number][]; imported_from: string | null;
   import_skipped: string[] | null; ra_bill_id: number | null; ra_code: string | null; lines: Line[]; questions: { kind: string; text: string; edge_id?: number; area_id?: number }[];
@@ -265,6 +268,13 @@ export function MeasurePage() {
   );
 }
 
+/** An edge's path ([x1, y1, x2, y2, ...], straight or along an arc) as SVG points, y turned. */
+export function edgePoints(line: number[]): string {
+  const out: string[] = [];
+  for (let i = 0; i + 1 < line.length; i += 2) out.push(`${line[i]},${-line[i + 1]}`);
+  return out.join(" ");
+}
+
 function nextCode(areas: Area[]): string {
   const used = new Set(areas.map((a) => a.code));
   for (let i = 0; i < 26; i++) if (!used.has(String.fromCharCode(65 + i))) return String.fromCharCode(65 + i);
@@ -378,13 +388,10 @@ function DrawingView(props: {
         );
       })}
       {edges.map((e) => (
-        <line
+        <polyline
           key={e.id}
           className={`m-edge ${e.answer ? "answered" : "open"} ${pick.edgeId === e.id ? "on" : ""}`}
-          x1={e.line[0]}
-          y1={-e.line[1]}
-          x2={e.line[2]}
-          y2={-e.line[3]}
+          points={edgePoints(e.line)}
           strokeWidth={unit * (pick.edgeId === e.id ? 9 : 6)}
           onPointerUp={(ev) => {
             ev.stopPropagation();
@@ -394,7 +401,7 @@ function DrawingView(props: {
           <title>
             {e.a}|{e.b}: {num(e.length_m, 3)} m {e.answer ? `(${ANSWER_LABEL[e.answer]})` : "(not answered)"}
           </title>
-        </line>
+        </polyline>
       ))}
       <g className="m-texts">
         {drawing.texts.map(([x, y, h, t], i) => {
@@ -1060,6 +1067,8 @@ function SheetView({ sheetId, st, pick, onPick, onBill, reload, onClose }: { she
             <th>Description</th>
             <th>Unit</th>
             <th className="num">Previous</th>
+            <th className="num">On the drawing</th>
+            <th className="num">Approved by the client</th>
             <th className="num">This bill</th>
             <th className="num">Up to date</th>
             <th className="num">WO qty</th>
@@ -1069,10 +1078,17 @@ function SheetView({ sheetId, st, pick, onPick, onBill, reload, onClose }: { she
           {s.cumulative.map((r) => (
             <tr key={r.wo_line_id}>
               <td>{r.item_no}</td>
-              <td>{r.description.slice(0, 80)}</td>
+              <td>
+                {r.description.slice(0, 80)}
+                {r.note && <div className="m-why m-corrected">{r.note}</div>}
+              </td>
               <td>{r.unit}</td>
               <td className="num">{num(r.previous, 3)}</td>
-              <td className="num">{num(r.this, 3)}</td>
+              <td className="num">{num(r.drawing, 3)}</td>
+              <td className="num">{r.approved === null ? "—" : num(r.approved, 3)}</td>
+              <td className="num">
+                <b>{num(r.this, 3)}</b>
+              </td>
               <td className="num">{num(r.upto, 3)}</td>
               <td className="num">{num(r.wo_qty, 3)}</td>
             </tr>

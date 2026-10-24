@@ -12,6 +12,7 @@ from decimal import Decimal
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 
 from app.measure import geom
 from app.measure.models import MeasureLine
@@ -19,6 +20,7 @@ from app.measure.models import MeasureLine
 HEAD = ["Sr / WO item", "Particulars", "No", "Length (m)", "Width (m)", "Height / Depth (m)", "Qty", "Total qty", "Unit"]
 FIRST = 7  # the first line's row
 DASH = "–"
+KEY = 14  # the hidden column with each line's item key (N), clear of the abstract's columns
 
 
 def _f(v) -> float | None:
@@ -41,7 +43,7 @@ def _qty_formula(r: int, ln: MeasureLine) -> str | float:
 def _total_formula(r: int, unit: str | None) -> str:
     u = (unit or "").strip().lower()
     if u == "sqft":
-        return f"=ROUND(G{r}*$K$3,3)"
+        return f"=ROUND(G{r}*$H$3,3)"
     if u == "rft":
         return f"=ROUND(G{r}/0.3048,3)"
     return f"=ROUND(G{r},3)"
@@ -60,14 +62,14 @@ def export(sheet, site, lines: list[MeasureLine], cumulative: list[dict], areas:
     ws["A2"], ws["A2"].font = "MEASUREMENT SHEET", bold
     ws["A3"] = f"Site: {site.code} {site.name}"
     ws["D3"] = f"Sheet {sheet.code} · measured on {sheet.measured_on:%d-%m-%Y}"
-    ws["J3"], ws["K3"], ws["L3"] = "1 sqm =", float(geom.SQFT_PER_SQM), "sqft"
-    ws["J3"].font = ws["K3"].font = bold
+    ws["G3"], ws["H3"], ws["I3"] = "1 sqm =", float(geom.SQFT_PER_SQM), "sqft"
+    ws["G3"].font = ws["H3"].font = bold
     ws["A4"] = "Quantities from the drawing at full precision; each line's total rounded to 3 decimals (half up, never truncated)."
     for i, h in enumerate(HEAD, start=1):
         c = ws.cell(row=6, column=i, value=h)
         c.font, c.border = bold, box
         c.fill = PatternFill("solid", fgColor="DDE7E1")
-    ws.cell(row=6, column=10, value="item key").font = Font(color="999999")
+    ws.cell(row=6, column=KEY, value="item key").font = Font(color="999999")
     r = FIRST
     for ln in lines:
         if ln.kind == "area":
@@ -92,7 +94,7 @@ def export(sheet, site, lines: list[MeasureLine], cumulative: list[dict], areas:
             ws.cell(row=r, column=7, value=q)
             ws.cell(row=r, column=8, value=_total_formula(r, ln.unit))
         ws.cell(row=r, column=9, value=ln.unit)
-        ws.cell(row=r, column=10, value=f"wo:{ln.wo_line_id}" if ln.wo_line_id else None).font = Font(color="999999")
+        ws.cell(row=r, column=KEY, value=f"wo:{ln.wo_line_id}" if ln.wo_line_id else None).font = Font(color="999999")
         for col in range(3, 9):
             ws.cell(row=r, column=col).number_format = "0.000" if col == 8 else "0.0000"
         r += 1
@@ -100,31 +102,40 @@ def export(sheet, site, lines: list[MeasureLine], cumulative: list[dict], areas:
     r += 1
     ws.cell(row=r, column=1, value="Abstract").font = bold
     r += 1
-    for i, h in enumerate(["WO item", "Description", "Unit", "Previous", "This bill", "Up to date", "WO qty", "Rate", "This bill ₹"], start=1):
+    # the bill's figures: the drawing's (live, from the lines), the client's approved where they
+    # approved it (a correction included); "This bill" is the approved one, as on the RA bill
+    heads = ["WO item", "Description", "Unit", "Previous", "On the drawing", "Approved by the client", "This bill", "Up to date", "WO qty", "Rate", "This bill ₹"]
+    for i, h in enumerate(heads, start=1):
         c = ws.cell(row=r, column=i, value=h)
         c.font, c.border = bold, box
     r += 1
     abstract_first = r
+    key = get_column_letter(KEY)
     for row in cumulative:
         ws.cell(row=r, column=1, value=row["item_no"])
         ws.cell(row=r, column=2, value=(row["description"] or "")[:200]).alignment = Alignment(wrap_text=True, vertical="top")
         ws.cell(row=r, column=3, value=row["unit"])
         ws.cell(row=r, column=4, value=_f(row["previous"]))
-        ws.cell(row=r, column=5, value=f'=SUMIF($J${FIRST}:$J${max(last, FIRST)},"wo:{row["wo_line_id"]}",$H${FIRST}:$H${max(last, FIRST)})')
-        ws.cell(row=r, column=6, value=f"=D{r}+E{r}")
-        ws.cell(row=r, column=7, value=_f(row["wo_qty"]))
-        ws.cell(row=r, column=8, value=_f(row["rate"]))
-        ws.cell(row=r, column=9, value=f"=ROUND(E{r}*H{r},2)")
-        for col in (4, 5, 6, 7):
+        ws.cell(row=r, column=5, value=f'=SUMIF(${key}${FIRST}:${key}${max(last, FIRST)},"wo:{row["wo_line_id"]}",$H${FIRST}:$H${max(last, FIRST)})')
+        if row.get("approved") is not None:
+            ws.cell(row=r, column=6, value=_f(row["approved"]))
+            ws.cell(row=r, column=7, value=f"=F{r}")
+        else:
+            ws.cell(row=r, column=7, value=f"=E{r}")
+        ws.cell(row=r, column=8, value=f"=D{r}+G{r}")
+        ws.cell(row=r, column=9, value=_f(row["wo_qty"]))
+        ws.cell(row=r, column=10, value=_f(row["rate"]))
+        ws.cell(row=r, column=11, value=f"=ROUND(G{r}*J{r},2)")
+        for col in (4, 5, 6, 7, 8, 9):
             ws.cell(row=r, column=col).number_format = "0.000"
-        ws.cell(row=r, column=9).number_format = "#,##0.00"
+        ws.cell(row=r, column=11).number_format = "#,##0.00"
         r += 1
-    ws.cell(row=r, column=8, value="Basic").font = bold
-    ws.cell(row=r, column=9, value=f"=SUM(I{abstract_first}:I{r - 1})").font = bold
-    ws.cell(row=r, column=9).number_format = "#,##0.00"
-    for col, w in zip("ABCDEFGHIJKL", (12, 60, 7, 11, 10, 13, 12, 12, 8, 10, 9, 6), strict=True):
+    ws.cell(row=r, column=10, value="Basic").font = bold
+    ws.cell(row=r, column=11, value=f"=SUM(K{abstract_first}:K{r - 1})").font = bold
+    ws.cell(row=r, column=11).number_format = "#,##0.00"
+    for col, w in zip("ABCDEFGHIJK", (12, 60, 7, 11, 12, 13, 12, 12, 10, 9, 12), strict=True):
         ws.column_dimensions[col].width = w
-    ws.column_dimensions["J"].hidden = True
+    ws.column_dimensions[key].hidden = True
     ws.freeze_panes = "C7"
     ws.print_title_rows = "6:6"
     ws.page_setup.orientation = "landscape"

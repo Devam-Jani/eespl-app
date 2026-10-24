@@ -257,8 +257,12 @@ def run(db: Session) -> dict:
         areas[code] = _ok(c.post(f"{base}/areas", json={"cad_file_id": fid, "x": x, "y": y, "code": code, "name": name, "kind": kind}, headers=hb), f"area {code}", 201)
     st = _ok(c.get(base, headers=hb), "state")
     out["areas"] = {a["code"]: {"area_sqm": a["area_sqm"], "periphery_m": a["periphery_m"], "net_area_sqm": a["net_area_sqm"], "net_periphery_m": a["net_periphery_m"], "counts": a["counts"]} for a in st["areas"]}
-    edge = st["edges"][0]
-    out["shared_edge"] = {"between": f"{edge['a']}|{edge['b']}", "length_m": edge["length_m"]}
+    edge = next(e for e in st["edges"] if {e["a"], e["b"]} == {"A", "R"})
+    out["shared_edges"] = {f"{e['a']}|{e['b']}": e["length_m"] for e in st["edges"]}
+    # the slope's cut edge along the pool: the pool's wall stays on it (both faces)
+    for e in st["edges"]:
+        if {e["a"], e["b"]} == {"A", "Q"}:
+            _ok(c.post(f"/api/measure/edges/{e['id']}/answer", json={"answer": "both"}, headers=hb), "edge A|Q")
 
     # 2. heights and the slope from Section Y-Y; the shared edge's answer ------------------------------
     sec = "Section Y-Y"
