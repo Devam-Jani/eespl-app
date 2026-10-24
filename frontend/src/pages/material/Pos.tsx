@@ -12,6 +12,7 @@ import { Pager } from "../Clients";
 import { shortDate } from "../Tenders";
 import { GrnForm } from "./Grns";
 import { ProductSelect, StatusBadge, today, UnitSelect, useMaterialLookups } from "./common";
+import { Button, Card, Field } from "../../ui/components";
 
 const STATUSES = ["draft", "pending_approval", "approved", "sent", "partly_received", "received", "closed", "cancelled"];
 
@@ -51,9 +52,9 @@ export default function Pos() {
             ))}
           </select>
           {can("po.edit") && (
-            <button className="btn btn-primary" onClick={() => navigate("/purchase-orders/new")}>
+            <Button variant="primary" type="submit" onClick={() => navigate("/purchase-orders/new")}>
               New PO
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -234,10 +235,9 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
   return (
     <form onSubmit={submit}>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card">
+      <Card as="div">
         <div className="grid-4">
-          <label className="field">
-            <span>Vendor *</span>
+          <Field label="Vendor *">
             <select required value={form.vendor_id} onChange={(e) => setForm({ ...form, vendor_id: Number(e.target.value) || "" })}>
               <option value="">— vendor —</option>
               {lookups.vendors.map((v) => (
@@ -246,9 +246,8 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Deliver to *</span>
+          </Field>
+          <Field label="Deliver to *">
             <select required value={form.store_id} onChange={(e) => setForm({ ...form, store_id: Number(e.target.value) })}>
               {lookups.stores.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -256,9 +255,8 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Bill from (our GSTIN)</span>
+          </Field>
+          <Field label="Bill from (our GSTIN)">
             <select value={form.from_gstin_id} onChange={(e) => setForm({ ...form, from_gstin_id: Number(e.target.value) || "" })}>
               <option value="">—</option>
               {lookups.gstins.map((g) => (
@@ -267,19 +265,16 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>PO date</span>
+          </Field>
+          <Field label="PO date">
             <input type="date" value={form.po_date} disabled={!!po} onChange={(e) => setForm({ ...form, po_date: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Expected delivery</span>
+          </Field>
+          <Field label="Expected delivery">
             <input type="date" value={form.expected_delivery} onChange={(e) => setForm({ ...form, expected_delivery: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Payment terms</span>
+          </Field>
+          <Field label="Payment terms">
             <input value={form.payment_terms} onChange={(e) => setForm({ ...form, payment_terms: e.target.value })} placeholder="e.g. 30 days from the invoice" />
-          </label>
+          </Field>
           <label className="field" style={{ gridColumn: "span 2" }}>
             <span>Remark</span>
             <input value={form.remark} onChange={(e) => setForm({ ...form, remark: e.target.value })} />
@@ -295,7 +290,7 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
             : "Pick the vendor to see the GST split."}
           {indentIds.length > 0 && ` · for ${indentIds.length} indent(s)`}
         </p>
-      </div>
+      </Card>
       {taxedUnregistered && <div className="alert alert-warn top-gap">This supplier has no GSTIN and cannot charge GST: the GST entered will not be input tax credit.</div>}
       <div className="card top-gap table-wrap">
         <table className="table compact">
@@ -364,21 +359,20 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
                 </td>
                 <td className="num">{inr(totals.lineAmounts[i])}</td>
                 <td>
-                  <button type="button" className="btn btn-ghost btn-icon" aria-label="Remove" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>
+                  <Button variant="ghost" className="btn-icon" type="button"  aria-label="Remove" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>
                     ×
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <button
-          type="button"
-          className="btn btn-small"
+        <Button size="small" type="button"
+          
           onClick={() => setLines((ls) => [...ls, { indent_line_id: null, product_id: "", qty: "", unit: "", rate: "", discount_percent: "0", gst_percent: "18" }])}
         >
           + Line
-        </button>
+        </Button>
         <h2 className="section-title top-gap">Charges</h2>
         <table className="table compact">
           <thead>
@@ -416,21 +410,20 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
                   <input type="checkbox" checked={c.add_to_cost} onChange={(e) => setCharge(i, { add_to_cost: e.target.checked })} aria-label="Add to material cost" />
                 </td>
                 <td>
-                  <button type="button" className="btn btn-ghost btn-icon" aria-label="Remove" onClick={() => setCharges((cs) => cs.filter((_, j) => j !== i))}>
+                  <Button variant="ghost" className="btn-icon" type="button"  aria-label="Remove" onClick={() => setCharges((cs) => cs.filter((_, j) => j !== i))}>
                     ×
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <button
-          type="button"
-          className="btn btn-small"
+        <Button size="small" type="button"
+          
           onClick={() => setCharges((cs) => [...cs, { kind: "freight", description: "Freight", amount: "", gst_percent: "18", add_to_cost: true }])}
         >
           + Charge
-        </button>
+        </Button>
         <TotalsBox
           t={{
             subtotal: totals.subtotal,
@@ -452,12 +445,12 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
         </p>
       </div>
       <div className="form-actions">
-        <button type="button" className="btn" onClick={onCancel}>
+        <Button type="button"  onClick={onCancel}>
           Cancel
-        </button>
-        <button className="btn btn-primary" disabled={busy || lines.length === 0}>
+        </Button>
+        <Button variant="primary" type="submit" disabled={busy || lines.length === 0}>
           {po ? "Save" : "Create draft PO"}
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -600,66 +593,60 @@ export function PoDetail() {
           </p>
         </div>
         <div className="page-actions">
-          <button className="btn" onClick={() => void downloadFile(`/api/material/pos/${po.id}/pdf`).catch((err) => setError(errorText(err)))}>
+          <Button type="submit" onClick={() => void downloadFile(`/api/material/pos/${po.id}/pdf`).catch((err) => setError(errorText(err)))}>
             PDF
-          </button>
+          </Button>
           {po.can_edit && (
-            <button className="btn" onClick={() => setEditing(true)}>
+            <Button type="submit" onClick={() => setEditing(true)}>
               Edit
-            </button>
+            </Button>
           )}
           {po.status === "draft" && editable && (
-            <button className="btn btn-primary" onClick={() => void act("submit")}>
+            <Button variant="primary" type="submit" onClick={() => void act("submit")}>
               {po.needs_approver ? "Send for approval" : "Approve"}
-            </button>
+            </Button>
           )}
           {po.can_approve && (
             <>
-              <button
-                className="btn btn-danger"
-                onClick={() => {
+              <Button variant="danger" type="submit" onClick={() => {
                   const reason = prompt("Send back to draft: why?");
                   if (reason) void act("reject", { reason });
                 }}
               >
                 Send back
-              </button>
-              <button className="btn btn-primary" onClick={() => void act("approve")}>
+              </Button>
+              <Button variant="primary" type="submit" onClick={() => void act("approve")}>
                 Approve
-              </button>
+              </Button>
             </>
           )}
           {po.status === "approved" && editable && (
-            <button className="btn btn-primary" disabled={po.gstin_missing} title={po.gstin_missing ? "Set the company GSTIN first" : undefined} onClick={() => void act("send")}>
+            <Button variant="primary" type="submit" disabled={po.gstin_missing} title={po.gstin_missing ? "Set the company GSTIN first" : undefined} onClick={() => void act("send")}>
               Mark sent
-            </button>
+            </Button>
           )}
           {receivable && (
-            <button className="btn btn-primary" onClick={() => setReceiving(true)}>
+            <Button variant="primary" type="submit" onClick={() => setReceiving(true)}>
               Receive (GRN)
-            </button>
+            </Button>
           )}
           {editable && ["partly_received", "sent", "approved"].includes(po.status) && po.lines.some((l) => Number(l.received_qty) > 0) && (
-            <button
-              className="btn"
-              onClick={() => {
+            <Button type="submit" onClick={() => {
                 const reason = prompt("Short-close: why will the rest not come?");
                 if (reason) void act("close", { reason });
               }}
             >
               Short-close
-            </button>
+            </Button>
           )}
           {editable && !["partly_received", "received", "closed", "cancelled"].includes(po.status) && (
-            <button
-              className="btn btn-danger"
-              onClick={() => {
+            <Button variant="danger" type="submit" onClick={() => {
                 const reason = prompt(`Cancel ${po.code}: why?`);
                 if (reason) void act("cancel", { reason });
               }}
             >
               Cancel PO
-            </button>
+            </Button>
           )}
         </div>
       </div>

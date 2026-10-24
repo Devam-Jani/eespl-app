@@ -93,10 +93,14 @@ class Totals:
     counts: dict[str, int]
 
 
-def tender_totals(db: Session, tender: Tender) -> Totals:
-    lines = db.scalars(
-        select(BoqLine).where(BoqLine.tender_id == tender.id).options(lazyload("*"))
-    ).all()
+def tender_totals(db: Session, tender: Tender, lines: list[BoqLine] | None = None) -> Totals:
+    """The BOQ's totals (pass the lines when they are loaded already: a 5,000-line BOQ once)."""
+    if lines is None:
+        lines = list(
+            db.scalars(
+                select(BoqLine).where(BoqLine.tender_id == tender.id).options(lazyload("*"))
+            ).all()
+        )
     profile = db.get(CompanyProfile, 1)
     gst_percent = profile.default_gst_percent if profile else Decimal(18)
     sections: dict[int | None, Decimal] = {}

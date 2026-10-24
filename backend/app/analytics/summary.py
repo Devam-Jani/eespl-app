@@ -50,6 +50,7 @@ from app.finance.models import (
 from app.masters.models import Client
 from app.material.models import FreightEntry, SiteIssue, SiteIssueLine, StockLedger, Store
 from app.portal.models import Snag
+from app.sites import progress
 from app.sites.models import AreaScope, Site, SiteMember
 from app.tenders.models import BoqLine, Tender
 
@@ -510,9 +511,10 @@ def refresh(db: Session) -> datetime:
         for head, amount in ex.tender_budget(db, site).items():
             budget.setdefault(head, amount)
         system, tender_margin = tender_facts(db, site.tender_id)
-        rate, fc = forecast(history.get(site.id, []), site.progress_percent, site.start_date, day)
+        live = progress.site_percent(db, site.id)
+        rate, fc = forecast(history.get(site.id, []), live, site.start_date, day)
         reason = is_delayed(
-            site.status, site.progress_percent, site.start_date, site.target_date, day, threshold
+            site.status, live, site.start_date, site.target_date, day, threshold
         )
         md, _n = att.get(site.id, (ZERO, 0))
         closed = snag_closed.get(site.id)
@@ -530,7 +532,7 @@ def refresh(db: Session) -> datetime:
                 system_id=system,
                 start_date=site.start_date,
                 target_date=site.target_date,
-                progress=site.progress_percent,
+                progress=live,
                 elapsed=elapsed(site.start_date, site.target_date, day),
                 rate_per_day=rate,
                 forecast_end=fc,
@@ -563,10 +565,12 @@ def refresh(db: Session) -> datetime:
             snap = db.get(ProgressSnapshot, (site.id, day))
             if snap is None:
                 db.add(
-                    ProgressSnapshot(site_id=site.id, on_date=day, percent=site.progress_percent)
+                    ProgressSnapshot(
+                        site_id=site.id, on_date=day, percent=progress.site_percent(db, site.id)
+                    )
                 )
             else:
-                snap.percent = site.progress_percent
+                snap.percent = progress.site_percent(db, site.id)
 
     _monthly(db, as_of, demo_site, client_demo, month_cost, month_salary, month_labour)
     s.refreshed_at = as_of

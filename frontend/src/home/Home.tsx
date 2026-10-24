@@ -240,6 +240,7 @@ export default function Home() {
             rowKey={(s) => s.id}
             label="Active sites"
             onOpen={(s) => navigate(`/sites/${s.id}`)}
+            cards
             filters={[
               { key: "all", label: "All", test: () => true },
               { key: "late", label: "Late", test: (s) => s.late },

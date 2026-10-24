@@ -613,6 +613,15 @@ def submit_ra(
         raise svc.conflict(f"{b.code} is {b.status}")
     if Decimal(b.gross) <= 0:
         raise svc.unprocessable("Nothing to bill")
+    from app.measure import bill as measure_bill  # noqa: PLC0415
+
+    if measure_bill.sheet_of_bill(db, b) is not None:
+        failed = [c for c in measure_bill.checklist(db, b) if not c["ok"]]
+        if failed:
+            raise svc.unprocessable(
+                "Billing checklist: "
+                + "; ".join(f"{c['label']} ({', '.join(c['detail'][:3])})" for c in failed)
+            )
     b.status, b.submitted_at = "submitted", svc.now()
     record(db, request, principal, "ra.submit", "ra_bill", b.id)
     portal.tell_clients(

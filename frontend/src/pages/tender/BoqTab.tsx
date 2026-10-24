@@ -7,6 +7,7 @@ import { RATE_POLICIES } from "../../types";
 import type { Boq, BoqLine, LineDetail, RateHistory, SuggestResult, Tender } from "../../types";
 import ImportWizard from "./ImportWizard";
 import { useLearned } from "../../sitecontrol/learned";
+import { Button } from "../../ui/components";
 
 type Col = {
   key: string;
@@ -17,6 +18,15 @@ type Col = {
   muted?: boolean;
   width?: string;
 };
+
+// every row the same height (a spreadsheet's), so the grid can draw only the rows in view
+const ROW_H = 44;
+const HEAD_H = 36;
+
+/** The rows to draw: those in view and 30 either side. */
+export function rowWindow(scrollTop: number, view: number, count: number): { from: number; to: number } {
+  return { from: Math.max(0, Math.floor(scrollTop / ROW_H) - 30), to: Math.min(count, Math.ceil((scrollTop + view) / ROW_H) + 30) };
+}
 
 const STATUS_LABEL: Record<string, string> = {
   unpriced: "Unpriced",
@@ -129,7 +139,7 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
     const editable = () => canEdit;
     const cols: Col[] = [
       { key: "client_item_no", label: "Item no", editable, width: "5.5rem" },
-      { key: "description", label: "Description", editable },
+      { key: "description", label: "Description", editable, width: "26rem" },
       { key: "unit", label: "Unit", editable, width: "5rem" },
       { key: "qty", label: "Qty", editable, num: true, width: "6.5rem" },
       { key: "rate", label: "Rate", editable: (l) => canEdit && l.status !== "not_quoted", num: true, width: "7.5rem" },
@@ -234,13 +244,26 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
     gridRef.current?.focus();
   }
 
+  // windowing: the rows in view and 30 either side (a 5,000-line BOQ draws about 80 rows)
+  const [scrollTop, setScrollTop] = useState(0);
+  const view = gridRef.current?.clientHeight ?? 800;
+  const win = rowWindow(scrollTop, view, rows.length);
+
   function moveTo(row: number, col: number) {
     const r = Math.max(0, Math.min(rows.length - 1, row));
     const c = Math.max(0, Math.min(columns.length - 1, col));
     setCursor({ row: r, col: c });
     const target = rows[r];
     if (target?.kind === "line") setSelected(target.line.id);
-    gridRef.current?.querySelector(`[data-cell="${r}-${c}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    // the row may not be drawn yet (windowing): scroll by its position, then the cell sideways
+    const g = gridRef.current;
+    if (g) {
+      const top = r * ROW_H;
+      const head = HEAD_H;
+      if (top < g.scrollTop) g.scrollTop = top;
+      else if (top + ROW_H > g.scrollTop + g.clientHeight - head) g.scrollTop = top + ROW_H - g.clientHeight + head;
+      requestAnimationFrame(() => g.querySelector(`[data-cell="${r}-${c}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" }));
+    }
   }
 
   function nextEditable(row: number, col: number, step: 1 | -1): { row: number; col: number } | null {
@@ -419,30 +442,30 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
         <div className="page-actions">
           {canEdit && (
             <>
-              <button className="btn" onClick={() => setImporting(true)}>
+              <Button type="submit" onClick={() => setImporting(true)}>
                 ⤒ Import client BOQ
-              </button>
-              <button className="btn btn-primary" disabled={busy || boq.lines.length === 0} onClick={() => void suggest()}>
+              </Button>
+              <Button variant="primary" type="submit" disabled={busy || boq.lines.length === 0} onClick={() => void suggest()}>
                 Suggest rates
-              </button>
+              </Button>
               <span className="inline-form">
-                <button className="btn" disabled={busy || suggestedCount === 0} onClick={() => void acceptAll()}>
+                <Button type="submit" disabled={busy || suggestedCount === 0} onClick={() => void acceptAll()}>
                   Accept all ≥
-                </button>
+                </Button>
                 <input className="input-num" value={acceptAbove} onChange={(e) => setAcceptAbove(e.target.value)} aria-label="Minimum score %" />
                 <span className="muted">%</span>
               </span>
-              <button className="btn" disabled={busy} onClick={() => void addLine()}>
+              <Button type="submit" disabled={busy} onClick={() => void addLine()}>
                 Add line
-              </button>
-              <button className="btn" disabled={busy} onClick={() => void addSection()}>
+              </Button>
+              <Button type="submit" disabled={busy} onClick={() => void addSection()}>
                 Add section
-              </button>
+              </Button>
               {seesCost && (
                 <span className="inline-form">
-                  <button className="btn" disabled={busy} onClick={() => void applyMargin()}>
+                  <Button type="submit" disabled={busy} onClick={() => void applyMargin()}>
                     Apply margin
-                  </button>
+                  </Button>
                   <input className="input-num" value={margin} onChange={(e) => setMargin(e.target.value)} aria-label="Margin %" />
                   <span className="muted">%</span>
                 </span>
@@ -463,8 +486,8 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
           {boq.lines.length === 0 && boq.sections.length === 0 ? (
             <p className="empty">No BOQ yet. Import the client's BOQ or add lines by hand.</p>
           ) : (
-            <div className="boq-grid" ref={gridRef} tabIndex={0} onKeyDown={onGridKey} role="grid" aria-label="BOQ">
-              <table className="table compact">
+            <div className="boq-grid" ref={gridRef} tabIndex={0} onKeyDown={onGridKey} onScroll={(e) => setScrollTop((e.target as HTMLDivElement).scrollTop)} role="grid" aria-label="BOQ" aria-rowcount={rows.length}>
+              <table className="table compact" style={{ width: `${columns.reduce((s, c) => s + parseFloat(c.width ?? "8"), 0)}rem` }}>
                 <thead>
                   <tr>
                     {columns.map((c) => (
@@ -475,8 +498,14 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r, ri) =>
-                    r.kind === "section" ? (
+                  {win.from > 0 && (
+                    <tr aria-hidden="true" className="boq-spacer">
+                      <td colSpan={columns.length} style={{ height: win.from * ROW_H }} />
+                    </tr>
+                  )}
+                  {rows.slice(win.from, win.to).map((r, i) => {
+                    const ri = win.from + i;
+                    return r.kind === "section" ? (
                       <tr key={`s${r.id}`} className="boq-section" data-cell={`${ri}-0`}>
                         <td colSpan={columns.length - 1}>
                           <SectionTitle tenderId={tender.id} id={r.id} title={r.title} note={r.note} canEdit={canEdit} onSaved={applyBoq} onError={setError} />
@@ -494,7 +523,12 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
                         current={selected === r.line.id}
                         on={rowHandlers}
                       />
-                    ),
+                    );
+                  })}
+                  {win.to < rows.length && (
+                    <tr aria-hidden="true" className="boq-spacer">
+                      <td colSpan={columns.length} style={{ height: (rows.length - win.to) * ROW_H }} />
+                    </tr>
                   )}
                 </tbody>
               </table>
@@ -576,6 +610,15 @@ const LineRow = memo(function LineRow({ line, ri, columns, activeCol, editing, c
   );
 });
 
+/** The margin on the selling price: (rate − cost) / rate (the stored one for a system rate). */
+export function marginOnPrice(line: Pick<BoqLine, "rate" | "cost_rate" | "margin_percent" | "source">): number | null {
+  const rate = Number(line.rate);
+  const cost = Number(line.cost_rate);
+  if (line.rate && line.cost_rate && rate > 0) return Math.round(((rate - cost) / rate) * 10000) / 100;
+  if (line.source === "system" && line.margin_percent) return Number(line.margin_percent);
+  return null;
+}
+
 function CellView({ line, col }: { line: BoqLine; col: string }) {
   switch (col) {
     case "description":
@@ -606,8 +649,10 @@ function CellView({ line, col }: { line: BoqLine; col: string }) {
       const v = cellText(line, col);
       return <>{v ? inr(v) : "—"}</>;
     }
-    case "margin_percent":
-      return <>{line.source === "system" && line.margin_percent ? `${num(line.margin_percent, 2)}%` : "—"}</>;
+    case "margin_percent": {
+      const m = marginOnPrice(line);
+      return <>{m === null ? "—" : `${num(m, 2)}%`}</>;
+    }
     case "source":
       return <span className="muted">{line.source ?? "—"}</span>;
     case "status":
@@ -671,15 +716,15 @@ function SectionTitle({
         <strong>{title}</strong>
         {canEdit && (
           <>
-            <button className="btn btn-small btn-ghost" onClick={() => void rename()}>
+            <Button variant="ghost" size="small" type="submit" onClick={() => void rename()}>
               Rename
-            </button>
-            <button className="btn btn-small btn-ghost" onClick={() => void editNote()}>
+            </Button>
+            <Button variant="ghost" size="small" type="submit" onClick={() => void editNote()}>
               {note ? "Edit note" : "Add note"}
-            </button>
-            <button className="btn btn-small btn-ghost" onClick={() => void remove()}>
+            </Button>
+            <Button variant="ghost" size="small" type="submit" onClick={() => void remove()}>
               Remove heading
-            </button>
+            </Button>
           </>
         )}
       </span>
@@ -726,9 +771,9 @@ function LinePanel({
           {line.client_item_no ? `${line.client_item_no} · ` : ""}
           {STATUS_LABEL[line.status]}
         </h2>
-        <button className="btn btn-ghost btn-icon" onClick={onClose} aria-label="Close">
+        <Button variant="ghost" className="btn-icon" type="submit" onClick={onClose} aria-label="Close">
           ×
-        </button>
+        </Button>
       </div>
       <p className="pre-line small">{line.description}</p>
       <dl className="totals">
@@ -786,12 +831,10 @@ function LinePanel({
               {c.details && <WhyThisRate rate={c.rate} history={c.details} />}
             </div>
             {canEdit && line.status !== "not_quoted" && (
-              <button
-                className="btn btn-small"
-                onClick={() => void run(() => api<Boq>(`${base}/${line.id}/use-candidate`, { method: "POST", json: { candidate_id: c.id } }), "Rate applied.")}
+              <Button size="small" type="submit" onClick={() => void run(() => api<Boq>(`${base}/${line.id}/use-candidate`, { method: "POST", json: { candidate_id: c.id } }), "Rate applied.")}
               >
                 Use this
-              </button>
+              </Button>
             )}
           </li>
         ))}
@@ -883,22 +926,20 @@ function LinePanel({
       {canEdit && (
         <div className="form-actions">
           {line.status === "not_quoted" ? (
-            <button className="btn" onClick={() => void run(() => api<Boq>(base, { method: "PATCH", json: { lines: [{ id: line.id, status: "unpriced" }] } }))}>
+            <Button type="submit" onClick={() => void run(() => api<Boq>(base, { method: "PATCH", json: { lines: [{ id: line.id, status: "unpriced" }] } }))}>
               Quote this line
-            </button>
+            </Button>
           ) : (
-            <button className="btn" onClick={() => void run(() => api<Boq>(base, { method: "PATCH", json: { lines: [{ id: line.id, status: "not_quoted" }] } }))}>
+            <Button type="submit" onClick={() => void run(() => api<Boq>(base, { method: "PATCH", json: { lines: [{ id: line.id, status: "not_quoted" }] } }))}>
               Mark not quoted
-            </button>
+            </Button>
           )}
           {line.rate && line.status !== "not_quoted" && (
-            <button className="btn" onClick={() => void run(() => api<Boq>(base, { method: "PATCH", json: { lines: [{ id: line.id, rate: null }] } }))}>
+            <Button type="submit" onClick={() => void run(() => api<Boq>(base, { method: "PATCH", json: { lines: [{ id: line.id, rate: null }] } }))}>
               Clear rate
-            </button>
+            </Button>
           )}
-          <button
-            className="btn btn-danger"
-            onClick={() => {
+          <Button variant="danger" type="submit" onClick={() => {
               if (!confirm("Delete this line?")) return;
               onClose();
               void run(() =>
@@ -909,7 +950,7 @@ function LinePanel({
             }}
           >
             Delete line
-          </button>
+          </Button>
         </div>
       )}
     </aside>

@@ -28,6 +28,7 @@ from app.masters.models import Client
 from app.models import Role, RolePermission, User, UserRole
 from app.portal import service as portal
 from app.portal.models import Snag
+from app.sites import progress
 from app.sites.models import Site, SiteNode
 from app.tenders.export import inr
 
@@ -240,8 +241,9 @@ def site_status_pdf(db: Session, site: Site) -> bytes:
         )
         .order_by(SiteNode.parent_id.nulls_first(), SiteNode.sort_order, SiteNode.id)
     ).all()
+    site_pct, live = progress.rollup(db, site.id)
     parts = "".join(
-        f"<tr><td>{'&nbsp;&nbsp;' if n.kind in ('floor', 'basement') else ''}{e(n.name)}</td><td class='num'>{Decimal(n.progress_percent):.0f}%</td></tr>"
+        f"<tr><td>{'&nbsp;&nbsp;' if n.kind in ('floor', 'basement') else ''}{e(n.name)}</td><td class='num'>{live.get(n.id, Decimal(0)):.0f}%</td></tr>"
         for n in nodes
     )
     dprs = db.scalars(
@@ -294,7 +296,7 @@ def site_status_pdf(db: Session, site: Site) -> bytes:
     body = f"""
 <div class="meta"><div><b>Site:</b> {e(site.code)} · {e(site.name)}</div><div><b>Client:</b> {e(client.name if client else '')}</div>
 <div><b>Start:</b> {site.start_date.strftime('%d %b %Y') if site.start_date else '—'} · <b>Planned end:</b> {site.target_date.strftime('%d %b %Y') if site.target_date else '—'}</div>
-<div><b>Progress:</b> {Decimal(site.progress_percent):.0f}% · <b>Time gone:</b> {fmt(s.elapsed, 'pct') if s else '—'} · <b>Forecast end:</b> {forecast}</div></div>
+<div><b>Progress:</b> {site_pct:.0f}% · <b>Time gone:</b> {fmt(s.elapsed, 'pct') if s else '—'} · <b>Forecast end:</b> {forecast}</div></div>
 <div style="display:flex;gap:10px"><div style="flex:1"><h2>Progress by tower / floor</h2><table><tbody>{parts or "<tr><td class='muted'>No structure yet.</td></tr>"}</tbody></table></div>
 <div style="flex:1"><h2>Billing</h2><table><tbody>{billing or "<tr><td class='muted'>No contract yet.</td></tr>"}</tbody></table></div></div>
 <h2>Recent daily reports</h2><table><tbody>{dpr_rows or "<tr><td class='muted'>No reports yet.</td></tr>"}</tbody></table>

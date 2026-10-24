@@ -838,27 +838,74 @@ export function HelpSettings() {
 
 // --- in the layout: the go-live banner, the training banner and switch, the page's "?" ------------------------------
 
+/** The roles that set the company up for go-live: only they see what is still missing. */
+export const GO_LIVE_ROLES = ["director", "office_admin", "super_admin"];
+export function showsGoLive(roleCodes: string[]): boolean {
+  return roleCodes.some((r) => GO_LIVE_ROLES.includes(r));
+}
+const HIDE_KEY = (uid: string) => `eespl.golive.hidden.${uid}`;
+const todayKey = () => new Date().toLocaleDateString("en-CA");
+
 export function GoLiveBanner() {
-  const { can } = useAuth();
+  const { me } = useAuth();
+  const roles = me?.roles.map((r) => r.code) ?? [];
+  const uid = me?.user.id ?? "";
   const [missing, setMissing] = useState<{ key: string; what: string; where: string }[]>([]);
-  const location = useLocation();
+  const [open, setOpen] = useState(false);
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return window.localStorage.getItem(HIDE_KEY(uid)) === todayKey();
+    } catch {
+      return false;
+    }
+  });
+  const shows = showsGoLive(roles);
   useEffect(() => {
-    if (!can("settings.company")) return;
+    if (!shows || hidden) return;
     api<{ missing: typeof missing }>("/api/ops/go-live-checks").then(
       (r) => setMissing(r.missing),
       () => setMissing([]),
     );
-  }, [can, location.pathname]);
-  if (!missing.length) return null;
+  }, [shows, hidden]);
+  if (!shows || hidden || !missing.length) return null;
   return (
     <div className="golive-banner" role="status">
-      <b>Not set yet for go-live:</b>{" "}
-      {missing.map((m, i) => (
-        <span key={m.key}>
-          {i > 0 && " · "}
-          <Link to={m.where}>{m.what}</Link>
+      <div className="golive-line">
+        <b>
+          <span className="golive-long">Not set yet for go-live:</span>
+          <span className="golive-short">Go-live:</span>
+        </b>
+        <span className="golive-count">
+          {missing.length} {missing.length === 1 ? "setting" : "settings"}
         </span>
-      ))}
+        <button type="button" className="link-button" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? "Hide the list" : "Show what's missing"}
+        </button>
+        <button
+          type="button"
+          className="link-button golive-hide"
+          onClick={() => {
+            setHidden(true);
+            try {
+              window.localStorage.setItem(HIDE_KEY(uid), todayKey());
+            } catch {
+              // storage blocked: hidden until the page reloads
+            }
+          }}
+        >
+          <span className="golive-long">Hide for today</span>
+          <span className="golive-short">Hide today</span>
+        </button>
+      </div>
+      {open && (
+        <ul className="golive-list">
+          {missing.map((m) => (
+            <li key={m.key}>
+              <Link to={m.where}>{m.what}</Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

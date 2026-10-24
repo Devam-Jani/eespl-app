@@ -4,6 +4,7 @@ import { api, fetchObjectUrl } from "../../api";
 import { errorText } from "../../format";
 import { RATE_POLICIES } from "../../types";
 import type { CompanyProfile as Profile } from "../../types";
+import { Button, Card, Field } from "../../ui/components";
 
 const FIELDS: { key: keyof Profile; label: string; hint?: string; type?: string }[] = [
   { key: "legal_name", label: "Legal name" },
@@ -101,8 +102,7 @@ export default function CompanyProfile() {
                 />
               </label>
             ))}
-            <label className="field">
-              <span>Suggested rate from the library</span>
+            <Field label="Suggested rate from the library">
               <select value={form.rate_policy ?? ""} onChange={(e) => setForm((s) => ({ ...s, rate_policy: e.target.value }))}>
                 {Object.entries(RATE_POLICIES).map(([value, label]) => (
                   <option key={value} value={value}>
@@ -111,15 +111,15 @@ export default function CompanyProfile() {
                 ))}
               </select>
               <span className="muted small">Default from the backtest on past BOQs (python -m app.cli backtest-rates).</span>
-            </label>
+            </Field>
           </div>
           <div className="form-actions">
-            <button className="btn btn-primary" disabled={!profile}>
+            <Button variant="primary" type="submit" disabled={!profile}>
               Save
-            </button>
+            </Button>
           </div>
         </form>
-        <div className="card">
+        <Card as="div">
           <h2 className="section-title">Logo</h2>
           {logo ? <img src={logo} alt="Company logo" className="logo-preview" /> : <p className="muted">No logo yet.</p>}
           <label className="field top-gap">
@@ -127,11 +127,11 @@ export default function CompanyProfile() {
             <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
           </label>
           {logo && (
-            <button className="btn btn-small btn-danger" onClick={() => void removeLogo()}>
+            <Button variant="danger" size="small" type="submit" onClick={() => void removeLogo()}>
               Remove logo
-            </button>
+            </Button>
           )}
-        </div>
+        </Card>
       </div>
     </>
   );

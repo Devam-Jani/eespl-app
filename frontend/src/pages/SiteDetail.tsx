@@ -37,6 +37,7 @@ import type { Status } from "../ui/tokens";
 
 type Tab =
   | "overview"
+  | "visits"
   | "structure"
   | "scope"
   | "tasks"
@@ -87,6 +88,7 @@ export default function SiteDetail() {
     ["Material plan", `/sites/${site.id}/material-plan`, can("planning.view", "indent.view")],
     ["Measurement book", `/measurements?site=${site.id}`, can("measurement.view")],
     ["AutoCAD takeoff", `/sites/${site.id}/takeoff`, can("takeoff.view")],
+    ["Measure and bill", `/sites/${site.id}/measure`, can("billing.view")],
     ["Methodology", `/sites/${site.id}/methodology`, can("methodology.site")],
     ["RFI zones", `/sites/${site.id}/zones`, can("closeout.site") || can("closeout.billing")],
     ["Measure", `/sites/${site.id}/measurements`, can("closeout.billing")],
@@ -110,6 +112,7 @@ export default function SiteDetail() {
       ["material", "Materials", can("indent.view", "indent.create", "store.view", "grn.view", "po.view")],
       ["finance", "Measurements & bills", can("billing.view")],
       ["drawings", "Drawings", true],
+      ["visits", "Site visits", true],
       ["process", "Process", true],
       ["handover", "Handover", true],
       ["location", "Location & visits", true],
@@ -160,29 +163,26 @@ export default function SiteDetail() {
           </Link>
         )}
       </header>
-      {tools.some(([, , show]) => show) && (
-        <nav className="site-tools" aria-label="Site tools">
-          {tools
-            .filter(([, , show]) => show)
-            .map(([label, to]) => (
-              <Link key={to} to={to} className="chip">
-                {label}
-              </Link>
-            ))}
-        </nav>
-      )}
       {error && <div className="alert alert-error">{error}</div>}
-      <Suspense fallback={null}>
-        <SiteControlStrip siteId={site.id} />
-        <SiteVisits siteId={site.id} />
-      </Suspense>
       {/* on a phone the tabs are one menu */}
-      <select className="tab-select" value={tab} onChange={(e) => setTab(e.target.value as Tab)} aria-label="Section">
+      <select
+        className="tab-select"
+        value={tab}
+        onChange={(e) => (e.target.value.startsWith("/") ? navigate(e.target.value) : setTab(e.target.value as Tab))}
+        aria-label="Section"
+      >
         {all.map(([key, label]) => (
           <option key={key} value={key}>
             {label}
           </option>
         ))}
+        {tools
+          .filter(([, , show]) => show)
+          .map(([label, to]) => (
+            <option key={to} value={to}>
+              Open: {label}
+            </option>
+          ))}
       </select>
       <div className="tabs site-tabs" role="tablist" aria-label="Site sections">
         {main.map(([key, label]) => (
@@ -191,18 +191,52 @@ export default function SiteDetail() {
           </button>
         ))}
         {more.length > 0 && (
-          <select className={`tab tab-more ${inMore ? "active" : ""}`} value={inMore ? tab : ""} onChange={(e) => e.target.value && setTab(e.target.value as Tab)} aria-label="More sections">
+          <select
+            className={`tab tab-more ${inMore ? "active" : ""}`}
+            value={inMore ? tab : ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v.startsWith("/")) navigate(v);
+              else if (v) setTab(v as Tab);
+            }}
+            aria-label="More sections and the site's other pages"
+          >
             <option value="">{inMore ? inMore[1] : "More"}</option>
-            {more.map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
+            <optgroup label="Sections">
+              {more.map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </optgroup>
+            {tools.some(([, , show]) => show) && (
+              <optgroup label="Open">
+                {tools
+                  .filter(([, , show]) => show)
+                  .map(([label, to]) => (
+                    <option key={to} value={to}>
+                      {label}
+                    </option>
+                  ))}
+              </optgroup>
+            )}
           </select>
         )}
       </div>
       <div className="top-gap">
-        {tab === "overview" && <Overview site={site} onChange={setSite} />}
+        {tab === "overview" && (
+          <>
+            <Suspense fallback={null}>
+              <SiteControlStrip siteId={site.id} />
+            </Suspense>
+            <Overview site={site} onChange={setSite} />
+          </>
+        )}
+        {tab === "visits" && (
+          <Suspense fallback={null}>
+            <SiteVisits siteId={site.id} />
+          </Suspense>
+        )}
         {tab === "structure" && <StructureTab site={site} onChange={load} />}
         {tab === "scope" && <ScopeTab site={site} onChange={load} />}
         {tab === "tasks" && (

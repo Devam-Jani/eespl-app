@@ -32,7 +32,7 @@ from app.models import User
 from app.portal import service as svc
 from app.portal.models import ClientUser, Comment, PortalInvite, SiteDocument, Snag, SnagPhoto
 from app.portal.service import PortalCtx, portal_ctx
-from app.sites import model3d
+from app.sites import model3d, progress
 from app.sites.models import (
     Drawing,
     DrawingRevision,
@@ -148,7 +148,7 @@ def my_sites(db: DbSession, ctx: Ctx) -> list[dict]:
                 "code": site.code,
                 "name": site.name,
                 "city": site.city,
-                "percent": float(site.progress_percent or 0),
+                "percent": float(progress.site_percent(db, site.id)),
                 "last_dpr": _last_dpr(db, site.id),
                 "open_snags": _open_snags(db, site.id),
                 "sections": svc.sections(db, site.id),
@@ -195,6 +195,7 @@ def overview(site_id: int, db: DbSession, ctx: Ctx) -> dict:
         ).all()
     )
     points = _client_points(db, site.id, _client_ids(db, ctx))
+    total, live = progress.rollup(db, site.id)
     return {
         "id": site.id,
         "code": site.code,
@@ -202,14 +203,14 @@ def overview(site_id: int, db: DbSession, ctx: Ctx) -> dict:
         "city": site.city,
         "start_date": site.start_date,
         "target_date": site.target_date,
-        "percent": float(site.progress_percent or 0),
+        "percent": float(total),
         "parts": [
             {
                 "id": n.id,
                 "parent_id": n.parent_id,
                 "kind": n.kind,
                 "name": n.name,
-                "percent": float(n.progress_percent or 0),
+                "percent": float(live.get(n.id, 0)),
             }
             for n in nodes
         ],
@@ -248,8 +249,8 @@ def model(site_id: int, request: Request, db: DbSession, ctx: Ctx):
             select(StageTemplate.id, StageTemplate.name).where(StageTemplate.id.in_(ids or [0]))
         )
     ]
-    progress = float(site.progress_percent or 0)
-    body = {**payload, "version": tag, "site_progress": progress, "templates": templates}
+    site_progress = float(progress.rollup(db, site.id)[0])
+    body = {**payload, "version": tag, "site_progress": site_progress, "templates": templates}
     headers = {"ETag": f'"{tag}"', "Cache-Control": "no-cache"}
     return JSONResponse(jsonable_encoder(body), headers=headers)
 

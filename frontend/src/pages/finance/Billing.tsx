@@ -6,6 +6,7 @@ import { Modal } from "../../ui/Overlay";
 import { errorText, inr, num } from "../../format";
 import type { AgeingRow, Contract, FinanceLookups, Invoice, RaBill, Receipt } from "../../finance/types";
 import { shortDate } from "../Tenders";
+import { Button, Card, Field } from "../../ui/components";
 
 const RA_BADGE: Record<string, string> = {
   draft: "badge-muted",
@@ -68,14 +69,14 @@ export function SiteBilling({ siteId }: { siteId: number }) {
     <>
       {error && <div className="alert alert-error">{error}</div>}
       {!contract ? (
-        <div className="card">
+        <Card as="div">
           <p>No client contract yet.</p>
           {edit && (
-            <button className="btn btn-primary" onClick={() => void run(api(`/api/finance/sites/${siteId}/contract`, { method: "POST", json: {} }))}>
+            <Button variant="primary" type="submit" onClick={() => void run(api(`/api/finance/sites/${siteId}/contract`, { method: "POST", json: {} }))}>
               Make the contract from the won tender
-            </button>
+            </Button>
           )}
-        </div>
+        </Card>
       ) : (
         <>
           <div className="tiles">
@@ -99,12 +100,10 @@ export function SiteBilling({ siteId }: { siteId: number }) {
           </div>
           <div className="page-actions top-gap">
             {edit && (
-              <button
-                className="btn btn-primary"
-                onClick={() => void run(api<RaBill>(`/api/finance/contracts/${contract.id}/ra-bills`, { method: "POST", json: {} })).then((b) => b && setOpen(b))}
+              <Button variant="primary" type="submit" onClick={() => void run(api<RaBill>(`/api/finance/contracts/${contract.id}/ra-bills`, { method: "POST", json: {} })).then((b) => b && setOpen(b))}
               >
                 New RA bill (from progress)
-              </button>
+              </Button>
             )}
             {edit && <ExtraItem contract={contract} onSaved={load} />}
           </div>
@@ -135,9 +134,9 @@ export function SiteBilling({ siteId }: { siteId: number }) {
                       <span className={`badge ${RA_BADGE[b.status]}`}>{b.status}</span> {b.invoice_number && <span className="small">{b.invoice_number}</span>}
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
-                      <button className="btn btn-small" onClick={() => pdf(`/api/finance/ra-bills/${b.id}/pdf`, setError)}>
+                      <Button size="small" type="submit" onClick={() => pdf(`/api/finance/ra-bills/${b.id}/pdf`, setError)}>
                         PDF
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -178,41 +177,37 @@ function ExtraItem({ contract, onSaved }: { contract: Contract; onSaved: () => P
   }
   return (
     <>
-      <button className="btn" onClick={() => setOpenForm(true)}>
+      <Button type="submit" onClick={() => setOpenForm(true)}>
         Extra item
-      </button>
+      </Button>
       {pending.length > 0 &&
         can("billing.approve") &&
         pending.map((l) => (
-          <button key={l.id} className="btn btn-small" onClick={() => void api(`/api/finance/contract-lines/${l.id}/approve`, { method: "POST" }).then(onSaved)}>
+          <Button size="small" type="submit" key={l.id}  onClick={() => void api(`/api/finance/contract-lines/${l.id}/approve`, { method: "POST" }).then(onSaved)}>
             Approve extra: {l.description.slice(0, 30)}
-          </button>
+          </Button>
         ))}
       {openForm && (
         <Modal title="Extra item beyond the BOQ" onClose={() => setOpenForm(false)}>
           <form onSubmit={submit}>
             {error && <div className="alert alert-error">{error}</div>}
             <p className="small muted">An extra item is billable once approved (billing.approve).</p>
-            <label className="field">
-              <span>Description</span>
+            <Field label="Description">
               <input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            </label>
+            </Field>
             <div className="grid-2">
-              <label className="field">
-                <span>Unit</span>
+              <Field label="Unit">
                 <input required value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} />
-              </label>
-              <label className="field">
-                <span>Qty</span>
+              </Field>
+              <Field label="Qty">
                 <input required inputMode="decimal" value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} />
-              </label>
-              <label className="field">
-                <span>Rate</span>
+              </Field>
+              <Field label="Rate">
                 <input required inputMode="decimal" value={form.rate} onChange={(e) => setForm({ ...form, rate: e.target.value })} />
-              </label>
+              </Field>
             </div>
             <div className="form-actions">
-              <button className="btn btn-primary">Add</button>
+              <Button variant="primary" type="submit">Add</Button>
             </div>
           </form>
         </Modal>
@@ -341,31 +336,26 @@ function RaEditor({ bill, onClose, onChange }: { bill: RaBill; onClose: () => vo
       </table>
       {(draft || certifying) && edit && (
         <div className="grid-2">
-          <label className="field">
-            <span>Other deduction (₹)</span>
+          <Field label="Other deduction (₹)">
             <input inputMode="decimal" value={other.amount} onChange={(e) => setOther({ ...other, amount: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Reason</span>
+          </Field>
+          <Field label="Reason">
             <input value={other.remark} onChange={(e) => setOther({ ...other, remark: e.target.value })} />
-          </label>
+          </Field>
           {certifying && (
-            <label className="field">
-              <span>Certified by (client)</span>
+            <Field label="Certified by (client)">
               <input value={other.by} onChange={(e) => setOther({ ...other, by: e.target.value })} />
-            </label>
+            </Field>
           )}
         </div>
       )}
       <div className="form-actions">
-        <button className="btn" onClick={() => pdf(`/api/finance/ra-bills/${bill.id}/pdf`, setError)}>
+        <Button type="submit" onClick={() => pdf(`/api/finance/ra-bills/${bill.id}/pdf`, setError)}>
           PDF
-        </button>
+        </Button>
         {draft && edit && (
           <>
-            <button
-              className="btn"
-              onClick={() =>
+            <Button type="submit" onClick={() =>
                 void call("", "PUT", {
                   lines: Object.entries(qty).map(([k, v]) => ({ contract_line_id: Number(k), qty: v || "0" })),
                   other_deduction: other.amount || "0",
@@ -374,16 +364,14 @@ function RaEditor({ bill, onClose, onChange }: { bill: RaBill; onClose: () => vo
               }
             >
               Save
-            </button>
-            <button className="btn btn-primary" onClick={() => void call("/submit", "POST")}>
+            </Button>
+            <Button variant="primary" type="submit" onClick={() => void call("/submit", "POST")}>
               Submit to client
-            </button>
+            </Button>
           </>
         )}
         {certifying && edit && (
-          <button
-            className="btn btn-primary"
-            onClick={() =>
+          <Button variant="primary" type="submit" onClick={() =>
               void call("/certify", "POST", {
                 lines: Object.entries(cert).map(([k, v]) => ({ contract_line_id: Number(k), certified_qty: v || "0" })),
                 certified_by_client: other.by || null,
@@ -393,27 +381,27 @@ function RaEditor({ bill, onClose, onChange }: { bill: RaBill; onClose: () => vo
             }
           >
             Record certification
-          </button>
+          </Button>
         )}
         {bill.status === "certified_by_client" && edit && (
-          <button className="btn btn-primary" onClick={() => void call("/confirm-client", "POST")}>
+          <Button variant="primary" type="submit" onClick={() => void call("/confirm-client", "POST")}>
             Confirm client certification
-          </button>
+          </Button>
         )}
         {["certified_by_client", "rejected_by_client"].includes(bill.status) && edit && (
-          <button className="btn" onClick={() => void call("/reopen", "POST")}>
+          <Button type="submit" onClick={() => void call("/reopen", "POST")}>
             Back to draft
-          </button>
+          </Button>
         )}
         {bill.status === "certified" && edit && (
-          <button className="btn btn-primary" onClick={() => void call("/invoice", "POST", {})}>
+          <Button variant="primary" type="submit" onClick={() => void call("/invoice", "POST", {})}>
             Raise tax invoice
-          </button>
+          </Button>
         )}
         {["draft", "submitted", "certified_by_client", "rejected_by_client", "certified"].includes(bill.status) && edit && (
-          <button className="btn btn-danger" onClick={() => confirm(`Cancel ${bill.code}? It keeps its number.`) && void call("/cancel", "POST")}>
+          <Button variant="danger" type="submit" onClick={() => confirm(`Cancel ${bill.code}? It keeps its number.`) && void call("/cancel", "POST")}>
             Cancel bill
-          </button>
+          </Button>
         )}
       </div>
     </Modal>
@@ -469,13 +457,13 @@ export function InvoiceTable({ invoices, onChange }: { invoices: Invoice[]; onCh
                 {i.retention_held && Number(i.retention_held) > 0 && <div className="small muted">retention {inr(i.retention_held)}</div>}
               </td>
               <td className="nowrap">
-                <button className="btn btn-small" onClick={() => pdf(`/api/finance/invoices/${i.id}/pdf`, setError)}>
+                <Button size="small" type="submit" onClick={() => pdf(`/api/finance/invoices/${i.id}/pdf`, setError)}>
                   PDF
-                </button>
+                </Button>
                 {i.kind === "invoice" && can("billing.approve") && (
-                  <button className="btn btn-small" onClick={() => void creditNote(i)}>
+                  <Button size="small" type="submit" onClick={() => void creditNote(i)}>
                     Credit note
-                  </button>
+                  </Button>
                 )}
               </td>
             </tr>
@@ -552,8 +540,7 @@ function ReceiptForm({ lookups, onClose, onSaved }: { lookups: FinanceLookups; o
       <form onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
         <div className="grid-4">
-          <label className="field">
-            <span>Client *</span>
+          <Field label="Client *">
             <select required value={clientId} onChange={(e) => setClientId(Number(e.target.value) || "")}>
               <option value="">—</option>
               {lookups.clients.map((c) => (
@@ -562,21 +549,18 @@ function ReceiptForm({ lookups, onClose, onSaved }: { lookups: FinanceLookups; o
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Mode</span>
+          </Field>
+          <Field label="Mode">
             <select value={form.mode} onChange={set("mode")}>
               {["neft", "rtgs", "cheque", "upi", "cash"].map((m) => (
                 <option key={m}>{m}</option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Ref / UTR / cheque no</span>
+          </Field>
+          <Field label="Ref / UTR / cheque no">
             <input value={form.ref_no} onChange={set("ref_no")} />
-          </label>
-          <label className="field">
-            <span>Into bank</span>
+          </Field>
+          <Field label="Into bank">
             <select value={form.bank_account_id} onChange={set("bank_account_id")}>
               <option value="">—</option>
               {lookups.banks.map((b) => (
@@ -585,29 +569,24 @@ function ReceiptForm({ lookups, onClose, onSaved }: { lookups: FinanceLookups; o
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Received (₹)</span>
+          </Field>
+          <Field label="Received (₹)">
             <input inputMode="decimal" value={form.amount} onChange={set("amount")} />
-          </label>
-          <label className="field">
-            <span>Client TDS, income tax (₹)</span>
+          </Field>
+          <Field label="Client TDS, income tax (₹)">
             <input inputMode="decimal" value={form.tds_amount} onChange={set("tds_amount")} />
-          </label>
-          <label className="field">
-            <span>GST TDS (₹)</span>
+          </Field>
+          <Field label="GST TDS (₹)">
             <input inputMode="decimal" value={form.gst_tds_amount} onChange={set("gst_tds_amount")} />
-          </label>
-          <label className="field">
-            <span>Short payment / write-off (₹)</span>
+          </Field>
+          <Field label="Short payment / write-off (₹)">
             <input inputMode="decimal" value={form.write_off} onChange={set("write_off")} />
-          </label>
+          </Field>
         </div>
         {Number(form.write_off) > 0 && (
-          <label className="field">
-            <span>Reason for the write-off *</span>
+          <Field label="Reason for the write-off *">
             <input required value={form.write_off_reason} onChange={set("write_off_reason")} />
-          </label>
+          </Field>
         )}
         <label className="check">
           <input type="checkbox" checked={form.is_advance} onChange={(e) => setForm({ ...form, is_advance: e.target.checked })} /> Mobilisation advance (not against invoices)
@@ -643,12 +622,12 @@ function ReceiptForm({ lookups, onClose, onSaved }: { lookups: FinanceLookups; o
           {!form.is_advance && <> · spread over invoices {inr(allocated)}</>}
         </p>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button"  onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary" disabled={!form.is_advance && Math.abs(settled - allocated) > 0.004}>
+          </Button>
+          <Button variant="primary" type="submit" disabled={!form.is_advance && Math.abs(settled - allocated)> 0.004}>
             Save receipt
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>
@@ -700,9 +679,9 @@ export default function Billing() {
             ))}
           </div>
           {can("billing.edit") && (
-            <button className="btn btn-primary" onClick={() => setReceiving(true)}>
+            <Button variant="primary" type="submit" onClick={() => setReceiving(true)}>
               New receipt
-            </button>
+            </Button>
           )}
         </div>
       </div>

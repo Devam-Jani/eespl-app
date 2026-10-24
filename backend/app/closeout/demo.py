@@ -424,6 +424,9 @@ def run(db: Session) -> dict:
         _stages(db, site, nodes[f][1], m["toilet_template"], boq["toilet"], Decimal("5.31"), "sqm", ts, 5 if f != "103" else 2)
         _stages(db, site, nodes[f][2], m["balcony_template"], boq["balcony"], Decimal("3.6"), "rmt", bs, 5 if bs else 0)
     _drawing(db, site, nodes, None)
+    from app.sites import progress  # noqa: PLC0415
+
+    progress.refresh(db, site)  # the steps were written here: the floors and the site from them
     db.commit()
     out["contract"] = {k2: f"{v['unit']} @ {v['rate']} x {v['qty']}" for k2, v in lines.items()}
 

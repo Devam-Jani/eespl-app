@@ -653,7 +653,46 @@ input.full {
 
 .boq-grid table {
   table-layout: fixed;
-  min-width: 900px;
+  min-width: 100%;
+}
+
+/* a spreadsheet's rows: every row 44 px (the grid draws only the rows in view), the
+   description on two lines with the full text on hover */
+.boq-grid tbody tr:not(.boq-spacer),
+.boq-grid tbody tr:not(.boq-spacer) > td {
+  height: 44px;
+  max-height: 44px;
+}
+
+.boq-grid tbody td.boq-cell,
+.boq-grid tbody tr.boq-section > td {
+  padding: 4px 8px;
+  overflow: hidden;
+  vertical-align: middle;
+  line-height: 1.3;
+  font-size: 13px;
+}
+
+.boq-grid .boq-cell .clamp {
+  -webkit-line-clamp: 2;
+}
+
+.boq-grid tbody td.boq-cell:has(textarea) {
+  overflow: visible;
+  position: relative;
+}
+
+.boq-grid tbody td.boq-cell textarea.cell-editor {
+  position: absolute;
+  inset: 2px;
+  z-index: 3;
+  height: 120px;
+  background: var(--surface);
+}
+
+.boq-spacer td {
+  padding: 0;
+  border: 0;
 }
 
 .boq-grid thead th {
@@ -3804,6 +3843,48 @@ td.indent {
   color: var(--prog-ink);
   font-weight: 600;
 }
+.golive-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  color: var(--prog-ink);
+}
+.golive-count {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.golive-banner .link-button {
+  min-height: 28px;
+  color: var(--prog-ink);
+  text-decoration: underline;
+}
+.golive-hide {
+  margin-left: auto;
+}
+.golive-short {
+  display: none;
+}
+/* a phone: the same one line, in fewer words */
+@media (max-width: 480px) {
+  .golive-banner {
+    padding: 6px 12px;
+  }
+  .golive-line {
+    gap: 8px;
+  }
+  .golive-long {
+    display: none;
+  }
+  .golive-short {
+    display: inline;
+  }
+}
+.golive-list {
+  margin: 6px 0 2px;
+  padding-left: 18px;
+}
 .training-banner {
   /* always visible in the training company: the hold-point colour at 18% behind its ink */
   background: color-mix(in srgb, var(--hold) 18%, var(--bg));
@@ -4392,4 +4473,66 @@ label.field-wrong textarea,
 
 .mono {
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+/* --- measure and bill (measure/Pages.tsx) --------------------------------------------------- */
+.mb-page { width: 100%; min-width: 0; }
+.measure-grid { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: var(--space-4); align-items: start; margin-bottom: var(--space-4); }
+.measure-canvas { background: var(--stage); border: 1px solid var(--border); border-radius: var(--r-card); overflow: hidden; }
+.measure-svg { display: block; width: 100%; height: 560px; touch-action: none; cursor: grab; }
+.measure-svg.mode-pick, .measure-svg.mode-trace { cursor: crosshair; }
+.measure-3d { width: 100%; height: 560px; }
+.measure-hint { margin: 0; padding: var(--space-2) var(--space-3); border-top: 1px solid var(--border); }
+.m-outlines path { fill: none; stroke: var(--muted); vector-effect: non-scaling-stroke; }
+.m-area path { fill-opacity: 0.22; cursor: pointer; }
+.m-area.on path { fill-opacity: 0.45; stroke: var(--accent); }
+.m-code { fill: var(--text); font-weight: 700; pointer-events: none; }
+.m-edge { stroke-linecap: round; cursor: pointer; }
+.m-edge.open { stroke: var(--hold); }
+.m-edge.answered { stroke: var(--done); }
+.m-edge.on { stroke: var(--accent); }
+.m-texts text { fill: var(--muted); }
+.m-texts text.m-level { fill: var(--accent); cursor: pointer; font-weight: 700; }
+.m-texts text.chosen { fill: var(--hold); }
+.m-trace { fill: none; stroke: var(--accent); }
+.measure-side { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.m-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.m-list > li { border: 1px solid var(--border); border-radius: var(--r-card-sm); padding: var(--space-2) var(--space-3); background: var(--surface); }
+.m-list > li.on { border-color: var(--accent); }
+.m-list-head { background: none; border: 0; padding: 0; color: var(--text); font: inherit; cursor: pointer; text-align: left; }
+.m-figures { display: grid; grid-template-columns: 90px 1fr; gap: 2px var(--space-2); margin: var(--space-2) 0; font-size: 13px; }
+.m-figures dt { color: var(--muted); }
+.m-figures dd { margin: 0; }
+.m-parts { display: flex; flex-wrap: wrap; gap: var(--space-3); margin: var(--space-2) 0; font-size: 13px; }
+.m-answers { display: flex; flex-direction: column; gap: var(--space-2); }
+.m-answers label { border: 1px solid var(--border); border-radius: var(--r-input); padding: var(--space-2) var(--space-3); cursor: pointer; }
+.m-answers label.on { border-color: var(--accent); }
+.m-weir { width: 80px; }
+.m-source { font-weight: 600; }
+.m-sheet td { vertical-align: top; }
+.m-sheet tr.on td { background: var(--surface-2); }
+.m-sheet tr.on td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.m-area-row td { font-weight: 700; background: var(--surface-2); }
+.m-ded td { color: var(--block-ink); }
+.m-why { font-size: 12px; color: var(--muted); }
+.m-num { background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; text-decoration: underline dotted; text-align: inherit; }
+.m-skipped { font-size: 13px; }
+.m-bill-head { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); margin-bottom: var(--space-3); }
+.m-bill-head h3 { margin: 0 0 4px; font-size: 12px; text-transform: uppercase; color: var(--muted); }
+.m-checks { list-style: none; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+@media (max-width: 1100px) {
+  .measure-grid { grid-template-columns: 1fr; }
+  .measure-svg, .measure-3d { height: 380px; }
+  .m-bill-head { grid-template-columns: 1fr; }
+}
+.m-cards { display: none; list-style: none; padding: 0; margin: 0; }
+@media (max-width: 760px) {
+  .mb-page .table-wrap:has(.m-sheet) { display: none; }
+  .m-cards { display: flex; flex-direction: column; gap: var(--space-2); }
+  .m-card { border: 1px solid var(--border); border-radius: var(--r-card-sm); padding: var(--space-2) var(--space-3); background: var(--surface); }
+  .m-card-area { font-weight: 700; padding: var(--space-2) 0 0; }
+  .m-card-qty { text-align: right; font-weight: 700; }
+  .m-abstract th:nth-child(2), .m-abstract td:nth-child(2), .m-abstract th:nth-child(7), .m-abstract td:nth-child(7) { display: none; }
+  .mb-page .card-head { flex-wrap: wrap; }
+  .mb-page .card-actions { flex-wrap: wrap; }
 }

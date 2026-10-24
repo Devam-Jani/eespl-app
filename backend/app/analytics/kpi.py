@@ -61,6 +61,7 @@ from app.material import service as material
 from app.material.models import Grn, Indent, IndentLine, PurchaseOrder, StockLedger
 from app.models import User
 from app.portal.models import Snag
+from app.sites import progress
 from app.sites.models import Site, StageTemplateStep, Task
 from app.tenders.models import Tender, TenderRevision
 
@@ -645,7 +646,7 @@ def supervisor(db: Session, principal: Principal, scope: str, demo: bool = False
                 "site_id": s.id,
                 "code": s.code,
                 "name": s.name,
-                "progress": s.progress_percent,
+                "progress": progress.site_percent(db, s.id),
                 "todos": [
                     {
                         "key": "dpr",
