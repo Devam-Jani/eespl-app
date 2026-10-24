@@ -3,7 +3,7 @@
 // snapping, mapped to the site's places and accepted into the survey and the measurement book.
 // For a 1600 px screen and a tablet (not a phone).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { ReadProgress } from "./ReadProgress";
@@ -12,6 +12,7 @@ import type { Geo as PlanGeo, GeoV2 } from "./glplan";
 import { useAuth } from "../auth";
 import { errorText, num } from "../format";
 import { ART } from "../ui/tokens";
+import { Button, Card, Field } from "../ui/components";
 
 type Layer = { name: string; count: number; color: number; off: boolean; frozen: boolean; role: string | null };
 type CadFile = {
@@ -172,22 +173,22 @@ export function TakeoffPage() {
                 <>
                   <span className={`badge ${r.file.status === "ready" ? "badge-ok" : r.file.status === "failed" ? "badge-danger" : "badge-warn"}`}>{r.file.status}</span>
                   {r.file.status === "ready" && (
-                    <button className="btn btn-small" onClick={() => setParam("file", String(r.file!.id))}>
+                    <Button size="small" onClick={() => setParam("file", String(r.file!.id))}>
                       Open
-                    </button>
+                    </Button>
                   )}
                   {r.file.status === "failed" && <span className="small text-danger">{r.file.error}</span>}
                   {canEdit && r.file.status !== "reading" && r.file.status !== "queued" && (
-                    <button className="btn btn-small btn-ghost" onClick={() => void read(r.revision_id)}>
+                    <Button variant="ghost" size="small" onClick={() => void read(r.revision_id)}>
                       Read again
-                    </button>
+                    </Button>
                   )}
                 </>
               ) : (
                 canEdit && (
-                  <button className="btn btn-small btn-primary" onClick={() => void read(r.revision_id)}>
+                  <Button variant="primary" size="small" onClick={() => void read(r.revision_id)}>
                     Read the drawing
-                  </button>
+                  </Button>
                 )
               )}
             </div>
@@ -366,11 +367,13 @@ function Workspace({
       <div className="takeoff-grid">
         <div className="takeoff-canvas-wrap">
           <div className="takeoff-toolbar">
-            <input placeholder="Search the texts…" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search the texts" />
+            <Field label="Search the texts" bare>
+              <input placeholder="Search the texts…" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search the texts" />
+            </Field>
             {canEdit && !trace && (
-              <button className="btn btn-small" onClick={() => setTrace({ areaId: selected?.id ?? null, points: [], snaps: [] })}>
+              <Button size="small" onClick={() => setTrace({ areaId: selected?.id ?? null, points: [], snaps: [] })}>
                 {selected ? `Trace ${selected.name.slice(0, 24)}` : "Trace a new area"}
-              </button>
+              </Button>
             )}
             {trace && (
               <>
@@ -378,32 +381,32 @@ function Workspace({
                   Click the corners ({trace.points.length}){trace.snaps.length > 0 && ` · last snapped to ${trace.snaps[trace.snaps.length - 1]}`}; or click inside the room for an
                   outline from the walls:
                 </span>
-                <button
-                  className="btn btn-small"
+                <Button
+                  size="small"
                   onClick={() => setTrace({ ...trace, points: trace.points.slice(0, -1), snaps: trace.snaps.slice(0, -1) })}
                   disabled={!trace.points.length}
                 >
                   Undo corner
-                </button>
-                <button className="btn btn-small btn-primary" disabled={trace.points.length < 3} onClick={() => void finishTrace(trace.points)}>
+                </Button>
+                <Button variant="primary" size="small" disabled={trace.points.length < 3} onClick={() => void finishTrace(trace.points)}>
                   Finish
-                </button>
-                <button className="btn btn-small btn-ghost" onClick={() => (setTrace(null), setProposed(null))}>
+                </Button>
+                <Button variant="ghost" size="small" onClick={() => (setTrace(null), setProposed(null))}>
                   Cancel
-                </button>
+                </Button>
               </>
             )}
             {proposed && (
               <>
-                <button className="btn btn-small btn-primary" onClick={() => void finishTrace(proposed)}>
+                <Button variant="primary" size="small" onClick={() => void finishTrace(proposed)}>
                   Use this outline
-                </button>
-                <button
-                  className="btn btn-small"
+                </Button>
+                <Button
+                  size="small"
                   onClick={() => (setTrace({ areaId: trace?.areaId ?? null, points: proposed, snaps: proposed.map(() => "wall") }), setProposed(null))}
                 >
                   Correct its corners
-                </button>
+                </Button>
               </>
             )}
           </div>
@@ -695,15 +698,15 @@ function DrawingCanvas({
         aria-label="The drawing"
       />
       <div className="takeoff-zoom">
-        <button className="btn btn-small" onClick={() => setView((v) => ({ ...v, scale: v.scale * 1.5 }))} aria-label="Zoom in">
+        <Button size="small" onClick={() => setView((v) => ({ ...v, scale: v.scale * 1.5 }))} aria-label="Zoom in">
           +
-        </button>
-        <button className="btn btn-small" onClick={() => setView((v) => ({ ...v, scale: v.scale / 1.5 }))} aria-label="Zoom out">
+        </Button>
+        <Button size="small" onClick={() => setView((v) => ({ ...v, scale: v.scale / 1.5 }))} aria-label="Zoom out">
           −
-        </button>
-        <button className="btn btn-small" onClick={() => setView((v) => ({ ...v, scale: 0 }))}>
+        </Button>
+        <Button size="small" onClick={() => setView((v) => ({ ...v, scale: 0 }))}>
           Fit
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -790,20 +793,21 @@ function AreasPanel({
   return (
     <div className="takeoff-areas">
       <div className="form-row">
-        <select value={show} onChange={(e) => setShow(e.target.value)} aria-label="Show">
-          <option value="waterproofing">Areas we waterproof</option>
-          <option value="all">Every labelled area</option>
-        </select>
+        <Field label="Show" bare>
+          <select value={show} onChange={(e) => setShow(e.target.value)} aria-label="Show">
+            <option value="waterproofing">Areas we waterproof</option>
+            <option value="all">Every labelled area</option>
+          </select>
+        </Field>
         {canEdit && floors.length > 1 && (
-          <button className="btn btn-small" onClick={() => setCopy({ source: String(floors[0].id), targets: new Set() })}>
+          <Button size="small" onClick={() => setCopy({ source: String(floors[0].id), targets: new Set() })}>
             Same as a floor for other floors…
-          </button>
+          </Button>
         )}
       </div>
       {copy && (
-        <div className="card top-gap-small">
-          <label className="field">
-            <span>Same as</span>
+        <Card as="div" className="top-gap-small">
+          <Field label="Same as">
             <select value={copy.source} onChange={(e) => setCopy({ ...copy, source: e.target.value })}>
               {floors.map((f) => (
                 <option key={f.id} value={f.id}>
@@ -811,7 +815,7 @@ function AreasPanel({
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
           <div className="small">for floors:</div>
           <div className="chip-list">
             {floors
@@ -832,13 +836,13 @@ function AreasPanel({
                 </label>
               ))}
           </div>
-          <button className="btn btn-small btn-primary" disabled={!copy.targets.size} onClick={() => void doCopy()}>
+          <Button variant="primary" size="small" disabled={!copy.targets.size} onClick={() => void doCopy()}>
             Copy the mapped areas
-          </button>{" "}
-          <button className="btn btn-small btn-ghost" onClick={() => setCopy(null)}>
+          </Button>{" "}
+          <Button variant="ghost" size="small" onClick={() => setCopy(null)}>
             Cancel
-          </button>
-        </div>
+          </Button>
+        </Card>
       )}
       <table className="table compact takeoff-table">
         <thead>
@@ -866,17 +870,19 @@ function AreasPanel({
                     <span className="muted">{a.plan}</span> <span className="badge badge-warn">sheet guessed</span>{" "}
                     {canEdit && a.status !== "accepted" && (
                       <>
-                        <button className="btn btn-small btn-ghost" onClick={() => void onSave(a, { plan: a.plan })}>
+                        <Button variant="ghost" size="small" onClick={() => void onSave(a, { plan: a.plan })}>
                           Confirm
-                        </button>
-                        <select value="" onChange={(e) => e.target.value && void onSave(a, { plan: e.target.value })} aria-label="Sheet">
-                          <option value="">— another sheet —</option>
-                          {(file.plan_titles ?? []).map((t) => (
-                            <option key={t} value={t}>
-                              {t}
-                            </option>
-                          ))}
-                        </select>
+                        </Button>
+                        <Field label="Sheet" bare>
+                          <select value="" onChange={(e) => e.target.value && void onSave(a, { plan: e.target.value })} aria-label="Sheet">
+                            <option value="">— another sheet —</option>
+                            {(file.plan_titles ?? []).map((t) => (
+                              <option key={t} value={t}>
+                                {t}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
                       </>
                     )}
                   </div>
@@ -886,14 +892,16 @@ function AreasPanel({
                   <div className="small" onClick={(e) => e.stopPropagation()}>
                     <span className="badge badge-warn">sheet unknown</span>{" "}
                     {canEdit && a.status !== "accepted" && (file.plan_titles ?? []).length > 0 && (
-                      <select value="" onChange={(e) => e.target.value && void onSave(a, { plan: e.target.value })} aria-label="Sheet">
-                        <option value="">— pick the sheet —</option>
-                        {(file.plan_titles ?? []).map((t) => (
-                          <option key={t} value={t}>
-                            {t}
-                          </option>
-                        ))}
-                      </select>
+                      <Field label="Sheet" bare>
+                        <select value="" onChange={(e) => e.target.value && void onSave(a, { plan: e.target.value })} aria-label="Sheet">
+                          <option value="">— pick the sheet —</option>
+                          {(file.plan_titles ?? []).map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
                     )}
                   </div>
                 )}
@@ -951,51 +959,55 @@ function AreasPanel({
                   </>
                 ) : (
                   <>
-                    <select
-                      value={a.node_id ?? ""}
-                      disabled={!canEdit}
-                      onChange={(e) => void onSave(a, { node_id: e.target.value ? Number(e.target.value) : null })}
-                      aria-label="Place"
-                    >
-                      <option value="">— place on the site —</option>
-                      {nodes.map((n) => (
-                        <option key={n.id} value={n.id}>
-                          {n.path}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={a.area_type_id ?? ""}
-                      disabled={!canEdit}
-                      onChange={(e) => void onSave(a, { area_type_id: e.target.value ? Number(e.target.value) : null })}
-                      aria-label="Area type"
-                    >
-                      <option value="">— area type —</option>
-                      {types.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
+                    <Field label="Place" bare>
+                      <select
+                        value={a.node_id ?? ""}
+                        disabled={!canEdit}
+                        onChange={(e) => void onSave(a, { node_id: e.target.value ? Number(e.target.value) : null })}
+                        aria-label="Place"
+                      >
+                        <option value="">— place on the site —</option>
+                        {nodes.map((n) => (
+                          <option key={n.id} value={n.id}>
+                            {n.path}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Area type" bare>
+                      <select
+                        value={a.area_type_id ?? ""}
+                        disabled={!canEdit}
+                        onChange={(e) => void onSave(a, { area_type_id: e.target.value ? Number(e.target.value) : null })}
+                        aria-label="Area type"
+                      >
+                        <option value="">— area type —</option>
+                        {types.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
                     {canEdit && (
                       <div className="takeoff-actions">
-                        <button className="btn btn-small" disabled={!a.node_id || !a.area_sqm} onClick={() => void onAccept(a, false)}>
+                        <Button size="small" disabled={!a.node_id || !a.area_sqm} onClick={() => void onAccept(a, false)}>
                           To the survey
-                        </button>
+                        </Button>
                         {can("measurement.edit") && (
-                          <button className="btn btn-small btn-primary" disabled={!a.node_id || !a.area_sqm} onClick={() => void onAccept(a, true)}>
+                          <Button variant="primary" size="small" disabled={!a.node_id || !a.area_sqm} onClick={() => void onAccept(a, true)}>
                             Survey + measurement book
-                          </button>
+                          </Button>
                         )}
-                        <button
-                          className="btn btn-small btn-ghost"
+                        <Button
+                          variant="ghost" size="small"
                           onClick={async () => {
                             const patch = { status: a.status === "ignored" ? "candidate" : "ignored" };
                             for (const id of a.group_ids ?? [a.id]) await onSave({ ...a, id }, patch);
                           }}
                         >
                           {a.status === "ignored" ? "Bring back" : (a.count ?? 1) > 1 ? `Leave out all ${a.count}` : "Leave out"}
-                        </button>
+                        </Button>
                       </div>
                     )}
                   </>
@@ -1048,11 +1060,13 @@ function LayersPanel({
     <div>
       <p className="small muted">Which layers are walls, rooms, dimensions, text, and which to hide (furniture, electrical, hatch): saved for the architect and reused.</p>
       <div className="form-row">
-        <input value={architect} placeholder="Architect" onChange={(e) => setArchitect(e.target.value)} aria-label="Architect" />
+        <Field label="Architect" bare>
+          <input value={architect} placeholder="Architect" onChange={(e) => setArchitect(e.target.value)} aria-label="Architect" />
+        </Field>
         {canEdit && (
-          <button className="btn btn-small btn-primary" disabled={architect.trim().length < 2} onClick={() => void save()}>
+          <Button variant="primary" size="small" disabled={architect.trim().length < 2} onClick={() => void save()}>
             Save the mapping
-          </button>
+          </Button>
         )}
       </div>
       <table className="table compact">
@@ -1081,18 +1095,20 @@ function LayersPanel({
                 />
               </td>
               <td>
-                <span className="layer-swatch" style={{ background: ACI[Math.abs(l.color)] ?? ART.drawLine }} /> {l.name}
+                <span className="layer-swatch paint" style={{ "--swatch": ACI[Math.abs(l.color)] ?? ART.drawLine } as CSSProperties} /> {l.name}
               </td>
               <td className="num">{l.count}</td>
               <td>
-                <select value={roles[l.name] ?? ""} disabled={!canEdit} onChange={(e) => setRoles({ ...roles, [l.name]: e.target.value })} aria-label={`Role of ${l.name}`}>
-                  <option value="">—</option>
-                  {ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
+                <Field label={`Role of ${l.name}`} bare>
+                  <select value={roles[l.name] ?? ""} disabled={!canEdit} onChange={(e) => setRoles({ ...roles, [l.name]: e.target.value })} aria-label={`Role of ${l.name}`}>
+                    <option value="">—</option>
+                    {ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
               </td>
             </tr>
           ))}

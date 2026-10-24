@@ -5,6 +5,7 @@ import ExportButton from "../../components/ExportButton";
 import { Modal } from "../../ui/Overlay";
 import { errorText } from "../../format";
 import type { Gstin } from "../../types";
+import { Button, Card, Field } from "../../ui/components";
 
 export default function GstinAddresses() {
   const [rows, setRows] = useState<Gstin[]>([]);
@@ -29,14 +30,14 @@ export default function GstinAddresses() {
         <h1>GSTIN addresses</h1>
         <div className="page-actions">
           <ExportButton path="/api/settings/gstins/export" />
-          <button className="btn btn-primary" onClick={() => setEditing("new")}>
+          <Button variant="primary" onClick={() => setEditing("new")}>
             Add GSTIN
-          </button>
+          </Button>
         </div>
       </div>
       <p className="muted">One row per GST registration. The default is used on bills and purchase orders unless another is chosen.</p>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -55,9 +56,9 @@ export default function GstinAddresses() {
                 <td>{g.state}</td>
                 <td className="pre-line">{g.address}</td>
                 <td className="row-actions">
-                  <button className="btn btn-small" onClick={() => setEditing(g)}>
+                  <Button size="small" onClick={() => setEditing(g)}>
                     Edit
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}
@@ -70,7 +71,7 @@ export default function GstinAddresses() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       {editing && (
         <GstinForm
           gstin={editing === "new" ? null : editing}
@@ -125,32 +126,29 @@ function GstinForm({ gstin, onClose, onSaved }: { gstin: Gstin | null; onClose: 
     <Modal title={gstin ? `Edit ${gstin.gstin}` : "Add GSTIN"} onClose={onClose}>
       <form className="form" onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
-        <label className="field">
-          <span>GSTIN</span>
+        <Field label="GSTIN">
           <input value={form.gstin} maxLength={15} disabled={!!gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value })} required />
-        </label>
-        <label className="field">
-          <span>State</span>
+        </Field>
+        <Field label="State">
           <input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} required />
-        </label>
-        <label className="field">
-          <span>Address</span>
+        </Field>
+        <Field label="Address">
           <textarea rows={3} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} required />
-        </label>
+        </Field>
         <label className="check">
           <input type="checkbox" checked={form.is_default} onChange={(e) => setForm({ ...form, is_default: e.target.checked })} />
           Default address
         </label>
         <div className="form-actions">
           {gstin && (
-            <button type="button" className="btn btn-danger push-left" onClick={() => void remove()}>
+            <Button type="button" variant="danger" className="push-left" onClick={() => void remove()}>
               Delete
-            </button>
+            </Button>
           )}
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Save</button>
+          </Button>
+          <Button type="submit" variant="primary">Save</Button>
         </div>
       </form>
     </Modal>

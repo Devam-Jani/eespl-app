@@ -5,6 +5,7 @@ import ExportButton from "../../components/ExportButton";
 import { Modal } from "../../ui/Overlay";
 import { errorText } from "../../format";
 import type { Category, Page } from "../../types";
+import { Button, Card, Field } from "../../ui/components";
 
 type Kind = "work" | "material";
 
@@ -42,16 +43,16 @@ export default function Categories() {
             </button>
           </div>
           <ExportButton path={`/api/categories/export?kind=${kind}`} />
-          <button className="btn btn-primary" onClick={() => setEditing("new")}>
+          <Button variant="primary" onClick={() => setEditing("new")}>
             Add category
-          </button>
+          </Button>
         </div>
       </div>
       <p className="muted">
         {kind === "work" ? "Where on site the work is (used on tasks, work orders and issues)." : "What kind of product it is (used on products)."}
       </p>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -72,15 +73,15 @@ export default function Categories() {
                 {kind === "material" && <td className="num">{c.product_count}</td>}
                 <td>{c.is_active ? <span className="badge badge-ok">Active</span> : <span className="badge badge-muted">Inactive</span>}</td>
                 <td className="row-actions">
-                  <button className="btn btn-small" onClick={() => setEditing(c)}>
+                  <Button size="small" onClick={() => setEditing(c)}>
                     Edit
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
       {editing && (
         <CategoryForm
           kind={kind}
@@ -144,13 +145,11 @@ function CategoryForm({
     <Modal title={category ? `Edit ${category.name}` : `Add ${kind} category`} onClose={onClose}>
       <form className="form" onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
-        <label className="field">
-          <span>Name</span>
+        <Field label="Name">
           <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required autoFocus />
-        </label>
+        </Field>
         <div className="grid-2">
-          <label className="field">
-            <span>Parent (optional)</span>
+          <Field label="Parent (optional)">
             <select value={form.parent_id} onChange={(e) => setForm({ ...form, parent_id: e.target.value })}>
               <option value="">—</option>
               {parents.map((p) => (
@@ -159,11 +158,10 @@ function CategoryForm({
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Order</span>
+          </Field>
+          <Field label="Order">
             <input type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: e.target.value })} />
-          </label>
+          </Field>
         </div>
         <label className="check">
           <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
@@ -171,14 +169,14 @@ function CategoryForm({
         </label>
         <div className="form-actions">
           {category && (
-            <button type="button" className="btn btn-danger push-left" onClick={() => void remove()}>
+            <Button type="button" variant="danger" className="push-left" onClick={() => void remove()}>
               Delete
-            </button>
+            </Button>
           )}
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Save</button>
+          </Button>
+          <Button type="submit" variant="primary">Save</Button>
         </div>
       </form>
     </Modal>

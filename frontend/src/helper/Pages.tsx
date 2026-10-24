@@ -104,7 +104,7 @@ export function IssueLog() {
           </div>
         </div>
       )}
-      <div className="card filters">
+      <Card as="div" className="filters">
         <Field label="Status">
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="">Any</option>
@@ -128,7 +128,7 @@ export function IssueLog() {
         <Field label="Search">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="error, page…" />
         </Field>
-      </div>
+      </Card>
       {error && <div className="alert alert-error">{error}</div>}
       {rows === null ? (
         <p className="muted">Loading…</p>

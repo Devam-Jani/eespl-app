@@ -8,6 +8,7 @@ import type { Subcontractor, WorkOrder, WoLine } from "../../execution/types";
 import type { Site } from "../../types";
 import { shortDate } from "../Tenders";
 import { localToday } from "./DprTab";
+import { Button, buttonClass, Card, Field } from "../../ui/components";
 
 const STATUS_BADGE: Record<string, string> = { draft: "badge-muted", approved: "badge-info", active: "badge-warn", completed: "badge-ok", closed: "badge-muted" };
 const M_BADGE: Record<string, string> = { recorded: "badge-info", pending_approval: "badge-warn", verified: "badge-ok", rejected: "badge-danger" };
@@ -41,11 +42,11 @@ export default function WorkOrdersTab({ site }: { site: Site }) {
     <>
       {error && <div className="alert alert-error">{error}</div>}
       {can("subcon.edit") && (
-        <button className="btn btn-primary" onClick={() => setCreating(true)}>
+        <Button variant="primary" onClick={() => setCreating(true)}>
           New work order
-        </button>
+        </Button>
       )}
-      <div className="card table-wrap top-gap">
+      <Card as="div" className="table-wrap top-gap">
         <table className="table">
           <thead>
             <tr>
@@ -80,7 +81,7 @@ export default function WorkOrdersTab({ site }: { site: Site }) {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       {creating && <WoForm site={site} onClose={() => setCreating(false)} onSaved={async (w) => (setCreating(false), await load(), setOpen(w))} />}
       {open && <WoView wo={open} site={site} onClose={() => setOpen(null)} onChange={async () => await load()} />}
     </>
@@ -143,8 +144,7 @@ function WoForm({ site, wo, onClose, onSaved }: { site: Site; wo?: WorkOrder; on
       <form onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
         <div className="grid-2">
-          <label className="field">
-            <span>Subcontractor *</span>
+          <Field label="Subcontractor *">
             <select required value={form.subcontractor_id} onChange={(e) => setForm({ ...form, subcontractor_id: Number(e.target.value) || "" })}>
               <option value="">—</option>
               {subs.map((s) => (
@@ -158,32 +158,26 @@ function WoForm({ site, wo, onClose, onSaved }: { site: Site; wo?: WorkOrder; on
                 PAN {sub.pan ?? "—"} · GSTIN {sub.gstin ?? "—"} · bank {sub.bank ?? "—"} · default TDS {num(sub.tds_percent)}%
               </small>
             )}
-          </label>
-          <label className="field">
-            <span>Material by</span>
+          </Field>
+          <Field label="Material by">
             <select value={form.material_by} onChange={(e) => setForm({ ...form, material_by: e.target.value as "eespl" | "subcontractor" })}>
               <option value="eespl">EESPL</option>
               <option value="subcontractor">Subcontractor</option>
             </select>
-          </label>
-          <label className="field">
-            <span>Retention %</span>
+          </Field>
+          <Field label="Retention %">
             <input inputMode="decimal" value={form.retention_percent} onChange={(e) => setForm({ ...form, retention_percent: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>TDS % (blank: by PAN type)</span>
+          </Field>
+          <Field label="TDS % (blank: by PAN type)">
             <input inputMode="decimal" value={form.tds_percent} onChange={(e) => setForm({ ...form, tds_percent: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Start</span>
+          </Field>
+          <Field label="Start">
             <input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>End</span>
+          </Field>
+          <Field label="End">
             <input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Terms (T&amp;C template)</span>
+          </Field>
+          <Field label="Terms (T&amp;C template)">
             <select value={form.tc_template_id} onChange={(e) => setForm({ ...form, tc_template_id: Number(e.target.value) || "" })}>
               <option value="">Built-in work order terms</option>
               {templates.map((t) => (
@@ -192,55 +186,49 @@ function WoForm({ site, wo, onClose, onSaved }: { site: Site; wo?: WorkOrder; on
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Remark</span>
+          </Field>
+          <Field label="Remark">
             <input value={form.remark} onChange={(e) => setForm({ ...form, remark: e.target.value })} />
-          </label>
+          </Field>
         </div>
         <h2 className="section-title">Scope</h2>
         <div className="line-cards">
           {lines.map((l, i) => (
             <div key={i} className="line-card">
-              <label className="field">
-                <span>Description</span>
+              <Field label="Description">
                 <input required value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} />
-              </label>
+              </Field>
               <div className="line-row">
-                <label className="field">
-                  <span>Unit</span>
+                <Field label="Unit">
                   <input required value={l.unit} onChange={(e) => setLine(i, { unit: e.target.value })} />
-                </label>
-                <label className="field">
-                  <span>Qty</span>
+                </Field>
+                <Field label="Qty">
                   <input required inputMode="decimal" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} />
-                </label>
-                <label className="field">
-                  <span>Rate</span>
+                </Field>
+                <Field label="Rate">
                   <input required inputMode="decimal" value={l.rate} onChange={(e) => setLine(i, { rate: e.target.value })} />
-                </label>
-                <div className="field">
-                  <span>Amount</span>
+                </Field>
+                <Field as="div" label="Amount">
                   <b className="accepted">{inr(Number(l.qty || 0) * Number(l.rate || 0))}</b>
-                </div>
-                <button type="button" className="btn btn-ghost btn-icon" aria-label="Remove line" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>
+                </Field>
+                <Button type="button" variant="ghost" icon aria-label="Remove line" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>
                   ×
-                </button>
+                </Button>
               </div>
             </div>
           ))}
         </div>
-        <button type="button" className="btn btn-small top-gap" onClick={() => setLines((ls) => [...ls, { description: "", unit: "sqm", qty: "", rate: "" }])}>
+        <Button type="button" size="small" className="top-gap" onClick={() => setLines((ls) => [...ls, { description: "", unit: "sqm", qty: "", rate: "" }])}>
           + Line
-        </button>
+        </Button>
         <p className="right">
           Work order value <b>{inr(total)}</b> · retention {inr((total * Number(form.retention_percent || 0)) / 100)}
         </p>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Save draft</button>
+          </Button>
+          <Button type="submit" variant="primary">Save draft</Button>
         </div>
       </form>
     </Modal>
@@ -288,7 +276,7 @@ function WoView({ wo, site, onClose, onChange }: { wo: WorkOrder; site: Site; on
         </div>
       </div>
       {wo.lines.map((l) => (
-        <div key={l.id} className="card top-gap">
+        <Card key={l.id} as="div" className="top-gap">
           <div className="toolbar">
             <div>
               <b>{l.description}</b>
@@ -298,9 +286,9 @@ function WoView({ wo, site, onClose, onChange }: { wo: WorkOrder; site: Site; on
               </div>
             </div>
             {wo.can_measure && (
-              <button className="btn btn-small btn-primary" onClick={() => setMeasuring(l)}>
+              <Button variant="primary" size="small" onClick={() => setMeasuring(l)}>
                 + Measurement
-              </button>
+              </Button>
             )}
           </div>
           {l.measurements.length > 0 && (
@@ -319,18 +307,18 @@ function WoView({ wo, site, onClose, onChange }: { wo: WorkOrder; site: Site; on
                     <td className="small">{m.remark ?? ""}</td>
                     <td className="nowrap">
                       {m.status === "recorded" && wo.can_change_status && (
-                        <button className="btn btn-small" onClick={() => void act(`measurements/${m.id}/verify`)}>
+                        <Button size="small" onClick={() => void act(`measurements/${m.id}/verify`)}>
                           Verify
-                        </button>
+                        </Button>
                       )}
                       {m.status === "pending_approval" && wo.can_approve && (
                         <>
-                          <button className="btn btn-small btn-primary" onClick={() => void act(`measurements/${m.id}/approve`)}>
+                          <Button variant="primary" size="small" onClick={() => void act(`measurements/${m.id}/approve`)}>
                             Approve
-                          </button>
-                          <button className="btn btn-small btn-danger" onClick={() => void act(`measurements/${m.id}/reject`)}>
+                          </Button>
+                          <Button variant="danger" size="small" onClick={() => void act(`measurements/${m.id}/reject`)}>
                             Reject
-                          </button>
+                          </Button>
                         </>
                       )}
                     </td>
@@ -339,31 +327,31 @@ function WoView({ wo, site, onClose, onChange }: { wo: WorkOrder; site: Site; on
               </tbody>
             </table>
           )}
-        </div>
+        </Card>
       ))}
       <div className="form-actions">
-        <button className="btn" onClick={() => void downloadFile(`/api/execution/work-orders/${wo.id}/pdf`).catch((err) => setError(errorText(err)))}>
+        <Button onClick={() => void downloadFile(`/api/execution/work-orders/${wo.id}/pdf`).catch((err) => setError(errorText(err)))}>
           PDF
-        </button>
+        </Button>
         {wo.can_edit && (
-          <button className="btn" onClick={() => setEditing(true)}>
+          <Button onClick={() => setEditing(true)}>
             Edit
-          </button>
+          </Button>
         )}
         {wo.status === "draft" && wo.can_approve && (
-          <button className="btn btn-primary" onClick={() => void act(`work-orders/${wo.id}/approve`)}>
+          <Button variant="primary" onClick={() => void act(`work-orders/${wo.id}/approve`)}>
             Approve
-          </button>
+          </Button>
         )}
         {wo.status === "active" && wo.can_change_status && (
-          <button className="btn" onClick={() => void act(`work-orders/${wo.id}/complete`)}>
+          <Button onClick={() => void act(`work-orders/${wo.id}/complete`)}>
             Mark completed
-          </button>
+          </Button>
         )}
         {wo.status === "completed" && wo.can_change_status && (
-          <button className="btn" onClick={() => void act(`work-orders/${wo.id}/close`)}>
+          <Button onClick={() => void act(`work-orders/${wo.id}/close`)}>
             Close
-          </button>
+          </Button>
         )}
       </div>
       {measuring && (
@@ -409,33 +397,30 @@ function MeasureForm({ wo, line, onClose, onSaved }: { wo: WorkOrder; line: WoLi
       <form onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
         <div className="grid-2">
-          <label className="field">
-            <span>Date</span>
+          <Field label="Date">
             <input type="date" className="tap-input" value={form.on_date} onChange={(e) => setForm({ ...form, on_date: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Qty done ({line.unit}) *</span>
+          </Field>
+          <Field label={<>Qty done ({line.unit}) *</>}>
             <input required className="tap-input" inputMode="decimal" value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} />
-          </label>
+          </Field>
         </div>
         {after > Number(line.qty) && (
           <div className="alert alert-warn">
             This takes the line to {num(after)} {line.unit}, beyond the WO qty of {num(line.qty)}: it will need approval.
           </div>
         )}
-        <label className="field">
-          <span>Remark</span>
+        <Field label="Remark">
           <input value={form.remark} onChange={(e) => setForm({ ...form, remark: e.target.value })} />
-        </label>
-        <label className="btn tap-wide">
+        </Field>
+        <label className={buttonClass({ className: "tap-wide" })}>
           📷 Photos {files?.length ? `(${files.length})` : ""}
           <input type="file" accept="image/*" capture="environment" multiple hidden onChange={(e) => setFiles(e.target.files)} />
         </label>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Save</button>
+          </Button>
+          <Button type="submit" variant="primary">Save</Button>
         </div>
       </form>
     </Modal>

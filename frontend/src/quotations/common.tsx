@@ -2,6 +2,7 @@
 // (**bold** product names, ==highlight== notes, {placeholders}) and the stage / steps editor.
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
+import { Button, Field } from "../ui/components";
 
 export type Step = { text: string; client_scope: boolean; if_required: boolean };
 export type Section = { heading: string; option: string | null; steps: Step[] };
@@ -244,27 +245,26 @@ export function MarkupField({
     onChange(value.slice(0, at) + text + value.slice(at));
   }
   return (
-    <div className={`field markup-field ${compact ? "compact" : ""}`}>
-      {label && <span>{label}</span>}
+    <Field as="div" label={label} className={`markup-field ${compact ? "compact" : ""}`}>
       {!disabled && (
         <div className="markup-tools">
           {/* onMouseDown: keep the text box's selection while the button is pressed */}
-          <button
+          <Button
             type="button"
-            className="btn btn-small btn-ghost"
+            variant="ghost" size="small"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => wrap("**")}
             title="Bold the selected text (product names)"
           >
             <b>B</b>
-          </button>
-          <button type="button" className="btn btn-small btn-ghost" onMouseDown={(e) => e.preventDefault()} onClick={() => wrap("==")} title="Highlight the selected text (notes)">
+          </Button>
+          <Button type="button" variant="ghost" size="small" onMouseDown={(e) => e.preventDefault()} onClick={() => wrap("==")} title="Highlight the selected text (notes)">
             <mark>H</mark>
-          </button>
+          </Button>
           {!compact && (
-            <button type="button" className="btn btn-small btn-ghost" onClick={() => setPicking(!picking)}>
+            <Button type="button" variant="ghost" size="small" onClick={() => setPicking(!picking)}>
               + Product
-            </button>
+            </Button>
           )}
           {placeholders?.map((p) => (
             <button key={p} type="button" className="chip" onClick={() => insert(`{${p}}`)}>
@@ -274,7 +274,9 @@ export function MarkupField({
         </div>
       )}
       {picking && <ProductPicker onPick={(name) => (insert(`**${name}**`), setPicking(false))} />}
-      <textarea ref={ref} rows={rows} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} />
+      <Field label={label} bare>
+        <textarea ref={ref} rows={rows} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} />
+      </Field>
       {/^.*(\*\*|==)/s.test(value) && (
         <div className="markup-preview" aria-label="As it will print">
           <span className="muted small">Prints as:</span>
@@ -286,7 +288,7 @@ export function MarkupField({
         </div>
       )}
       {hint && <small className="muted">{hint}</small>}
-    </div>
+    </Field>
   );
 }
 
@@ -299,12 +301,14 @@ export function ProductPicker({ onPick }: { onPick: (name: string) => void }) {
   }, [q]);
   return (
     <div className="product-picker">
-      <input autoFocus placeholder="Search the products master" value={q} onChange={(e) => setQ(e.target.value)} />
+      <Field label="Search the products master" bare>
+        <input autoFocus placeholder="Search the products master" value={q} onChange={(e) => setQ(e.target.value)} />
+      </Field>
       <div className="product-list">
         {rows.map((r) => (
-          <button key={r.id} type="button" className="btn btn-small btn-ghost" onClick={() => onPick(r.name)}>
+          <Button key={r.id} type="button" variant="ghost" size="small" onClick={() => onPick(r.name)}>
             {r.name} <span className="muted small">{r.code}</span>
-          </button>
+          </Button>
         ))}
         {rows.length === 0 && <span className="muted small">No product found.</span>}
       </div>
@@ -328,26 +332,30 @@ export function SectionsEditor({ sections, onChange, stages, disabled }: { secti
       {sections.map((s, i) => (
         <div key={i} className="section-box">
           <div className="inline-form">
-            <input list="stage-names" value={s.heading} placeholder="Stage (e.g. Surface preparation)" onChange={(e) => set(i, { heading: e.target.value })} disabled={disabled} />
-            <input
-              className="option-input"
-              value={s.option ?? ""}
-              placeholder="Option"
-              title="An option number makes this section an alternative (OR)"
-              onChange={(e) => set(i, { option: e.target.value || null })}
-              disabled={disabled}
-            />
+            <Field label="Stage (e.g. Surface preparation)" bare>
+              <input list="stage-names" value={s.heading} placeholder="Stage (e.g. Surface preparation)" onChange={(e) => set(i, { heading: e.target.value })} disabled={disabled} />
+            </Field>
+            <Field label="Option" bare>
+              <input
+                className="option-input"
+                value={s.option ?? ""}
+                placeholder="Option"
+                title="An option number makes this section an alternative (OR)"
+                onChange={(e) => set(i, { option: e.target.value || null })}
+                disabled={disabled}
+              />
+            </Field>
             {!disabled && (
               <>
-                <button type="button" className="btn btn-small btn-ghost" onClick={() => move(i, -1)} aria-label="Up">
+                <Button type="button" variant="ghost" size="small" onClick={() => move(i, -1)} aria-label="Up">
                   ↑
-                </button>
-                <button type="button" className="btn btn-small btn-ghost" onClick={() => move(i, 1)} aria-label="Down">
+                </Button>
+                <Button type="button" variant="ghost" size="small" onClick={() => move(i, 1)} aria-label="Down">
                   ↓
-                </button>
-                <button type="button" className="btn btn-small btn-ghost" onClick={() => onChange(sections.filter((_, j) => j !== i))}>
+                </Button>
+                <Button type="button" variant="ghost" size="small" onClick={() => onChange(sections.filter((_, j) => j !== i))}>
                   Remove
-                </button>
+                </Button>
               </>
             )}
           </div>
@@ -365,29 +373,29 @@ export function SectionsEditor({ sections, onChange, stages, disabled }: { secti
                     <input type="checkbox" checked={st.if_required} onChange={(e) => setStep(i, k, { if_required: e.target.checked })} disabled={disabled} /> If required
                   </label>
                   {!disabled && (
-                    <button type="button" className="btn btn-small btn-ghost" onClick={() => set(i, { steps: s.steps.filter((_, j) => j !== k) })}>
+                    <Button type="button" variant="ghost" size="small" onClick={() => set(i, { steps: s.steps.filter((_, j) => j !== k) })}>
                       ✕
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>
             );
           })}
           {!disabled && (
-            <button type="button" className="btn btn-small btn-ghost" onClick={() => set(i, { steps: [...s.steps, { text: "", client_scope: false, if_required: false }] })}>
+            <Button type="button" variant="ghost" size="small" onClick={() => set(i, { steps: [...s.steps, { text: "", client_scope: false, if_required: false }] })}>
               + Step
-            </button>
+            </Button>
           )}
         </div>
       ))}
       {!disabled && (
-        <button
+        <Button
           type="button"
-          className="btn btn-small"
+          size="small"
           onClick={() => onChange([...sections, { heading: "", option: null, steps: [{ text: "", client_scope: false, if_required: false }] }])}
         >
           + Stage section
-        </button>
+        </Button>
       )}
       <datalist id="stage-names">
         {stages.map((s) => (

@@ -4,6 +4,7 @@ import { api, queryString } from "../api";
 import ExportButton from "../components/ExportButton";
 import type { AuditEntry } from "../types";
 import { errorText } from "../format";
+import { Button, Card, Field } from "../ui/components";
 
 const PAGE_SIZE = 50;
 
@@ -59,9 +60,8 @@ export default function Audit() {
         <h1>Audit log</h1>
         <ExportButton path={`/api/audit/export${queryString({ ...filters })}`} />
       </div>
-      <form className="card filters" onSubmit={apply}>
-        <label className="field">
-          <span>Kind</span>
+      <Card as="form" className="filters" onSubmit={apply}>
+        <Field label="Kind">
           <select {...field("category")}>
             <option value="">Everything</option>
             <option value="logins">Sign-ins</option>
@@ -70,21 +70,18 @@ export default function Audit() {
             <option value="deletes">Deletions</option>
             <option value="route_views">Views of someone's route</option>
           </select>
-        </label>
-        <label className="field">
-          <span>User (email)</span>
+        </Field>
+        <Field label="User (email)">
           <input placeholder="e.g. admin@" {...field("user")} />
-        </label>
-        <label className="field">
-          <span>Entity</span>
+        </Field>
+        <Field label="Entity">
           <select {...field("entity")}>
             <option value="">Any</option>
             <option value="user">User</option>
             <option value="role">Role</option>
           </select>
-        </label>
-        <label className="field">
-          <span>Action</span>
+        </Field>
+        <Field label="Action">
           <select {...field("action")}>
             <option value="">Any</option>
             <option value="auth">auth.* (logins)</option>
@@ -93,20 +90,17 @@ export default function Audit() {
             <option value="user">user.*</option>
             <option value="role">role.*</option>
           </select>
-        </label>
-        <label className="field">
-          <span>From</span>
+        </Field>
+        <Field label="From">
           <input type="date" {...field("date_from")} />
-        </label>
-        <label className="field">
-          <span>To</span>
+        </Field>
+        <Field label="To">
           <input type="date" {...field("date_to")} />
-        </label>
+        </Field>
         <div className="filter-actions">
-          <button className="btn btn-primary">Apply</button>
-          <button
+          <Button type="submit" variant="primary">Apply</Button>
+          <Button
             type="button"
-            className="btn"
             onClick={() => {
               setForm(EMPTY);
               setFilters(EMPTY);
@@ -114,12 +108,12 @@ export default function Audit() {
             }}
           >
             Clear
-          </button>
+          </Button>
         </div>
-      </form>
+      </Card>
       {error && <div className="alert alert-error">{error}</div>}
 
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -147,9 +141,9 @@ export default function Audit() {
                   <td>{a.ip ?? "—"}</td>
                   <td>
                     {(a.before || a.after) && (
-                      <button className="btn btn-small" onClick={() => setOpen(open === a.id ? null : a.id)}>
+                      <Button size="small" onClick={() => setOpen(open === a.id ? null : a.id)}>
                         {open === a.id ? "Hide" : "Details"}
-                      </button>
+                      </Button>
                     )}
                   </td>
                 </tr>
@@ -180,21 +174,21 @@ export default function Audit() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       <div className="pager">
         <span className="muted">
           {total === 0 ? "0" : `${offset + 1}–${Math.min(offset + PAGE_SIZE, total)}`} of {total}
         </span>
-        <button className="btn btn-small" disabled={offset === 0} onClick={() => setOffset(offset - PAGE_SIZE)}>
+        <Button size="small" disabled={offset === 0} onClick={() => setOffset(offset - PAGE_SIZE)}>
           Previous
-        </button>
-        <button
-          className="btn btn-small"
+        </Button>
+        <Button
+          size="small"
           disabled={offset + PAGE_SIZE >= total}
           onClick={() => setOffset(offset + PAGE_SIZE)}
         >
           Next
-        </button>
+        </Button>
       </div>
     </>
   );

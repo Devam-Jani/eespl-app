@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { errorText, inr, num } from "../format";
+import { Button, Card, Field } from "../ui/components";
 
 export type RateCardLite = { id: number; contractor_id: number; job: string; unit: string; rate: string; in_force: boolean };
 type VendorLite = { id: number; name: string };
@@ -39,11 +40,10 @@ export function NewCard({ onDone, onError }: { onDone: () => void; onError: (e: 
     }
   }
   return (
-    <div className="card">
+    <Card as="div">
       <h2 className="section-title">New rate</h2>
       <div className="grid-2">
-        <label className="field">
-          <span>Labour contractor</span>
+        <Field label="Labour contractor">
           <select value={f.contractor_id} onChange={set("contractor_id")}>
             <option value="">Choose…</option>
             {contractors.map((c) => (
@@ -52,17 +52,14 @@ export function NewCard({ onDone, onError }: { onDone: () => void; onError: (e: 
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Job</span>
+        </Field>
+        <Field label="Job">
           <input value={f.job} placeholder="Coating" onChange={set("job")} />
-        </label>
-        <label className="field full">
-          <span>Covers</span>
+        </Field>
+        <Field label="Covers" className="full">
           <input value={f.covers} placeholder="surface preparation, cleaning, crack and joint treatment, vata, primer and coat" onChange={set("covers")} />
-        </label>
-        <label className="field">
-          <span>Rate (₹) per</span>
+        </Field>
+        <Field label="Rate (₹) per">
           <span className="inline">
             <input className="input-num" value={f.rate} onChange={set("rate")} />
             <select value={f.unit} onChange={set("unit")}>
@@ -71,24 +68,21 @@ export function NewCard({ onDone, onError }: { onDone: () => void; onError: (e: 
               ))}
             </select>
           </span>
-        </label>
-        <label className="field">
-          <span>Up to (a range, optional)</span>
+        </Field>
+        <Field label="Up to (a range, optional)">
           <input className="input-num" value={f.rate_max} onChange={set("rate_max")} />
-        </label>
-        <label className="field">
-          <span>Valid from</span>
+        </Field>
+        <Field label="Valid from">
           <input type="date" value={f.valid_from} onChange={set("valid_from")} />
-        </label>
-        <label className="field">
-          <span>Valid to</span>
+        </Field>
+        <Field label="Valid to">
           <input type="date" value={f.valid_to} onChange={set("valid_to")} />
-        </label>
+        </Field>
       </div>
-      <button className="btn btn-primary top-gap" disabled={!f.contractor_id || !f.job || !f.rate} onClick={() => void save()}>
+      <Button variant="primary" className="top-gap" disabled={!f.contractor_id || !f.job || !f.rate} onClick={() => void save()}>
         Add the rate
-      </button>
-    </div>
+      </Button>
+    </Card>
   );
 }
 
@@ -148,7 +142,7 @@ export function NewBill({ cards, onDone, onError }: { cards: RateCardLite[]; onD
   }
   const pieceReady = contractor && site && from && to;
   return (
-    <div className="card">
+    <Card as="div">
       <h2 className="section-title">New labour bill</h2>
       <div className="tabs tabs-inline">
         <button className={`tab ${kind === "piece" ? "active" : ""}`} onClick={() => setKind("piece")}>
@@ -158,8 +152,7 @@ export function NewBill({ cards, onDone, onError }: { cards: RateCardLite[]; onD
           Gang on attendance
         </button>
       </div>
-      <label className="field top-gap">
-        <span>Labour contractor</span>
+      <Field label="Labour contractor" className="top-gap">
         <select value={contractor} onChange={(e) => setContractor(e.target.value)}>
           <option value="">Choose…</option>
           {contractors.map((c) => (
@@ -168,17 +161,15 @@ export function NewBill({ cards, onDone, onError }: { cards: RateCardLite[]; onD
             </option>
           ))}
         </select>
-      </label>
+      </Field>
       {kind === "attendance" ? (
-        <label className="field">
-          <span>Month (hours per site from attendance)</span>
+        <Field label="Month (hours per site from attendance)">
           <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
-        </label>
+        </Field>
       ) : (
         <>
           <div className="grid-3">
-            <label className="field">
-              <span>Site</span>
+            <Field label="Site">
               <select value={site} onChange={(e) => setSite(e.target.value)}>
                 <option value="">Choose…</option>
                 {sites.map((x) => (
@@ -187,15 +178,13 @@ export function NewBill({ cards, onDone, onError }: { cards: RateCardLite[]; onD
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="field">
-              <span>From</span>
+            </Field>
+            <Field label="From">
               <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-            </label>
-            <label className="field">
-              <span>To</span>
+            </Field>
+            <Field label="To">
               <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-            </label>
+            </Field>
           </div>
           {lines.length > 0 && (
             <table className="table compact">
@@ -206,14 +195,16 @@ export function NewBill({ cards, onDone, onError }: { cards: RateCardLite[]; onD
                       {ln.item_no} {ln.description.slice(0, 70)} ({ln.unit})
                     </td>
                     <td>
-                      <select value={picks[ln.id] ?? ""} onChange={(e) => setPicks({ ...picks, [ln.id]: e.target.value })} aria-label="Job">
-                        <option value="">— not in this bill —</option>
-                        {myCards.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.job} ₹{c.rate}/{c.unit}
-                          </option>
-                        ))}
-                      </select>
+                      <Field label="Job" bare>
+                        <select value={picks[ln.id] ?? ""} onChange={(e) => setPicks({ ...picks, [ln.id]: e.target.value })} aria-label="Job">
+                          <option value="">— not in this bill —</option>
+                          {myCards.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.job} ₹{c.rate}/{c.unit}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
                     </td>
                   </tr>
                 ))}
@@ -244,14 +235,14 @@ export function NewBill({ cards, onDone, onError }: { cards: RateCardLite[]; onD
       )}
       <div className="top-gap">
         {kind === "piece" && (
-          <button className="btn" disabled={!pieceReady} onClick={() => void doPreview()}>
+          <Button disabled={!pieceReady} onClick={() => void doPreview()}>
             Preview
-          </button>
+          </Button>
         )}{" "}
-        <button className="btn btn-primary" disabled={!contractor || (kind === "piece" && !pieceReady)} onClick={() => void create()}>
+        <Button variant="primary" disabled={!contractor || (kind === "piece" && !pieceReady)} onClick={() => void create()}>
           Make the bill
-        </button>
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }

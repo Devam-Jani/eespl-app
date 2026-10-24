@@ -7,6 +7,7 @@ import { errorText, inr, num, showError } from "../../format";
 import type { AttendanceStatus, DaySheet, MusterRow, Subcontractor, Worker } from "../../execution/types";
 import type { Site } from "../../types";
 import { localToday } from "./DprTab";
+import { Button, buttonClass, Card, Field } from "../../ui/components";
 
 const MARKS: [AttendanceStatus, string][] = [
   ["present", "P"],
@@ -100,7 +101,9 @@ export function QuickMark({ site, onSaved }: { site: Site; onSaved?: () => void 
   return (
     <div className="daily">
       <div className="daily-head">
-        <input type="date" className="tap-input" value={day} max={localToday()} onChange={(e) => setDay(e.target.value)} aria-label="Day" />
+        <Field label="Day" bare>
+          <input type="date" className="tap-input" value={day} max={localToday()} onChange={(e) => setDay(e.target.value)} aria-label="Day" />
+        </Field>
         {sheet && (
           <span className="small">
             P {sheet.counts.present} · ½ {sheet.counts.half_day} · A {sheet.counts.absent}
@@ -110,14 +113,14 @@ export function QuickMark({ site, onSaved }: { site: Site; onSaved?: () => void 
       {error && <div className="alert alert-error">{error}</div>}
       {message && <div className="alert alert-ok">{message}</div>}
       {canEdit && rows.length > 0 && (
-        <button
-          className="btn tap-wide"
+        <Button
+          className="tap-wide"
           onClick={() =>
             setDraft((d) => Object.fromEntries(rows.map((r) => [r.labour_id, r.elsewhere ? d[r.labour_id] : { ...d[r.labour_id], status: "present" as AttendanceStatus }])))
           }
         >
           ✓ Mark all present
-        </button>
+        </Button>
       )}
       <ul className="mark-list with-sticky-bar">
         {rows.map((r) => {
@@ -147,8 +150,7 @@ export function QuickMark({ site, onSaved }: { site: Site; onSaved?: () => void 
                   </button>
                 ))}
                 {d.status && d.status !== "absent" && r.type === "subcontractor" && (
-                  <label className="ot-field">
-                    <span>Hours here</span>
+                  <Field label="Hours here" inline className="ot-field">
                     <input
                       className="tap-input ot"
                       inputMode="decimal"
@@ -158,11 +160,10 @@ export function QuickMark({ site, onSaved }: { site: Site; onSaved?: () => void 
                       value={d.hours ?? ""}
                       onChange={(e) => set(r.labour_id, { hours: e.target.value })}
                     />
-                  </label>
+                  </Field>
                 )}
                 {d.status && d.status !== "absent" && (
-                  <label className="ot-field">
-                    <span>OT hrs</span>
+                  <Field label="OT hrs" inline className="ot-field">
                     <input
                       className="tap-input ot"
                       inputMode="decimal"
@@ -172,7 +173,7 @@ export function QuickMark({ site, onSaved }: { site: Site; onSaved?: () => void 
                       value={d.ot_hours}
                       onChange={(e) => set(r.labour_id, { ot_hours: e.target.value })}
                     />
-                  </label>
+                  </Field>
                 )}
               </div>
             </li>
@@ -182,13 +183,13 @@ export function QuickMark({ site, onSaved }: { site: Site; onSaved?: () => void 
       </ul>
       {canEdit && rows.length > 0 && (
         <div className="daily-actions sticky-actions">
-          <label className="btn tap-wide">
+          <label className={buttonClass({ className: "tap-wide" })}>
             📷 Group photo
             <input type="file" accept="image/*" capture="environment" hidden onChange={(e) => void photo(e.target.files)} />
           </label>
-          <button className="btn btn-primary tap-wide" disabled={busy || !marked} onClick={() => void save()}>
+          <Button variant="primary" className="tap-wide" disabled={busy || !marked} onClick={() => void save()}>
             Save attendance ({marked})
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -240,16 +241,13 @@ export function WorkerForm({ worker, siteId, onClose, onSaved }: { worker?: Work
       <form onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
         <div className="grid-2">
-          <label className="field">
-            <span>Name *</span>
+          <Field label="Name *">
             <input required value={form.name} onChange={set("name")} />
-          </label>
-          <label className="field">
-            <span>Phone</span>
+          </Field>
+          <Field label="Phone">
             <input inputMode="tel" value={form.phone} onChange={set("phone")} />
-          </label>
-          <label className="field">
-            <span>Trade</span>
+          </Field>
+          <Field label="Trade">
             <select value={form.trade} onChange={set("trade")}>
               {TRADES.map((t) => (
                 <option key={t} value={t}>
@@ -257,17 +255,15 @@ export function WorkerForm({ worker, siteId, onClose, onSaved }: { worker?: Work
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Type</span>
+          </Field>
+          <Field label="Type">
             <select value={form.type} onChange={set("type")}>
               <option value="own">Own labour</option>
               <option value="subcontractor">From a subcontractor</option>
             </select>
-          </label>
+          </Field>
           {form.type === "subcontractor" && (
-            <label className="field">
-              <span>Subcontractor *</span>
+            <Field label="Subcontractor *">
               <select required value={form.subcontractor_id} onChange={(e) => setForm({ ...form, subcontractor_id: Number(e.target.value) || "" })}>
                 <option value="">—</option>
                 {subs.map((s) => (
@@ -276,26 +272,23 @@ export function WorkerForm({ worker, siteId, onClose, onSaved }: { worker?: Work
                   </option>
                 ))}
               </select>
-            </label>
+            </Field>
           )}
-          <label className="field">
-            <span>Daily wage (₹)</span>
+          <Field label="Daily wage (₹)">
             <input inputMode="decimal" value={form.daily_wage} onChange={set("daily_wage")} />
-          </label>
-          <label className="field">
-            <span>OT rate per hour (₹)</span>
+          </Field>
+          <Field label="OT rate per hour (₹)">
             <input inputMode="decimal" value={form.ot_rate_per_hour} onChange={set("ot_rate_per_hour")} />
-          </label>
-          <label className="field">
-            <span>Aadhaar (last 4 digits{worker?.aadhaar_last4 ? `; now ••••${worker.aadhaar_last4}` : ""})</span>
+          </Field>
+          <Field label={<>Aadhaar (last 4 digits{worker?.aadhaar_last4 ? `; now ••••${worker.aadhaar_last4}` : ""})</>}>
             <input inputMode="numeric" maxLength={14} value={form.aadhaar} onChange={set("aadhaar")} placeholder="Only the last 4 are kept" autoComplete="off" />
-          </label>
+          </Field>
         </div>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Save</button>
+          </Button>
+          <Button type="submit" variant="primary">Save</Button>
         </div>
       </form>
     </Modal>
@@ -316,13 +309,15 @@ export function MusterTable({ siteId }: { siteId?: number }) {
   return (
     <>
       <div className="toolbar">
-        <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month" />
-        <button className="btn" onClick={() => void downloadFile(`/api/execution/muster/export?${q}`).catch((err) => setError(errorText(err)))}>
+        <Field label="Month" bare>
+          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month" />
+        </Field>
+        <Button onClick={() => void downloadFile(`/api/execution/muster/export?${q}`).catch((err) => setError(errorText(err)))}>
           Excel
-        </button>
+        </Button>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table compact">
           <thead>
             <tr>
@@ -359,7 +354,7 @@ export function MusterTable({ siteId }: { siteId?: number }) {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -400,23 +395,23 @@ export default function LabourTab({ site }: { site: Site }) {
           </button>
         ))}
         <span className="push-right" />
-        <button className="btn btn-small" onClick={() => void checkIn(false)}>
+        <Button size="small" onClick={() => void checkIn(false)}>
           Staff check-in
-        </button>
-        <button className="btn btn-small" onClick={() => void checkIn(true)}>
+        </Button>
+        <Button size="small" onClick={() => void checkIn(true)}>
           Check-out
-        </button>
+        </Button>
       </div>
       <div className="top-gap">
         {view === "mark" && <QuickMark key={key} site={site} />}
         {view === "workers" && (
           <>
             {can("labour.edit") && (
-              <button className="btn btn-primary" onClick={() => setEditing("new")}>
+              <Button variant="primary" onClick={() => setEditing("new")}>
                 Add worker
-              </button>
+              </Button>
             )}
-            <div className="card table-wrap top-gap">
+            <Card as="div" className="table-wrap top-gap">
               <table className="table compact">
                 <thead>
                   <tr>
@@ -443,7 +438,7 @@ export default function LabourTab({ site }: { site: Site }) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </Card>
           </>
         )}
         {view === "muster" && <MusterTable siteId={site.id} />}

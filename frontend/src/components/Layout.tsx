@@ -11,7 +11,7 @@ import { PageErrorBoundary } from "../helper/Helper";
 import type { Group } from "../menu";
 import { groupOf, MENU, visibleGroups } from "../menu";
 import { GoLiveBanner, HelpButton, TrainingBanner, useMode } from "../ops/Pages";
-import { Icon, initials, NavItem } from "../ui/components";
+import { Button, Icon, initials, NavItem } from "../ui/components";
 import { GROUP_ICON, NavIcon, PAGE_ICON } from "../ui/navIcons";
 import { prefetch } from "../ui/prefetch";
 import { useTheme } from "../ui/theme";
@@ -191,9 +191,9 @@ export default function Layout() {
       <div className="app-main">
         <header className="app-header">
           {(phone && !siteRole) || tablet ? (
-            <button className="btn btn-ghost btn-icon" aria-label="Menu" aria-expanded={drawer} onClick={() => setDrawer(!drawer)}>
+            <Button variant="ghost" icon aria-label="Menu" aria-expanded={drawer} onClick={() => setDrawer(!drawer)}>
               <span aria-hidden="true">☰</span>
-            </button>
+            </Button>
           ) : null}
           <div className="app-title">
             <span className="app-section">{here && here !== title ? here : ""}</span>

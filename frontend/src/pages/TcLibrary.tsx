@@ -6,6 +6,7 @@ import ExportButton from "../components/ExportButton";
 import { Modal } from "../ui/Overlay";
 import { errorText } from "../format";
 import type { Clause, HiddenReason, Page, Template, TemplateSummary } from "../types";
+import { Button, Card, Field } from "../ui/components";
 
 function move<T>(list: T[], index: number, delta: number): T[] {
   const target = index + delta;
@@ -124,7 +125,9 @@ function Clauses({
     <>
       <div className="toolbar">
         <div className="page-actions">
-          <input className="search" placeholder="Filter clauses" value={filter} onChange={(e) => setFilter(e.target.value)} />
+          <Field label="Filter clauses" bare>
+            <input className="search" placeholder="Filter clauses" value={filter} onChange={(e) => setFilter(e.target.value)} />
+          </Field>
           <button className={`chip-toggle ${reviewOnly ? "on" : ""}`} onClick={() => setReviewOnly((v) => !v)}>
             Needs review ({reviewCount})
           </button>
@@ -137,13 +140,13 @@ function Clauses({
           path={`/api/tc/clauses/export?include_hidden=${showHidden}${reviewOnly ? "&needs_review=true" : ""}`}
         />
         {canEdit && (
-          <button className="btn btn-primary" onClick={() => setEditing("new")}>
+          <Button variant="primary" onClick={() => setEditing("new")}>
             Add clause
-          </button>
+          </Button>
         )}
       </div>
       {groups.map(([category, list]) => (
-        <div key={category} className="card clause-group">
+        <Card key={category} as="div" className="clause-group">
           <h2 className="section-title capitalize">
             {category.replace(/_/g, " ")} <span className="muted small">({list.length})</span>
           </h2>
@@ -183,9 +186,9 @@ function Clauses({
                               {v.text} <span className="muted small">({v.own_usage_count})</span>
                             </span>
                             {canEdit && (
-                              <button className="btn btn-small" onClick={() => void act(`${v.id}/unmerge`)}>
+                              <Button size="small" onClick={() => void act(`${v.id}/unmerge`)}>
                                 Unmerge
-                              </button>
+                              </Button>
                             )}
                           </li>
                         ))}
@@ -196,22 +199,22 @@ function Clauses({
                     <div className="clause-actions">
                       {!hidden && (
                         <>
-                          <button className="btn btn-small" disabled={i === 0} onClick={() => void reorder(list, i, -1)} aria-label="Move up">
+                          <Button size="small" disabled={i === 0} onClick={() => void reorder(list, i, -1)} aria-label="Move up">
                             ↑
-                          </button>
-                          <button
-                            className="btn btn-small"
+                          </Button>
+                          <Button
+                            size="small"
                             disabled={i === list.length - 1}
                             onClick={() => void reorder(list, i, 1)}
                             aria-label="Move down"
                           >
                             ↓
-                          </button>
+                          </Button>
                         </>
                       )}
-                      <button className="btn btn-small" onClick={() => setEditing(c)}>
+                      <Button size="small" onClick={() => setEditing(c)}>
                         Edit
-                      </button>
+                      </Button>
                       <RowMenu
                         items={[
                           hidden
@@ -227,9 +230,9 @@ function Clauses({
               );
             })}
           </ol>
-        </div>
+        </Card>
       ))}
-      {groups.length === 0 && <div className="card empty">No clauses.</div>}
+      {groups.length === 0 && <Card as="div" className="empty">No clauses.</Card>}
       {editing && (
         <ClauseForm
           clause={editing === "new" ? null : editing}
@@ -270,9 +273,9 @@ function RowMenu({ items }: { items: { label: string; run: () => void }[] }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="row-menu" onMouseLeave={() => setOpen(false)}>
-      <button className="btn btn-small" onClick={() => setOpen((o) => !o)} aria-label="More actions">
+      <Button size="small" onClick={() => setOpen((o) => !o)} aria-label="More actions">
         ⋯
-      </button>
+      </Button>
       {open && (
         <div className="row-menu-items">
           {items.map((item) => (
@@ -305,8 +308,7 @@ function HideDialog({
   return (
     <Modal title="Hide clause" onClose={onClose}>
       <p className="item-desc">{clause.text}</p>
-      <label className="field">
-        <span>Reason</span>
+      <Field label="Reason">
         <select value={reason} onChange={(e) => setReason(e.target.value as HiddenReason)}>
           {(Object.keys(HIDDEN_LABELS) as HiddenReason[]).map((r) => (
             <option key={r} value={r}>
@@ -314,15 +316,15 @@ function HideDialog({
             </option>
           ))}
         </select>
-      </label>
+      </Field>
       <p className="muted small">Hidden clauses are also taken out of every template. You can unhide later.</p>
       <div className="form-actions">
-        <button className="btn" onClick={onClose}>
+        <Button onClick={onClose}>
           Cancel
-        </button>
-        <button className="btn btn-primary" onClick={() => void onHide(reason)}>
+        </Button>
+        <Button variant="primary" onClick={() => void onHide(reason)}>
           Hide
-        </button>
+        </Button>
       </div>
     </Modal>
   );
@@ -348,7 +350,9 @@ function MergeDialog({
         Choose the clause to keep (the master). This wording is kept as a variant, its usage count is added to the master, and
         templates that hold it get the master instead. You can unmerge later.
       </p>
-      <input className="full" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+      <Field label="Search clauses" bare>
+        <input className="full" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+      </Field>
       <ul className="pick-list top-gap">
         {shown.map((c) => (
           <li key={c.id}>
@@ -418,33 +422,31 @@ function ClauseForm({
             {clause.review_note ?? "Needs review"}. Correct the text and save to clear this.
           </div>
         )}
-        <label className="field">
-          <span>Text</span>
+        <Field label="Text">
           <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} required autoFocus />
-        </label>
-        <label className="field">
-          <span>Category</span>
+        </Field>
+        <Field label="Category">
           <input list="tc-categories" value={category} onChange={(e) => setCategory(e.target.value)} required />
           <datalist id="tc-categories">
             {categories.map((c) => (
               <option key={c} value={c} />
             ))}
           </datalist>
-        </label>
+        </Field>
         <label className="check">
           <input type="checkbox" checked={defaultInclude} onChange={(e) => setDefaultInclude(e.target.checked)} />
           Include by default
         </label>
         <div className="form-actions">
           {clause && (
-            <button type="button" className="btn btn-danger push-left" onClick={() => void remove()}>
+            <Button type="button" variant="danger" className="push-left" onClick={() => void remove()}>
               Delete
-            </button>
+            </Button>
           )}
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Save</button>
+          </Button>
+          <Button type="submit" variant="primary">Save</Button>
         </div>
       </form>
     </Modal>
@@ -523,13 +525,13 @@ function Templates({ clauses, onError }: { clauses: Clause[]; onError: (e: strin
 
   return (
     <div className="split split-narrow">
-      <div className="card">
+      <Card as="div">
         <div className="toolbar">
           <h2 className="section-title">Templates</h2>
           {canEdit && (
-            <button className="btn btn-small btn-primary" onClick={() => void create()}>
+            <Button variant="primary" size="small" onClick={() => void create()}>
               New
-            </button>
+            </Button>
           )}
         </div>
         <ul className="pick-list">
@@ -544,9 +546,9 @@ function Templates({ clauses, onError }: { clauses: Clause[]; onError: (e: strin
             </li>
           ))}
         </ul>
-      </div>
+      </Card>
 
-      <div className="card">
+      <Card as="div">
         {!selected ? (
           <p className="muted">Choose a template.</p>
         ) : (
@@ -557,23 +559,23 @@ function Templates({ clauses, onError }: { clauses: Clause[]; onError: (e: strin
               </h2>
               {canEdit && (
                 <div className="page-actions">
-                  <button
-                    className="btn btn-small"
+                  <Button
+                    size="small"
                     onClick={() => {
                       const name = prompt("Rename template", selected.name);
                       if (name && name !== selected.name) void patch({ name });
                     }}
                   >
                     Rename
-                  </button>
+                  </Button>
                   {!selected.is_default && (
-                    <button className="btn btn-small" onClick={() => void patch({ is_default: true })}>
+                    <Button size="small" onClick={() => void patch({ is_default: true })}>
                       Make default
-                    </button>
+                    </Button>
                   )}
-                  <button className="btn btn-small btn-danger" onClick={() => void remove()}>
+                  <Button variant="danger" size="small" onClick={() => void remove()}>
                     Delete
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -586,29 +588,29 @@ function Templates({ clauses, onError }: { clauses: Clause[]; onError: (e: strin
                   </div>
                   {canEdit && (
                     <div className="clause-actions">
-                      <button
-                        className="btn btn-small"
+                      <Button
+                        size="small"
                         disabled={i === 0}
                         onClick={() => void patch({ clause_ids: move(ids, i, -1) })}
                         aria-label="Move up"
                       >
                         ↑
-                      </button>
-                      <button
-                        className="btn btn-small"
+                      </Button>
+                      <Button
+                        size="small"
                         disabled={i === ids.length - 1}
                         onClick={() => void patch({ clause_ids: move(ids, i, 1) })}
                         aria-label="Move down"
                       >
                         ↓
-                      </button>
-                      <button
-                        className="btn btn-small"
+                      </Button>
+                      <Button
+                        size="small"
                         onClick={() => void patch({ clause_ids: ids.filter((x) => x !== c.id) })}
                         aria-label="Remove from template"
                       >
                         ×
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </li>
@@ -617,16 +619,18 @@ function Templates({ clauses, onError }: { clauses: Clause[]; onError: (e: strin
             {selected.clauses.length === 0 && <p className="muted">No clauses in this template yet.</p>}
             {canEdit && (
               <div className="toolbar top-gap">
-                <select value={adding} onChange={(e) => setAdding(e.target.value)} className="grow">
-                  <option value="">Add a clause…</option>
-                  {available.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      [{c.category}] {c.text.length > 110 ? `${c.text.slice(0, 110)}…` : c.text}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  className="btn btn-small btn-primary"
+                <Field label="Add a clause" bare>
+                  <select value={adding} onChange={(e) => setAdding(e.target.value)} className="grow">
+                    <option value="">Add a clause…</option>
+                    {available.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        [{c.category}] {c.text.length > 110 ? `${c.text.slice(0, 110)}…` : c.text}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Button
+                  variant="primary" size="small"
                   disabled={!adding}
                   onClick={() => {
                     void patch({ clause_ids: [...ids, Number(adding)] });
@@ -634,12 +638,12 @@ function Templates({ clauses, onError }: { clauses: Clause[]; onError: (e: strin
                   }}
                 >
                   Add
-                </button>
+                </Button>
               </div>
             )}
           </>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

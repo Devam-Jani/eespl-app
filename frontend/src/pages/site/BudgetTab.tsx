@@ -5,6 +5,7 @@ import { useAuth } from "../../auth";
 import { errorText, inr, num } from "../../format";
 import type { Budget } from "../../execution/types";
 import type { Site } from "../../types";
+import { Button, Card, Field } from "../../ui/components";
 
 const LabourPerSqm = lazy(() => import("../../costing/Pages").then((m) => ({ default: m.LabourPerSqm })));
 
@@ -59,7 +60,7 @@ export default function BudgetTab({ site }: { site: Site }) {
       <Suspense fallback={null}>
         <LabourPerSqm siteId={site.id} />
       </Suspense>
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table budget">
           <thead>
             <tr>
@@ -79,13 +80,15 @@ export default function BudgetTab({ site }: { site: Site }) {
                 </td>
                 <td className="num">
                   {edit ? (
-                    <input
-                      className="input-num"
-                      inputMode="decimal"
-                      value={edit[r.head] ?? ""}
-                      onChange={(e) => setEdit({ ...edit, [r.head]: e.target.value })}
-                      aria-label={`${r.head} budget`}
-                    />
+                    <Field label={`${r.head} budget`} bare>
+                      <input
+                        className="input-num"
+                        inputMode="decimal"
+                        value={edit[r.head] ?? ""}
+                        onChange={(e) => setEdit({ ...edit, [r.head]: e.target.value })}
+                        aria-label={`${r.head} budget`}
+                      />
+                    </Field>
                   ) : r.hidden ? (
                     <span className="muted">hidden</span>
                   ) : (
@@ -122,44 +125,50 @@ export default function BudgetTab({ site }: { site: Site }) {
             </tr>
           </tbody>
         </table>
-      </div>
+      </Card>
       {b.can_edit && (
         <div className="page-actions top-gap">
           {edit ? (
             <>
-              <button className="btn" onClick={() => setEdit(null)}>
+              <Button onClick={() => setEdit(null)}>
                 Cancel
-              </button>
-              <button className="btn btn-primary" onClick={save}>
+              </Button>
+              <Button variant="primary" onClick={save}>
                 Save budget
-              </button>
+              </Button>
             </>
           ) : (
-            <button className="btn" onClick={() => setEdit(Object.fromEntries(b.rows.map((r) => [r.head, r.saved && !r.hidden ? (r.budget ?? "") : ""])))}>
+            <Button onClick={() => setEdit(Object.fromEntries(b.rows.map((r) => [r.head, r.saved && !r.hidden ? (r.budget ?? "") : ""])))}>
               Set budget
-            </button>
+            </Button>
           )}
           {b.tender_suggestion && can("tender.margin") && (
-            <button className="btn" onClick={() => void run(api<Budget>(`/api/execution/sites/${site.id}/budget/from-tender`, { method: "POST" }))}>
+            <Button onClick={() => void run(api<Budget>(`/api/execution/sites/${site.id}/budget/from-tender`, { method: "POST" }))}>
               Budget from the tender ({inr(Number(b.tender_suggestion.material ?? 0) + Number(b.tender_suggestion.labour ?? 0))})
-            </button>
+            </Button>
           )}
         </div>
       )}
       {b.can_edit && (
-        <form className="card top-gap inline-form wrap" onSubmit={addCost}>
+        <Card as="form" className="top-gap inline-form wrap" onSubmit={addCost}>
           <b>Add a cost</b>
-          <select value={cost.head} onChange={(e) => setCost({ ...cost, head: e.target.value })}>
-            {Object.entries(HEAD).map(([k, [l]]) => (
-              <option key={k} value={k}>
-                {l}
-              </option>
-            ))}
-          </select>
-          <input required className="input-num" inputMode="decimal" placeholder="₹" value={cost.amount} onChange={(e) => setCost({ ...cost, amount: e.target.value })} />
-          <input required placeholder="What for" value={cost.description} onChange={(e) => setCost({ ...cost, description: e.target.value })} />
-          <button className="btn btn-primary">Add</button>
-        </form>
+          <Field label="Cost head" bare>
+            <select value={cost.head} onChange={(e) => setCost({ ...cost, head: e.target.value })}>
+              {Object.entries(HEAD).map(([k, [l]]) => (
+                <option key={k} value={k}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="₹" bare>
+            <input required className="input-num" inputMode="decimal" placeholder="₹" value={cost.amount} onChange={(e) => setCost({ ...cost, amount: e.target.value })} />
+          </Field>
+          <Field label="What for" bare>
+            <input required placeholder="What for" value={cost.description} onChange={(e) => setCost({ ...cost, description: e.target.value })} />
+          </Field>
+          <Button type="submit" variant="primary">Add</Button>
+        </Card>
       )}
       <p className="muted small top-gap">Cost side only: client billing and margin come with M5.</p>
     </>

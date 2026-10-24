@@ -389,6 +389,20 @@ select {
   width: 100%;
 }
 
+/* a bare field (an input in a grid cell, a toolbar search): its label is for screen readers only and
+   it adds no box, so the input lays out as if the label were not there */
+.field-bare {
+  display: contents;
+}
+
+/* an inline field reads as a sentence: the label, then its input, on one line ("Due [date]") */
+.field-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
 .check {
   display: inline-flex;
   align-items: center;

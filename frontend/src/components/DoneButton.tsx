@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "../api";
 import { errorText } from "../format";
+import { Button, Field } from "../ui/components";
 
 /** "Done" on an action item: doing the action in the app closes it by itself, so closing it by
  * hand asks why the action itself was not done (shown on the site's process timeline). */
@@ -19,26 +20,28 @@ export function DoneButton({ id, action, onDone }: { id: number; action: string 
   }
   if (!asking)
     return (
-      <button className="btn btn-small" onClick={() => setAsking(true)}>
+      <Button size="small" onClick={() => setAsking(true)}>
         Done
-      </button>
+      </Button>
     );
   return (
     <span className="done-reason">
-      <input
-        autoFocus
-        value={reason}
-        maxLength={300}
-        placeholder={`Why was "${action ?? "the action"}" not done in the app?`}
-        onChange={(e) => setReason(e.target.value)}
-        aria-label="Reason"
-      />
-      <button className="btn btn-small btn-primary" disabled={reason.trim().length < 3} onClick={() => void save()}>
+      <Field label="Reason" bare>
+        <input
+          autoFocus
+          value={reason}
+          maxLength={300}
+          placeholder={`Why was "${action ?? "the action"}" not done in the app?`}
+          onChange={(e) => setReason(e.target.value)}
+          aria-label="Reason"
+        />
+      </Field>
+      <Button variant="primary" size="small" disabled={reason.trim().length < 3} onClick={() => void save()}>
         Close it
-      </button>
-      <button className="btn btn-small btn-ghost" onClick={() => setAsking(false)}>
+      </Button>
+      <Button variant="ghost" size="small" onClick={() => setAsking(false)}>
         Cancel
-      </button>
+      </Button>
       {error && <span className="small text-danger">{error}</span>}
     </span>
   );

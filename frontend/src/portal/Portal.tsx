@@ -9,7 +9,7 @@ import { api, downloadFile, fetchObjectUrl } from "../api";
 import { useAuth } from "../auth";
 import Bell from "../components/Bell";
 import { PageErrorBoundary } from "../helper/Helper";
-import { initials } from "../ui/components";
+import { Button, buttonClass, Card, Field, initials } from "../ui/components";
 import { useTheme } from "../ui/theme";
 import { isClientLogin } from "../components/Guards";
 import { Modal } from "../ui/Overlay";
@@ -120,15 +120,15 @@ export function PortalLayout() {
         )}
         <div className="portal-actions">
           <Bell />
-          <button className="btn btn-ghost btn-small" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label={`Use the ${theme === "dark" ? "light" : "dark"} look`}>
+          <Button variant="ghost" size="small" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label={`Use the ${theme === "dark" ? "light" : "dark"} look`}>
             {theme === "dark" ? "Light" : "Dark"}
-          </button>
-          <Link to="/portal/reports" className="btn btn-ghost btn-small">
+          </Button>
+          <Link to="/portal/reports" className={buttonClass({ variant: "ghost", size: "small" })}>
             My reports
           </Link>
-          <button className="btn btn-ghost btn-small" onClick={() => void logout()}>
+          <Button variant="ghost" size="small" onClick={() => void logout()}>
             Sign out
-          </button>
+          </Button>
         </div>
       </header>
       <main className="portal-main">
@@ -154,20 +154,22 @@ export function PortalHome() {
       {sites?.length === 0 && <p className="empty">No sites are shared with you yet.</p>}
       <div className="portal-cards">
         {sites?.map((s) => (
-          <Link key={s.id} to={`/portal/sites/${s.id}`} className="card portal-card">
-            <div className="toolbar">
-              <strong>{s.name}</strong>
-              <span className="portal-percent">{s.percent.toFixed(0)}%</span>
-            </div>
-            <div className="muted small">
-              {s.code}
-              {s.city ? ` · ${s.city}` : ""}
-            </div>
-            <Bar percent={s.percent} />
-            <div className="small portal-facts">
-              <span>Last report: {day(s.last_dpr)}</span>
-              <span>Open snags: {s.open_snags}</span>
-            </div>
+          <Link key={s.id} to={`/portal/sites/${s.id}`} className="portal-card">
+            <Card as="div">
+              <div className="toolbar">
+                <strong>{s.name}</strong>
+                <span className="portal-percent">{s.percent.toFixed(0)}%</span>
+              </div>
+              <div className="muted small">
+                {s.code}
+                {s.city ? ` · ${s.city}` : ""}
+              </div>
+              <Bar percent={s.percent} />
+              <div className="small portal-facts">
+                <span>Last report: {day(s.last_dpr)}</span>
+                <span>Open snags: {s.open_snags}</span>
+              </div>
+            </Card>
           </Link>
         ))}
       </div>
@@ -255,13 +257,15 @@ function SiteView({ siteId }: { siteId: number }) {
       <h1 className="portal-title">
         {site.name} <span className="muted small">{site.code}</span>
       </h1>
-      <select className="tab-select tap-input" value={tab} onChange={(e) => setTab(e.target.value)} aria-label="Section">
-        {tabs.map(([k, l]) => (
-          <option key={k} value={k}>
-            {l}
-          </option>
-        ))}
-      </select>
+      <Field label="Section" bare>
+        <select className="tab-select tap-input" value={tab} onChange={(e) => setTab(e.target.value)} aria-label="Section">
+          {tabs.map(([k, l]) => (
+            <option key={k} value={k}>
+              {l}
+            </option>
+          ))}
+        </select>
+      </Field>
       <div className="tabs tabs-inline tab-bar">
         {tabs.map(([k, l]) => (
           <button key={k} className={`tab ${tab === k ? "active" : ""}`} onClick={() => setTab(k)}>
@@ -307,7 +311,7 @@ function OverviewTab({ site, onChange }: { site: Overview; onChange: () => void 
     <>
       {error && <div className="alert alert-error">{error}</div>}
       <div className="portal-grid">
-        <div className="card">
+        <Card as="div">
           <div className="muted small">Overall progress</div>
           <div className="portal-big">{site.percent.toFixed(0)}%</div>
           <Bar percent={site.percent} />
@@ -322,8 +326,8 @@ function OverviewTab({ site, onChange }: { site: Overview; onChange: () => void 
               </span>
             ))}
           </div>
-        </div>
-        <div className="card">
+        </Card>
+        <Card as="div">
           <div className="muted small">By tower / floor</div>
           {towers.length === 0 && floorsOf(null).length === 0 && <p className="muted small">No towers or floors yet.</p>}
           {[...towers, { id: -1, parent_id: null, kind: "", name: "", percent: 0 }].map((t) => {
@@ -346,10 +350,10 @@ function OverviewTab({ site, onChange }: { site: Overview; onChange: () => void 
               </div>
             );
           })}
-        </div>
+        </Card>
       </div>
       {site.open_points.length > 0 && (
-        <div className="card top-gap">
+        <Card as="div" className="top-gap">
           <div className="muted small">Open meeting points for you</div>
           {site.open_points.map((p) => (
             <div key={p.id} className="toolbar portal-row">
@@ -360,14 +364,14 @@ function OverviewTab({ site, onChange }: { site: Overview; onChange: () => void 
                 <span className="badge badge-ok">acknowledged</span>
               ) : (
                 !readOnly && (
-                  <button className="btn btn-small" onClick={() => void ack(p.id)}>
+                  <Button size="small" onClick={() => void ack(p.id)}>
                     Acknowledge
-                  </button>
+                  </Button>
                 )
               )}
             </div>
           ))}
-        </div>
+        </Card>
       )}
       <div className="top-gap portal-3d">
         <Suspense fallback={<p className="muted">Loading the 3D view…</p>}>
@@ -430,14 +434,14 @@ function DprTab({ siteId }: { siteId: number }) {
       {error && <div className="alert alert-error">{error}</div>}
       {list?.length === 0 && <p className="empty">No daily reports yet.</p>}
       {list?.map((d) => (
-        <div key={d.id} className="card portal-item">
+        <Card key={d.id} as="div" className="portal-item">
           <div className="toolbar">
             <button className="as-button" onClick={() => setOpen(open === d.id ? null : d.id)}>
               <strong>{day(d.on_date)}</strong> {d.weather && <span className="muted small">· {d.weather}</span>}
             </button>
-            <button className="btn btn-small" onClick={() => void file(`/api/portal/sites/${siteId}/dprs/${d.id}/pdf`).catch((err) => setError(errorText(err)))}>
+            <Button size="small" onClick={() => void file(`/api/portal/sites/${siteId}/dprs/${d.id}/pdf`).catch((err) => setError(errorText(err)))}>
               PDF
-            </button>
+            </Button>
           </div>
           <p className="portal-text">{d.work_done}</p>
           <div className="small muted">
@@ -470,7 +474,7 @@ function DprTab({ siteId }: { siteId: number }) {
               <Thread entityType="dpr" entityId={d.id} />
             </div>
           )}
-        </div>
+        </Card>
       ))}
     </>
   );
@@ -489,14 +493,16 @@ function PhotosTab({ siteId }: { siteId: number }) {
   return (
     <>
       {areas.length > 1 && (
-        <select className="tap-input" value={area} onChange={(e) => setArea(e.target.value)} aria-label="Area">
-          <option value="">All areas</option>
-          {areas.map((a) => (
-            <option key={a} value={a}>
-              {a || "Site"}
-            </option>
-          ))}
-        </select>
+        <Field label="Area" bare>
+          <select className="tap-input" value={area} onChange={(e) => setArea(e.target.value)} aria-label="Area">
+            <option value="">All areas</option>
+            {areas.map((a) => (
+              <option key={a} value={a}>
+                {a || "Site"}
+              </option>
+            ))}
+          </select>
+        </Field>
       )}
       {list?.length === 0 && <p className="empty">No photos shared yet.</p>}
       {Object.entries(byDate).map(([d, photos]) => (
@@ -567,7 +573,7 @@ function InspectionsTab({ siteId }: { siteId: number }) {
       <h3 className="section-title">Inspections</h3>
       {list.length === 0 && <p className="empty">No inspections yet.</p>}
       {list.map((i) => (
-        <div key={i.id} className="card portal-item">
+        <Card key={i.id} as="div" className="portal-item">
           <div className="toolbar">
             <button className="as-button" onClick={() => setOpen(open === i.id ? null : i.id)}>
               <strong>{i.code}</strong> <span className="muted small">{day(i.on_date)}</span>
@@ -579,31 +585,31 @@ function InspectionsTab({ siteId }: { siteId: number }) {
             {i.step ? ` · ${i.step}` : ""}
           </div>
           <div className="portal-buttons">
-            <button className="btn btn-small" onClick={() => dl(`/api/portal/sites/${siteId}/inspections/${i.id}/pdf`)}>
+            <Button size="small" onClick={() => dl(`/api/portal/sites/${siteId}/inspections/${i.id}/pdf`)}>
               PDF
-            </button>
+            </Button>
             {i.client_signoff === "waiting" && !readOnly && (
-              <button className="btn btn-small btn-primary" onClick={() => setSigning(i)}>
+              <Button variant="primary" size="small" onClick={() => setSigning(i)}>
                 Sign off
-              </button>
+              </Button>
             )}
             {i.client_signoff === "waiting" && readOnly && <span className="badge badge-warn">waiting for sign-off</span>}
             {i.client_signoff === "signed" && <span className="badge badge-ok">signed by {i.client_signed_name}</span>}
           </div>
           {open === i.id && <Thread entityType="inspection" entityId={i.id} />}
-        </div>
+        </Card>
       ))}
       <h3 className="section-title top-gap">Minutes of meeting</h3>
       {moms.length === 0 && <p className="empty">No meetings recorded.</p>}
       {moms.map((m) => (
-        <div key={m.id} className="card portal-item">
+        <Card key={m.id} as="div" className="portal-item">
           <div className="toolbar">
             <span>
               <strong>{m.title}</strong> <span className="muted small">{day(m.on_date)}</span>
             </span>
-            <button className="btn btn-small" onClick={() => dl(`/api/portal/sites/${siteId}/moms/${m.id}/pdf`)}>
+            <Button size="small" onClick={() => dl(`/api/portal/sites/${siteId}/moms/${m.id}/pdf`)}>
               PDF
-            </button>
+            </Button>
           </div>
           {m.points.map((p) => (
             <div key={p.id} className="toolbar portal-row small">
@@ -619,14 +625,14 @@ function InspectionsTab({ siteId }: { siteId: number }) {
                   <span className="badge badge-ok">acknowledged</span>
                 ) : (
                   !readOnly && (
-                    <button className="btn btn-small" onClick={() => void ack(p.id)}>
+                    <Button size="small" onClick={() => void ack(p.id)}>
                       Acknowledge
-                    </button>
+                    </Button>
                   )
                 ))}
             </div>
           ))}
-        </div>
+        </Card>
       ))}
       {signing && (
         <SignDialog
@@ -660,18 +666,16 @@ function SignDialog({ siteId, inspection, onClose, onDone }: { siteId: number; i
     <Modal title={`Sign off ${inspection.code}`} onClose={onClose}>
       <form onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
-        <label className="field">
-          <span>Your name</span>
+        <Field label="Your name">
           <input className="tap-input" value={name} onChange={(e) => setName(e.target.value)} required />
-        </label>
-        <div className="field">
-          <span>Signature</span>
+        </Field>
+        <Field as="div" label="Signature">
           <SignaturePad onChange={setSignature} />
-        </div>
+        </Field>
         <div className="form-actions">
-          <button className="btn btn-primary tap-wide" disabled={!name.trim() || !signature}>
+          <Button type="submit" variant="primary" className="tap-wide" disabled={!name.trim() || !signature}>
             Sign
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>
@@ -714,33 +718,31 @@ function DocumentsTab({ siteId }: { siteId: number }) {
       {message && <div className="alert alert-ok">{message}</div>}
       {list.length === 0 && <p className="empty">No documents shared yet.</p>}
       {list.map((d) => (
-        <div key={d.key} className="card portal-item toolbar">
+        <Card key={d.key} as="div" className="portal-item toolbar">
           <span>
             <strong>{d.title}</strong> {d.revision && <span className="badge badge-ok">{d.revision}</span>}
             <div className="muted small">
               {d.source === "You" ? "Uploaded by you" : "From EESPL"} · {day(d.date)}
             </div>
           </span>
-          <button className="btn btn-small" onClick={() => void file(d.url).catch((err) => setError(errorText(err)))}>
+          <Button size="small" onClick={() => void file(d.url).catch((err) => setError(errorText(err)))}>
             Download
-          </button>
-        </div>
+          </Button>
+        </Card>
       ))}
       {!readOnly && (
-        <form className="card top-gap" onSubmit={send}>
+        <Card as="form" className="top-gap" onSubmit={send}>
           <h3 className="section-title">Upload your drawing</h3>
-          <label className="field">
-            <span>Title</span>
+          <Field label="Title">
             <input className="tap-input" value={title} onChange={(e) => setTitle(e.target.value)} required />
-          </label>
-          <label className="field">
-            <span>File (PDF, photo, DWG or DXF)</span>
+          </Field>
+          <Field label="File (PDF, photo, DWG or DXF)">
             <input type="file" accept=".pdf,image/*,.dwg,.dxf" onChange={(e) => setUpload(e.target.files?.[0] ?? null)} required />
-          </label>
-          <button className="btn btn-primary tap-wide" disabled={!upload || !title.trim()}>
+          </Field>
+          <Button type="submit" variant="primary" className="tap-wide" disabled={!upload || !title.trim()}>
             Upload
-          </button>
-        </form>
+          </Button>
+        </Card>
       )}
     </>
   );
@@ -828,7 +830,7 @@ function BillingTab({ siteId }: { siteId: number }) {
     <>
       {error && <div className="alert alert-error">{error}</div>}
       <div className="portal-grid">
-        <div className="card">
+        <Card as="div">
           <div className="muted small">Due now</div>
           <div className="portal-big">{inr(o.due)}</div>
           <div className="small">
@@ -842,8 +844,8 @@ function BillingTab({ siteId }: { siteId: number }) {
               </span>
             ))}
           </div>
-        </div>
-        <div className="card">
+        </Card>
+        <Card as="div">
           <div className="muted small">Retention held</div>
           <div className="portal-big">{inr(o.retention_held)}</div>
           {data.contract && (
@@ -851,13 +853,13 @@ function BillingTab({ siteId }: { siteId: number }) {
               Contract {inr(data.contract.value)} · retention {num(data.contract.retention_percent, 2)}%
             </div>
           )}
-        </div>
+        </Card>
       </div>
 
       <h3 className="section-title top-gap">RA bills</h3>
       {data.ra_bills.length === 0 && <p className="empty">No bills yet.</p>}
       {data.ra_bills.map((b) => (
-        <div key={b.id} className="card portal-item">
+        <Card key={b.id} as="div" className="portal-item">
           <div className="toolbar">
             <button className="as-button" onClick={() => setOpen(open === b.id ? null : b.id)}>
               <strong>{b.code}</strong> <span className="muted small">to {day(b.period_to)}</span>
@@ -871,17 +873,17 @@ function BillingTab({ siteId }: { siteId: number }) {
           </div>
           {b.client_remark && <div className="small muted">Your remark: {b.client_remark}</div>}
           <div className="portal-buttons">
-            <button className="btn btn-small" onClick={() => dl(`/api/portal/sites/${siteId}/ra-bills/${b.id}/pdf`)}>
+            <Button size="small" onClick={() => dl(`/api/portal/sites/${siteId}/ra-bills/${b.id}/pdf`)}>
               PDF
-            </button>
+            </Button>
             {b.status === "submitted" && !readOnly && (
               <>
-                <button className="btn btn-small btn-primary" onClick={() => setCertifying(b)}>
+                <Button variant="primary" size="small" onClick={() => setCertifying(b)}>
                   Certify
-                </button>
-                <button className="btn btn-small btn-danger" onClick={() => void reject(b)}>
+                </Button>
+                <Button variant="danger" size="small" onClick={() => void reject(b)}>
                   Reject
-                </button>
+                </Button>
               </>
             )}
           </div>
@@ -917,21 +919,21 @@ function BillingTab({ siteId }: { siteId: number }) {
               <Thread entityType="ra_bill" entityId={b.id} />
             </>
           )}
-        </div>
+        </Card>
       ))}
 
       <h3 className="section-title top-gap">Tax invoices</h3>
       {data.invoices.length === 0 && <p className="empty">No invoices yet.</p>}
       {data.invoices.map((i) => (
-        <div key={i.id} className="card portal-item">
+        <Card key={i.id} as="div" className="portal-item">
           <div className="toolbar">
             <span>
               <strong>{i.number}</strong> <span className="muted small">{day(i.invoice_date)}</span>{" "}
               {i.kind === "credit_note" && <span className="badge badge-info">credit note</span>}
             </span>
-            <button className="btn btn-small" onClick={() => dl(`/api/portal/sites/${siteId}/invoices/${i.id}/pdf`)}>
+            <Button size="small" onClick={() => dl(`/api/portal/sites/${siteId}/invoices/${i.id}/pdf`)}>
               PDF
-            </button>
+            </Button>
           </div>
           <div className="portal-figures small">
             <span>Total {inr(i.total)}</span>
@@ -943,7 +945,7 @@ function BillingTab({ siteId }: { siteId: number }) {
             )}
           </div>
           {i.credit_notes.length > 0 && <div className="small muted">Credit notes: {i.credit_notes.map((c) => `${c.number} (${inr(c.total)})`).join(", ")}</div>}
-        </div>
+        </Card>
       ))}
 
       <h3 className="section-title top-gap">Receipts</h3>
@@ -1008,13 +1010,10 @@ function CertifyDialog({ siteId, bill, onClose, onDone }: { siteId: number; bill
         {error && <div className="alert alert-error">{error}</div>}
         <p className="small muted">Enter the quantity you certify for each line. EESPL confirms it before it counts.</p>
         {billed.map((l) => (
-          <label key={l.contract_line_id} className="field">
-            <span>
-              {l.description.split(" — ")[0]}{" "}
+          <Field label={<>{l.description.split(" — ")[0]}{" "}
               <span className="muted">
                 (billed {num(l.qty, 2)} {l.unit})
-              </span>
-            </span>
+              </span></>} key={l.contract_line_id}>
             <input
               className="tap-input"
               type="number"
@@ -1025,14 +1024,13 @@ function CertifyDialog({ siteId, bill, onClose, onDone }: { siteId: number; bill
               value={qty[l.contract_line_id]}
               onChange={(e) => setQty({ ...qty, [l.contract_line_id]: e.target.value })}
             />
-          </label>
+          </Field>
         ))}
-        <label className="field">
-          <span>Remark</span>
+        <Field label="Remark">
           <input className="tap-input" value={remark} onChange={(e) => setRemark(e.target.value)} />
-        </label>
+        </Field>
         <div className="form-actions">
-          <button className="btn btn-primary tap-wide">Certify</button>
+          <Button type="submit" variant="primary" className="tap-wide">Certify</Button>
         </div>
       </form>
     </Modal>
@@ -1083,13 +1081,13 @@ function SnagsTab({ site }: { site: Overview }) {
     <>
       {error && <div className="alert alert-error">{error}</div>}
       {!readOnly && (
-        <button className="btn btn-primary tap-wide" onClick={() => setRaising(true)}>
+        <Button variant="primary" className="tap-wide" onClick={() => setRaising(true)}>
           Raise a snag
-        </button>
+        </Button>
       )}
       {list.length === 0 && <p className="empty">No snags.</p>}
       {list.map((s) => (
-        <div key={s.id} className="card portal-item">
+        <Card key={s.id} as="div" className="portal-item">
           <div className="toolbar">
             <button className="as-button" onClick={() => setOpen(open === s.id ? null : s.id)}>
               <strong>{s.title}</strong>
@@ -1102,19 +1100,19 @@ function SnagsTab({ site }: { site: Overview }) {
           </div>
           {s.status === "fixed" && !readOnly && (
             <div className="portal-buttons">
-              <button className="btn btn-small btn-primary" onClick={() => void act(s, "verify")}>
+              <Button variant="primary" size="small" onClick={() => void act(s, "verify")}>
                 Verify fixed
-              </button>
-              <button className="btn btn-small" onClick={() => void act(s, "reopen")}>
+              </Button>
+              <Button size="small" onClick={() => void act(s, "reopen")}>
                 Reopen
-              </button>
+              </Button>
             </div>
           )}
           {s.status === "verified" && !readOnly && (
             <div className="portal-buttons">
-              <button className="btn btn-small" onClick={() => void act(s, "reopen")}>
+              <Button size="small" onClick={() => void act(s, "reopen")}>
                 Reopen
-              </button>
+              </Button>
             </div>
           )}
           {open === s.id && (
@@ -1131,7 +1129,7 @@ function SnagsTab({ site }: { site: Overview }) {
               <Thread entityType="snag" entityId={s.id} />
             </>
           )}
-        </div>
+        </Card>
       ))}
       {raising && (
         <SnagForm
@@ -1174,8 +1172,7 @@ export function SnagForm({ site, onClose, onDone }: { site: Pick<Overview, "id" 
     <Modal title="Raise a snag" onClose={onClose}>
       <form onSubmit={submit} className="snag-form">
         {error && <div className="alert alert-error">{error}</div>}
-        <label className="field">
-          <span>What is wrong?</span>
+        <Field label="What is wrong?">
           <input
             className="tap-input"
             value={form.title}
@@ -1184,9 +1181,8 @@ export function SnagForm({ site, onClose, onDone }: { site: Pick<Overview, "id" 
             maxLength={300}
             placeholder="e.g. Damp patch on the ceiling"
           />
-        </label>
-        <label className="field">
-          <span>Where</span>
+        </Field>
+        <Field label="Where">
           <select className="tap-input" value={form.node_id} onChange={(e) => setForm({ ...form, node_id: e.target.value })}>
             <option value="">Somewhere else (type below)</option>
             {site.parts.map((p) => (
@@ -1195,26 +1191,23 @@ export function SnagForm({ site, onClose, onDone }: { site: Pick<Overview, "id" 
               </option>
             ))}
           </select>
-        </label>
+        </Field>
         {!form.node_id && (
-          <label className="field">
-            <span>Area</span>
+          <Field label="Area">
             <input className="tap-input" value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} placeholder="e.g. Flat 302, kitchen" />
-          </label>
+          </Field>
         )}
-        <label className="field">
-          <span>Details</span>
+        <Field label="Details">
           <textarea className="tap-input" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-        </label>
-        <label className="field">
-          <span>Photos</span>
+        </Field>
+        <Field label="Photos">
           <input type="file" accept="image/*" capture="environment" multiple onChange={(e) => setPhotos([...photos, ...Array.from(e.target.files ?? [])])} />
           {photos.length > 0 && <span className="small muted">{photos.length} photo(s) added</span>}
-        </label>
+        </Field>
         <div className="form-actions">
-          <button className="btn btn-primary tap-wide" disabled={busy || !form.title.trim()}>
+          <Button type="submit" variant="primary" className="tap-wide" disabled={busy || !form.title.trim()}>
             {busy ? "Sending…" : "Send to EESPL"}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>
@@ -1269,13 +1262,15 @@ export function Thread({ entityType, entityId, staff = false }: { entityType: st
       ))}
       {!portal.readOnly && (
         <form className="inline-form" onSubmit={send}>
-          <input className="tap-input grow" value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write a comment" required maxLength={4000} />
+          <Field label="Write a comment" bare>
+            <input className="tap-input grow" value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write a comment" required maxLength={4000} />
+          </Field>
           {staff && (
             <label className="check small">
               <input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} /> internal note
             </label>
           )}
-          <button className="btn btn-small">Send</button>
+          <Button type="submit" size="small">Send</Button>
         </form>
       )}
     </div>
@@ -1319,26 +1314,23 @@ export function InviteAccept() {
         {done ? (
           <>
             <div className="alert alert-ok">Your password is set. Sign in with {info?.email}.</div>
-            <button type="button" className="btn btn-primary btn-block" onClick={() => navigate("/login")}>
+            <Button type="button" variant="primary" block onClick={() => navigate("/login")}>
               Go to sign in
-            </button>
+            </Button>
           </>
         ) : (
           info && (
             <>
-              <label className="field">
-                <span>Email</span>
+              <Field label="Email">
                 <input value={info.email} disabled />
-              </label>
-              <label className="field">
-                <span>New password (10 characters or more)</span>
+              </Field>
+              <Field label="New password (10 characters or more)">
                 <input type="password" autoComplete="new-password" minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} required />
-              </label>
-              <label className="field">
-                <span>Repeat it</span>
+              </Field>
+              <Field label="Repeat it">
                 <input type="password" autoComplete="new-password" minLength={10} value={again} onChange={(e) => setAgain(e.target.value)} required />
-              </label>
-              <button className="btn btn-primary btn-block">Set password</button>
+              </Field>
+              <Button type="submit" variant="primary" block>Set password</Button>
             </>
           )
         )}

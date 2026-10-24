@@ -4,7 +4,7 @@ import { useAuth } from "../../auth";
 import { Modal } from "../../ui/Overlay";
 import { errorText, num } from "../../format";
 import type { AreaScope, ScopeLine, ScopeOverview, Site, SiteLookups, SiteNode } from "../../types";
-import { ProgressBar } from "../../ui/components";
+import { Button, Card, Field, ProgressBar } from "../../ui/components";
 import { NODE_KINDS, depthOf, useNodes } from "./StructureTab";
 
 const STATE: Record<string, [string, string]> = {
@@ -61,7 +61,7 @@ export default function ScopeTab({ site, onChange }: { site: Site; onChange: () 
   if (!data) return error ? <div className="alert alert-error">{error}</div> : <p className="muted">Loading…</p>;
 
   return (
-    <div className="card">
+    <Card as="div">
       <div className="toolbar">
         <div>
           <h2 className="section-title">What we do where</h2>
@@ -70,9 +70,9 @@ export default function ScopeTab({ site, onChange }: { site: Site; onChange: () 
           </span>
         </div>
         {canEdit && (
-          <button className="btn btn-primary" onClick={() => void generate()}>
+          <Button variant="primary" onClick={() => void generate()}>
             Generate tasks
-          </button>
+          </Button>
         )}
       </div>
       {error && <div className="alert alert-error">{error}</div>}
@@ -90,9 +90,9 @@ export default function ScopeTab({ site, onChange }: { site: Site; onChange: () 
               </div>
             </div>
             {canEdit && (
-              <button className="btn btn-small" disabled={!nodes.length} onClick={() => setAssigning(ln)}>
+              <Button size="small" disabled={!nodes.length} onClick={() => setAssigning(ln)}>
                 Assign to areas
-              </button>
+              </Button>
             )}
           </div>
           {ln.scopes.length > 0 && <ScopeTable scopes={ln.scopes} canEdit={canEdit} siteId={site.id} onDone={run} />}
@@ -118,7 +118,7 @@ export default function ScopeTab({ site, onChange }: { site: Site; onChange: () 
           }}
         />
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -151,22 +151,22 @@ function ScopeTable({ scopes, canEdit, siteId, onDone }: { scopes: AreaScope[]; 
             </td>
             {canEdit && (
               <td className="row-actions nowrap">
-                <button
-                  className="btn btn-small btn-ghost"
+                <Button
+                  variant="ghost" size="small"
                   onClick={() => {
                     const qty = prompt("Quantity", s.qty);
                     if (qty) void onDone(api<ScopeOverview>(`/api/sites/${siteId}/scopes/${s.id}`, { method: "PATCH", json: { qty } }));
                   }}
                 >
                   Qty
-                </button>
-                <button
-                  className="btn btn-small btn-ghost"
+                </Button>
+                <Button
+                  variant="ghost" size="small"
                   disabled={s.started > 0}
                   onClick={() => confirm(`Remove ${s.node_path}?`) && void onDone(api<ScopeOverview>(`/api/sites/${siteId}/scopes/${s.id}`, { method: "DELETE" }))}
                 >
                   Remove
-                </button>
+                </Button>
               </td>
             )}
           </tr>
@@ -233,8 +233,7 @@ function AssignDialog({
       {error && <div className="alert alert-error">{error}</div>}
       <p className="small clamp">{line.description}</p>
       <div className="grid-2">
-        <label className="field">
-          <span>Stage template {String(line.suggested_template_id) === template && <span className="badge badge-info">suggested</span>}</span>
+        <Field label={<>Stage template {String(line.suggested_template_id) === template && <span className="badge badge-info">suggested</span>}</>}>
           <select value={template} onChange={(e) => setTemplate(e.target.value)}>
             {templates.map((t) => (
               <option key={t.id} value={t.id}>
@@ -242,39 +241,44 @@ function AssignDialog({
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Quantity to split {line.boq_qty ? `(default: BOQ ${num(line.boq_qty, 3)} ${line.unit ?? ""})` : "(required: QRO line)"}</span>
+        </Field>
+        <Field label={<>Quantity to split {line.boq_qty ? `(default: BOQ ${num(line.boq_qty, 3)} ${line.unit ?? ""})` : "(required: QRO line)"}</>}>
           <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder={line.boq_qty ?? ""} />
-        </label>
+        </Field>
       </div>
       <div className="inline-form">
         <span className="muted">Add all</span>
-        <select value={kind} onChange={(e) => setKind(e.target.value)}>
-          {NODE_KINDS.map((k) => (
-            <option key={k} value={k}>
-              {k.replace("_", " ")}s
-            </option>
-          ))}
-        </select>
-        <span className="muted">in</span>
-        <select value={under} onChange={(e) => setUnder(e.target.value)}>
-          <option value="">the whole site</option>
-          {nodes
-            .filter((n) => ["tower", "wing", "floor", "basement", "podium"].includes(n.kind))
-            .map((n) => (
-              <option key={n.id} value={n.id}>
-                {n.path}
+        <Field label="Add all" bare>
+          <select value={kind} onChange={(e) => setKind(e.target.value)}>
+            {NODE_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {k.replace("_", " ")}s
               </option>
             ))}
-        </select>
-        <button className="btn btn-small" onClick={() => void shortcut()}>
+          </select>
+        </Field>
+        <span className="muted">in</span>
+        <Field label="Under" bare>
+          <select value={under} onChange={(e) => setUnder(e.target.value)}>
+            <option value="">the whole site</option>
+            {nodes
+              .filter((n) => ["tower", "wing", "floor", "basement", "podium"].includes(n.kind))
+              .map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.path}
+                </option>
+              ))}
+          </select>
+        </Field>
+        <Button size="small" onClick={() => void shortcut()}>
           Add
-        </button>
-        <button className="btn btn-small btn-ghost" onClick={() => setPicked(new Set())}>
+        </Button>
+        <Button variant="ghost" size="small" onClick={() => setPicked(new Set())}>
           Clear
-        </button>
-        <input className="search grow" placeholder="Filter places" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        </Button>
+        <Field label="Filter places" bare>
+          <input className="search grow" placeholder="Filter places" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        </Field>
       </div>
       <div className="tree-pick top-gap">
         {shown.map((n) => (
@@ -304,12 +308,12 @@ function AssignDialog({
         </label>
       )}
       <div className="form-actions">
-        <button className="btn" onClick={onClose}>
+        <Button onClick={onClose}>
           Cancel
-        </button>
-        <button className="btn btn-primary" disabled={!picked.size || !template} onClick={() => void save()}>
+        </Button>
+        <Button variant="primary" disabled={!picked.size || !template} onClick={() => void save()}>
           Assign to {picked.size} places
-        </button>
+        </Button>
       </div>
     </Modal>
   );

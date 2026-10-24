@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { CHART } from "../ui/tokens";
 // Small SVG charts for the analytics pages (no chart library: this chunk is lazy-loaded).
 // Okabe–Ito colours (safe for colour-blind readers); every bar / point carries its value as a
@@ -32,7 +33,7 @@ function Legend({ series }: { series: Series[] }) {
     <div className="chart-legend">
       {series.map((s, i) => (
         <span key={s.key}>
-          <i style={{ background: s.color ?? PALETTE[i % PALETTE.length], borderRadius: s.kind === "line" ? 6 : 2 }} /> {s.label}
+          <i className="paint" style={{ "--swatch": s.color ?? PALETTE[i % PALETTE.length], borderRadius: s.kind === "line" ? 6 : 2 } as CSSProperties} /> {s.label}
         </span>
       ))}
     </div>
@@ -174,7 +175,7 @@ export function HBarChart({
           <div key={i} className={`hbar ${onClick ? "clickable" : ""}`} onClick={onClick ? () => onClick(r) : undefined} title={`${String(r[label])}: ${fmt(v)}`}>
             <span className="hbar-label">{String(r[label])}</span>
             <span className="hbar-track">
-              <span className="hbar-fill" style={{ width: `${(Math.abs(v) / max) * 100}%`, opacity: v < 0 ? 0.7 : 1, background: color }} />
+              <span className="hbar-fill paint" style={{ width: `${(Math.abs(v) / max) * 100}%`, opacity: v < 0 ? 0.7 : 1, "--swatch": color } as CSSProperties} />
             </span>
             <span className="hbar-value">
               {fmt(v)}
@@ -293,10 +294,10 @@ export function ScatterChart({
       </svg>
       <div className="chart-legend">
         <span>
-          <i style={{ background: PALETTE[0], borderRadius: 6 }} /> on track
+          <i className="paint" style={{ "--swatch": PALETTE[0], borderRadius: 6 } as CSSProperties} /> on track
         </span>
         <span>
-          <i style={{ background: PALETTE[3] }} /> delayed
+          <i className="paint" style={{ "--swatch": PALETTE[3] } as CSSProperties} /> delayed
         </span>
         <span className="muted small">
           shaded: more than {threshold} points behind time · delayed sites labelled{hidden ? ` (${hidden} without room: hover)` : ""}, hover for the rest
@@ -319,7 +320,7 @@ export function FunnelChart({
     <div className="funnel">
       {steps.map((s, i) => (
         <div key={s.step} className={`funnel-step ${onClick ? "clickable" : ""}`} onClick={onClick ? () => onClick(s.step) : undefined}>
-          <div className="funnel-bar" style={{ width: `${Math.max(8, (s.count / max) * 100)}%`, background: PALETTE[i % PALETTE.length] }}>
+          <div className="funnel-bar paint" style={{ width: `${Math.max(8, (s.count / max) * 100)}%`, "--swatch": PALETTE[i % PALETTE.length] } as CSSProperties}>
             <b>{s.count}</b>
           </div>
           <div className="funnel-text">

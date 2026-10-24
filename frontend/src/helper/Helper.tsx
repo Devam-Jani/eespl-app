@@ -7,6 +7,7 @@ import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from "
 import { useLocation } from "react-router-dom";
 import { api, ApiError, onApiFailure, type FieldProblem } from "../api";
 import { crashReport, currentAction, formValues, pagePath, reportForFailure, send, trackActions } from "./report";
+import { Button, Field } from "../ui/components";
 
 type Problem =
   | { kind: "mistake"; message: string; fields: FieldProblem[]; unmarked: FieldProblem[]; requestId: string | null }
@@ -245,9 +246,9 @@ export function HelperCard() {
     <aside className={`helper-card helper-${problem.kind}`} role="alertdialog" aria-labelledby="helper-title">
       <div className="helper-head">
         <b id="helper-title">{problem.kind === "mistake" ? "Please check this" : "Something went wrong"}</b>
-        <button className="btn btn-ghost btn-small" onClick={close} aria-label="Close the helper">
+        <Button variant="ghost" size="small" onClick={close} aria-label="Close the helper">
           ×
-        </button>
+        </Button>
       </div>
       {problem.kind === "mistake" ? (
         <>
@@ -275,32 +276,30 @@ export function HelperCard() {
       {note && <p className="helper-note">{note}</p>}
       {mode === "report" && (
         <div className="helper-form">
-          <label className="field">
-            <span>What were you doing?</span>
+          <Field label="What were you doing?">
             <textarea rows={3} value={words} onChange={(e) => setWords(e.target.value)} maxLength={2000} autoFocus placeholder="I was saving the bill after adding a line…" />
-          </label>
+          </Field>
           <label className="check">
             <input type="checkbox" checked={withValues} onChange={(e) => setWithValues(e.target.checked)} /> Also send what I typed on this form (never passwords)
           </label>
           <div className="row">
-            <button className="btn btn-primary btn-small" disabled={busy || !words.trim()} onClick={() => void report()}>
+            <Button variant="primary" size="small" disabled={busy || !words.trim()} onClick={() => void report()}>
               Send
-            </button>
-            <button className="btn btn-ghost btn-small" onClick={() => setMode("")}>
+            </Button>
+            <Button variant="ghost" size="small" onClick={() => setMode("")}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}
       {mode === "ask" && (
         <div className="helper-form">
-          <label className="field">
-            <span>Your question (optional)</span>
+          <Field label="Your question (optional)">
             <input value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={1000} placeholder="What do I do now?" />
-          </label>
-          <button className="btn btn-primary btn-small" disabled={busy} onClick={() => void ask()}>
+          </Field>
+          <Button variant="primary" size="small" disabled={busy} onClick={() => void ask()}>
             {busy ? "Asking…" : "Ask"}
-          </button>
+          </Button>
           {answer && (
             <div className="helper-answer">
               <p>{answer}</p>
@@ -312,19 +311,19 @@ export function HelperCard() {
       {mode === "" && (
         <div className="row helper-actions">
           {problem.kind === "error" && !note && (
-            <button className="btn btn-small" onClick={() => setMode("report")}>
+            <Button size="small" onClick={() => setMode("report")}>
               Report this
-            </button>
+            </Button>
           )}
           {ai && (
-            <button className="btn btn-small" onClick={() => setMode("ask")}>
+            <Button size="small" onClick={() => setMode("ask")}>
               Ask the helper
-            </button>
+            </Button>
           )}
           {problem.kind === "mistake" && !note && (
-            <button className="btn btn-ghost btn-small" onClick={() => setMode("report")}>
+            <Button variant="ghost" size="small" onClick={() => setMode("report")}>
               This looks wrong? Report it
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -350,12 +349,12 @@ export class PageErrorBoundary extends Component<{ children: ReactNode }, { fail
       <div className="alert alert-error page-crash">
         <b>This page hit a problem.</b> It is recorded in the issue log. Go back, or reload the page; if it happens again use <i>Report this</i> on the card below.
         <div className="row">
-          <button className="btn btn-small" onClick={() => window.location.reload()}>
+          <Button size="small" onClick={() => window.location.reload()}>
             Reload the page
-          </button>
-          <button className="btn btn-ghost btn-small" onClick={() => window.history.back()}>
+          </Button>
+          <Button variant="ghost" size="small" onClick={() => window.history.back()}>
             Go back
-          </button>
+          </Button>
         </div>
       </div>
     );

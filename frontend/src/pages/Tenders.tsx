@@ -8,6 +8,7 @@ import { Modal } from "../ui/Overlay";
 import { errorText, inr } from "../format";
 import type { Page, Tender, TenderLookups } from "../types";
 import { Pager } from "./Clients";
+import { Button, Card, Field } from "../ui/components";
 
 export const TENDER_STATUSES: Record<string, string> = {
   draft: "Draft",
@@ -79,55 +80,65 @@ export default function Tenders() {
               setFilters((f) => ({ ...f, q }));
             }}
           >
-            <input className="search" placeholder="Search code, name, client or site" value={q} onChange={(e) => setQ(e.target.value)} />
+            <Field label="Search code, name, client or site" bare>
+              <input className="search" placeholder="Search code, name, client or site" value={q} onChange={(e) => setQ(e.target.value)} />
+            </Field>
           </form>
-          <select value={filters.status} onChange={setFilter("status")}>
-            <option value="">All statuses</option>
-            {Object.entries(TENDER_STATUSES).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+          <Field label="Status" bare>
+            <select value={filters.status} onChange={setFilter("status")}>
+              <option value="">All statuses</option>
+              {Object.entries(TENDER_STATUSES).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </Field>
           {lookups && (
             <>
-              <select value={filters.client_id} onChange={setFilter("client_id")}>
-                <option value="">All clients</option>
-                {lookups.clients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <select value={filters.channel_id} onChange={setFilter("channel_id")}>
-                <option value="">All channels</option>
-                {lookups.channels.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <select value={filters.owner_id} onChange={setFilter("owner_id")}>
-                <option value="">All owners</option>
-                {lookups.users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.full_name}
-                  </option>
-                ))}
-              </select>
+              <Field label="Client" bare>
+                <select value={filters.client_id} onChange={setFilter("client_id")}>
+                  <option value="">All clients</option>
+                  {lookups.clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Channel" bare>
+                <select value={filters.channel_id} onChange={setFilter("channel_id")}>
+                  <option value="">All channels</option>
+                  {lookups.channels.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Owner" bare>
+                <select value={filters.owner_id} onChange={setFilter("owner_id")}>
+                  <option value="">All owners</option>
+                  {lookups.users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.full_name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             </>
           )}
           <ExportButton path={`/api/tenders/export${queryString(filters)}`} />
           {canEdit && (
-            <button className="btn btn-primary" onClick={() => setCreating(true)}>
+            <Button variant="primary" onClick={() => setCreating(true)}>
               New tender
-            </button>
+            </Button>
           )}
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
 
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -172,7 +183,7 @@ export default function Tenders() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       {page && <Pager page={page} onOffset={setOffset} />}
 
       {creating && lookups && (
@@ -256,12 +267,10 @@ export function TenderForm({
       <form onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
         <div className="grid-2">
-          <label className="field">
-            <span>Name *</span>
+          <Field label="Name *">
             <input required value={form.name} onChange={set("name")} autoFocus />
-          </label>
-          <label className="field">
-            <span>Client (end client, e.g. Adani Realty)</span>
+          </Field>
+          <Field label="Client (end client, e.g. Adani Realty)">
             <select value={form.client_id} onChange={set("client_id")}>
               <option value="">— not known yet —</option>
               {lookups.clients.map((c) => (
@@ -270,9 +279,8 @@ export function TenderForm({
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Channel (who brought it)</span>
+          </Field>
+          <Field label="Channel (who brought it)">
             <select value={form.channel_id} onChange={set("channel_id")}>
               <option value="">— direct —</option>
               {lookups.channels.map((c) => (
@@ -281,21 +289,17 @@ export function TenderForm({
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Site name</span>
+          </Field>
+          <Field label="Site name">
             <input value={form.site_name} onChange={set("site_name")} />
-          </label>
-          <label className="field">
-            <span>City</span>
+          </Field>
+          <Field label="City">
             <input value={form.site_city} onChange={set("site_city")} />
-          </label>
-          <label className="field">
-            <span>State</span>
+          </Field>
+          <Field label="State">
             <input value={form.site_state} onChange={set("site_state")} />
-          </label>
-          <label className="field">
-            <span>Owner</span>
+          </Field>
+          <Field label="Owner">
             <select value={form.owner_id} onChange={set("owner_id")}>
               {lookups.users.map((u) => (
                 <option key={u.id} value={u.id}>
@@ -303,18 +307,15 @@ export function TenderForm({
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Received on</span>
+          </Field>
+          <Field label="Received on">
             <input type="date" value={form.received_on} onChange={set("received_on")} />
-          </label>
-          <label className="field">
-            <span>Due on</span>
+          </Field>
+          <Field label="Due on">
             <input type="date" value={form.due_on} onChange={set("due_on")} />
-          </label>
+          </Field>
           {!tender && (
-            <label className="field">
-              <span>T&C template</span>
+            <Field label="T&C template">
               <select value={form.tc_template_id} onChange={set("tc_template_id")}>
                 <option value="">None</option>
                 {lookups.tc_templates.map((t) => (
@@ -324,10 +325,9 @@ export function TenderForm({
                   </option>
                 ))}
               </select>
-            </label>
+            </Field>
           )}
-          <label className="field">
-            <span>Team members</span>
+          <Field label="Team members">
             <select
               multiple
               value={members}
@@ -340,19 +340,18 @@ export function TenderForm({
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
         </div>
-        <label className="field">
-          <span>Notes</span>
+        <Field label="Notes">
           <textarea rows={3} value={form.notes} onChange={set("notes")} />
-        </label>
+        </Field>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary" disabled={busy}>
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy}>
             {tender ? "Save" : "Create tender"}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

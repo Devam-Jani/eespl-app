@@ -8,6 +8,7 @@ import { Modal } from "../ui/Overlay";
 import type { LeadDetail as Detail, LeadLookups } from "../types";
 import { KylasBadge, LEAD_SOURCES, LEAD_STATUSES, LeadForm, LeadStatusBadge } from "./Leads";
 import { shortDate } from "./Tenders";
+import { Button, buttonClass, Card, Field } from "../ui/components";
 
 const ACTIVITY_ICON: Record<string, string> = { note: "✎", call: "☎", visit: "⌂", status_change: "→", kylas: "K" };
 
@@ -97,42 +98,44 @@ export default function LeadDetail() {
         </div>
         {canEdit && (
           <div className="page-actions">
-            <select
-              value={lead.status}
-              onChange={(e) =>
-                e.target.value === "lost" ? setLosing(true) : void run(api<Detail>(`/api/leads/${lead.id}`, { method: "PATCH", json: { status: e.target.value } }))
-              }
-            >
-              {Object.entries(LEAD_STATUSES).map(([v, l]) => (
-                <option key={v} value={v}>
-                  {l}
-                </option>
-              ))}
-            </select>
+            <Field label="Status" bare>
+              <select
+                value={lead.status}
+                onChange={(e) =>
+                  e.target.value === "lost" ? setLosing(true) : void run(api<Detail>(`/api/leads/${lead.id}`, { method: "PATCH", json: { status: e.target.value } }))
+                }
+              >
+                {Object.entries(LEAD_STATUSES).map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </Field>
             {can("survey.view") && (
-              <Link className="btn" to={`/surveys?lead=${lead.id}`}>
+              <Link className={buttonClass()} to={`/surveys?lead=${lead.id}`}>
                 Surveys
               </Link>
             )}
             {can("quotation.view") && (
-              <Link className="btn" to={`/quotations?lead_id=${lead.id}`}>
+              <Link className={buttonClass()} to={`/quotations?lead_id=${lead.id}`}>
                 Quotations
               </Link>
             )}
             {can("quotation.edit") && (
-              <Link className="btn btn-primary" to={`/quotations?lead_id=${lead.id}&new=1`}>
+              <Link className={buttonClass({ variant: "primary" })} to={`/quotations?lead_id=${lead.id}&new=1`}>
                 New quotation
               </Link>
             )}
             {!lead.tender_id && can("tender.edit") && (
-              <button className="btn" onClick={() => confirm("Create a tender from this lead?") && void run(api<Detail>(`/api/leads/${lead.id}/convert`, { method: "POST" }))}>
+              <Button onClick={() => confirm("Create a tender from this lead?") && void run(api<Detail>(`/api/leads/${lead.id}/convert`, { method: "POST" }))}>
                 Convert to tender
-              </button>
+              </Button>
             )}
             {lookups && (
-              <button className="btn btn-primary" onClick={() => setEditing(true)}>
+              <Button variant="primary" onClick={() => setEditing(true)}>
                 Edit
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -160,7 +163,7 @@ export default function LeadDetail() {
         </div>
       )}
       <div className="split">
-        <div className="card">
+        <Card as="div">
           <dl className="detail-list">
             {rows.map(([k, v]) => (
               <div key={k}>
@@ -178,23 +181,27 @@ export default function LeadDetail() {
           </p>
           {lead.kylas_last_error && <p className="small text-danger">{lead.kylas_last_error}</p>}
           {canEdit && !lead.kylas_lead_id && lead.phone && (lead.kylas_sync_status === "failed" || lead.kylas_sync_status === "disabled") && (
-            <button className="btn btn-small" onClick={() => void run(api<Detail>(`/api/leads/${lead.id}/kylas/retry`, { method: "POST" }))}>
+            <Button size="small" onClick={() => void run(api<Detail>(`/api/leads/${lead.id}/kylas/retry`, { method: "POST" }))}>
               Retry
-            </button>
+            </Button>
           )}
           <p className="muted small">The lead is created in Kylas once. Later edits stay in EESPL; Kylas outcomes (lost, junk, won) come back every few minutes.</p>
-        </div>
-        <div className="card">
+        </Card>
+        <Card as="div">
           <h2 className="section-title">Activity</h2>
           {canEdit && (
             <form onSubmit={addNote} className="inline-form">
-              <select value={note.type} onChange={(e) => setNote((n) => ({ ...n, type: e.target.value }))}>
-                <option value="note">Note</option>
-                <option value="call">Call</option>
-                <option value="visit">Visit</option>
-              </select>
-              <input className="grow" value={note.text} onChange={(e) => setNote((n) => ({ ...n, text: e.target.value }))} placeholder="What happened?" />
-              <button className="btn btn-primary">Add</button>
+              <Field label="Note type" bare>
+                <select value={note.type} onChange={(e) => setNote((n) => ({ ...n, type: e.target.value }))}>
+                  <option value="note">Note</option>
+                  <option value="call">Call</option>
+                  <option value="visit">Visit</option>
+                </select>
+              </Field>
+              <Field label="What happened?" bare>
+                <input className="grow" value={note.text} onChange={(e) => setNote((n) => ({ ...n, text: e.target.value }))} placeholder="What happened?" />
+              </Field>
+              <Button type="submit" variant="primary">Add</Button>
             </form>
           )}
           <ul className="timeline">
@@ -204,9 +211,9 @@ export default function LeadDetail() {
                 <div>
                   <div className="pre-line">{a.text}</div>
                   {a.file_id && (
-                    <button className="btn btn-small btn-ghost" onClick={() => void downloadFile(`/api/quotations/files/${a.file_id}`)}>
+                    <Button variant="ghost" size="small" onClick={() => void downloadFile(`/api/quotations/files/${a.file_id}`)}>
                       ⤓ Issued quotation (PDF)
-                    </button>
+                    </Button>
                   )}
                   <div className="muted small">
                     {new Date(a.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} {a.by_name ? `· ${a.by_name}` : a.type === "kylas" ? "· Kylas" : ""}
@@ -215,7 +222,7 @@ export default function LeadDetail() {
               </li>
             ))}
           </ul>
-        </div>
+        </Card>
       </div>
       {editing && lookups && (
         <LeadForm
@@ -244,8 +251,7 @@ function LostDialog({ onClose, onSave }: { onClose: () => void; onSave: (body: {
           onSave({ lost_reason: reason, lost_to: to.trim() || null, lost_note: note.trim() || null });
         }}
       >
-        <label className="field">
-          <span>Reason *</span>
+        <Field label="Reason *">
           <select required value={reason} onChange={(e) => setReason(e.target.value)} autoFocus>
             <option value="">Choose…</option>
             {Object.entries(LOST_REASONS).map(([k, v]) => (
@@ -254,22 +260,20 @@ function LostDialog({ onClose, onSave }: { onClose: () => void; onSave: (body: {
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Lost to (competitor, if known)</span>
+        </Field>
+        <Field label="Lost to (competitor, if known)">
           <input value={to} onChange={(e) => setTo(e.target.value)} maxLength={200} />
-        </label>
-        <label className="field">
-          <span>Details</span>
+        </Field>
+        <Field label="Details">
           <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
-        </label>
+        </Field>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary" disabled={!reason}>
+          </Button>
+          <Button type="submit" variant="primary" disabled={!reason}>
             Mark lost
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

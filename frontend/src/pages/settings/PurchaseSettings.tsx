@@ -5,6 +5,7 @@ import { useAuth } from "../../auth";
 import { errorText, inr } from "../../format";
 import type { MaterialLookups, PurchaseSettings as Settings } from "../../material/types";
 import { refreshLookups } from "../material/common";
+import { Button, Card, Field } from "../../ui/components";
 
 export default function PurchaseSettings() {
   const { can } = useAuth();
@@ -42,23 +43,20 @@ export default function PurchaseSettings() {
       <h1>Purchase settings</h1>
       {error && <div className="alert alert-error">{error}</div>}
       {message && <div className="alert alert-ok">{message}</div>}
-      <form className="card" onSubmit={submit}>
+      <Card as="form" onSubmit={submit}>
         <fieldset disabled={!canEdit}>
           <div className="grid-2">
-            <label className="field">
-              <span>PO approval limit (₹)</span>
+            <Field label="PO approval limit (₹)">
               <input inputMode="decimal" value={form.po_approval_limit} onChange={(e) => setForm({ ...form, po_approval_limit: e.target.value })} />
               <small className="muted">Up to {inr(form.po_approval_limit)} the buyer approves their own PO; above it a PO approver must.</small>
-            </label>
-            <label className="field">
-              <span>GRN approvals</span>
+            </Field>
+            <Field label="GRN approvals">
               <select value={form.grn_approval_levels} onChange={(e) => setForm({ ...form, grn_approval_levels: Number(e.target.value) })}>
                 <option value={1}>One approval</option>
                 <option value={2}>Two approvals (by two people)</option>
               </select>
-            </label>
-            <label className="field">
-              <span>PO terms &amp; conditions template</span>
+            </Field>
+            <Field label="PO terms &amp; conditions template">
               <select value={form.po_tc_template_id ?? ""} onChange={(e) => setForm({ ...form, po_tc_template_id: Number(e.target.value) || null })}>
                 <option value="">Built-in purchase terms</option>
                 {templates.map((t) => (
@@ -67,7 +65,7 @@ export default function PurchaseSettings() {
                   </option>
                 ))}
               </select>
-            </label>
+            </Field>
             <label className="check">
               <input type="checkbox" checked={form.allow_negative_stock} onChange={(e) => setForm({ ...form, allow_negative_stock: e.target.checked })} /> Allow stock to go below
               zero
@@ -75,11 +73,11 @@ export default function PurchaseSettings() {
           </div>
           {canEdit && (
             <div className="form-actions">
-              <button className="btn btn-primary">Save</button>
+              <Button type="submit" variant="primary">Save</Button>
             </div>
           )}
         </fieldset>
-      </form>
+      </Card>
     </>
   );
 }

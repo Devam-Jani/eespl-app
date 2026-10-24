@@ -7,6 +7,7 @@ import { errorText, inr, num } from "../../format";
 import type { FinanceLookups, Payment, SubconBill, VendorBill } from "../../finance/types";
 import { shortDate } from "../Tenders";
 import { useFinanceLookups } from "./Billing";
+import { Button, Card, Field } from "../../ui/components";
 
 type Vendor = { id: number; name: string; type: string; gstin: string | null };
 type GrnRow = {
@@ -78,8 +79,7 @@ function BillForm({ vendors, onClose, onSaved }: { vendors: Vendor[]; onClose: (
       <form onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
         <div className="grid-4">
-          <label className="field">
-            <span>Vendor *</span>
+          <Field label="Vendor *">
             <select required value={form.vendor_id} onChange={(e) => setForm({ ...form, vendor_id: Number(e.target.value) || "" })}>
               <option value="">—</option>
               {vendors.map((v) => (
@@ -88,31 +88,26 @@ function BillForm({ vendors, onClose, onSaved }: { vendors: Vendor[]; onClose: (
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Kind</span>
+          </Field>
+          <Field label="Kind">
             <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
               <option value="material">Material (from GRNs)</option>
               <option value="service">Service</option>
               <option value="freight">Transporter freight</option>
             </select>
-          </label>
-          <label className="field">
-            <span>Vendor's bill no *</span>
+          </Field>
+          <Field label="Vendor's bill no *">
             <input required value={form.bill_no} onChange={(e) => setForm({ ...form, bill_no: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Bill date *</span>
+          </Field>
+          <Field label="Bill date *">
             <input type="date" required value={form.bill_date} onChange={(e) => setForm({ ...form, bill_date: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Due (blank: payment terms)</span>
+          </Field>
+          <Field label="Due (blank: payment terms)">
             <input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>TDS % (blank: by vendor type)</span>
+          </Field>
+          <Field label="TDS % (blank: by vendor type)">
             <input inputMode="decimal" value={form.tds_percent} onChange={(e) => setForm({ ...form, tds_percent: e.target.value })} />
-          </label>
+          </Field>
         </div>
         {form.kind === "material" ? (
           <>
@@ -143,21 +138,25 @@ function BillForm({ vendors, onClose, onSaved }: { vendors: Vendor[]; onClose: (
                             {num(l.accepted_qty)} {l.unit}
                           </td>
                           <td className="num">
-                            <input
-                              className="input-num"
-                              placeholder={num(l.accepted_qty)}
-                              value={over[l.id]?.qty ?? ""}
-                              onChange={(e) => setOver({ ...over, [l.id]: { ...over[l.id], qty: e.target.value } })}
-                            />
+                            <Field label="Billed qty" bare>
+                              <input
+                                className="input-num"
+                                placeholder={num(l.accepted_qty)}
+                                value={over[l.id]?.qty ?? ""}
+                                onChange={(e) => setOver({ ...over, [l.id]: { ...over[l.id], qty: e.target.value } })}
+                              />
+                            </Field>
                           </td>
                           <td className="num">{inr(l.rate)}</td>
                           <td className="num">
-                            <input
-                              className="input-num"
-                              placeholder={num(l.rate)}
-                              value={over[l.id]?.rate ?? ""}
-                              onChange={(e) => setOver({ ...over, [l.id]: { ...over[l.id], rate: e.target.value } })}
-                            />
+                            <Field label="Billed rate" bare>
+                              <input
+                                className="input-num"
+                                placeholder={num(l.rate)}
+                                value={over[l.id]?.rate ?? ""}
+                                onChange={(e) => setOver({ ...over, [l.id]: { ...over[l.id], rate: e.target.value } })}
+                              />
+                            </Field>
                           </td>
                         </tr>
                       ))}
@@ -173,37 +172,45 @@ function BillForm({ vendors, onClose, onSaved }: { vendors: Vendor[]; onClose: (
             <h2 className="section-title">Lines</h2>
             {direct.map((l, i) => (
               <div key={i} className="line-row">
-                <input
-                  className="grow"
-                  placeholder="Description"
-                  value={l.description}
-                  onChange={(e) => setDirect((d) => d.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))}
-                />
-                <input className="input-num" placeholder="Qty" value={l.qty} onChange={(e) => setDirect((d) => d.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))} />
-                <input
-                  className="input-num"
-                  placeholder="Rate"
-                  value={l.rate}
-                  onChange={(e) => setDirect((d) => d.map((x, j) => (j === i ? { ...x, rate: e.target.value } : x)))}
-                />
-                <input
-                  className="input-num"
-                  placeholder="GST %"
-                  value={l.gst_percent}
-                  onChange={(e) => setDirect((d) => d.map((x, j) => (j === i ? { ...x, gst_percent: e.target.value } : x)))}
-                />
+                <Field label="Description" bare>
+                  <input
+                    className="grow"
+                    placeholder="Description"
+                    value={l.description}
+                    onChange={(e) => setDirect((d) => d.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))}
+                  />
+                </Field>
+                <Field label="Qty" bare>
+                  <input className="input-num" placeholder="Qty" value={l.qty} onChange={(e) => setDirect((d) => d.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))} />
+                </Field>
+                <Field label="Rate" bare>
+                  <input
+                    className="input-num"
+                    placeholder="Rate"
+                    value={l.rate}
+                    onChange={(e) => setDirect((d) => d.map((x, j) => (j === i ? { ...x, rate: e.target.value } : x)))}
+                  />
+                </Field>
+                <Field label="GST %" bare>
+                  <input
+                    className="input-num"
+                    placeholder="GST %"
+                    value={l.gst_percent}
+                    onChange={(e) => setDirect((d) => d.map((x, j) => (j === i ? { ...x, gst_percent: e.target.value } : x)))}
+                  />
+                </Field>
               </div>
             ))}
-            <button type="button" className="btn btn-small top-gap" onClick={() => setDirect((d) => [...d, { description: "", qty: "1", rate: "", gst_percent: "18" }])}>
+            <Button type="button" size="small" className="top-gap" onClick={() => setDirect((d) => [...d, { description: "", qty: "1", rate: "", gst_percent: "18" }])}>
               + Line
-            </button>
+            </Button>
           </>
         )}
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Save bill</button>
+          </Button>
+          <Button type="submit" variant="primary">Save bill</Button>
         </div>
       </form>
     </Modal>
@@ -242,8 +249,7 @@ function PayForm({ bills, lookups, onClose, onSaved }: { bills: VendorBill[]; lo
       <form onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
         <div className="grid-4">
-          <label className="field">
-            <span>Vendor</span>
+          <Field label="Vendor">
             <select value={vendorId} onChange={(e) => setVendorId(Number(e.target.value) || "")}>
               {vendors.map(([id, name]) => (
                 <option key={id} value={id}>
@@ -251,21 +257,18 @@ function PayForm({ bills, lookups, onClose, onSaved }: { bills: VendorBill[]; lo
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Mode</span>
+          </Field>
+          <Field label="Mode">
             <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
               {["neft", "rtgs", "cheque", "upi", "cash"].map((m) => (
                 <option key={m}>{m}</option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Ref</span>
+          </Field>
+          <Field label="Ref">
             <input value={form.ref_no} onChange={(e) => setForm({ ...form, ref_no: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>From bank</span>
+          </Field>
+          <Field label="From bank">
             <select value={form.bank_account_id} onChange={(e) => setForm({ ...form, bank_account_id: e.target.value })}>
               <option value="">—</option>
               {lookups.banks.map((b) => (
@@ -274,7 +277,7 @@ function PayForm({ bills, lookups, onClose, onSaved }: { bills: VendorBill[]; lo
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
         </div>
         <table className="table compact">
           <tbody>
@@ -290,17 +293,19 @@ function PayForm({ bills, lookups, onClose, onSaved }: { bills: VendorBill[]; lo
                   </td>
                   <td className="num">{inr(b.outstanding)}</td>
                   <td className="num">
-                    <input className="input-num" inputMode="decimal" placeholder="pay" value={alloc[b.id] ?? ""} onChange={(e) => setAlloc({ ...alloc, [b.id]: e.target.value })} />
+                    <Field label="pay" bare>
+                      <input className="input-num" inputMode="decimal" placeholder="pay" value={alloc[b.id] ?? ""} onChange={(e) => setAlloc({ ...alloc, [b.id]: e.target.value })} />
+                    </Field>
                   </td>
                 </tr>
               ))}
           </tbody>
         </table>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Pay</button>
+          </Button>
+          <Button type="submit" variant="primary">Pay</Button>
         </div>
       </form>
     </Modal>
@@ -377,19 +382,19 @@ export default function Payables() {
           </div>
           {edit && (
             <>
-              <button className="btn" onClick={() => setDialog("bill")}>
+              <Button onClick={() => setDialog("bill")}>
                 New bill
-              </button>
-              <button className="btn btn-primary" onClick={() => setDialog("pay")}>
+              </Button>
+              <Button variant="primary" onClick={() => setDialog("pay")}>
                 Pay
-              </button>
+              </Button>
             </>
           )}
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {tab === "bills" && (
-        <div className="card table-wrap">
+        <Card as="div" className="table-wrap">
           <table className="table compact">
             <thead>
               <tr>
@@ -447,19 +452,19 @@ export default function Payables() {
                   </td>
                   <td className="nowrap">
                     {b.blocked && can("delivery.escalate") && (
-                      <button
-                        className="btn btn-small"
+                      <Button
+                        size="small"
                         onClick={() => {
                           const reason = prompt("Release this bill for approval despite the match: why?");
                           if (reason && reason.trim().length >= 5) void act(`/api/sitecontrol/vendor-bills/${b.id}/release`, { reason: reason.trim() });
                         }}
                       >
                         Release
-                      </button>
+                      </Button>
                     )}
                     {b.status === "draft" && edit && !b.blocked && (
-                      <button
-                        className="btn btn-small"
+                      <Button
+                        size="small"
                         onClick={() =>
                           void act(`/api/finance/vendor-bills/${b.id}/approve`, {
                             accept_differences: b.match_issues.length > 0 && confirm("Accept the differences flagged on this bill?"),
@@ -467,17 +472,17 @@ export default function Payables() {
                         }
                       >
                         Approve
-                      </button>
+                      </Button>
                     )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
       {tab === "payments" && (
-        <div className="card table-wrap">
+        <Card as="div" className="table-wrap">
           <table className="table compact">
             <thead>
               <tr>
@@ -506,19 +511,19 @@ export default function Payables() {
                   <td>
                     <span className={`badge ${BADGE[p.status]}`}>{p.status.replace("_", " ")}</span>{" "}
                     {p.status === "pending_approval" && can("payables.approve") && (
-                      <button className="btn btn-small btn-primary" onClick={() => void act(`/api/finance/payments/${p.id}/approve`)}>
+                      <Button variant="primary" size="small" onClick={() => void act(`/api/finance/payments/${p.id}/approve`)}>
                         Approve
-                      </button>
+                      </Button>
                     )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
       {tab === "due" && (
-        <div className="card table-wrap">
+        <Card as="div" className="table-wrap">
           <table className="table compact">
             <tbody>
               {due.map((d) => (
@@ -538,10 +543,10 @@ export default function Payables() {
               )}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
       {tab === "ageing" && ageing && (
-        <div className="card table-wrap">
+        <Card as="div" className="table-wrap">
           <table className="table">
             <thead>
               <tr>
@@ -568,7 +573,7 @@ export default function Payables() {
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
       {tab === "subcon" && (
         <>
@@ -577,13 +582,13 @@ export default function Payables() {
               {wos
                 .filter((w) => ["active", "completed"].includes(w.status))
                 .map((w) => (
-                  <button key={w.id} className="btn btn-small" onClick={() => void act(`/api/finance/work-orders/${w.id}/subcon-bills`, {})}>
+                  <Button key={w.id} size="small" onClick={() => void act(`/api/finance/work-orders/${w.id}/subcon-bills`, {})}>
                     Bill {w.code} ({w.subcontractor_name})
-                  </button>
+                  </Button>
                 ))}
             </div>
           )}
-          <div className="card table-wrap top-gap">
+          <Card as="div" className="table-wrap top-gap">
             <table className="table compact">
               <thead>
                 <tr>
@@ -624,27 +629,27 @@ export default function Payables() {
                       )}
                       {b.productivity_status === "to_be_set" && <span className="badge badge-muted">productivity norm to be set</span>}
                       {b.status === "draft" && b.productivity_status === "low" && !b.productivity_override_note && can("labourcheck.override") && (
-                        <button
-                          className="btn btn-small"
+                        <Button
+                          size="small"
                           onClick={() => {
                             const note = prompt("Override the labour check: note");
                             if (note && note.trim().length >= 5) void act(`/api/sitecontrol/subcon-bills/${b.id}/override`, { note: note.trim() });
                           }}
                         >
                           Override
-                        </button>
+                        </Button>
                       )}{" "}
                       {b.status === "draft" && edit && (
-                        <button className="btn btn-small btn-primary" onClick={() => void act(`/api/finance/subcon-bills/${b.id}/approve`)}>
+                        <Button variant="primary" size="small" onClick={() => void act(`/api/finance/subcon-bills/${b.id}/approve`)}>
                           Approve
-                        </button>
+                        </Button>
                       )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         </>
       )}
       {dialog === "bill" && <BillForm vendors={vendors} onClose={() => setDialog(null)} onSaved={() => (setDialog(null), void load())} />}

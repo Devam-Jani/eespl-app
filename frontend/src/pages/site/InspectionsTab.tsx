@@ -8,6 +8,7 @@ import type { Site, SiteTask } from "../../types";
 import { shortDate } from "../Tenders";
 import { localToday } from "./DprTab";
 import SignaturePad from "./SignaturePad";
+import { Button, buttonClass, Card, Field } from "../../ui/components";
 
 const RESULT: Record<string, [string, string]> = {
   pass: ["badge-ok", "Pass"],
@@ -30,11 +31,11 @@ export default function InspectionsTab({ site, onChange }: { site: Site; onChang
     <>
       {error && <div className="alert alert-error">{error}</div>}
       {can("inspection.edit") && (
-        <button className="btn btn-primary tap-wide-sm" onClick={() => setCreating(true)}>
+        <Button variant="primary" className="tap-wide-sm" onClick={() => setCreating(true)}>
           New inspection
-        </button>
+        </Button>
       )}
-      <div className="card table-wrap top-gap">
+      <Card as="div" className="table-wrap top-gap">
         <table className="table">
           <thead>
             <tr>
@@ -61,14 +62,14 @@ export default function InspectionsTab({ site, onChange }: { site: Site; onChang
                   <span className={`badge ${RESULT[i.result][0]}`}>{RESULT[i.result][1]}</span>
                 </td>
                 <td>
-                  <button className="btn btn-small" onClick={() => void downloadFile(`/api/execution/inspections/${i.id}/pdf`).catch((err) => setError(errorText(err)))}>
+                  <Button size="small" onClick={() => void downloadFile(`/api/execution/inspections/${i.id}/pdf`).catch((err) => setError(errorText(err)))}>
                     PDF
-                  </button>
+                  </Button>
                   {i.client_signoff === "waiting" && <span className="badge badge-warn">waiting for client</span>}
                   {i.client_signoff === "signed" && <span className="badge badge-ok">client signed: {i.client_signed_name}</span>}
                   {i.client_signoff === "none" && can("inspection.edit") && (
-                    <button
-                      className="btn btn-small btn-ghost"
+                    <Button
+                      variant="ghost" size="small"
                       onClick={() =>
                         void api(`/api/portal-admin/inspections/${i.id}/request-signoff`, { method: "POST" }).then(
                           () => void load(),
@@ -77,7 +78,7 @@ export default function InspectionsTab({ site, onChange }: { site: Site; onChang
                       }
                     >
                       Ask client to sign
-                    </button>
+                    </Button>
                   )}
                 </td>
               </tr>
@@ -91,7 +92,7 @@ export default function InspectionsTab({ site, onChange }: { site: Site; onChang
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       {creating && (
         <InspectionForm
           site={site}
@@ -176,8 +177,7 @@ export function InspectionForm({ site, onClose, onSaved }: { site: Site; onClose
     <Modal title="Inspection" onClose={onClose} wide>
       <div className="daily">
         {error && <div className="alert alert-error">{error}</div>}
-        <label className="field">
-          <span>Step (hold point)</span>
+        <Field label="Step (hold point)">
           <select className="tap-input" value={taskId} onChange={(e) => pickTask(Number(e.target.value) || "")}>
             <option value="">— none: a general inspection —</option>
             {holdTasks.map((t) => (
@@ -187,9 +187,8 @@ export function InspectionForm({ site, onClose, onSaved }: { site: Site; onClose
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Checklist *</span>
+        </Field>
+        <Field label="Checklist *">
           <select className="tap-input" value={templateId} onChange={(e) => setTemplateId(Number(e.target.value) || "")}>
             <option value="">—</option>
             {checklists.map((c) => (
@@ -198,7 +197,7 @@ export function InspectionForm({ site, onClose, onSaved }: { site: Site; onClose
               </option>
             ))}
           </select>
-        </label>
+        </Field>
         {template?.items.map((item) => (
           <div key={item.id} className="check-item">
             <div>
@@ -220,11 +219,17 @@ export function InspectionForm({ site, onClose, onSaved }: { site: Site; onClose
               </div>
             )}
             {item.type === "number" && (
-              <input className="tap-input" inputMode="decimal" value={values[item.id] ?? ""} onChange={(e) => setValues({ ...values, [item.id]: e.target.value })} />
+              <Field label={item.text} bare>
+                <input className="tap-input" inputMode="decimal" value={values[item.id] ?? ""} onChange={(e) => setValues({ ...values, [item.id]: e.target.value })} />
+              </Field>
             )}
-            {item.type === "text" && <input className="tap-input" value={values[item.id] ?? ""} onChange={(e) => setValues({ ...values, [item.id]: e.target.value })} />}
+            {item.type === "text" && (
+              <Field label={item.text} bare>
+                <input className="tap-input" value={values[item.id] ?? ""} onChange={(e) => setValues({ ...values, [item.id]: e.target.value })} />
+              </Field>
+            )}
             {item.type === "photo" && (
-              <label className={`btn tap-wide ${files[item.id] ? "btn-primary" : ""}`}>
+              <label className={buttonClass({ variant: files[item.id] ? "primary" : "secondary", className: "tap-wide" })}>
                 📷 {files[item.id] ? files[item.id].name : "Take photo"}
                 <input type="file" accept="image/*" capture="environment" hidden onChange={(e) => e.target.files?.[0] && setFiles({ ...files, [item.id]: e.target.files[0] })} />
               </label>
@@ -233,36 +238,31 @@ export function InspectionForm({ site, onClose, onSaved }: { site: Site; onClose
         ))}
         {template && (
           <>
-            <label className="btn tap-wide top-gap">
+            <label className={buttonClass({ className: "tap-wide top-gap" })}>
               📷 More photos {extra.length ? `(${extra.length})` : ""}
               <input type="file" accept="image/*" capture="environment" multiple hidden onChange={(e) => setExtra(Array.from(e.target.files ?? []))} />
             </label>
             <div className="grid-2 top-gap">
-              <label className="field">
-                <span>Result</span>
+              <Field label="Result">
                 <select className="tap-input" value={failed ? "fail" : form.result} disabled={failed} onChange={(e) => setForm({ ...form, result: e.target.value })}>
                   <option value="">{failed ? "Fail" : "Pass (from the answers)"}</option>
                   <option value="pass_with_remarks">Pass with remarks</option>
                   <option value="fail">Fail</option>
                 </select>
-              </label>
-              <label className="field">
-                <span>Date</span>
+              </Field>
+              <Field label="Date">
                 <input type="date" className="tap-input" value={form.on_date} onChange={(e) => setForm({ ...form, on_date: e.target.value })} />
-              </label>
+              </Field>
             </div>
-            <label className="field">
-              <span>Remarks</span>
+            <Field label="Remarks">
               <textarea rows={2} value={form.remark} onChange={(e) => setForm({ ...form, remark: e.target.value })} />
-            </label>
-            <label className="field">
-              <span>Client representative</span>
+            </Field>
+            <Field label="Client representative">
               <input className="tap-input" value={form.client_rep} onChange={(e) => setForm({ ...form, client_rep: e.target.value })} placeholder="Name" />
-            </label>
-            <div className="field">
-              <span>Signature (client representative)</span>
+            </Field>
+            <Field as="div" label="Signature (client representative)">
               <SignaturePad onChange={setSignature} />
-            </div>
+            </Field>
             {task?.hold_point && can("site.edit") && (
               <label className="check">
                 <input type="checkbox" checked={certify} onChange={(e) => setCertify(e.target.checked)} /> Certify the hold point "{task.name}" if it passes
@@ -271,12 +271,12 @@ export function InspectionForm({ site, onClose, onSaved }: { site: Site; onClose
           </>
         )}
         <div className="daily-actions">
-          <button className="btn tap-wide" onClick={onClose}>
+          <Button className="tap-wide" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary tap-wide" disabled={busy || !template} onClick={() => void submit()}>
+          </Button>
+          <Button variant="primary" className="tap-wide" disabled={busy || !template} onClick={() => void submit()}>
             Save inspection
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

@@ -8,6 +8,7 @@ import type { FreightReportRow, FreightRow, MaterialLookups } from "../../materi
 import type { Page } from "../../types";
 import { shortDate } from "../Tenders";
 import { today, useMaterialLookups } from "./common";
+import { Button, Card, Field } from "../../ui/components";
 
 const DIRECTION: Record<string, string> = { inbound: "Inbound (vendor → us)", godown_to_site: "Godown → site", other: "Other" };
 const SOURCE: Record<string, string> = { po: "PO charge", transfer: "Transfer", bill: "Transporter bill" };
@@ -44,25 +45,29 @@ export default function Freight() {
         <h1>Site freight</h1>
         <div className="page-actions">
           {lookups && (
-            <select value={siteId} onChange={(e) => setSiteId(e.target.value)}>
-              <option value="">All sites</option>
-              {lookups.sites.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.code} {s.name}
-                </option>
-              ))}
-            </select>
+            <Field label="Site" bare>
+              <select value={siteId} onChange={(e) => setSiteId(e.target.value)}>
+                <option value="">All sites</option>
+                {lookups.sites.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.code} {s.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
           )}
-          <input className="input-num" value={year} onChange={(e) => setYear(e.target.value)} aria-label="Year" />
+          <Field label="Year" bare>
+            <input className="input-num" value={year} onChange={(e) => setYear(e.target.value)} aria-label="Year" />
+          </Field>
           {can("po.edit", "store.edit") && (
-            <button className="btn btn-primary" onClick={() => setAdding(true)}>
+            <Button variant="primary" onClick={() => setAdding(true)}>
               Add transporter bill
-            </button>
+            </Button>
           )}
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -103,9 +108,9 @@ export default function Freight() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       <h2 className="section-title top-gap">Entries</h2>
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table compact">
           <thead>
             <tr>
@@ -132,7 +137,7 @@ export default function Freight() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
       {adding && lookups && <BillForm lookups={lookups} onClose={() => setAdding(false)} onSaved={async () => (setAdding(false), await load())} />}
     </>
   );
@@ -159,8 +164,7 @@ function BillForm({ lookups, onClose, onSaved }: { lookups: MaterialLookups; onC
       <form onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
         <div className="grid-2">
-          <label className="field">
-            <span>Charge to site *</span>
+          <Field label="Charge to site *">
             <select required value={form.site_id} onChange={set("site_id")}>
               <option value="">—</option>
               {lookups.sites.map((s) => (
@@ -169,9 +173,8 @@ function BillForm({ lookups, onClose, onSaved }: { lookups: MaterialLookups; onC
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Direction</span>
+          </Field>
+          <Field label="Direction">
             <select value={form.direction} onChange={set("direction")}>
               {Object.entries(DIRECTION).map(([v, l]) => (
                 <option key={v} value={v}>
@@ -179,41 +182,34 @@ function BillForm({ lookups, onClose, onSaved }: { lookups: MaterialLookups; onC
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Date</span>
+          </Field>
+          <Field label="Date">
             <input type="date" value={form.on_date} onChange={set("on_date")} />
-          </label>
-          <label className="field">
-            <span>Amount (₹) *</span>
+          </Field>
+          <Field label="Amount (₹) *">
             <input required inputMode="decimal" value={form.amount} onChange={set("amount")} />
-          </label>
-          <label className="field">
-            <span>GST %</span>
+          </Field>
+          <Field label="GST %">
             <input inputMode="decimal" value={form.gst_percent} onChange={set("gst_percent")} />
-          </label>
-          <label className="field">
-            <span>Bill no</span>
+          </Field>
+          <Field label="Bill no">
             <input value={form.bill_no} onChange={set("bill_no")} />
-          </label>
-          <label className="field">
-            <span>Transporter</span>
+          </Field>
+          <Field label="Transporter">
             <input value={form.transporter} onChange={set("transporter")} />
-          </label>
-          <label className="field">
-            <span>Vehicle no</span>
+          </Field>
+          <Field label="Vehicle no">
             <input value={form.vehicle_no} onChange={set("vehicle_no")} />
-          </label>
+          </Field>
         </div>
-        <label className="field">
-          <span>Remark</span>
+        <Field label="Remark">
           <input value={form.remark} onChange={set("remark")} />
-        </label>
+        </Field>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Save</button>
+          </Button>
+          <Button type="submit" variant="primary">Save</Button>
         </div>
       </form>
     </Modal>

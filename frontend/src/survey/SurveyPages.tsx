@@ -8,6 +8,7 @@ import { errorText, showError } from "../format";
 import type { SiteNode } from "../types";
 import { formatArea, formatLength, parseLength, parseSize } from "./units";
 import type { Unit } from "./units";
+import { Button, buttonClass, Card, Field } from "../ui/components";
 
 const Camera = lazy(() => import("./Camera"));
 
@@ -115,19 +116,19 @@ export function SurveysList() {
           <p className="muted small">Areas measured on site; quantities per area, floor and survey; BOQ lines and indents from them.</p>
         </div>
         <div className="page-actions">
-          <Link to="/surveys/pilot" className="btn btn-small btn-ghost">
+          <Link to="/surveys/pilot" className={buttonClass({ variant: "ghost", size: "small" })}>
             Camera pilot
           </Link>
-          <button className="btn btn-small btn-ghost" onClick={() => void downloadFile("/api/surveys/marker-sheet.pdf").catch((e) => showError(e))}>
+          <Button variant="ghost" size="small" onClick={() => void downloadFile("/api/surveys/marker-sheet.pdf").catch((e) => showError(e))}>
             ⤓ Marker sheet A4 (up to 1.5 m)
-          </button>
-          <button className="btn btn-small btn-ghost" onClick={() => void downloadFile("/api/surveys/marker-sheet.pdf?size=a3").catch((e) => showError(e))}>
+          </Button>
+          <Button variant="ghost" size="small" onClick={() => void downloadFile("/api/surveys/marker-sheet.pdf?size=a3").catch((e) => showError(e))}>
             ⤓ Marker sheet A3 (up to 2.5 m)
-          </button>
+          </Button>
           {can("survey.edit") && (
-            <button className="btn btn-primary" onClick={() => setCreating(true)}>
+            <Button variant="primary" onClick={() => setCreating(true)}>
               New survey
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -205,16 +206,14 @@ export function NewSurvey({ preset, onClose }: { preset: Record<string, number>;
     <Modal title="New site survey" onClose={onClose}>
       <form onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
-        <label className="field">
-          <span>For a</span>
+        <Field label="For a">
           <select value={kind} onChange={(e) => (setKind(e.target.value as typeof kind), setParentId(""))} disabled={Object.keys(preset).length > 0}>
             <option value="site_id">Site</option>
             <option value="tender_id">Tender</option>
             <option value="lead_id">Lead</option>
           </select>
-        </label>
-        <label className="field">
-          <span>Which</span>
+        </Field>
+        <Field label="Which">
           <select value={parentId} onChange={(e) => setParentId(e.target.value)} required>
             <option value="">Choose…</option>
             {options.map((o) => (
@@ -223,13 +222,12 @@ export function NewSurvey({ preset, onClose }: { preset: Record<string, number>;
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Title</span>
+        </Field>
+        <Field label="Title">
           <input className="tap-input" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={300} placeholder="e.g. Tower A wet areas" />
-        </label>
+        </Field>
         <div className="form-actions">
-          <button className="btn btn-primary tap-wide">Start</button>
+          <Button type="submit" variant="primary" className="tap-wide">Start</Button>
         </div>
       </form>
     </Modal>
@@ -288,25 +286,25 @@ export function SurveyDetail() {
         <div className="page-actions">
           <span className="unit-switch">
             {(["m", "ftin"] as Unit[]).map((u) => (
-              <button key={u} className={`btn btn-small ${unit === u ? "btn-primary" : "btn-ghost"}`} onClick={() => void setUnit(u)}>
+              <Button key={u} size="small" variant={unit === u ? "primary" : "ghost"} onClick={() => void setUnit(u)}>
                 {u === "m" ? "m" : "ft-in"}
-              </button>
+              </Button>
             ))}
           </span>
           {s.status === "draft" && s.can_edit && (
-            <button className="btn btn-small" onClick={() => void act(`/api/surveys/${s.id}/submit`)}>
+            <Button size="small" onClick={() => void act(`/api/surveys/${s.id}/submit`)}>
               Submit
-            </button>
+            </Button>
           )}
           {s.status === "submitted" && s.can_approve && (
-            <button className="btn btn-small btn-primary" onClick={() => void act(`/api/surveys/${s.id}/approve`)}>
+            <Button variant="primary" size="small" onClick={() => void act(`/api/surveys/${s.id}/approve`)}>
               Approve
-            </button>
+            </Button>
           )}
           {s.status !== "draft" && (s.can_approve || s.status === "submitted") && (
-            <button className="btn btn-small btn-ghost" onClick={() => void act(`/api/surveys/${s.id}/reopen`)}>
+            <Button variant="ghost" size="small" onClick={() => void act(`/api/surveys/${s.id}/reopen`)}>
               Reopen
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -321,9 +319,9 @@ export function SurveyDetail() {
       {tab === "areas" && (
         <>
           {s.can_edit && (
-            <button className="btn btn-primary tap-wide top-gap" onClick={() => setEditing("new")}>
+            <Button variant="primary" className="tap-wide top-gap" onClick={() => setEditing("new")}>
               + Add area
-            </button>
+            </Button>
           )}
           {groups.map(([floor, areas]) => (
             <section key={floor} className="survey-floor">
@@ -440,7 +438,7 @@ function AreaCard({
     }
   }
   return (
-    <div className="card area-card">
+    <Card as="div" className="area-card">
       <div className="area-main">
         {thumb ? <img src={thumb} alt="" className="area-thumb" /> : <div className={`area-thumb empty ${photoRequired ? "needs" : ""}`}>no photo</div>}
         <div className="area-text">
@@ -463,39 +461,39 @@ function AreaCard({
       </div>
       {canEdit && (
         <div className="area-actions">
-          <button className="btn btn-small btn-primary" onClick={onCamera}>
+          <Button variant="primary" size="small" onClick={onCamera}>
             📷 Photo / measure
-          </button>
-          <button className="btn btn-small" onClick={onEdit}>
+          </Button>
+          <Button size="small" onClick={onEdit}>
             Edit
-          </button>
-          <button className="btn btn-small btn-ghost" disabled={busy} onClick={() => void run(api<Survey>(`/api/surveys/areas/${a.id}/copy`, { method: "POST" }))}>
+          </Button>
+          <Button variant="ghost" size="small" disabled={busy} onClick={() => void run(api<Survey>(`/api/surveys/areas/${a.id}/copy`, { method: "POST" }))}>
             Copy
-          </button>
-          <button className="btn btn-small btn-ghost" onClick={onRepeat}>
+          </Button>
+          <Button variant="ghost" size="small" onClick={onRepeat}>
             Repeat on floors
-          </button>
+          </Button>
           {aiAvailable && first && (
-            <button
-              className="btn btn-small btn-ghost"
+            <Button
+              variant="ghost" size="small"
               disabled={busy}
               onClick={() =>
                 void run(api(`/api/surveys/areas/${a.id}/suggest`, { method: "POST", json: { photo_id: first.id } }).then(() => api<Survey>(`/api/surveys/${surveyId}`)))
               }
             >
               ✨ Suggest
-            </button>
+            </Button>
           )}
-          <button
-            className="btn btn-small btn-ghost"
+          <Button
+            variant="ghost" size="small"
             disabled={busy}
             onClick={() => confirm(`Delete ${a.name}?`) && void run(api<Survey>(`/api/surveys/areas/${a.id}`, { method: "DELETE" }))}
           >
             Delete
-          </button>
+          </Button>
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -520,12 +518,12 @@ function AiSuggestion({ a, onChange, onError }: { a: Area; onChange: (s: Survey)
           <input type="checkbox" checked={pick.notes} onChange={(e) => setPick({ ...pick, notes: e.target.checked })} /> Notes: {sug.condition_notes}
         </label>
       )}
-      <button
-        className="btn btn-small"
+      <Button
+        size="small"
         onClick={() => void api<Survey>(`/api/surveys/ai/${sug.call_id}/accept`, { method: "POST", json: pick }).then(onChange, (e) => onError(errorText(e)))}
       >
         Accept ticked
-      </button>
+      </Button>
     </div>
   );
 }
@@ -680,8 +678,7 @@ function AreaForm({
       >
         {error && <div className="alert alert-error">{error}</div>}
         {survey.site_id && nodes.length > 0 ? (
-          <label className="field">
-            <span>Place on the site</span>
+          <Field label="Place on the site">
             <select className="tap-input" value={f.node_id} onChange={set("node_id")}>
               <option value="">Not on the structure</option>
               {floorOptions.map((n) => (
@@ -690,20 +687,17 @@ function AreaForm({
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
         ) : null}
         <div className="row-2">
-          <label className="field">
-            <span>Tower</span>
+          <Field label="Tower">
             <input className="tap-input" value={f.tower} onChange={set("tower")} placeholder="A" />
-          </label>
-          <label className="field">
-            <span>Floor</span>
+          </Field>
+          <Field label="Floor">
             <input className="tap-input" value={f.floor_label} onChange={set("floor_label")} placeholder="Floor 3, G, B1, Terrace" />
-          </label>
+          </Field>
         </div>
-        <label className="field">
-          <span>Area type</span>
+        <Field label="Area type">
           <select className="tap-input" value={f.area_type_id} onChange={(e) => setF({ ...f, area_type_id: e.target.value, upturn: area ? f.upturn : "" })}>
             <option value="">Choose…</option>
             {lookups.area_types.map((t) => (
@@ -713,11 +707,10 @@ function AreaForm({
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Name</span>
+        </Field>
+        <Field label="Name">
           <input className="tap-input" value={f.name} onChange={set("name")} placeholder={[f.floor_label, type?.name].filter(Boolean).join(" ") || "Flat 302 Toilet 1"} />
-        </label>
+        </Field>
         <div className="tabs tabs-inline">
           {(["rect", "direct"] as const).map((sh) => (
             <button type="button" key={sh} className={`tab ${f.shape === sh ? "active" : ""}`} onClick={() => setF({ ...f, shape: sh })}>
@@ -731,60 +724,51 @@ function AreaForm({
           )}
         </div>
         {f.shape === "rect" && (
-          <label className="field">
-            <span>Size ({unit === "m" ? "metres: 3.2 x 2.21" : "feet-inches: 10'6 x 7'3"})</span>
+          <Field label={<>Size ({unit === "m" ? "metres: 3.2 x 2.21" : "feet-inches: 10'6 x 7'3"})</>}>
             <input className="tap-input size-input" inputMode="text" value={f.size} onChange={set("size")} autoFocus={!area} />
             {f.size && (
               <span className={`small ${parsed ? "muted" : "text-danger"}`}>
                 {parsed ? `${parsed[0].toFixed(3)} m × ${parsed[1].toFixed(3)} m = ${(parsed[0] * parsed[1]).toFixed(2)} sqm` : "Not readable yet"}
               </span>
             )}
-          </label>
+          </Field>
         )}
         {f.shape === "direct" && (
           <div className="row-2">
-            <label className="field">
-              <span>Area ({unit === "m" ? "sqm" : "sqft"})</span>
+            <Field label={<>Area ({unit === "m" ? "sqm" : "sqft"})</>}>
               <input className="tap-input" type="number" step="any" min="0" value={f.direct} onChange={set("direct")} required />
-            </label>
-            <label className="field">
-              <span>Perimeter</span>
+            </Field>
+            <Field label="Perimeter">
               <input className="tap-input" value={f.perimeter} onChange={set("perimeter")} placeholder={unit === "m" ? "m" : "ft-in"} />
-            </label>
+            </Field>
           </div>
         )}
         <div className="row-2">
-          <label className="field">
-            <span>Upturn (mm)</span>
+          <Field label="Upturn (mm)">
             <input className="tap-input" type="number" min="0" value={f.upturn} onChange={set("upturn")} placeholder={type ? `${Number(type.default_upturn_mm)} (type)` : "0"} />
-          </label>
-          <label className="field">
-            <span>Count</span>
+          </Field>
+          <Field label="Count">
             <input className="tap-input" type="number" min="1" value={f.count} onChange={set("count")} />
-          </label>
+          </Field>
         </div>
         <div className="row-2">
           {type?.includes_walls && (
-            <label className="field">
-              <span>Wall height</span>
+            <Field label="Wall height">
               <input className="tap-input" value={f.wall} onChange={set("wall")} placeholder={unit === "m" ? "m" : "ft-in"} />
-            </label>
+            </Field>
           )}
           {type?.needs_sunk_depth && (
-            <label className="field">
-              <span>Sunk depth (mm)</span>
+            <Field label="Sunk depth (mm)">
               <input className="tap-input" type="number" min="0" value={f.sunk} onChange={set("sunk")} />
-            </label>
+            </Field>
           )}
-          <label className="field">
-            <span>Deductions ({unit === "m" ? "sqm" : "sqft"})</span>
+          <Field label={<>Deductions ({unit === "m" ? "sqm" : "sqft"})</>}>
             <input className="tap-input" type="number" step="any" min="0" value={f.deductions} onChange={set("deductions")} placeholder="0" />
-          </label>
+          </Field>
         </div>
         <details>
           <summary className="small">System, wastage, method, remarks</summary>
-          <label className="field">
-            <span>System</span>
+          <Field label="System">
             <select className="tap-input" value={f.system_id} onChange={set("system_id")}>
               <option value="">{systemName(type?.default_system_id) ? `Suggested for the area type: ${systemName(type?.default_system_id)}` : "None yet"}</option>
               {choices.length > 0 && (
@@ -805,34 +789,31 @@ function AreaForm({
                 ))}
               </optgroup>
             </select>
-          </label>
+          </Field>
           <div className="row-2">
-            <label className="field">
-              <span>Wastage % (this area)</span>
+            <Field label="Wastage % (this area)">
               <input className="tap-input" type="number" step="any" min="0" value={f.wastage} onChange={set("wastage")} placeholder="from the type / system" />
-            </label>
-            <label className="field">
-              <span>Measured by</span>
+            </Field>
+            <Field label="Measured by">
               <select className="tap-input" value={f.method} onChange={set("method")}>
                 <option value="laser">Laser meter</option>
                 <option value="manual">Tape / by hand</option>
                 <option value="cad">Drawing (CAD)</option>
                 <option value="label">Label / client figure</option>
               </select>
-            </label>
+            </Field>
           </div>
-          <label className="field">
-            <span>Remarks</span>
+          <Field label="Remarks">
             <textarea rows={2} value={f.remarks} onChange={set("remarks")} />
-          </label>
+          </Field>
         </details>
         <div className="form-actions">
           {!area && (
-            <button type="button" className="btn tap-wide" onClick={() => void save(true)}>
+            <Button type="button" className="tap-wide" onClick={() => void save(true)}>
               Save and add next
-            </button>
+            </Button>
           )}
-          <button className="btn btn-primary tap-wide">Save</button>
+          <Button type="submit" variant="primary" className="tap-wide">Save</Button>
         </div>
       </form>
     </Modal>
@@ -856,22 +837,19 @@ function RepeatDialog({ area, onClose, onDone }: { area: Area; onClose: () => vo
       >
         {error && <div className="alert alert-error">{error}</div>}
         <div className="row-2">
-          <label className="field">
-            <span>From floor</span>
+          <Field label="From floor">
             <input className="tap-input" type="number" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </label>
-          <label className="field">
-            <span>To floor</span>
+          </Field>
+          <Field label="To floor">
             <input className="tap-input" type="number" value={to} onChange={(e) => setTo(e.target.value)} />
-          </label>
+          </Field>
         </div>
-        <label className="field">
-          <span>Floor name ({"{n}"} = the floor number)</span>
+        <Field label={<>Floor name ({"{n}"} = the floor number)</>}>
           <input className="tap-input" value={label} onChange={(e) => setLabel(e.target.value)} />
-        </label>
+        </Field>
         <p className="small muted">Each copy keeps the size and count; on a site it goes on that tower's floor of the same name.</p>
         <div className="form-actions">
-          <button className="btn btn-primary tap-wide">Repeat</button>
+          <Button type="submit" variant="primary" className="tap-wide">Repeat</Button>
         </div>
       </form>
     </Modal>
@@ -917,7 +895,7 @@ function Products({ survey }: { survey: Survey }) {
           {c.no_system_count > 6 ? " …" : ""}
         </div>
       )}
-      <div className="card">
+      <Card as="div">
         <h2 className="section-title">Whole survey</h2>
         <div className="table-wrap">
           <table className="table compact">
@@ -963,11 +941,11 @@ function Products({ survey }: { survey: Survey }) {
           </table>
         </div>
         <p className="small muted">Whole packs only on this total, never per area or floor.</p>
-      </div>
+      </Card>
       <h2 className="section-title top-gap">By floor</h2>
       <div className="floor-grid">
         {c.by_floor.map((f) => (
-          <div key={f.key} className="card">
+          <Card key={f.key} as="div">
             <strong>{f.key}</strong>
             <table className="table compact">
               <tbody>
@@ -981,7 +959,7 @@ function Products({ survey }: { survey: Survey }) {
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         ))}
       </div>
     </div>
@@ -1030,27 +1008,29 @@ function Outputs({ survey, onError }: { survey: Survey; onError: (e: string) => 
     <div className="outputs">
       {msg && <div className="alert alert-ok">{msg}</div>}
       {can("tender.edit") && (
-        <div className="card">
+        <Card as="div">
           <h2 className="section-title">Tender BOQ</h2>
           <p className="small muted">One line per system with the summed treated area (sqm), priced by the tender's Suggest. Lines remember the areas they came from.</p>
           <div className="inline-form">
-            <input
-              className="tap-input"
-              placeholder={survey.tender_id ? "this survey's tender" : "Tender id (when not linked)"}
-              value={tender}
-              onChange={(e) => setTender(e.target.value)}
-            />
+            <Field label={survey.tender_id ? "this survey's tender" : "Tender id (when not linked)"} bare>
+              <input
+                className="tap-input"
+                placeholder={survey.tender_id ? "this survey's tender" : "Tender id (when not linked)"}
+                value={tender}
+                onChange={(e) => setTender(e.target.value)}
+              />
+            </Field>
             <label className="check">
               <input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} /> Split by area type
             </label>
-            <button className="btn btn-primary" onClick={() => void boq()}>
+            <Button variant="primary" onClick={() => void boq()}>
               Create BOQ lines
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
       {can("indent.create") && (
-        <div className="card top-gap">
+        <Card as="div" className="top-gap">
           <h2 className="section-title">Material indent</h2>
           <p className="small muted">Only places the supervisor marked “work front ready” are ordered, so a block that is not open yet is not ordered early.</p>
           <label className="check">
@@ -1069,12 +1049,12 @@ function Outputs({ survey, onError }: { survey: Survey; onError: (e: string) => 
               ))}
             {!notReady && floorKeys.every((k) => (fronts[k]?.ready_areas ?? 0) === 0) && <p className="muted small">No work front is ready yet.</p>}
           </div>
-          <button className="btn btn-primary top-gap" onClick={() => void indent()}>
+          <Button variant="primary" className="top-gap" onClick={() => void indent()}>
             Create indent draft {floors.length ? `(${floors.length} floor${floors.length > 1 ? "s" : ""})` : "(all floors)"}
-          </button>
-        </div>
+          </Button>
+        </Card>
       )}
-      <div className="card top-gap">
+      <Card as="div" className="top-gap">
         <h2 className="section-title">Reports</h2>
         <div className="inline-form">
           {can("tender.margin") && (
@@ -1082,14 +1062,14 @@ function Outputs({ survey, onError }: { survey: Survey; onError: (e: string) => 
               <input type="checkbox" checked={rates} onChange={(e) => setRates(e.target.checked)} /> Include rates
             </label>
           )}
-          <button className="btn" onClick={() => void downloadFile(`/api/surveys/${survey.id}/pdf${rates ? "?include_rates=true" : ""}`).catch((e) => onError(errorText(e)))}>
+          <Button onClick={() => void downloadFile(`/api/surveys/${survey.id}/pdf${rates ? "?include_rates=true" : ""}`).catch((e) => onError(errorText(e)))}>
             ⤓ Survey PDF
-          </button>
-          <button className="btn" onClick={() => void downloadFile(`/api/surveys/${survey.id}/xlsx`).catch((e) => onError(errorText(e)))}>
+          </Button>
+          <Button onClick={() => void downloadFile(`/api/surveys/${survey.id}/xlsx`).catch((e) => onError(errorText(e)))}>
             ⤓ Excel
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
@@ -1115,9 +1095,9 @@ export function PilotReport() {
           </p>
         </div>
         <div className="page-actions">
-          <button className="btn btn-small" onClick={() => void downloadFile("/api/surveys/pilot?format=xlsx")}>
+          <Button size="small" onClick={() => void downloadFile("/api/surveys/pilot?format=xlsx")}>
             ⤓ Excel
-          </button>
+          </Button>
         </div>
       </div>
       <div className="kpi-grid">
@@ -1223,7 +1203,7 @@ export function SurveySettings() {
       <h1>Site survey</h1>
       {msg && <div className="alert alert-ok">{msg}</div>}
       {error && <div className="alert alert-error">{error}</div>}
-      <form className="card" onSubmit={save}>
+      <Card as="form" onSubmit={save}>
         <label className="check">
           <input type="checkbox" checked={s.photo_required} onChange={(e) => setS({ ...s, photo_required: e.target.checked })} /> Every area needs a photo before the survey can be
           submitted
@@ -1232,28 +1212,25 @@ export function SurveySettings() {
           <input type="checkbox" checked={s.camera_billing_allowed} onChange={(e) => setS({ ...s, camera_billing_allowed: e.target.checked })} /> Camera sizes allowed for billing
           (off: RA bill quantities from camera-only areas need a laser / manual size or the client's certification)
         </label>
-        <label className="field">
-          <span>Flag camera vs laser differences above (%)</span>
+        <Field label="Flag camera vs laser differences above (%)">
           <input type="number" step="0.1" min="0" value={s.mismatch_percent} onChange={(e) => setS({ ...s, mismatch_percent: e.target.value })} />
-        </label>
+        </Field>
         <h2 className="section-title top-gap">AI suggestion from the photo</h2>
         {!s.ai_key_present && <p className="small muted">No ANTHROPIC_API_KEY in .env: the Suggest button stays hidden whatever is set here.</p>}
         <label className="check">
           <input type="checkbox" checked={s.ai_enabled} onChange={(e) => setS({ ...s, ai_enabled: e.target.checked })} /> On (management approval needed)
         </label>
         <div className="inline-form">
-          <label className="field">
-            <span>Model</span>
+          <Field label="Model">
             <input value={s.ai_model} onChange={(e) => setS({ ...s, ai_model: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Monthly cap (₹)</span>
+          </Field>
+          <Field label="Monthly cap (₹)">
             <input type="number" min="0" value={s.ai_monthly_cap_inr} onChange={(e) => setS({ ...s, ai_monthly_cap_inr: e.target.value })} />
-          </label>
+          </Field>
         </div>
         <p className="small muted">Spent this month: ₹{Number(s.ai_month_spend_inr).toFixed(2)}</p>
-        <button className="btn btn-primary">Save settings</button>
-      </form>
+        <Button type="submit" variant="primary">Save settings</Button>
+      </Card>
       <h2 className="section-title top-gap">Area types</h2>
       <p className="small muted">Seeded defaults are "to be confirmed by the team": tick Confirmed once agreed.</p>
       <div className="table-wrap">
@@ -1278,48 +1255,56 @@ export function SurveySettings() {
                   {!t.confirmed && <div className="small text-warn">to be confirmed by the team</div>}
                 </td>
                 <td>
-                  <select value={t.default_system_id ?? ""} onChange={(e) => void saveType({ ...t, default_system_id: e.target.value ? Number(e.target.value) : null })}>
-                    <option value="">—</option>
-                    {systems.map((x) => (
-                      <option key={x.id} value={x.id}>
-                        {x.name}
-                      </option>
-                    ))}
-                  </select>
+                  <Field label="Suggested system" bare>
+                    <select value={t.default_system_id ?? ""} onChange={(e) => void saveType({ ...t, default_system_id: e.target.value ? Number(e.target.value) : null })}>
+                      <option value="">—</option>
+                      {systems.map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {x.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
                 </td>
                 <td>
-                  <select
-                    multiple
-                    size={3}
-                    aria-label={`Also suitable for ${t.name}`}
-                    value={(t.suitable_system_ids ?? []).map(String)}
-                    onChange={(e) => void saveType({ ...t, suitable_system_ids: Array.from(e.target.selectedOptions).map((o) => Number(o.value)) })}
-                  >
-                    {systems.map((x) => (
-                      <option key={x.id} value={x.id}>
-                        {x.name}
-                      </option>
-                    ))}
-                  </select>
+                  <Field label={`Also suitable for ${t.name}`} bare>
+                    <select
+                      multiple
+                      size={3}
+                      aria-label={`Also suitable for ${t.name}`}
+                      value={(t.suitable_system_ids ?? []).map(String)}
+                      onChange={(e) => void saveType({ ...t, suitable_system_ids: Array.from(e.target.selectedOptions).map((o) => Number(o.value)) })}
+                    >
+                      {systems.map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {x.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
                 </td>
                 <td className="num">
-                  <input
-                    className="input-num"
-                    type="number"
-                    min="0"
-                    defaultValue={Number(t.default_upturn_mm)}
-                    onBlur={(e) => void saveType({ ...t, default_upturn_mm: e.target.value })}
-                  />
+                  <Field label="Upturn mm" bare>
+                    <input
+                      className="input-num"
+                      type="number"
+                      min="0"
+                      defaultValue={Number(t.default_upturn_mm)}
+                      onBlur={(e) => void saveType({ ...t, default_upturn_mm: e.target.value })}
+                    />
+                  </Field>
                 </td>
                 <td className="num">
-                  <input
-                    className="input-num"
-                    type="number"
-                    min="0"
-                    defaultValue={t.default_wastage_percent ?? ""}
-                    placeholder="system"
-                    onBlur={(e) => void saveType({ ...t, default_wastage_percent: e.target.value === "" ? null : e.target.value })}
-                  />
+                  <Field label="Wastage %" bare>
+                    <input
+                      className="input-num"
+                      type="number"
+                      min="0"
+                      defaultValue={t.default_wastage_percent ?? ""}
+                      placeholder="system"
+                      onBlur={(e) => void saveType({ ...t, default_wastage_percent: e.target.value === "" ? null : e.target.value })}
+                    />
+                  </Field>
                 </td>
                 <td>
                   <input type="checkbox" checked={t.includes_walls} onChange={(e) => void saveType({ ...t, includes_walls: e.target.checked })} />

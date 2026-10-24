@@ -9,7 +9,7 @@ import { useAuth } from "../auth";
 import { errorText, inrCompact } from "../format";
 import type { Building } from "../xray/geometry";
 import type { XNode } from "../xray/XrayView";
-import { Button, Card, EmptyState, KpiCard, ProgressBar, Skeleton, StatusChip } from "../ui/components";
+import { Button, Card, EmptyState, Field, KpiCard, ProgressBar, Skeleton, StatusChip } from "../ui/components";
 import { MonthBars, type MonthPoint } from "../ui/MonthBars";
 import { useToast } from "../ui/Overlay";
 import { Table } from "../ui/Table";
@@ -162,17 +162,19 @@ export default function Home() {
       )}
 
       <div className="home-row">
-        <section className="card home-building" aria-label="Live building">
+        <Card className="home-building" aria-label="Live building">
           <header className="card-head home-building-head">
             <h2 className="card-title">Live building{shownSite || data?.building ? ` · ${shownSite?.name ?? data?.building?.name}` : ""}</h2>
             {buildingSites.length > 1 && (
-              <select value={siteId ?? ""} onChange={(e) => setSiteId(Number(e.target.value))} aria-label="Site shown in 3D">
-                {buildingSites.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+              <Field label="Site shown in 3D" bare>
+                <select value={siteId ?? ""} onChange={(e) => setSiteId(Number(e.target.value))} aria-label="Site shown in 3D">
+                  {buildingSites.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             )}
             <Button aria-pressed={roomsFirst} onClick={() => setRoomsFirst(!roomsFirst)}>
               Rooms first
@@ -199,13 +201,9 @@ export default function Home() {
           ) : (
             <EmptyState title="No building in 3D yet" hint="Build it from the site's AutoCAD drawing (Site > 3D building)." />
           )}
-        </section>
+        </Card>
 
-        <section className="card home-needs" aria-label="Needs you today">
-          <header className="card-head">
-            <h2 className="card-title">Needs you today</h2>
-            <span className="muted">{needs.length} open</span>
-          </header>
+        <Card className="home-needs" aria-label="Needs you today" title="Needs you today" actions={<span className="muted">{needs.length} open</span>}>
           {!data ? (
             <Skeleton height={90} lines={3} />
           ) : needs.length === 0 ? (
@@ -228,7 +226,7 @@ export default function Home() {
               </article>
             ))
           )}
-        </section>
+        </Card>
       </div>
 
       <Card title="Active sites">

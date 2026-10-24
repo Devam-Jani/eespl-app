@@ -7,6 +7,7 @@ import { Modal } from "../ui/Overlay";
 import { errorText } from "../format";
 import type { Channel, ChannelType, Page } from "../types";
 import { Pager } from "./Clients";
+import { Button, Card, Field } from "../ui/components";
 
 const TYPES: Record<ChannelType, string> = {
   salesperson: "Salesperson",
@@ -54,32 +55,36 @@ export default function Channels() {
               setFilters((f) => ({ ...f, q }));
             }}
           >
-            <input className="search" placeholder="Search channels" value={q} onChange={(e) => setQ(e.target.value)} />
+            <Field label="Search channels" bare>
+              <input className="search" placeholder="Search channels" value={q} onChange={(e) => setQ(e.target.value)} />
+            </Field>
           </form>
-          <select
-            value={filters.type}
-            onChange={(e) => {
-              setOffset(0);
-              setFilters((f) => ({ ...f, type: e.target.value }));
-            }}
-          >
-            <option value="">All types</option>
-            {Object.entries(TYPES).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+          <Field label="Type" bare>
+            <select
+              value={filters.type}
+              onChange={(e) => {
+                setOffset(0);
+                setFilters((f) => ({ ...f, type: e.target.value }));
+              }}
+            >
+              <option value="">All types</option>
+              {Object.entries(TYPES).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </Field>
           <ExportButton path={`/api/channels/export${queryString(filters)}`} />
           {canEdit && (
-            <button className="btn btn-primary" onClick={() => setEditing("new")}>
+            <Button variant="primary" onClick={() => setEditing("new")}>
               Add channel
-            </button>
+            </Button>
           )}
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -114,7 +119,7 @@ export default function Channels() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       {page && <Pager page={page} onOffset={setOffset} />}
       {editing && (
         <ChannelForm
@@ -166,12 +171,10 @@ function ChannelForm({ channel, onClose, onSaved }: { channel: Channel | null; o
     <Modal title={channel ? `Edit ${channel.name}` : "New channel"} onClose={onClose}>
       <form onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
-        <label className="field">
-          <span>Name *</span>
+        <Field label="Name *">
           <input required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} autoFocus />
-        </label>
-        <label className="field">
-          <span>Type</span>
+        </Field>
+        <Field label="Type">
           <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as ChannelType }))}>
             {Object.entries(TYPES).map(([value, label]) => (
               <option key={value} value={value}>
@@ -179,24 +182,23 @@ function ChannelForm({ channel, onClose, onSaved }: { channel: Channel | null; o
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Notes</span>
+        </Field>
+        <Field label="Notes">
           <textarea rows={2} value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
-        </label>
+        </Field>
         <label className="check">
           <input type="checkbox" checked={form.is_active} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))} /> Active
         </label>
         <div className="form-actions">
           {channel && (
-            <button type="button" className="btn btn-danger push-left" onClick={() => void remove()}>
+            <Button type="button" variant="danger" className="push-left" onClick={() => void remove()}>
               Delete
-            </button>
+            </Button>
           )}
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Save</button>
+          </Button>
+          <Button type="submit" variant="primary">Save</Button>
         </div>
       </form>
     </Modal>

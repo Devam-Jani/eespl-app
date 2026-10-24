@@ -4,6 +4,7 @@ import { errorText, inr } from "../../format";
 import type { Dpr, DprRow } from "../../execution/types";
 import type { Site } from "../../types";
 import { shortDate } from "../Tenders";
+import { Button, buttonClass, Card, Field } from "../../ui/components";
 
 export const localToday = () => {
   const d = new Date();
@@ -140,21 +141,23 @@ export default function DprTab({ site }: { site: Site }) {
   return (
     <div className="daily">
       <div className="daily-head">
-        <input type="date" value={day} max={localToday()} onChange={(e) => setDay(e.target.value)} aria-label="Day" className="tap-input" />
+        <Field label="Day" bare>
+          <input type="date" value={day} max={localToday()} onChange={(e) => setDay(e.target.value)} aria-label="Day" className="tap-input" />
+        </Field>
         {dpr && <span className={`badge ${STATUS_BADGE[dpr.status]}`}>{STATUS_LABEL[dpr.status] ?? dpr.status}</span>}
         {dpr?.id && dpr.status !== "draft" && (
-          <button className="btn" onClick={() => void downloadFile(`/api/execution/dprs/${dpr.id}/pdf`).catch((err) => setError(errorText(err)))}>
+          <Button onClick={() => void downloadFile(`/api/execution/dprs/${dpr.id}/pdf`).catch((err) => setError(errorText(err)))}>
             PDF
-          </button>
+          </Button>
         )}
         {dpr?.can_acknowledge && (
           <>
-            <button className="btn btn-primary" onClick={() => void acknowledge()}>
+            <Button variant="primary" onClick={() => void acknowledge()}>
               Approve
-            </button>
-            <button className="btn" onClick={() => void returnIt()}>
+            </Button>
+            <Button onClick={() => void returnIt()}>
               Return
-            </button>
+            </Button>
           </>
         )}
       </div>
@@ -167,7 +170,7 @@ export default function DprTab({ site }: { site: Site }) {
       )}
       {dpr && a && (
         <>
-          <div className="card daily-card">
+          <Card as="div" className="daily-card">
             <h2 className="section-title">Recorded today</h2>
             <div className="chips">
               <span className="chip">
@@ -188,9 +191,9 @@ export default function DprTab({ site }: { site: Site }) {
                 ))}
                 {a.tasks.length > 5 && (
                   <li>
-                    <button type="button" className="btn btn-small btn-ghost" onClick={() => setAllTasks(!allTasks)}>
+                    <Button type="button" variant="ghost" size="small" onClick={() => setAllTasks(!allTasks)}>
                       {allTasks ? "Show fewer" : `Show all ${a.tasks.length} task updates`}
-                    </button>
+                    </Button>
                   </li>
                 )}
               </ul>
@@ -219,10 +222,9 @@ export default function DprTab({ site }: { site: Site }) {
                 ))}
               </ul>
             )}
-          </div>
-          <div className="card daily-card top-gap">
-            <label className="field">
-              <span>Weather</span>
+          </Card>
+          <Card as="div" className="daily-card top-gap">
+            <Field label="Weather">
               <div className="tap-group">
                 {WEATHER.map((w) => (
                   <button key={w} type="button" disabled={!edit} className={`tap ${form.weather === w ? "on" : ""}`} onClick={() => setForm({ ...form, weather: w })}>
@@ -230,60 +232,65 @@ export default function DprTab({ site }: { site: Site }) {
                   </button>
                 ))}
               </div>
-            </label>
-            <label className="field">
-              <span>Work done today *</span>
+            </Field>
+            <Field label="Work done today *">
               <textarea rows={4} disabled={!edit} value={form.work_done} onChange={set("work_done")} placeholder="Where, what, how much" />
-            </label>
-            <div className="field">
-              <span>Work by place (the place on the site's list, or a new area waiting for planning)</span>
+            </Field>
+            <Field as="div" label="Work by place (the place on the site's list, or a new area waiting for planning)">
               {lines.map((l, i) => (
                 <div key={i} className="dpr-line">
-                  <select disabled={!edit} value={l.place} onChange={(e) => setLine(i, { place: e.target.value })} aria-label="Place">
-                    <option value="">Place…</option>
-                    {places.map((p) => (
-                      <option key={p.value} value={p.value}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </select>
-                  <input disabled={!edit} value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} placeholder="What was done" />
-                  <input disabled={!edit} className="input-num" inputMode="decimal" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} placeholder="Qty" />
-                  <input disabled={!edit} className="input-unit" value={l.unit} onChange={(e) => setLine(i, { unit: e.target.value })} placeholder="Unit" />
-                  <input
-                    disabled={!edit}
-                    className="input-num"
-                    inputMode="numeric"
-                    value={l.labour_count}
-                    onChange={(e) => setLine(i, { labour_count: e.target.value })}
-                    placeholder="People"
-                  />
+                  <Field label="Place" bare>
+                    <select disabled={!edit} value={l.place} onChange={(e) => setLine(i, { place: e.target.value })} aria-label="Place">
+                      <option value="">Place…</option>
+                      {places.map((p) => (
+                        <option key={p.value} value={p.value}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="What was done" bare>
+                    <input disabled={!edit} value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} placeholder="What was done" />
+                  </Field>
+                  <Field label="Qty" bare>
+                    <input disabled={!edit} className="input-num" inputMode="decimal" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} placeholder="Qty" />
+                  </Field>
+                  <Field label="Unit" bare>
+                    <input disabled={!edit} className="input-unit" value={l.unit} onChange={(e) => setLine(i, { unit: e.target.value })} placeholder="Unit" />
+                  </Field>
+                  <Field label="People" bare>
+                    <input
+                      disabled={!edit}
+                      className="input-num"
+                      inputMode="numeric"
+                      value={l.labour_count}
+                      onChange={(e) => setLine(i, { labour_count: e.target.value })}
+                      placeholder="People"
+                    />
+                  </Field>
                   {edit && (
-                    <button type="button" className="btn btn-ghost btn-icon" aria-label="Remove" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>
+                    <Button type="button" variant="ghost" icon aria-label="Remove" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>
                       ×
-                    </button>
+                    </Button>
                   )}
                 </div>
               ))}
               {edit && (
-                <button type="button" className="btn btn-small" onClick={() => setLines((ls) => [...ls, emptyLine()])}>
+                <Button type="button" size="small" onClick={() => setLines((ls) => [...ls, emptyLine()])}>
                   + Add work on a place
-                </button>
+                </Button>
               )}
               {!edit && lines.length === 0 && <span className="muted small">No place recorded.</span>}
-            </div>
-            <label className="field">
-              <span>Hindrances</span>
+            </Field>
+            <Field label="Hindrances">
               <textarea rows={2} disabled={!edit} value={form.hindrances} onChange={set("hindrances")} placeholder="Rain, material short, area not handed over…" />
-            </label>
-            <label className="field">
-              <span>Plan for tomorrow</span>
+            </Field>
+            <Field label="Plan for tomorrow">
               <textarea rows={2} disabled={!edit} value={form.next_day_plan} onChange={set("next_day_plan")} />
-            </label>
-            <div className="field">
-              <span>Photos ({dpr.photos.length})</span>
+            </Field>
+            <Field as="div" label={<>Photos ({dpr.photos.length})</>}>
               {edit && (
-                <label className="btn tap-wide">
+                <label className={buttonClass({ className: "tap-wide" })}>
                   📷 Take / add photos
                   <input type="file" accept="image/*" capture="environment" multiple hidden onChange={(e) => void addPhotos(e.target.files)} />
                 </label>
@@ -293,15 +300,15 @@ export default function DprTab({ site }: { site: Site }) {
                   <li key={p.id}>{p.filename}</li>
                 ))}
               </ul>
-            </div>
+            </Field>
             {edit ? (
               <div className="daily-actions">
-                <button className="btn tap-wide" disabled={busy} onClick={() => void save(false)}>
+                <Button className="tap-wide" disabled={busy} onClick={() => void save(false)}>
                   Save draft
-                </button>
-                <button className="btn btn-primary tap-wide" disabled={busy || !form.work_done.trim()} onClick={() => void save(true)}>
+                </Button>
+                <Button variant="primary" className="tap-wide" disabled={busy || !form.work_done.trim()} onClick={() => void save(true)}>
                   Submit DPR
-                </button>
+                </Button>
               </div>
             ) : (
               dpr.submitted_by_name && (
@@ -311,11 +318,11 @@ export default function DprTab({ site }: { site: Site }) {
                 </p>
               )
             )}
-          </div>
+          </Card>
         </>
       )}
       <h2 className="section-title top-gap">Last 31 days</h2>
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table compact">
           <tbody>
             {recent.map((r) => (
@@ -335,7 +342,7 @@ export default function DprTab({ site }: { site: Site }) {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
     </div>
   );
 }

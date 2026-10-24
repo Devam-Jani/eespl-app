@@ -7,6 +7,7 @@ import type { Po, Rfq } from "../../material/types";
 import type { Page } from "../../types";
 import { shortDate } from "../Tenders";
 import { StatusBadge, useMaterialLookups } from "./common";
+import { Button, Card, Field } from "../../ui/components";
 
 export default function Rfqs() {
   const navigate = useNavigate();
@@ -24,7 +25,7 @@ export default function Rfqs() {
         <p className="muted small">Start an RFQ from approved indents (Indents › pick › Create RFQ).</p>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -60,7 +61,7 @@ export default function Rfqs() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -164,27 +165,29 @@ export function RfqDetail() {
         </div>
         {open && (
           <div className="page-actions">
-            <button className="btn" onClick={() => void saveQuotes()}>
+            <Button onClick={() => void saveQuotes()}>
               Save quotes
-            </button>
+            </Button>
             {lookups && (
-              <select value={storeId} onChange={(e) => setStoreId(e.target.value ? Number(e.target.value) : "")} aria-label="Deliver to">
-                <option value="">Deliver to: the indent's store</option>
-                {lookups.stores.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    Deliver to: {s.name}
-                  </option>
-                ))}
-              </select>
+              <Field label="Deliver to" bare>
+                <select value={storeId} onChange={(e) => setStoreId(e.target.value ? Number(e.target.value) : "")} aria-label="Deliver to">
+                  <option value="">Deliver to: the indent's store</option>
+                  {lookups.stores.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      Deliver to: {s.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             )}
-            <button className="btn btn-primary" onClick={() => void makePos()}>
+            <Button variant="primary" onClick={() => void makePos()}>
               Make PO(s) from the picks
-            </button>
+            </Button>
           </div>
         )}
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table compare">
           <thead>
             <tr>
@@ -196,7 +199,9 @@ export function RfqDetail() {
                   <div className="small muted">
                     Freight (total){" "}
                     {open ? (
-                      <input className="input-num" value={freight[v.vendor_id] ?? ""} onChange={(e) => setFreight((f) => ({ ...f, [v.vendor_id]: e.target.value }))} />
+                      <Field label="Freight (total)" bare>
+                        <input className="input-num" value={freight[v.vendor_id] ?? ""} onChange={(e) => setFreight((f) => ({ ...f, [v.vendor_id]: e.target.value }))} />
+                      </Field>
                     ) : (
                       inr(v.freight)
                     )}
@@ -226,20 +231,24 @@ export function RfqDetail() {
                       <td key={v.vendor_id} className={q?.lowest ? "cell-best" : ""}>
                         {open ? (
                           <div className="quote-inputs">
-                            <input
-                              className="input-num"
-                              placeholder="rate"
-                              value={c?.rate ?? ""}
-                              onChange={(e) => set(key, { rate: e.target.value })}
-                              aria-label={`${v.name} rate`}
-                            />
-                            <input
-                              className="input-num"
-                              placeholder="GST %"
-                              value={c?.gst_percent ?? "18"}
-                              onChange={(e) => set(key, { gst_percent: e.target.value })}
-                              aria-label={`${v.name} GST`}
-                            />
+                            <Field label={`${v.name} rate`} bare>
+                              <input
+                                className="input-num"
+                                placeholder="rate"
+                                value={c?.rate ?? ""}
+                                onChange={(e) => set(key, { rate: e.target.value })}
+                                aria-label={`${v.name} rate`}
+                              />
+                            </Field>
+                            <Field label={`${v.name} GST`} bare>
+                              <input
+                                className="input-num"
+                                placeholder="GST %"
+                                value={c?.gst_percent ?? "18"}
+                                onChange={(e) => set(key, { gst_percent: e.target.value })}
+                                aria-label={`${v.name} GST`}
+                              />
+                            </Field>
                           </div>
                         ) : (
                           q && <div>{inr(q.rate)}</div>
@@ -260,7 +269,7 @@ export function RfqDetail() {
             })}
           </tbody>
         </table>
-      </div>
+      </Card>
       <p className="muted small">Landed rate = rate + the line's share of the vendor's freight (shared by value). Save the quotes to see it.</p>
     </>
   );

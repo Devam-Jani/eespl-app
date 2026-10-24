@@ -9,6 +9,7 @@ import { errorText, inr } from "../format";
 import type { KylasSync, Lead, LeadDetail, LeadDuplicate, LeadLookups, Page } from "../types";
 import { Pager } from "./Clients";
 import { shortDate } from "./Tenders";
+import { Button, Card, Field } from "../ui/components";
 
 export const LEAD_STATUSES: Record<string, string> = {
   new: "New",
@@ -115,42 +116,52 @@ export default function Leads() {
               setFilters((f) => ({ ...f, q }));
             }}
           >
-            <input className="search" placeholder="Search code, name, company, phone, city" value={q} onChange={(e) => setQ(e.target.value)} />
+            <Field label="Search code, name, company, phone, city" bare>
+              <input className="search" placeholder="Search code, name, company, phone, city" value={q} onChange={(e) => setQ(e.target.value)} />
+            </Field>
           </form>
-          <select value={filters.status} onChange={setFilter("status")}>
-            <option value="">All statuses</option>
-            {Object.entries(LEAD_STATUSES).map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </select>
-          <select value={filters.lead_source} onChange={setFilter("lead_source")}>
-            <option value="">All sources</option>
-            {Object.entries(LEAD_SOURCES).map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </select>
-          {lookups && (
-            <select value={filters.owner_id} onChange={setFilter("owner_id")}>
-              <option value="">All owners</option>
-              {lookups.users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.full_name}
+          <Field label="Status" bare>
+            <select value={filters.status} onChange={setFilter("status")}>
+              <option value="">All statuses</option>
+              {Object.entries(LEAD_STATUSES).map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
                 </option>
               ))}
             </select>
+          </Field>
+          <Field label="Source" bare>
+            <select value={filters.lead_source} onChange={setFilter("lead_source")}>
+              <option value="">All sources</option>
+              {Object.entries(LEAD_SOURCES).map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {lookups && (
+            <Field label="Owner" bare>
+              <select value={filters.owner_id} onChange={setFilter("owner_id")}>
+                <option value="">All owners</option>
+                {lookups.users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.full_name}
+                  </option>
+                ))}
+              </select>
+            </Field>
           )}
-          <select value={filters.kylas_sync_status} onChange={setFilter("kylas_sync_status")}>
-            <option value="">Any Kylas status</option>
-            {Object.entries(SYNC).map(([v, [, l]]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </select>
+          <Field label="Kylas status" bare>
+            <select value={filters.kylas_sync_status} onChange={setFilter("kylas_sync_status")}>
+              <option value="">Any Kylas status</option>
+              {Object.entries(SYNC).map(([v, [, l]]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </Field>
           <label className="check">
             <input
               type="checkbox"
@@ -169,16 +180,16 @@ export default function Leads() {
           </div>
           <ExportButton path={`/api/leads/export${queryString(filters)}`} />
           {canEdit && (
-            <button className="btn btn-primary" onClick={() => setCreating(true)}>
+            <Button variant="primary" onClick={() => setCreating(true)}>
               New lead
-            </button>
+            </Button>
           )}
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {view === "list" ? (
         <>
-          <div className="card table-wrap">
+          <Card as="div" className="table-wrap">
             <table className="table">
               <thead>
                 <tr>
@@ -226,7 +237,7 @@ export default function Leads() {
                 )}
               </tbody>
             </table>
-          </div>
+          </Card>
           {page && <Pager page={page} onOffset={setOffset} />}
         </>
       ) : (
@@ -331,15 +342,17 @@ export function LeadForm({
     }
   }
 
-  const select = (key: keyof typeof form, items: { id: number | string; name?: string; full_name?: string }[], empty: string) => (
-    <select value={form[key]} onChange={set(key)}>
-      <option value="">{empty}</option>
-      {items.map((x) => (
-        <option key={x.id} value={x.id}>
-          {x.name ?? x.full_name}
-        </option>
-      ))}
-    </select>
+  const select = (label: string, key: keyof typeof form, items: { id: number | string; name?: string; full_name?: string }[], empty: string) => (
+    <Field label={label}>
+      <select value={form[key]} onChange={set(key)}>
+        <option value="">{empty}</option>
+        {items.map((x) => (
+          <option key={x.id} value={x.id}>
+            {x.name ?? x.full_name}
+          </option>
+        ))}
+      </select>
+    </Field>
   );
 
   return (
@@ -348,37 +361,30 @@ export function LeadForm({
         {error && <div className="alert alert-error">{error}</div>}
         {lead && lead.kylas_sync_status === "synced" && <div className="alert alert-warn">Edits stay in EESPL: they are not sent to Kylas in this version.</div>}
         <div className="grid-2">
-          <label className="field">
-            <span>Contact name *</span>
+          <Field label="Contact name *">
             <input required autoFocus value={form.contact_name} onChange={set("contact_name")} />
-          </label>
-          <label className="field">
-            <span>Phone (mobile) *</span>
+          </Field>
+          <Field label="Phone (mobile) *">
             <input required value={form.phone} onChange={set("phone")} onBlur={() => void checkPhone()} placeholder="98765 43210" />
-          </label>
+          </Field>
           {dupes.length > 0 && (
             <div className="alert alert-warn" style={{ gridColumn: "1 / -1" }}>
               This phone is already on {dupes.map((d) => `${d.code} (${d.contact_name}, ${LEAD_STATUSES[d.status] ?? d.status})`).join(", ")}. You can still save.
             </div>
           )}
-          <label className="field">
-            <span>Email</span>
+          <Field label="Email">
             <input type="email" value={form.email} onChange={set("email")} />
-          </label>
-          <label className="field">
-            <span>Company</span>
+          </Field>
+          <Field label="Company">
             <input value={form.company} onChange={set("company")} />
-          </label>
-          <label className="field">
-            <span>City</span>
+          </Field>
+          <Field label="City">
             <input value={form.city} onChange={set("city")} />
-          </label>
-          <label className="field">
-            <span>State</span>
+          </Field>
+          <Field label="State">
             <input value={form.state} onChange={set("state")} />
-          </label>
-          <label className="field">
-            <span>Source</span>
+          </Field>
+          <Field label="Source">
             <select value={form.lead_source} onChange={set("lead_source")}>
               {Object.entries(LEAD_SOURCES).map(([v, l]) => (
                 <option key={v} value={v}>
@@ -386,49 +392,30 @@ export function LeadForm({
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Channel (who brought it)</span>
-            {select("channel_id", lookups.channels, "— direct —")}
-          </label>
-          <label className="field">
-            <span>Client (if known)</span>
-            {select("client_id", lookups.clients, "—")}
-          </label>
-          <label className="field">
-            <span>Owner</span>
-            {select("owner_id", lookups.users, "Me")}
-          </label>
-          <label className="field">
-            <span>Interest: system</span>
-            {select("system_id", lookups.systems, "—")}
-          </label>
-          <label className="field">
-            <span>Interest: work category</span>
-            {select("work_category_id", lookups.work_categories, "—")}
-          </label>
-          <label className="field">
-            <span>Est. area (sqm)</span>
+          </Field>
+          {select("Channel (who brought it)", "channel_id", lookups.channels, "— direct —")}
+          {select("Client (if known)", "client_id", lookups.clients, "—")}
+          {select("Owner", "owner_id", lookups.users, "Me")}
+          {select("Interest: system", "system_id", lookups.systems, "—")}
+          {select("Interest: work category", "work_category_id", lookups.work_categories, "—")}
+          <Field label="Est. area (sqm)">
             <input value={form.est_area_sqm} onChange={set("est_area_sqm")} />
-          </label>
-          <label className="field">
-            <span>Est. value (₹)</span>
+          </Field>
+          <Field label="Est. value (₹)">
             <input value={form.est_value} onChange={set("est_value")} />
-          </label>
-          <label className="field">
-            <span>Next follow-up</span>
+          </Field>
+          <Field label="Next follow-up">
             <input type="date" value={form.next_follow_up} onChange={set("next_follow_up")} />
-          </label>
+          </Field>
         </div>
-        <label className="field">
-          <span>Requirement</span>
+        <Field label="Requirement">
           <textarea rows={3} value={form.requirement} onChange={set("requirement")} />
-        </label>
+        </Field>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">{lead ? "Save" : "Create lead"}</button>
+          </Button>
+          <Button type="submit" variant="primary">{lead ? "Save" : "Create lead"}</Button>
         </div>
       </form>
     </Modal>

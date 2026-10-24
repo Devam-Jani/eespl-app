@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth";
+import { Card } from "../ui/components";
 
 /** A client login holds only the client portal permissions. */
 export function isClientLogin(permissions: Record<string, string>): boolean {
@@ -22,10 +23,10 @@ export function RequirePermission({ perms, children }: { perms: string[]; childr
   const { can } = useAuth();
   if (!can(...perms)) {
     return (
-      <div className="card">
+      <Card as="div">
         <h1>No access</h1>
         <p className="muted">You do not have permission to open this page.</p>
-      </div>
+      </Card>
     );
   }
   return <>{children}</>;

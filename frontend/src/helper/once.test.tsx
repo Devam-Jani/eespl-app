@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
 import { errorText } from "../format";
+import { Field } from "../ui/components";
 import { HelperCard } from "./Helper";
 
 function SaveForm() {
@@ -18,10 +19,9 @@ function SaveForm() {
         api("/api/things", { method: "POST", json: { qty: -5 } }).catch((err) => setError(errorText(err)));
       }}
     >
-      <label className="field">
-        <span>Quantity *</span>
+      <Field label="Quantity *">
         <input name="qty" defaultValue="-5" />
-      </label>
+      </Field>
       {error && <div className="alert alert-error">{error}</div>}
       <button type="submit">Save</button>
     </form>

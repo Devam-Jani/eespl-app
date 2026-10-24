@@ -6,6 +6,7 @@ import { useAuth } from "../auth";
 import { Modal } from "../ui/Overlay";
 import { errorText } from "../format";
 import { day, Thread } from "../portal/Portal";
+import { Button, buttonClass, Field } from "../ui/components";
 
 type Snag = {
   id: number;
@@ -62,34 +63,40 @@ export default function Snags() {
       <div className="page-header">
         <h1>Snags</h1>
         {can("site.update") && (
-          <button className="btn btn-primary" onClick={() => setCreating(true)}>
+          <Button variant="primary" onClick={() => setCreating(true)}>
             New snag
-          </button>
+          </Button>
         )}
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       <div className="filters">
-        <select value={filters.site_id} onChange={(e) => setFilters({ ...filters, site_id: e.target.value })} aria-label="Site">
-          <option value="">All sites</option>
-          {sites.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.code} {s.name}
-            </option>
-          ))}
-        </select>
-        <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} aria-label="Status">
-          <option value="">Any status</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s.replace("_", " ")}
-            </option>
-          ))}
-        </select>
-        <select value={filters.side} onChange={(e) => setFilters({ ...filters, side: e.target.value })} aria-label="Raised by">
-          <option value="">Raised by anyone</option>
-          <option value="client">Raised by the client</option>
-          <option value="staff">Raised by staff</option>
-        </select>
+        <Field label="Site" bare>
+          <select value={filters.site_id} onChange={(e) => setFilters({ ...filters, site_id: e.target.value })} aria-label="Site">
+            <option value="">All sites</option>
+            {sites.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.code} {s.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Status" bare>
+          <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} aria-label="Status">
+            <option value="">Any status</option>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s.replace("_", " ")}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Raised by" bare>
+          <select value={filters.side} onChange={(e) => setFilters({ ...filters, side: e.target.value })} aria-label="Raised by">
+            <option value="">Raised by anyone</option>
+            <option value="client">Raised by the client</option>
+            <option value="staff">Raised by staff</option>
+          </select>
+        </Field>
         {!filters.status && (
           <label className="check">
             <input type="checkbox" checked={filters.open_only === "true"} onChange={(e) => setFilters({ ...filters, open_only: e.target.checked ? "true" : "" })} /> Open only
@@ -235,12 +242,11 @@ function SnagDialog({ id, onClose, onChange }: { id: number; onClose: () => void
       </div>
       {s.status !== "closed" && (
         <div className="inline-form top-gap">
-          <label className="btn btn-small">
+          <label className={buttonClass({ size: "small" })}>
             Add "after" photo
             <input type="file" hidden accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && void photo(e.target.files[0])} />
           </label>
-          <label className="small">
-            Assigned to{" "}
+          <Field label="Assigned to" inline className="small">
             <select value={s.assigned_to ?? ""} onChange={(e) => e.target.value && void patch({ assigned_to: e.target.value })}>
               <option value="">— choose —</option>
               {staff.map((u) => (
@@ -250,14 +256,14 @@ function SnagDialog({ id, onClose, onChange }: { id: number; onClose: () => void
                 </option>
               ))}
             </select>
-          </label>
-          <label className="small">
-            Due <input type="date" value={s.due_date ?? ""} onChange={(e) => void patch({ due_date: e.target.value || null })} />
-          </label>
+          </Field>
+          <Field label="Due" inline className="small">
+            <input type="date" value={s.due_date ?? ""} onChange={(e) => void patch({ due_date: e.target.value || null })} />
+          </Field>
           {next[s.status].map(([st, l]) => (
-            <button key={st} className="btn btn-small btn-primary" onClick={() => void patch({ status: st })}>
+            <Button key={st} variant="primary" size="small" onClick={() => void patch({ status: st })}>
               {l}
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -281,8 +287,7 @@ function NewSnag({ sites, onClose, onDone }: { sites: { id: number; code: string
     <Modal title="New snag" onClose={onClose}>
       <form onSubmit={(e) => void submit(e)}>
         {error && <div className="alert alert-error">{error}</div>}
-        <label className="field">
-          <span>Site</span>
+        <Field label="Site">
           <select name="site_id" required>
             {sites.map((s) => (
               <option key={s.id} value={s.id}>
@@ -290,25 +295,21 @@ function NewSnag({ sites, onClose, onDone }: { sites: { id: number; code: string
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Title</span>
+        </Field>
+        <Field label="Title">
           <input name="title" required maxLength={300} />
-        </label>
-        <label className="field">
-          <span>Area</span>
+        </Field>
+        <Field label="Area">
           <input name="area" maxLength={200} />
-        </label>
-        <label className="field">
-          <span>Details</span>
+        </Field>
+        <Field label="Details">
           <textarea name="description" rows={3} />
-        </label>
-        <label className="field">
-          <span>Photos</span>
+        </Field>
+        <Field label="Photos">
           <input name="photos" type="file" accept="image/*" multiple />
-        </label>
+        </Field>
         <div className="form-actions">
-          <button className="btn btn-primary">Save</button>
+          <Button type="submit" variant="primary">Save</Button>
         </div>
       </form>
     </Modal>

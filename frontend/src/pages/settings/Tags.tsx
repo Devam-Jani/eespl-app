@@ -4,6 +4,7 @@ import { api, queryString } from "../../api";
 import ExportButton from "../../components/ExportButton";
 import { errorText } from "../../format";
 import type { Page, Tag, TagModule } from "../../types";
+import { Button, Card, Field } from "../../ui/components";
 
 const MODULES: Record<TagModule, string> = {
   material: "Material",
@@ -76,15 +77,17 @@ export default function Tags() {
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <form className="card toolbar" onSubmit={add}>
-        <input className="grow" placeholder={`New ${MODULES[module].toLowerCase()} tag`} value={name} onChange={(e) => setName(e.target.value)} required />
-        <button className="btn btn-primary">Add tag</button>
+      <Card as="form" className="toolbar" onSubmit={add}>
+        <Field label={`New ${MODULES[module].toLowerCase()} tag`} bare>
+          <input className="grow" placeholder={`New ${MODULES[module].toLowerCase()} tag`} value={name} onChange={(e) => setName(e.target.value)} required />
+        </Field>
+        <Button type="submit" variant="primary">Add tag</Button>
         <label className="check">
           <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
           Show archived
         </label>
-      </form>
-      <div className="card">
+      </Card>
+      <Card as="div">
         <div className="tag-cloud">
           {rows.map((t) => (
             <span key={t.id} className={`tag-pill ${t.is_archived ? "archived" : ""}`}>
@@ -105,7 +108,7 @@ export default function Tags() {
           ))}
           {rows.length === 0 && <p className="muted">No tags yet.</p>}
         </div>
-      </div>
+      </Card>
     </>
   );
 }

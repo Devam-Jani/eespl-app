@@ -5,6 +5,7 @@ import { Modal } from "../../ui/Overlay";
 import { errorText, num, showError } from "../../format";
 import type { Site, SiteTask } from "../../types";
 import { shortDate } from "../Tenders";
+import { Button, Card, Field } from "../../ui/components";
 
 const STATUS: Record<string, [string, string]> = {
   not_started: ["badge-muted", "Not started"],
@@ -49,16 +50,18 @@ export default function TasksTab({ site, onChange }: { site: Site; onChange: () 
   }, [tasks]);
 
   return (
-    <div className="card">
+    <Card as="div">
       <div className="toolbar">
         <h2 className="section-title">Tasks ({tasks.length})</h2>
         <div className="page-actions">
-          <select value={filter} onChange={(e) => setFilter(e.target.value)}>
-            <option value="">All tasks</option>
-            <option value="late">Late</option>
-            <option value="blocked">Blocked</option>
-            <option value="pending_certification">Waiting for certification</option>
-          </select>
+          <Field label="Show" bare>
+            <select value={filter} onChange={(e) => setFilter(e.target.value)}>
+              <option value="">All tasks</option>
+              <option value="late">Late</option>
+              <option value="blocked">Blocked</option>
+              <option value="pending_certification">Waiting for certification</option>
+            </select>
+          </Field>
           <div className="tabs">
             <button className={`tab ${view === "list" ? "active" : ""}`} onClick={() => setView("list")}>
               List
@@ -106,7 +109,7 @@ export default function TasksTab({ site, onChange }: { site: Site; onChange: () 
           }}
         />
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -256,53 +259,54 @@ export function TaskDialog({
         {task.certified_at && ` · certified ${new Date(task.certified_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`}
       </p>
       <div className="grid-2">
-        <label className="field">
-          <span>Status</span>
+        <Field label="Status">
           <select value={status} disabled={!canUpdate || locked} onChange={(e) => setStatus(e.target.value as SiteTask["status"])}>
             <option value="not_started">Not started</option>
             <option value="in_progress">In progress</option>
             <option value="done">Done</option>
             <option value="blocked">Blocked</option>
           </select>
-        </label>
-        <label className="field">
-          <span>% done</span>
+        </Field>
+        <Field label="% done">
           <input type="number" min={0} max={100} disabled={!canUpdate || locked} value={progress} onChange={(e) => setProgress(e.target.value)} />
-        </label>
+        </Field>
       </div>
-      <label className="field">
-        <span>Remark</span>
+      <Field label="Remark">
         <textarea rows={2} disabled={!canUpdate || locked} value={remark} onChange={(e) => setRemark(e.target.value)} />
-      </label>
+      </Field>
       {(task.needs_inspection || items.length > 0) && (
         <>
           <h3 className="section-title">Inspection checklist</h3>
           {items.map((it, i) => (
             <div key={i} className="inline-form">
-              <input
-                className="grow"
-                value={it.item}
-                disabled={!canUpdate || locked}
-                onChange={(e) => setItems((xs) => xs.map((x, j) => (j === i ? { ...x, item: e.target.value } : x)))}
-              />
-              <select
-                value={it.passed === null ? "" : it.passed ? "pass" : "fail"}
-                disabled={!canUpdate || locked}
-                onChange={(e) => setItems((xs) => xs.map((x, j) => (j === i ? { ...x, passed: e.target.value === "" ? null : e.target.value === "pass" } : x)))}
-              >
-                <option value="">—</option>
-                <option value="pass">Pass</option>
-                <option value="fail">Fail</option>
-              </select>
-              <button className="btn btn-small btn-ghost" disabled={!canUpdate || locked} onClick={() => setItems((xs) => xs.filter((_, j) => j !== i))}>
+              <Field label="Check item" bare>
+                <input
+                  className="grow"
+                  value={it.item}
+                  disabled={!canUpdate || locked}
+                  onChange={(e) => setItems((xs) => xs.map((x, j) => (j === i ? { ...x, item: e.target.value } : x)))}
+                />
+              </Field>
+              <Field label="Result" bare>
+                <select
+                  value={it.passed === null ? "" : it.passed ? "pass" : "fail"}
+                  disabled={!canUpdate || locked}
+                  onChange={(e) => setItems((xs) => xs.map((x, j) => (j === i ? { ...x, passed: e.target.value === "" ? null : e.target.value === "pass" } : x)))}
+                >
+                  <option value="">—</option>
+                  <option value="pass">Pass</option>
+                  <option value="fail">Fail</option>
+                </select>
+              </Field>
+              <Button variant="ghost" size="small" disabled={!canUpdate || locked} onClick={() => setItems((xs) => xs.filter((_, j) => j !== i))}>
                 ×
-              </button>
+              </Button>
             </div>
           ))}
           {canUpdate && !locked && (
-            <button className="btn btn-small" onClick={() => setItems((xs) => [...xs, { item: "", passed: null }])}>
+            <Button size="small" onClick={() => setItems((xs) => [...xs, { item: "", passed: null }])}>
               Add check
-            </button>
+            </Button>
           )}
         </>
       )}
@@ -319,17 +323,17 @@ export function TaskDialog({
       {canUpdate && !locked && <input type="file" accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />}
       <div className="form-actions">
         {canEdit && task.hold_point && task.status === "done" && (
-          <button className="btn push-left" onClick={() => void certify()}>
+          <Button className="push-left" onClick={() => void certify()}>
             Certify hold point
-          </button>
+          </Button>
         )}
-        <button className="btn" onClick={onClose}>
+        <Button onClick={onClose}>
           Close
-        </button>
+        </Button>
         {canUpdate && !locked && (
-          <button className="btn btn-primary" onClick={() => void save()}>
+          <Button variant="primary" onClick={() => void save()}>
             Save
-          </button>
+          </Button>
         )}
       </div>
     </Modal>

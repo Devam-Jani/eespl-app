@@ -10,12 +10,13 @@ import type { Site } from "../../types";
 import { useMaterialLookups } from "../material/common";
 import { shortDate } from "../Tenders";
 import { localToday } from "./DprTab";
+import { Button, Card, Field, buttonClass } from "../../ui/components";
 
 const STATUS_BADGE: Record<string, string> = { available: "badge-ok", at_site: "badge-info", repair: "badge-warn", lost: "badge-danger", disposed: "badge-muted" };
 
 export function AssetTable({ assets, onMove, onUsage }: { assets: AssetOut[]; onMove?: (a: AssetOut) => void; onUsage?: (a: AssetOut) => void }) {
   return (
-    <div className="card table-wrap">
+    <Card as="div" className="table-wrap">
       <table className="table compact">
         <thead>
           <tr>
@@ -49,14 +50,14 @@ export function AssetTable({ assets, onMove, onUsage }: { assets: AssetOut[]; on
               </td>
               <td className="nowrap">
                 {onMove && (
-                  <button className="btn btn-small" onClick={() => onMove(a)}>
+                  <Button size="small" onClick={() => onMove(a)}>
                     Move
-                  </button>
+                  </Button>
                 )}
                 {onUsage && a.site_id && a.category !== "tool" && (
-                  <button className="btn btn-small" onClick={() => onUsage(a)}>
+                  <Button size="small" onClick={() => onUsage(a)}>
                     Log use
-                  </button>
+                  </Button>
                 )}
               </td>
             </tr>
@@ -70,7 +71,7 @@ export function AssetTable({ assets, onMove, onUsage }: { assets: AssetOut[]; on
           )}
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 }
 
@@ -114,8 +115,7 @@ export function MoveForm({
       <form onSubmit={submit} className="daily">
         {error && <div className="alert alert-error">{error}</div>}
         <p className="small muted">Now: {asset.location}</p>
-        <label className="field">
-          <span>To *</span>
+        <Field label="To *">
           <select required className="tap-input" value={target} onChange={(e) => setTarget(e.target.value)}>
             <option value="">—</option>
             <optgroup label="Return to a store">
@@ -135,24 +135,22 @@ export function MoveForm({
               ))}
             </optgroup>
           </select>
-        </label>
-        <label className="field">
-          <span>Date</span>
+        </Field>
+        <Field label="Date">
           <input type="date" className="tap-input" value={form.on_date} onChange={(e) => setForm({ ...form, on_date: e.target.value })} />
-        </label>
-        <label className="field">
-          <span>Condition</span>
+        </Field>
+        <Field label="Condition">
           <input className="tap-input" value={form.condition} onChange={(e) => setForm({ ...form, condition: e.target.value })} placeholder="Good / needs service…" />
-        </label>
-        <label className={`btn tap-wide ${photo ? "btn-primary" : ""}`}>
+        </Field>
+        <label className={buttonClass({ variant: photo ? "primary" : "secondary", className: "tap-wide" })}>
           📷 {photo ? photo.name : "Photo"}
           <input type="file" accept="image/*" capture="environment" hidden onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
         </label>
         <div className="daily-actions">
-          <button type="button" className="btn tap-wide" onClick={onClose}>
+          <Button type="button" className="tap-wide" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary tap-wide">Move</button>
+          </Button>
+          <Button type="submit" variant="primary" className="tap-wide">Move</Button>
         </div>
       </form>
     </Modal>
@@ -199,12 +197,10 @@ export function UsageForm({ asset, onClose, onSaved }: { asset: AssetOut; onClos
       <form onSubmit={submit} className="daily">
         {error && <div className="alert alert-error">{error}</div>}
         <div className="grid-2">
-          <label className="field">
-            <span>Date</span>
+          <Field label="Date">
             <input type="date" className="tap-input" value={form.on_date} onChange={set("on_date")} />
-          </label>
-          <div className="field">
-            <span>By</span>
+          </Field>
+          <Field as="div" label="By">
             <div className="tap-group">
               {(["day", "hour"] as const).map((b) => (
                 <button key={b} type="button" className={`tap ${form.basis === b ? "on" : ""}`} onClick={() => setForm({ ...form, basis: b })}>
@@ -212,36 +208,31 @@ export function UsageForm({ asset, onClose, onSaved }: { asset: AssetOut; onClos
                 </button>
               ))}
             </div>
-          </div>
-          <label className="field">
-            <span>{form.basis === "day" ? "Days" : "Hours"} *</span>
+          </Field>
+          <Field label={<>{form.basis === "day" ? "Days" : "Hours"} *</>}>
             <input required className="tap-input" inputMode="decimal" value={form.quantity} onChange={set("quantity")} />
-          </label>
-          <label className="field">
-            <span>Rate (blank: {inr(form.basis === "day" ? asset.rate_per_day : asset.rate_per_hour)})</span>
+          </Field>
+          <Field label={<>Rate (blank: {inr(form.basis === "day" ? asset.rate_per_day : asset.rate_per_hour)})</>}>
             <input className="tap-input" inputMode="decimal" value={form.rate} onChange={set("rate")} />
-          </label>
-          <label className="field">
-            <span>Fuel (litres)</span>
+          </Field>
+          <Field label="Fuel (litres)">
             <input className="tap-input" inputMode="decimal" value={form.fuel_litres} onChange={set("fuel_litres")} />
-          </label>
-          <label className="field">
-            <span>Fuel cost (₹)</span>
+          </Field>
+          <Field label="Fuel cost (₹)">
             <input className="tap-input" inputMode="decimal" value={form.fuel_cost} onChange={set("fuel_cost")} />
-          </label>
-          <label className="field">
-            <span>Operator</span>
+          </Field>
+          <Field label="Operator">
             <input className="tap-input" value={form.operator} onChange={set("operator")} />
-          </label>
+          </Field>
         </div>
         <p className="right">
           Cost <b>{inr(Number(form.quantity || 0) * rate + Number(form.fuel_cost || 0))}</b>
         </p>
         <div className="daily-actions">
-          <button type="button" className="btn tap-wide" onClick={onClose}>
+          <Button type="button" className="tap-wide" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary tap-wide">Save</button>
+          </Button>
+          <Button type="submit" variant="primary" className="tap-wide">Save</Button>
         </div>
       </form>
     </Modal>
@@ -250,7 +241,7 @@ export function UsageForm({ asset, onClose, onSaved }: { asset: AssetOut; onClos
 
 export function UsageTable({ rows, showSite }: { rows: Usage[]; showSite?: boolean }) {
   return (
-    <div className="card table-wrap">
+    <Card as="div" className="table-wrap">
       <table className="table compact">
         <thead>
           <tr>
@@ -286,7 +277,7 @@ export function UsageTable({ rows, showSite }: { rows: Usage[]; showSite?: boole
           )}
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 }
 

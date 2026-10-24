@@ -7,6 +7,7 @@ import { Modal } from "../ui/Overlay";
 import { errorText, inr } from "../format";
 import type { BankAccount, Contact, Page, Product, Vendor } from "../types";
 import { Pager } from "./Clients";
+import { Button, Card, Field } from "../ui/components";
 
 const TYPES: Record<string, string> = {
   material_supplier: "Material supplier",
@@ -52,33 +53,37 @@ export default function Vendors() {
               setFilters((f) => ({ ...f, q }));
             }}
           >
-            <input className="search" placeholder="Search name, city or GSTIN" value={q} onChange={(e) => setQ(e.target.value)} />
+            <Field label="Search name, city or GSTIN" bare>
+              <input className="search" placeholder="Search name, city or GSTIN" value={q} onChange={(e) => setQ(e.target.value)} />
+            </Field>
           </form>
-          <select
-            value={filters.type}
-            onChange={(e) => {
-              setOffset(0);
-              setFilters((f) => ({ ...f, type: e.target.value }));
-            }}
-          >
-            <option value="">All types</option>
-            {Object.entries(TYPES).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+          <Field label="Type" bare>
+            <select
+              value={filters.type}
+              onChange={(e) => {
+                setOffset(0);
+                setFilters((f) => ({ ...f, type: e.target.value }));
+              }}
+            >
+              <option value="">All types</option>
+              {Object.entries(TYPES).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </Field>
           <ExportButton path={`/api/vendors/export${queryString(filters)}`} />
           {canEdit && (
-            <button className="btn btn-primary" onClick={() => setEditing("new")}>
+            <Button variant="primary" onClick={() => setEditing("new")}>
               Add vendor
-            </button>
+            </Button>
           )}
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
 
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -127,7 +132,7 @@ export default function Vendors() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       {page && <Pager page={page} onOffset={setOffset} />}
 
       {editing && (
@@ -233,12 +238,10 @@ function VendorForm({
       <form className="form" onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
         <div className="grid-2">
-          <label className="field">
-            <span>Name</span>
+          <Field label="Name">
             <input value={form.name} onChange={set("name")} required autoFocus />
-          </label>
-          <label className="field">
-            <span>Type</span>
+          </Field>
+          <Field label="Type">
             <select value={form.type} onChange={set("type")}>
               {Object.entries(TYPES).map(([value, label]) => (
                 <option key={value} value={value}>
@@ -246,36 +249,29 @@ function VendorForm({
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>GSTIN</span>
+          </Field>
+          <Field label="GSTIN">
             <input value={form.gstin} onChange={set("gstin")} maxLength={15} />
-          </label>
-          <label className="field">
-            <span>PAN</span>
+          </Field>
+          <Field label="PAN">
             <input value={form.pan} onChange={set("pan")} maxLength={10} />
-          </label>
-          <label className="field">
-            <span>City</span>
+          </Field>
+          <Field label="City">
             <input value={form.city} onChange={set("city")} />
-          </label>
-          <label className="field">
-            <span>State</span>
+          </Field>
+          <Field label="State">
             <input value={form.state} onChange={set("state")} />
-          </label>
-          <label className="field">
-            <span>Payment terms (days)</span>
+          </Field>
+          <Field label="Payment terms (days)">
             <input type="number" min="0" value={form.payment_terms_days} onChange={set("payment_terms_days")} />
-          </label>
+          </Field>
         </div>
-        <label className="field">
-          <span>Address</span>
+        <Field label="Address">
           <textarea rows={2} value={form.address} onChange={set("address")} />
-        </label>
-        <label className="field">
-          <span>Notes</span>
+        </Field>
+        <Field label="Notes">
           <textarea rows={2} value={form.notes} onChange={set("notes")} />
-        </label>
+        </Field>
         <label className="check">
           <input type="checkbox" checked={form.is_active} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))} />
           Active
@@ -296,42 +292,50 @@ function VendorForm({
             {contacts.map((c, i) => (
               <tr key={i}>
                 <td>
-                  <input value={c.name} onChange={(e) => setContact(i, { name: e.target.value })} />
+                  <Field label="Name" bare>
+                    <input value={c.name} onChange={(e) => setContact(i, { name: e.target.value })} />
+                  </Field>
                 </td>
                 <td>
-                  <input value={c.designation ?? ""} onChange={(e) => setContact(i, { designation: e.target.value })} />
+                  <Field label="Designation" bare>
+                    <input value={c.designation ?? ""} onChange={(e) => setContact(i, { designation: e.target.value })} />
+                  </Field>
                 </td>
                 <td>
-                  <input value={c.phone ?? ""} onChange={(e) => setContact(i, { phone: e.target.value })} />
+                  <Field label="Phone" bare>
+                    <input value={c.phone ?? ""} onChange={(e) => setContact(i, { phone: e.target.value })} />
+                  </Field>
                 </td>
                 <td>
-                  <input type="email" value={c.email ?? ""} onChange={(e) => setContact(i, { email: e.target.value })} />
+                  <Field label="Email" bare>
+                    <input type="email" value={c.email ?? ""} onChange={(e) => setContact(i, { email: e.target.value })} />
+                  </Field>
                 </td>
                 <td className="center-cell">
                   <input type="radio" name="primary" checked={c.is_primary} onChange={() => setContact(i, { is_primary: true })} />
                 </td>
                 <td>
-                  <button type="button" className="btn btn-small" onClick={() => setContacts((cs) => cs.filter((_, j) => j !== i))}>
+                  <Button type="button" size="small" onClick={() => setContacts((cs) => cs.filter((_, j) => j !== i))}>
                     ×
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <button type="button" className="btn btn-small" onClick={() => setContacts((cs) => [...cs, { ...EMPTY_CONTACT }])}>
+        <Button type="button" size="small" onClick={() => setContacts((cs) => [...cs, { ...EMPTY_CONTACT }])}>
           + Add contact
-        </button>
+        </Button>
         <div className="form-actions">
           {vendor && (
-            <button type="button" className="btn btn-danger push-left" onClick={() => void remove()}>
+            <Button type="button" variant="danger" className="push-left" onClick={() => void remove()}>
               Delete
-            </button>
+            </Button>
           )}
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Save</button>
+          </Button>
+          <Button type="submit" variant="primary">Save</Button>
         </div>
       </form>
     </Modal>
@@ -379,9 +383,9 @@ function VendorPanel({ vendorId, onEdit, onClose }: { vendorId: number; onEdit: 
         {vendor.payment_terms_days !== null && <span>Pays in {vendor.payment_terms_days} days</span>}
         <span className="muted">{[vendor.city, vendor.state].filter(Boolean).join(", ")}</span>
         {canEdit && (
-          <button className="btn btn-small push-right" onClick={() => onEdit(vendor)}>
+          <Button size="small" className="push-right" onClick={() => onEdit(vendor)}>
             Edit details
-          </button>
+          </Button>
         )}
       </div>
       {vendor.contacts.length > 0 && (
@@ -474,8 +478,8 @@ function BankAccounts({
               <td className="row-actions">
                 {canEdit && (
                   <>
-                    <button
-                      className="btn btn-small"
+                    <Button
+                      size="small"
                       onClick={() => {
                         setEditingId(b.id);
                         setForm({
@@ -489,10 +493,10 @@ function BankAccounts({
                       }}
                     >
                       Edit
-                    </button>
-                    <button className="btn btn-small btn-danger" onClick={() => void remove(b)}>
+                    </Button>
+                    <Button variant="danger" size="small" onClick={() => void remove(b)}>
                       Remove
-                    </button>
+                    </Button>
                   </>
                 )}
               </td>
@@ -509,39 +513,35 @@ function BankAccounts({
       </table>
       {!canEdit && <p className="muted small">Bank details can be added by someone with access to company or finance settings.</p>}
       {canEdit && !form && (
-        <button className="btn btn-small" onClick={() => setForm(empty)}>
+        <Button size="small" onClick={() => setForm(empty)}>
           + Add bank account
-        </button>
+        </Button>
       )}
       {form && (
         <form className="inline-form" onSubmit={save}>
           <div className="grid-4">
-            <label className="field">
-              <span>Account name</span>
+            <Field label="Account name">
               <input value={form.account_name} onChange={(e) => setForm({ ...form, account_name: e.target.value })} required />
-            </label>
-            <label className="field">
-              <span>Account number</span>
+            </Field>
+            <Field label="Account number">
               <input value={form.account_number} onChange={(e) => setForm({ ...form, account_number: e.target.value })} required />
-            </label>
-            <label className="field">
-              <span>IFSC</span>
+            </Field>
+            <Field label="IFSC">
               <input value={form.ifsc} maxLength={11} onChange={(e) => setForm({ ...form, ifsc: e.target.value })} required />
-            </label>
-            <label className="field">
-              <span>Bank</span>
+            </Field>
+            <Field label="Bank">
               <input value={form.bank} onChange={(e) => setForm({ ...form, bank: e.target.value })} />
-            </label>
+            </Field>
           </div>
           <label className="check">
             <input type="checkbox" checked={form.is_primary} onChange={(e) => setForm({ ...form, is_primary: e.target.checked })} />
             Primary account
           </label>
           <div className="form-actions">
-            <button type="button" className="btn" onClick={() => setForm(null)}>
+            <Button type="button" onClick={() => setForm(null)}>
               Cancel
-            </button>
-            <button className="btn btn-primary">Save</button>
+            </Button>
+            <Button type="submit" variant="primary">Save</Button>
           </div>
         </form>
       )}
@@ -627,9 +627,9 @@ function SuppliedProducts({
           </tbody>
         </table>
         {canEdit && (
-          <button className="btn btn-small" onClick={() => setEditing(true)}>
+          <Button size="small" onClick={() => setEditing(true)}>
             Edit products supplied
-          </button>
+          </Button>
         )}
       </>
     );
@@ -651,40 +651,46 @@ function SuppliedProducts({
           {rows.map((r, i) => (
             <tr key={i}>
               <td>
-                <select value={r.product_id} onChange={(e) => setRow(i, { product_id: Number(e.target.value) })}>
-                  <option value={0}>Choose a product…</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} — {p.unit}
-                    </option>
-                  ))}
-                </select>
+                <Field label="Product" bare>
+                  <select value={r.product_id} onChange={(e) => setRow(i, { product_id: Number(e.target.value) })}>
+                    <option value={0}>Choose a product…</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} — {p.unit}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
               </td>
               <td>
-                <input className="input-num" type="number" step="0.01" min="0" value={r.last_rate} onChange={(e) => setRow(i, { last_rate: e.target.value })} />
+                <Field label="Last rate (₹)" bare>
+                  <input className="input-num" type="number" step="0.01" min="0" value={r.last_rate} onChange={(e) => setRow(i, { last_rate: e.target.value })} />
+                </Field>
               </td>
               <td>
-                <input className="input-num" type="number" min="0" value={r.lead_time_days} onChange={(e) => setRow(i, { lead_time_days: e.target.value })} />
+                <Field label="Lead time (days)" bare>
+                  <input className="input-num" type="number" min="0" value={r.lead_time_days} onChange={(e) => setRow(i, { lead_time_days: e.target.value })} />
+                </Field>
               </td>
               <td>
-                <button className="btn btn-small" onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}>
+                <Button size="small" onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}>
                   ×
-                </button>
+                </Button>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
       <div className="form-actions">
-        <button className="btn btn-small push-left" onClick={() => setRows((rs) => [...rs, { product_id: 0, last_rate: "", lead_time_days: "" }])}>
+        <Button size="small" className="push-left" onClick={() => setRows((rs) => [...rs, { product_id: 0, last_rate: "", lead_time_days: "" }])}>
           + Add product
-        </button>
-        <button className="btn" onClick={() => setEditing(false)}>
+        </Button>
+        <Button onClick={() => setEditing(false)}>
           Cancel
-        </button>
-        <button className="btn btn-primary" onClick={() => void save()}>
+        </Button>
+        <Button variant="primary" onClick={() => void save()}>
           Save
-        </button>
+        </Button>
       </div>
     </>
   );

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
+import { Button } from "../ui/components";
 
 type Note = { id: number; kind: string; title: string; link: string | null; site_id: number | null; read: boolean; created_at: string };
 
@@ -34,28 +35,28 @@ export default function Bell({ allLink }: { allLink?: string } = {}) {
 
   return (
     <div className="bell" ref={box}>
-      <button className="btn btn-ghost bell-button" aria-label={`Notifications (${data.unread} unread)`} onClick={() => setOpen(!open)}>
+      <Button variant="ghost" className="bell-button" aria-label={`Notifications (${data.unread} unread)`} onClick={() => setOpen(!open)}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
           <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.7 21a2 2 0 0 1-3.4 0" />
         </svg>
         {data.unread > 0 && <span className="bell-count">{data.unread > 99 ? "99+" : data.unread}</span>}
-      </button>
+      </Button>
       {open && (
         <div className="bell-panel">
           <div className="toolbar">
             <strong>Notifications</strong>
             {data.unread > 0 && (
-              <button className="btn btn-small btn-ghost" onClick={() => void api("/api/notifications/read-all", { method: "POST" }).then(load)}>
+              <Button variant="ghost" size="small" onClick={() => void api("/api/notifications/read-all", { method: "POST" }).then(load)}>
                 Mark all read
-              </button>
+              </Button>
             )}
           </div>
           {data.items.length === 0 && <p className="muted small">Nothing yet.</p>}
           {allLink && (
-            <button className="btn btn-small btn-ghost" onClick={() => (setOpen(false), navigate(allLink))}>
+            <Button variant="ghost" size="small" onClick={() => (setOpen(false), navigate(allLink))}>
               See all, with filters →
-            </button>
+            </Button>
           )}
           {data.items.map((n) => (
             <button key={n.id} className={`bell-item ${n.read ? "" : "unread"}`} onClick={() => void go(n)}>

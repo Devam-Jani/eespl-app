@@ -9,6 +9,7 @@ import MapView from "./MapView";
 import type { MapCircle, MapLine, MapPin } from "./MapView";
 import { mapsLink } from "./tracker";
 import { ART } from "../ui/tokens";
+import { Button, buttonClass, Card, Field } from "../ui/components";
 
 /** A person's day: tracked points as a line, stops as numbered pins (times in and out, the
  * selfie), the road route between the stops, km per leg and the total, flags in red. */
@@ -127,14 +128,17 @@ export function DayMap() {
             ))}
           </ol>
           {day.can_choose_basis && day.ended_at && (
-            <div className="card">
+            <Card as="div">
               <h3>Km for the claim</h3>
-              <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (for tracked km: a detour the stops don't show)" />
+              <Field label="Reason (for tracked km: a detour the stops don't show)" bare>
+                <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (for tracked km: a detour the stops don't show)" />
+              </Field>
               <div className="form-row">
                 {(["route", "tracked"] as const).map((b) => (
-                  <button
+                  <Button
                     key={b}
-                    className={`btn btn-small ${day.km_basis === b ? "btn-primary" : ""}`}
+                    size="small"
+                    variant={day.km_basis === b ? "primary" : "secondary"}
                     onClick={async () => {
                       try {
                         await api(`/api/field/days/${day.id}/basis`, { method: "PUT", json: { basis: b, reason: reason || null } });
@@ -145,10 +149,10 @@ export function DayMap() {
                     }}
                   >
                     Use {b === "route" ? "road" : "tracked"} km
-                  </button>
+                  </Button>
                 ))}
               </div>
-            </div>
+            </Card>
           )}
         </div>
       </div>
@@ -293,8 +297,8 @@ export function SiteLocationTab({ siteId }: { siteId: number }) {
         />
         {canPin && (
           <div className="form-row top-gap-small">
-            <button
-              className="btn btn-small"
+            <Button
+              size="small"
               onClick={() =>
                 void locate().then(
                   (f) => setPicked([f.lat, f.lng]),
@@ -303,10 +307,12 @@ export function SiteLocationTab({ siteId }: { siteId: number }) {
               }
             >
               Use my location
-            </button>
-            <input className="input-small" value={radius} onChange={(e) => setRadius(e.target.value)} placeholder={`radius ${v.site.radius_m} m`} aria-label="Radius in metres" />
-            <button
-              className="btn btn-small btn-primary"
+            </Button>
+            <Field label="Radius in metres" bare>
+              <input className="input-small" value={radius} onChange={(e) => setRadius(e.target.value)} placeholder={`radius ${v.site.radius_m} m`} aria-label="Radius in metres" />
+            </Field>
+            <Button
+              variant="primary" size="small"
               disabled={!picked && !radius}
               onClick={async () => {
                 const at = picked ?? pin;
@@ -322,12 +328,12 @@ export function SiteLocationTab({ siteId }: { siteId: number }) {
               }}
             >
               Save the pin
-            </button>
+            </Button>
           </div>
         )}
         {msg && <p className="small">{msg}</p>}
         {pin && (
-          <a className="btn btn-primary top-gap-small" href={mapsLink(pin[0], pin[1])} target="_blank" rel="noreferrer">
+          <a className={buttonClass({ variant: "primary", className: "top-gap-small" })} href={mapsLink(pin[0], pin[1])} target="_blank" rel="noreferrer">
             Go to site (Google Maps)
           </a>
         )}

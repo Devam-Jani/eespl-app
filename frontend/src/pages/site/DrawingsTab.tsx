@@ -7,6 +7,7 @@ import { errorText } from "../../format";
 import type { Drawing, DrawingRevision, Site } from "../../types";
 import { useNodes } from "./StructureTab";
 import { ShareTick } from "./TasksTab";
+import { Button, buttonClass, Card, Field } from "../../ui/components";
 
 const REV_BADGE: Record<string, string> = { draft: "badge-muted", submitted: "badge-info", approved: "badge-ok", rejected: "badge-danger" };
 
@@ -54,13 +55,13 @@ export default function DrawingsTab({ site }: { site: Site }) {
   }
 
   return (
-    <div className="card">
+    <Card as="div">
       <div className="toolbar">
         <h2 className="section-title">Drawings ({drawings.length})</h2>
         {canUpload && (
-          <button className="btn btn-primary" onClick={() => setAdding(true)}>
+          <Button variant="primary" onClick={() => setAdding(true)}>
             Upload drawing
-          </button>
+          </Button>
         )}
       </div>
       {error && <div className="alert alert-error">{error}</div>}
@@ -85,7 +86,7 @@ export default function DrawingsTab({ site }: { site: Site }) {
               </div>
             </div>
             {canUpload && (
-              <label className="btn btn-small">
+              <label className={buttonClass({ size: "small" })}>
                 New revision
                 <input type="file" hidden accept=".pdf,.png,.jpg,.jpeg,.dwg" onChange={(e) => e.target.files?.[0] && newRevision(d, e.target.files[0])} />
               </label>
@@ -114,18 +115,18 @@ export default function DrawingsTab({ site }: { site: Site }) {
                   </td>
                   <td className="row-actions nowrap">
                     {canUpload && r.status === "draft" && (
-                      <button className="btn btn-small btn-ghost" onClick={() => void run(api<Drawing[]>(`${base}/${d.id}/revisions/${r.id}/submit`, { method: "POST" }))}>
+                      <Button variant="ghost" size="small" onClick={() => void run(api<Drawing[]>(`${base}/${d.id}/revisions/${r.id}/submit`, { method: "POST" }))}>
                         Submit
-                      </button>
+                      </Button>
                     )}
                     {canApprove && (r.status === "draft" || r.status === "submitted") && (
                       <>
-                        <button className="btn btn-small" onClick={() => decide(d, r, true)}>
+                        <Button size="small" onClick={() => decide(d, r, true)}>
                           Approve
-                        </button>
-                        <button className="btn btn-small btn-ghost" onClick={() => decide(d, r, false)}>
+                        </Button>
+                        <Button variant="ghost" size="small" onClick={() => decide(d, r, false)}>
                           Reject
-                        </button>
+                        </Button>
                       </>
                     )}
                   </td>
@@ -145,7 +146,7 @@ export default function DrawingsTab({ site }: { site: Site }) {
           }}
         />
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -167,20 +168,17 @@ function UploadDrawing({ nodes, onClose, onUpload }: { nodes: { id: number; path
   return (
     <Modal title="Upload a drawing" onClose={onClose}>
       <form onSubmit={submit}>
-        <label className="field">
-          <span>Title *</span>
+        <Field label="Title *">
           <input required autoFocus value={title} onChange={(e) => setTitle(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Discipline</span>
+        </Field>
+        <Field label="Discipline">
           <select value={discipline} onChange={(e) => setDiscipline(e.target.value)}>
             {["architectural", "structural", "waterproofing", "other"].map((d) => (
               <option key={d}>{d}</option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Place (optional)</span>
+        </Field>
+        <Field label="Place (optional)">
           <select value={node} onChange={(e) => setNode(e.target.value)}>
             <option value="">Whole site</option>
             {nodes.map((n) => (
@@ -189,18 +187,17 @@ function UploadDrawing({ nodes, onClose, onUpload }: { nodes: { id: number; path
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>File (PDF, PNG, JPG or DWG, up to 50 MB) — saved as R0</span>
+        </Field>
+        <Field label="File (PDF, PNG, JPG or DWG, up to 50 MB) — saved as R0">
           <input type="file" required accept=".pdf,.png,.jpg,.jpeg,.dwg" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        </label>
+        </Field>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary" disabled={!file}>
+          </Button>
+          <Button type="submit" variant="primary" disabled={!file}>
             Upload
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

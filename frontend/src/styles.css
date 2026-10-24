@@ -1207,6 +1207,11 @@ input.full {
   width: 5.5rem;
 }
 
+/* a field that takes two columns of a form grid (the PO's remark) */
+.span-2 {
+  grid-column: span 2;
+}
+
 .po-totals {
   margin-top: 0.75rem;
   margin-left: auto;
@@ -1537,7 +1542,10 @@ input.full {
   text-decoration: none;
   display: block;
 }
-.portal-card:hover {
+.portal-card > .card {
+  height: 100%;
+}
+.portal-card:hover > .card {
   border-color: var(--primary);
 }
 .portal-percent,
@@ -1722,7 +1730,8 @@ input.full {
   flex-wrap: wrap;
 }
 .portal-3d .page-actions > *,
-.split-3d .page-actions > * {
+.split-3d .page-actions > *,
+.split-3d .page-actions > .field-bare > * {
   max-width: 100%;
 }
 .portal-3d select {
@@ -1828,6 +1837,14 @@ tr.sev-high td:first-child {
   width: 11px;
   height: 11px;
   vertical-align: -1px;
+}
+/* a colour that comes with the data (a chart series, a drawing layer, a 3D status): the page sets
+   --swatch to a token's colour, the class paints it */
+.paint {
+  background: var(--swatch);
+}
+.swatch.outline.paint-border {
+  border-color: var(--swatch);
 }
 .hbars {
   display: flex;
@@ -2905,7 +2922,7 @@ li.late a {
     grid-template-columns: 1fr 1fr 1fr;
   }
   .dpr-line select,
-  .dpr-line input:nth-child(2) {
+  .dpr-line > :nth-child(2) > input {
     grid-column: 1 / -1;
   }
 }
@@ -3684,7 +3701,8 @@ li.late a {
   border-collapse: collapse;
   width: 100%;
 }
-.spec-lines td {
+.spec-lines td,
+.table.compact.spec-lines td {
   padding: 2px 8px 2px 0;
   vertical-align: top;
   border: 0;

@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
 import { errorText } from "../format";
+import { Button, Card, Field } from "../ui/components";
 
 type Step = {
   text: string;
@@ -211,9 +212,9 @@ function Steps({ stages, edit }: { stages: Stage[]; edit?: (stage: number, step:
                     <td className="small">{(st.tools ?? []).join(", ")}</td>
                     {edit && (
                       <td>
-                        <button className="btn btn-small" onClick={() => edit(si, i)}>
+                        <Button size="small" onClick={() => edit(si, i)}>
                           Edit
-                        </button>
+                        </Button>
                       </td>
                     )}
                   </tr>
@@ -268,24 +269,26 @@ export function MethodologyHome() {
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {tender && can("methodology.edit") && (
-        <div className="card">
+        <Card as="div">
           <h2 className="section-title">Build the methodology of tender #{tender}</h2>
           <div className="form-row">
-            <select value={std} onChange={(e) => setStd(e.target.value)} aria-label="Client standard">
-              <option value="">The tender&apos;s client standard</option>
-              {standards.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-            <button className="btn btn-primary" disabled={building} onClick={build}>
+            <Field label="Client standard" bare>
+              <select value={std} onChange={(e) => setStd(e.target.value)} aria-label="Client standard">
+                <option value="">The tender&apos;s client standard</option>
+                {standards.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Button variant="primary" disabled={building} onClick={build}>
               {building ? "Building…" : "Build"}
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
-      <div className="card top-gap">
+      <Card as="div" className="top-gap">
         <h2 className="section-title">Methodologies</h2>
         <table className="table compact">
           <thead>
@@ -318,8 +321,8 @@ export function MethodologyHome() {
             )}
           </tbody>
         </table>
-      </div>
-      <div className="card top-gap">
+      </Card>
+      <Card as="div" className="top-gap">
         <h2 className="section-title">Client standards</h2>
         <table className="table compact">
           <thead>
@@ -345,8 +348,8 @@ export function MethodologyHome() {
             ))}
           </tbody>
         </table>
-      </div>
-      <div className="card top-gap">
+      </Card>
+      <Card as="div" className="top-gap">
         <h2 className="section-title">Method library</h2>
         <table className="table compact">
           <thead>
@@ -378,7 +381,7 @@ export function MethodologyHome() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -424,7 +427,7 @@ export function SystemPage() {
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       <div className="grid-2">
-        <div className="card">
+        <Card as="div">
           <h2 className="section-title">Where it suits and why</h2>
           {s.conditions.map((c) => (
             <p key={c.text} className="small">
@@ -443,8 +446,8 @@ export function SystemPage() {
           <p className="small">
             <b>Measurement:</b> {s.measurement_rule ?? "—"}
           </p>
-        </div>
-        <div className="card">
+        </Card>
+        <Card as="div">
           <h2 className="section-title">To confirm ({s.to_confirm_list.length})</h2>
           <ul className="small">
             {s.to_confirm_list.map((c, i) => (
@@ -465,14 +468,14 @@ export function SystemPage() {
               </ul>
             </details>
           )}
-        </div>
+        </Card>
       </div>
-      <div className="card top-gap">
+      <Card as="div" className="top-gap">
         <h2 className="section-title">Stages and steps</h2>
         <Steps stages={s.stages} />
-      </div>
+      </Card>
       <div className="grid-2 top-gap">
-        <div className="card">
+        <Card as="div">
           <h2 className="section-title">Hold points and tests</h2>
           <ul className="small">
             {s.hold_points.map((h) => (
@@ -496,8 +499,8 @@ export function SystemPage() {
               </ul>
             </div>
           ))}
-        </div>
-        <div className="card">
+        </Card>
+        <Card as="div">
           <h2 className="section-title">Products and their data sheets</h2>
           <table className="table compact">
             <thead>
@@ -543,23 +546,29 @@ export function SystemPage() {
               ))}
             </p>
           )}
-        </div>
+        </Card>
       </div>
       {can("methodology.edit") && (
-        <div className="card top-gap">
+        <Card as="div" className="top-gap">
           <h2 className="section-title">Change (with the reason; a new version)</h2>
           <div className="form-row">
-            <select value={field} onChange={(e) => setField(e.target.value)} aria-label="Field">
-              <option value="guarantee_years">Guarantee (years)</option>
-              <option value="why">Why we pick it</option>
-              <option value="boq_description">BOQ text</option>
-              <option value="measurement_rule">Measurement rule</option>
-            </select>
-            <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="New value" aria-label="Value" />
-            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why it changes" aria-label="Reason" />
-            <button className="btn btn-primary" disabled={!value || reason.length < 3} onClick={save}>
+            <Field label="Field" bare>
+              <select value={field} onChange={(e) => setField(e.target.value)} aria-label="Field">
+                <option value="guarantee_years">Guarantee (years)</option>
+                <option value="why">Why we pick it</option>
+                <option value="boq_description">BOQ text</option>
+                <option value="measurement_rule">Measurement rule</option>
+              </select>
+            </Field>
+            <Field label="Value" bare>
+              <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="New value" aria-label="Value" />
+            </Field>
+            <Field label="Reason" bare>
+              <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why it changes" aria-label="Reason" />
+            </Field>
+            <Button variant="primary" disabled={!value || reason.length < 3} onClick={save}>
               Save
-            </button>
+            </Button>
           </div>
           <ul className="small">
             {s.changes.map((c) => (
@@ -568,7 +577,7 @@ export function SystemPage() {
               </li>
             ))}
           </ul>
-        </div>
+        </Card>
       )}
     </>
   );
@@ -612,7 +621,7 @@ export function StandardPage() {
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card">
+      <Card as="div">
         <div className="stat-row">
           <div className="stat">
             <div className="stat-value">
@@ -641,8 +650,8 @@ export function StandardPage() {
             <div className="stat-label small muted">Formats</div>
           </div>
         </div>
-      </div>
-      <div className="card top-gap">
+      </Card>
+      <Card as="div" className="top-gap">
         <h2 className="section-title">Rules (one per element and condition)</h2>
         <table className="table compact">
           <thead>
@@ -722,8 +731,8 @@ export function StandardPage() {
             ))}
           </tbody>
         </table>
-      </div>
-      <div className="card top-gap">
+      </Card>
+      <Card as="div" className="top-gap">
         <h2 className="section-title">Contradictions (for the pre-bid queries)</h2>
         <table className="table compact">
           <tbody>
@@ -736,8 +745,8 @@ export function StandardPage() {
             ))}
           </tbody>
         </table>
-      </div>
-      <div className="card top-gap">
+      </Card>
+      <Card as="div" className="top-gap">
         <h2 className="section-title">Documents read</h2>
         <table className="table compact">
           <thead>
@@ -765,7 +774,7 @@ export function StandardPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -844,28 +853,27 @@ export function MethodologyPage() {
           )}
         </div>
         <div className="page-actions">
-          <button className="btn" disabled={busy} onClick={() => act(() => api(`/api/methodology/methodologies/${m.id}/export`, { method: "POST", json: { audience: "client" } }))}>
+          <Button disabled={busy} onClick={() => act(() => api(`/api/methodology/methodologies/${m.id}/export`, { method: "POST", json: { audience: "client" } }))}>
             Export for the client (Word + PDF)
-          </button>
+          </Button>
           {can("methodology.compliance") && (
-            <button
-              className="btn"
+            <Button
               disabled={busy}
               onClick={() => act(() => api(`/api/methodology/methodologies/${m.id}/export`, { method: "POST", json: { audience: "internal" } }))}
             >
               Export internal
-            </button>
+            </Button>
           )}
           {can("methodology.compliance") && (
-            <button className="btn" disabled={busy} onClick={() => act(() => api(`/api/methodology/methodologies/${m.id}/recheck`, { method: "POST" }))}>
+            <Button disabled={busy} onClick={() => act(() => api(`/api/methodology/methodologies/${m.id}/recheck`, { method: "POST" }))}>
               Check again
-            </button>
+            </Button>
           )}
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {m.files.length > 0 && !only && (
-        <div className="card">
+        <Card as="div">
           <h2 className="section-title">Files</h2>
           <p className="small">
             {m.files.map((f) => (
@@ -874,11 +882,11 @@ export function MethodologyPage() {
               </button>
             ))}
           </p>
-        </div>
+        </Card>
       )}
       {showItems &&
         m.items.map((it, n) => (
-          <div key={it.id} className="card top-gap">
+          <Card key={it.id} as="div" className="top-gap">
             <h2 className="section-title">
               Item {n + 1}: {it.name}{" "}
               <span className="muted small">
@@ -958,13 +966,14 @@ export function MethodologyPage() {
                             <div>
                               {r.choices.map((c) => (
                                 <div key={c.key}>
-                                  <button
-                                    className={`btn btn-small ${it.make_choice === c.key ? "btn-primary" : ""}`}
+                                  <Button
+                                    size="small"
+                                    variant={it.make_choice === c.key ? "primary" : "secondary"}
                                     disabled={busy || !can("methodology.edit")}
                                     onClick={() => choose(it, c.key as "approved" | "keep")}
                                   >
                                     {c.label}
-                                  </button>{" "}
+                                  </Button>{" "}
                                   <span className="muted">
                                     {c.options ? c.options.slice(0, 4).join("; ") : c.query}
                                     {c.note && <div className="small">{c.note}</div>}
@@ -983,19 +992,19 @@ export function MethodologyPage() {
             {it.conditions.tank_perimeter_m && can("methodology.edit") && (
               <p className="small">
                 Tank perimeter: {fmt(it.conditions.tank_perimeter_m.value)} m <span className="muted">({it.conditions.tank_perimeter_m.source})</span>{" "}
-                <button className="btn btn-small" disabled={busy} onClick={() => perimeter(it)}>
+                <Button size="small" disabled={busy} onClick={() => perimeter(it)}>
                   Enter the real perimeter
-                </button>
+                </Button>
               </p>
             )}
             {only !== "compliance" && <Steps stages={it.stages} edit={can("methodology.edit") ? editStep(it) : undefined} />}
             {only !== "compliance" && it.edits.length > 0 && (
               <p className="small muted">Edits: {it.edits.map((e) => `v${e.version} ${e.stage.toLowerCase()}: ${e.reason}`).join("; ")}</p>
             )}
-          </div>
+          </Card>
         ))}
       {m.prebid && (!only || only === "prebid") && (
-        <div className="card top-gap">
+        <Card as="div" className="top-gap">
           <h2 className="section-title">Pre-bid queries ({m.prebid.length})</h2>
           <table className="table compact">
             <thead>
@@ -1015,22 +1024,24 @@ export function MethodologyPage() {
                   <td className="small">{q.reference}</td>
                   <td className="small">{q.kind}</td>
                   <td>
-                    <select
-                      value={q.status}
-                      aria-label="Status"
-                      disabled={busy}
-                      onChange={(e) => act(() => api(`/api/methodology/prebid/${q.id}`, { method: "PUT", json: { status: e.target.value, answer: q.answer } }))}
-                    >
-                      <option value="open">open</option>
-                      <option value="sent">sent</option>
-                      <option value="answered">answered</option>
-                    </select>
+                    <Field label="Status" bare>
+                      <select
+                        value={q.status}
+                        aria-label="Status"
+                        disabled={busy}
+                        onChange={(e) => act(() => api(`/api/methodology/prebid/${q.id}`, { method: "PUT", json: { status: e.target.value, answer: q.answer } }))}
+                      >
+                        <option value="open">open</option>
+                        <option value="sent">sent</option>
+                        <option value="answered">answered</option>
+                      </select>
+                    </Field>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
     </>
   );
@@ -1086,7 +1097,7 @@ export function SiteMethodology() {
         </div>
       </div>
       {s.items.map((it) => (
-        <div key={it.id} className="card top-gap">
+        <Card key={it.id} as="div" className="top-gap">
           <h2 className="section-title">
             {it.name} <span className="small muted">{it.system}</span>
           </h2>
@@ -1114,9 +1125,9 @@ export function SiteMethodology() {
               </tbody>
             </table>
           )}
-        </div>
+        </Card>
       ))}
-      <div className="card top-gap">
+      <Card as="div" className="top-gap">
         <h2 className="section-title">Pond tests</h2>
         <table className="table compact">
           <thead>
@@ -1140,8 +1151,8 @@ export function SiteMethodology() {
             ))}
           </tbody>
         </table>
-      </div>
-      <div className="card top-gap">
+      </Card>
+      <Card as="div" className="top-gap">
         <h2 className="section-title">Material tests on deliveries</h2>
         <table className="table compact">
           <thead>
@@ -1158,7 +1169,7 @@ export function SiteMethodology() {
                 <td className="small">{t.product_name}</td>
                 <td className="small">
                   {t.tests.length ? (
-                    <table className="spec-lines">
+                    <table className="table compact spec-lines">
                       <tbody>
                         {t.tests.map((x, i) => (
                           <tr key={i}>
@@ -1191,7 +1202,7 @@ export function SiteMethodology() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }

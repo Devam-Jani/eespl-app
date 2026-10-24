@@ -41,16 +41,20 @@ export default function Pos() {
               setFilters((f) => ({ ...f, q }));
             }}
           >
-            <input className="search" placeholder="Search PO no or vendor" value={q} onChange={(e) => setQ(e.target.value)} />
+            <Field label="Search PO no or vendor" bare>
+              <input className="search" placeholder="Search PO no or vendor" value={q} onChange={(e) => setQ(e.target.value)} />
+            </Field>
           </form>
-          <select value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
-            <option value="">All statuses</option>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s.replace(/_/g, " ")}
-              </option>
-            ))}
-          </select>
+          <Field label="Status" bare>
+            <select value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
+              <option value="">All statuses</option>
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
+          </Field>
           {can("po.edit") && (
             <Button variant="primary" type="submit" onClick={() => navigate("/purchase-orders/new")}>
               New PO
@@ -59,7 +63,7 @@ export default function Pos() {
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -95,7 +99,7 @@ export default function Pos() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       {page && <Pager page={page} onOffset={setOffset} />}
     </>
   );
@@ -275,10 +279,9 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
           <Field label="Payment terms">
             <input value={form.payment_terms} onChange={(e) => setForm({ ...form, payment_terms: e.target.value })} placeholder="e.g. 30 days from the invoice" />
           </Field>
-          <label className="field" style={{ gridColumn: "span 2" }}>
-            <span>Remark</span>
+          <Field label="Remark" className="span-2">
             <input value={form.remark} onChange={(e) => setForm({ ...form, remark: e.target.value })} />
-          </label>
+          </Field>
         </div>
         <p className="small muted">
           {vendor
@@ -292,7 +295,7 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
         </p>
       </Card>
       {taxedUnregistered && <div className="alert alert-warn top-gap">This supplier has no GSTIN and cannot charge GST: the GST entered will not be input tax credit.</div>}
-      <div className="card top-gap table-wrap">
+      <Card as="div" className="top-gap table-wrap">
         <table className="table compact">
           <thead>
             <tr>
@@ -318,20 +321,24 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
                   />
                 </td>
                 <td>
-                  <input className="input-num" required inputMode="decimal" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} />
+                  <Field label="Qty" bare>
+                    <input className="input-num" required inputMode="decimal" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} />
+                  </Field>
                 </td>
                 <td>
                   <UnitSelect units={lookups.units} value={l.unit} onChange={(u) => setLine(i, { unit: u })} />
                 </td>
                 <td>
-                  <input
-                    className="input-num"
-                    required={!contractFor(l)?.contract_id}
-                    inputMode="decimal"
-                    value={l.rate}
-                    placeholder={contractFor(l)?.rate ? "contract" : undefined}
-                    onChange={(e) => setLine(i, { rate: e.target.value })}
-                  />
+                  <Field label="Rate" bare>
+                    <input
+                      className="input-num"
+                      required={!contractFor(l)?.contract_id}
+                      inputMode="decimal"
+                      value={l.rate}
+                      placeholder={contractFor(l)?.rate ? "contract" : undefined}
+                      onChange={(e) => setLine(i, { rate: e.target.value })}
+                    />
+                  </Field>
                   <div>
                     <LastPrice productId={l.product_id ? Number(l.product_id) : null} rate={l.rate} />
                   </div>
@@ -342,24 +349,30 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
                     </div>
                   )}
                   {aboveContract(l) && (
-                    <input
-                      className="input-reason"
-                      required
-                      placeholder="why above the contract?"
-                      value={l.rate_reason ?? ""}
-                      onChange={(e) => setLine(i, { rate_reason: e.target.value })}
-                    />
+                    <Field label="Rate" bare>
+                      <input
+                        className="input-reason"
+                        required
+                        placeholder="why above the contract?"
+                        value={l.rate_reason ?? ""}
+                        onChange={(e) => setLine(i, { rate_reason: e.target.value })}
+                      />
+                    </Field>
                   )}
                 </td>
                 <td>
-                  <input className="input-num" inputMode="decimal" value={l.discount_percent} onChange={(e) => setLine(i, { discount_percent: e.target.value })} />
+                  <Field label="Disc %" bare>
+                    <input className="input-num" inputMode="decimal" value={l.discount_percent} onChange={(e) => setLine(i, { discount_percent: e.target.value })} />
+                  </Field>
                 </td>
                 <td>
-                  <input className="input-num" inputMode="decimal" value={l.gst_percent} onChange={(e) => setLine(i, { gst_percent: e.target.value })} />
+                  <Field label="GST %" bare>
+                    <input className="input-num" inputMode="decimal" value={l.gst_percent} onChange={(e) => setLine(i, { gst_percent: e.target.value })} />
+                  </Field>
                 </td>
                 <td className="num">{inr(totals.lineAmounts[i])}</td>
                 <td>
-                  <Button variant="ghost" className="btn-icon" type="button"  aria-label="Remove" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>
+                  <Button variant="ghost" icon type="button" aria-label="Remove" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>
                     ×
                   </Button>
                 </td>
@@ -389,28 +402,36 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
             {charges.map((c, i) => (
               <tr key={i}>
                 <td>
-                  <select value={c.kind} onChange={(e) => setCharge(i, { kind: e.target.value as ChargeKind })}>
-                    {CHARGE_KINDS.map((k) => (
-                      <option key={k} value={k}>
-                        {k}
-                      </option>
-                    ))}
-                  </select>
+                  <Field label="Kind" bare>
+                    <select value={c.kind} onChange={(e) => setCharge(i, { kind: e.target.value as ChargeKind })}>
+                      {CHARGE_KINDS.map((k) => (
+                        <option key={k} value={k}>
+                          {k}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
                 </td>
                 <td>
-                  <input value={c.description} onChange={(e) => setCharge(i, { description: e.target.value })} />
+                  <Field label="Description" bare>
+                    <input value={c.description} onChange={(e) => setCharge(i, { description: e.target.value })} />
+                  </Field>
                 </td>
                 <td>
-                  <input className="input-num" inputMode="decimal" value={c.amount} onChange={(e) => setCharge(i, { amount: e.target.value })} />
+                  <Field label="Amount" bare>
+                    <input className="input-num" inputMode="decimal" value={c.amount} onChange={(e) => setCharge(i, { amount: e.target.value })} />
+                  </Field>
                 </td>
                 <td>
-                  <input className="input-num" inputMode="decimal" value={c.gst_percent} onChange={(e) => setCharge(i, { gst_percent: e.target.value })} />
+                  <Field label="GST %" bare>
+                    <input className="input-num" inputMode="decimal" value={c.gst_percent} onChange={(e) => setCharge(i, { gst_percent: e.target.value })} />
+                  </Field>
                 </td>
                 <td>
                   <input type="checkbox" checked={c.add_to_cost} onChange={(e) => setCharge(i, { add_to_cost: e.target.checked })} aria-label="Add to material cost" />
                 </td>
                 <td>
-                  <Button variant="ghost" className="btn-icon" type="button"  aria-label="Remove" onClick={() => setCharges((cs) => cs.filter((_, j) => j !== i))}>
+                  <Button variant="ghost" icon type="button" aria-label="Remove" onClick={() => setCharges((cs) => cs.filter((_, j) => j !== i))}>
                     ×
                   </Button>
                 </td>
@@ -443,9 +464,9 @@ export function PoForm({ po, lookups, onSaved, onCancel }: { po?: Po; lookups: M
             ? `Above the approval limit (${inr(limit)}): it will need a PO approver.`
             : `Within the approval limit (${inr(limit)}): you can approve it yourself.`}
         </p>
-      </div>
+      </Card>
       <div className="form-actions">
-        <Button type="button"  onClick={onCancel}>
+        <Button type="button" onClick={onCancel}>
           Cancel
         </Button>
         <Button variant="primary" type="submit" disabled={busy || lines.length === 0}>
@@ -470,7 +491,7 @@ type T = {
 
 export function TotalsBox({ t, interstate }: { t: T; interstate: boolean }) {
   return (
-    <table className="totals po-totals">
+    <table className="table compact totals po-totals">
       <tbody>
         <tr>
           <td>Sub total</td>
@@ -664,7 +685,7 @@ export function PoDetail() {
           {inr(po.grand_total)} is above the approval limit of {inr(po.approval_limit)}: a PO approver must approve it.
         </div>
       )}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table compact">
           <thead>
             <tr>
@@ -738,7 +759,7 @@ export function PoDetail() {
           }}
           interstate={po.interstate}
         />
-      </div>
+      </Card>
       <dl className="detail-list top-gap">
         <div>
           <dt>Payment terms</dt>

@@ -107,7 +107,7 @@ export function SiteBilling({ siteId }: { siteId: number }) {
             )}
             {edit && <ExtraItem contract={contract} onSaved={load} />}
           </div>
-          <div className="card table-wrap top-gap">
+          <Card as="div" className="table-wrap top-gap">
             <table className="table compact">
               <thead>
                 <tr>
@@ -149,7 +149,7 @@ export function SiteBilling({ siteId }: { siteId: number }) {
                 )}
               </tbody>
             </table>
-          </div>
+          </Card>
           <h2 className="section-title top-gap">Invoices</h2>
           <InvoiceTable invoices={invoices} onChange={load} />
         </>
@@ -272,24 +272,28 @@ function RaEditor({ bill, onClose, onChange }: { bill: RaBill; onClose: () => vo
                 <td className="num muted">{num(l.suggested_qty)}</td>
                 <td className="num">
                   {draft && edit ? (
-                    <input
-                      className="input-num"
-                      inputMode="decimal"
-                      value={qty[l.contract_line_id] ?? ""}
-                      onChange={(e) => setQty({ ...qty, [l.contract_line_id]: e.target.value })}
-                    />
+                    <Field label="This bill" bare>
+                      <input
+                        className="input-num"
+                        inputMode="decimal"
+                        value={qty[l.contract_line_id] ?? ""}
+                        onChange={(e) => setQty({ ...qty, [l.contract_line_id]: e.target.value })}
+                      />
+                    </Field>
                   ) : (
                     num(l.qty)
                   )}
                 </td>
                 <td className="num">
                   {certifying && edit ? (
-                    <input
-                      className="input-num"
-                      inputMode="decimal"
-                      value={cert[l.contract_line_id] ?? ""}
-                      onChange={(e) => setCert({ ...cert, [l.contract_line_id]: e.target.value })}
-                    />
+                    <Field label="Certified" bare>
+                      <input
+                        className="input-num"
+                        inputMode="decimal"
+                        value={cert[l.contract_line_id] ?? ""}
+                        onChange={(e) => setCert({ ...cert, [l.contract_line_id]: e.target.value })}
+                      />
+                    </Field>
                   ) : l.certified_qty !== null ? (
                     num(l.certified_qty)
                   ) : (
@@ -304,7 +308,7 @@ function RaEditor({ bill, onClose, onChange }: { bill: RaBill; onClose: () => vo
           </tbody>
         </table>
       </div>
-      <table className="totals po-totals">
+      <table className="table compact totals po-totals">
         <tbody>
           <tr>
             <td>Gross (submitted)</td>
@@ -424,7 +428,7 @@ export function InvoiceTable({ invoices, onChange }: { invoices: Invoice[]; onCh
     }
   }
   return (
-    <div className="card table-wrap">
+    <Card as="div" className="table-wrap">
       {error && <div className="alert alert-error">{error}</div>}
       <table className="table compact">
         <thead>
@@ -477,7 +481,7 @@ export function InvoiceTable({ invoices, onChange }: { invoices: Invoice[]; onCh
           )}
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 }
 
@@ -610,7 +614,9 @@ function ReceiptForm({ lookups, onClose, onSaved }: { lookups: FinanceLookups; o
                   <td className="num">{inr(i.outstanding)}</td>
                   <td className="num">{inr(i.due)}</td>
                   <td className="num">
-                    <input className="input-num" inputMode="decimal" value={alloc[i.id] ?? ""} onChange={(e) => setAlloc({ ...alloc, [i.id]: e.target.value })} />
+                    <Field label="Settle" bare>
+                      <input className="input-num" inputMode="decimal" value={alloc[i.id] ?? ""} onChange={(e) => setAlloc({ ...alloc, [i.id]: e.target.value })} />
+                    </Field>
                   </td>
                 </tr>
               ))}
@@ -622,7 +628,7 @@ function ReceiptForm({ lookups, onClose, onSaved }: { lookups: FinanceLookups; o
           {!form.is_advance && <> · spread over invoices {inr(allocated)}</>}
         </p>
         <div className="form-actions">
-          <Button type="button"  onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
           </Button>
           <Button variant="primary" type="submit" disabled={!form.is_advance && Math.abs(settled - allocated)> 0.004}>
@@ -688,20 +694,22 @@ export default function Billing() {
       {error && <div className="alert alert-error">{error}</div>}
       {tab === "sites" && lookups && (
         <>
-          <select value={siteId} onChange={(e) => setSiteId(Number(e.target.value) || "")} aria-label="Site">
-            <option value="">Pick a site…</option>
-            {lookups.sites.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.code} {s.name}
-              </option>
-            ))}
-          </select>
+          <Field label="Site" bare>
+            <select value={siteId} onChange={(e) => setSiteId(Number(e.target.value) || "")} aria-label="Site">
+              <option value="">Pick a site…</option>
+              {lookups.sites.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.code} {s.name}
+                </option>
+              ))}
+            </select>
+          </Field>
           <div className="top-gap">{siteId && <SiteBilling key={siteId} siteId={siteId} />}</div>
         </>
       )}
       {tab === "invoices" && <InvoiceTable invoices={invoices} onChange={load} />}
       {tab === "receipts" && (
-        <div className="card table-wrap">
+        <Card as="div" className="table-wrap">
           <table className="table compact">
             <thead>
               <tr>
@@ -735,10 +743,10 @@ export default function Billing() {
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
       {tab === "ageing" && ageing && (
-        <div className="card table-wrap">
+        <Card as="div" className="table-wrap">
           <table className="table">
             <thead>
               <tr>
@@ -777,7 +785,7 @@ export default function Billing() {
               </tr>
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
       {receiving && lookups && <ReceiptForm lookups={lookups} onClose={() => setReceiving(false)} onSaved={() => (setReceiving(false), void load())} />}
     </>

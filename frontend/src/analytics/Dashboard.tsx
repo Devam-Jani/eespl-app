@@ -7,6 +7,7 @@ import { MENU, shows } from "../menu";
 import { HBarChart, PALETTE } from "./charts";
 import type { Drill, Tile } from "./ui";
 import { asOf, DataTable, drillHref, ExportButton, fmtValue, KpiTile, useData, useFilters } from "./ui";
+import { Button, Card } from "../ui/components";
 
 const DelaysCard = lazy(() => import("../schedule/Pages").then((m) => ({ default: m.DelaysCard })));
 const XrayTiles = lazy(() => import("../xray/Tiles")); // the sites in 3D (three.js: its own chunk)
@@ -63,14 +64,14 @@ export default function Dashboard({ embedded = false }: { embedded?: boolean } =
               <input type="checkbox" checked={demo} onChange={(e) => set("demo", e.target.checked ? "1" : "")} /> Demo company
             </label>
           )}
-          <button className="btn btn-small" disabled={busy} onClick={() => void refresh()}>
+          <Button size="small" disabled={busy} onClick={() => void refresh()}>
             {busy ? "Refreshing…" : "↻ Refresh"}
-          </button>
+          </Button>
           <ExportButton path={`/api/dashboard/${current.key}/xlsx${q}`} />
           {current.key === "company" && home.can_export && (
-            <button className="btn btn-small btn-ghost" onClick={() => void downloadFile(`/api/analytics/pdf/management${q}`).catch((err) => showError(err))}>
+            <Button variant="ghost" size="small" onClick={() => void downloadFile(`/api/analytics/pdf/management${q}`).catch((err) => showError(err))}>
               ⤓ PDF summary
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -153,7 +154,7 @@ function ManagementView({ demo }: { demo: boolean }) {
           </section>
         )}
       </div>
-      <aside className="dash-side card">
+      <Card as="aside" className="dash-side">
         <div className="toolbar">
           <h2 className="section-title">Alerts</h2>
           <Link to="/alerts" className="small">
@@ -167,7 +168,7 @@ function ManagementView({ demo }: { demo: boolean }) {
           </Link>
         ))}
         {alerts && alerts.alerts.length === 0 && <p className="muted small">No open alerts.</p>}
-      </aside>
+      </Card>
     </div>
   );
 }
@@ -184,7 +185,7 @@ function SalesView({ demo }: { demo: boolean }) {
     <>
       <Tiles tiles={data.tiles} demo={demo} />
       {!demo && <QuotationFollowUps rows={data.quotation_followups ?? []} mine={data.scope === "own"} />}
-      <section className="dash-section card top-gap">
+      <Card className="dash-section top-gap">
         <div className="toolbar">
           <h2 className="section-title">{data.scope === "own" ? "My pipeline" : "Pipeline"} by stage</h2>
           <Link to={`/analytics/strategy${demo ? "?demo=1" : ""}`} className="small">
@@ -207,7 +208,7 @@ function SalesView({ demo }: { demo: boolean }) {
             )
           }
         />
-      </section>
+      </Card>
     </>
   );
 }
@@ -216,7 +217,7 @@ function SalesView({ demo }: { demo: boolean }) {
 function QuotationFollowUps({ rows, mine }: { rows: FollowUp[]; mine: boolean }) {
   const overdue = rows.filter((r) => r.overdue).length;
   return (
-    <section className="dash-section card top-gap followups">
+    <Card className="dash-section top-gap followups">
       <div className="toolbar">
         <h2 className="section-title">
           {mine ? "My quotation follow-ups" : "Quotation follow-ups"} <span className="muted small">due this week{overdue ? ` · ${overdue} overdue` : ""}</span>
@@ -260,7 +261,7 @@ function QuotationFollowUps({ rows, mine }: { rows: FollowUp[]; mine: boolean })
           </table>
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -276,7 +277,7 @@ function SiteView({ demo }: { demo: boolean }) {
   return (
     <div className="site-todo-grid">
       {data.sites.map((s) => (
-        <div key={s.site_id} className="card">
+        <Card key={s.site_id} as="div">
           <div className="toolbar">
             <Link to={`/sites/${s.site_id}`}>
               <strong>{s.code}</strong> {s.name}
@@ -293,7 +294,7 @@ function SiteView({ demo }: { demo: boolean }) {
               </li>
             ))}
           </ul>
-        </div>
+        </Card>
       ))}
     </div>
   );
@@ -309,7 +310,7 @@ function AccountsView({ demo }: { demo: boolean }) {
   return (
     <>
       <Tiles tiles={data.tiles} demo={demo} />
-      <section className="dash-section card top-gap">
+      <Card className="dash-section top-gap">
         <div className="toolbar">
           <h2 className="section-title">Receivables ageing (due part, retention excluded)</h2>
           <span className="muted small">{asOf(data.as_of)}</span>
@@ -324,7 +325,7 @@ function AccountsView({ demo }: { demo: boolean }) {
         <p className="small">
           <Link to={`/analytics/finance${demo ? "?demo=1" : ""}`}>Cash flow, DSO and outstanding by client →</Link>
         </p>
-      </section>
+      </Card>
     </>
   );
 }
@@ -341,7 +342,7 @@ function PurchaseView({ demo }: { demo: boolean }) {
     <>
       <Tiles tiles={data.tiles} demo={demo} />
       <div className="split top-gap">
-        <section className="card">
+        <Card>
           <h2 className="section-title">POs awaiting delivery</h2>
           <ul className="plain-list">
             {data.pos.map((p) => (
@@ -351,8 +352,8 @@ function PurchaseView({ demo }: { demo: boolean }) {
             ))}
             {data.pos.length === 0 && <li className="muted">None.</li>}
           </ul>
-        </section>
-        <section className="card">
+        </Card>
+        <Card>
           <h2 className="section-title">Below reorder level</h2>
           <DataTable
             demo={demo}
@@ -368,7 +369,7 @@ function PurchaseView({ demo }: { demo: boolean }) {
               rows: data.low_stock,
             }}
           />
-        </section>
+        </Card>
       </div>
     </>
   );

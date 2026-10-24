@@ -12,6 +12,7 @@ import { decodeGeometry, useGlPlan } from "../takeoff/glplan";
 import type { Geo as PlanGeo, GeoV2 } from "../takeoff/glplan";
 import { ReadProgress } from "../takeoff/ReadProgress";
 import { ART, THEMES } from "../ui/tokens";
+import { Button, buttonClass, Card, Field } from "../ui/components";
 
 type Pt = [number, number];
 type Core = { kind: "stair" | "lift"; outline: Pt[]; risers: number | null };
@@ -173,10 +174,9 @@ export default function BuildingBuilder() {
     }
   }
   const ifcInput = out?.can_edit ? (
-    <label className="field">
-      <span>The client's BIM file (IFC)</span>
+    <Field label="The client's BIM file (IFC)">
       <input type="file" accept=".ifc" disabled={busy} onChange={(e) => e.target.files?.[0] && void uploadIfc(e.target.files[0])} />
-    </label>
+    </Field>
   ) : null;
 
   async function propose() {
@@ -252,20 +252,20 @@ export default function BuildingBuilder() {
           </p>
         </div>
         <div className="page-actions">
-          <Link className="btn" to={`/sites/${siteId}?tab=3d`}>
+          <Link className={buttonClass()} to={`/sites/${siteId}?tab=3d`}>
             See it in 3D
           </Link>
           {data && out.can_edit && (
-            <button className="btn btn-primary" disabled={busy || !dirty} onClick={() => void save()}>
+            <Button variant="primary" disabled={busy || !dirty} onClick={() => void save()}>
               Save{out.model ? ` (version ${out.model.version + 1})` : ""}
-            </button>
+            </Button>
           )}
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {msg && <div className="alert alert-ok">{msg}</div>}
       {!out.model && (
-        <div className="card">
+        <Card as="div">
           <h2>Start from a drawing</h2>
           {out.revisions
             .filter((r) => r.state !== "ready")
@@ -284,30 +284,30 @@ export default function BuildingBuilder() {
               <p key={d.cad_file_id}>
                 {d.title} (rev {d.rev_no}){" "}
                 {out.can_edit && (
-                  <button className="btn btn-small btn-primary" disabled={busy} onClick={() => void start(d.cad_file_id)}>
+                  <Button variant="primary" size="small" disabled={busy} onClick={() => void start(d.cad_file_id)}>
                     Build from this drawing
-                  </button>
+                  </Button>
                 )}
               </p>
             ))
           )}
           <p className="small muted">Or, when the client gave a BIM model, its IFC file (it is shown as it is; planning links its spaces to our places once):</p>
           {ifcInput}
-        </div>
+        </Card>
       )}
       {newer && out.can_edit && (
         <div className="alert alert-warn">
           A newer revision is read: {newer.title} rev {newer.rev_no}.{" "}
-          <button className="btn btn-small" disabled={busy} onClick={() => void start(newer.cad_file_id)}>
+          <Button size="small" disabled={busy} onClick={() => void start(newer.cad_file_id)}>
             Move the model onto it
-          </button>{" "}
+          </Button>{" "}
           (what still matches is kept; the changes are listed)
         </div>
       )}
       {out.model?.changes && <ChangesNote changes={out.model.changes} />}
       {data && (
         <div className="builder-grid">
-          <div className="card builder-side">
+          <Card as="div" className="builder-side">
             <h2>Floor types</h2>
             <p className="small muted">One per typical plan. The floors come from the plan's title where it names them; correct them here.</p>
             {data.floor_types.map((t) => (
@@ -319,26 +319,28 @@ export default function BuildingBuilder() {
               </button>
             ))}
             {out.can_edit && out.plans.some((p) => !data.floor_types.some((t) => t.plan === p.title)) && (
-              <select
-                value=""
-                aria-label="Add a floor type from a plan"
-                onChange={(e) => {
-                  const p = out.plans.find((x) => x.title === e.target.value);
-                  if (!p) return;
-                  const key = `${p.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 36)}-${data.floor_types.length}`;
-                  update((d) => d.floor_types.push({ key, name: p.title, plan: p.title, title_xy: p.xy, region: p.region, floors: p.floors, outline: [], columns: [], columns_confirmed: false, beams: [], cores: [], shift: [0, 0] }));
-                  setSel(key);
-                }}
-              >
-                <option value="">+ Add a floor type from a plan…</option>
-                {out.plans
-                  .filter((p) => !data.floor_types.some((t) => t.plan === p.title))
-                  .map((p) => (
-                    <option key={p.title} value={p.title}>
-                      {p.title}
-                    </option>
-                  ))}
-              </select>
+              <Field label="Add a floor type from a plan" bare>
+                <select
+                  value=""
+                  aria-label="Add a floor type from a plan"
+                  onChange={(e) => {
+                    const p = out.plans.find((x) => x.title === e.target.value);
+                    if (!p) return;
+                    const key = `${p.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 36)}-${data.floor_types.length}`;
+                    update((d) => d.floor_types.push({ key, name: p.title, plan: p.title, title_xy: p.xy, region: p.region, floors: p.floors, outline: [], columns: [], columns_confirmed: false, beams: [], cores: [], shift: [0, 0] }));
+                    setSel(key);
+                  }}
+                >
+                  <option value="">+ Add a floor type from a plan…</option>
+                  {out.plans
+                    .filter((p) => !data.floor_types.some((t) => t.plan === p.title))
+                    .map((p) => (
+                      <option key={p.title} value={p.title}>
+                        {p.title}
+                      </option>
+                    ))}
+                </select>
+              </Field>
             )}
             {type && out.can_edit && (
               <div className="builder-steps">
@@ -346,8 +348,8 @@ export default function BuildingBuilder() {
                   <label className="check">
                     <input type="checkbox" checked={type.walls !== false} onChange={(e) => updType((t) => (t.walls = e.target.checked))} /> Walls (off for a roof or a terrace)
                   </label>
-                  <button
-                    className="btn btn-small"
+                  <Button
+                    size="small"
                     onClick={() => {
                       if (!confirm(`Remove the floor type ${type.name}? (its floors fall back to the reference plan)`)) return;
                       update((d) => (d.floor_types = d.floor_types.filter((t) => t.key !== type.key)));
@@ -355,90 +357,95 @@ export default function BuildingBuilder() {
                     }}
                   >
                     Remove this floor type
-                  </button>
+                  </Button>
                 </div>
-                <label className="field">
-                  <span>Floors this plan is for</span>
+                <Field label="Floors this plan is for">
                   <input defaultValue={floorsText(type.floors)} key={type.key} onBlur={(e) => updType((t) => (t.floors = parseFloors(e.target.value)))} placeholder="3-12, or 2,3,5" />
-                </label>
+                </Field>
                 <div className="builder-row">
                   <b>1. Outline</b>
-                  <button className="btn btn-small" disabled={busy || !type.region} onClick={() => void propose()}>
+                  <Button size="small" disabled={busy || !type.region} onClick={() => void propose()}>
                     Propose from the walls
-                  </button>
-                  <button className={`btn btn-small${tool === "outline" ? " active" : ""}`} onClick={() => (setTool("outline"), setTrace([]))}>
+                  </Button>
+                  <Button size="small" className={tool === "outline" ? "active" : ""} onClick={() => (setTool("outline"), setTrace([]))}>
                     Trace
-                  </button>
+                  </Button>
                 </div>
                 <div className="builder-row">
                   <b>2. Columns</b>
-                  <button className="btn btn-small" disabled={busy || !type.outline.length} onClick={() => void findColumns()}>
+                  <Button size="small" disabled={busy || !type.outline.length} onClick={() => void findColumns()}>
                     Find columns
-                  </button>
-                  <button className={`btn btn-small${tool === "columns" ? " active" : ""}`} disabled={!type.outline.length} onClick={() => setTool("columns")}>
+                  </Button>
+                  <Button size="small" className={tool === "columns" ? "active" : ""} disabled={!type.outline.length} onClick={() => setTool("columns")}>
                     Add / remove
-                  </button>
-                  <button className="btn btn-small" disabled={!type.columns.length || type.columns_confirmed} onClick={() => (updType((t) => (t.columns_confirmed = true)), setTool("none"))}>
+                  </Button>
+                  <Button size="small" disabled={!type.columns.length || type.columns_confirmed} onClick={() => (updType((t) => (t.columns_confirmed = true)), setTool("none"))}>
                     {type.columns_confirmed ? "Confirmed" : "Confirm"}
-                  </button>
+                  </Button>
                 </div>
                 <div className="builder-row small">
                   Column sizes from
-                  <input type="number" step="0.05" min={0.1} max={1} style={{ width: "4.5em" }} value={data.settings.column_min_m} onChange={(e) => update((d) => (d.settings.column_min_m = Number(e.target.value)))} aria-label="Smallest column side (m)" />
+                  <Field label="Smallest column side (m)" bare>
+                    <input type="number" step="0.05" min={0.1} max={1} style={{ width: "4.5em" }} value={data.settings.column_min_m} onChange={(e) => update((d) => (d.settings.column_min_m = Number(e.target.value)))} aria-label="Smallest column side (m)" />
+                  </Field>
                   to
-                  <input type="number" step="0.05" min={0.2} max={2} style={{ width: "4.5em" }} value={data.settings.column_max_m} onChange={(e) => update((d) => (d.settings.column_max_m = Number(e.target.value)))} aria-label="Largest column side (m)" />
+                  <Field label="Largest column side (m)" bare>
+                    <input type="number" step="0.05" min={0.2} max={2} style={{ width: "4.5em" }} value={data.settings.column_max_m} onChange={(e) => update((d) => (d.settings.column_max_m = Number(e.target.value)))} aria-label="Largest column side (m)" />
+                  </Field>
                   m (this site's setting: save, then find again)
                 </div>
                 <div className="builder-row">
                   <b>3. Cores</b>
-                  <button className={`btn btn-small${tool === "stair" ? " active" : ""}`} onClick={() => (setTool("stair"), setTrace([]))}>
+                  <Button size="small" className={tool === "stair" ? "active" : ""} onClick={() => (setTool("stair"), setTrace([]))}>
                     Trace a stair
-                  </button>
-                  <button className={`btn btn-small${tool === "lift" ? " active" : ""}`} onClick={() => (setTool("lift"), setTrace([]))}>
+                  </Button>
+                  <Button size="small" className={tool === "lift" ? "active" : ""} onClick={() => (setTool("lift"), setTrace([]))}>
                     Trace a lift
-                  </button>
+                  </Button>
                 </div>
                 {type.cores.map((c, i) => (
                   <div key={i} className="builder-row small">
                     {c.kind === "stair" ? "Stair" : "Lift"} {i + 1}
                     {c.kind === "stair" && (
-                      <input
-                        type="number"
-                        min={10}
-                        max={40}
-                        placeholder="risers (auto)"
-                        value={c.risers ?? ""}
-                        onChange={(e) => updType((t) => (t.cores[i].risers = e.target.value ? Number(e.target.value) : null))}
-                        aria-label="Risers"
-                        style={{ width: "7em" }}
-                      />
+                      <Field label="Risers" bare>
+                        <input
+                          type="number"
+                          min={10}
+                          max={40}
+                          placeholder="risers (auto)"
+                          value={c.risers ?? ""}
+                          onChange={(e) => updType((t) => (t.cores[i].risers = e.target.value ? Number(e.target.value) : null))}
+                          aria-label="Risers"
+                          style={{ width: "7em" }}
+                        />
+                      </Field>
                     )}
-                    <button className="btn btn-small" onClick={() => updType((t) => t.cores.splice(i, 1))}>
+                    <Button size="small" onClick={() => updType((t) => t.cores.splice(i, 1))}>
                       Remove
-                    </button>
+                    </Button>
                   </div>
                 ))}
                 <div className="builder-row">
                   <b>4. Beams</b>
-                  <button className={`btn btn-small${tool === "beam" ? " active" : ""}`} disabled={type.columns.length < 2} onClick={() => (setTool("beam"), setBeamFrom(null))}>
+                  <Button size="small" className={tool === "beam" ? "active" : ""} disabled={type.columns.length < 2} onClick={() => (setTool("beam"), setBeamFrom(null))}>
                     Pick two columns
-                  </button>
+                  </Button>
                   <span className="small">{type.beams.length} beam(s)</span>
                   {type.beams.length > 0 && (
-                    <button className="btn btn-small" onClick={() => updType((t) => (t.beams = []))}>
+                    <Button size="small" onClick={() => updType((t) => (t.beams = []))}>
                       Clear
-                    </button>
+                    </Button>
                   )}
                 </div>
                 {(tool === "outline" || tool === "stair" || tool === "lift") && (
                   <div className="builder-row">
                     <span className="small">{trace.length} corner(s): click the plan (it snaps to the walls)</span>
-                    <button className="btn btn-small btn-primary" disabled={trace.length < 3} onClick={finishTrace}>
+                    <Button variant="primary" size="small" disabled={trace.length < 3} onClick={finishTrace}>
                       Finish
-                    </button>
-                    <button className="btn btn-small" onClick={() => setTrace((t) => t.slice(0, -1))}>
+                    </Button>
+                    <Button size="small" onClick={() => setTrace((t) => t.slice(0, -1))}>
                       Undo
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
@@ -456,10 +463,9 @@ export default function BuildingBuilder() {
                   ["column_max_m", "Column up to (m)"],
                 ] as const
               ).map(([k, label]) => (
-                <label key={k} className="field">
-                  <span>{label}</span>
+                <Field label={label} key={k}>
                   <input type="number" step="0.001" value={data.settings[k]} disabled={!out.can_edit} onChange={(e) => update((d) => (d.settings[k] = Number(e.target.value)))} />
-                </label>
+                </Field>
               ))}
               <label className="check">
                 <input type="checkbox" checked={data.settings.beams_on_walls} disabled={!out.can_edit} onChange={(e) => update((d) => (d.settings.beams_on_walls = e.target.checked))} /> Beams along the column lines
@@ -467,19 +473,17 @@ export default function BuildingBuilder() {
               <label className="check">
                 <input type="checkbox" checked={data.settings.ifc} disabled={!out.can_edit} onChange={(e) => update((d) => (d.settings.ifc = e.target.checked))} /> Show the client's BIM file (IFC)
               </label>
-              <label className="field">
-                <span>BIM file limit for a laptop (MB)</span>
+              <Field label="BIM file limit for a laptop (MB)">
                 <input type="number" min={10} max={600} value={data.settings.ifc_max_mb} disabled={!out.can_edit} onChange={(e) => update((d) => (d.settings.ifc_max_mb = Number(e.target.value)))} />
-              </label>
+              </Field>
               <div style={{ gridColumn: "1 / -1" }}>{ifcInput}</div>
-              <label className="field">
-                <span>Glow</span>
+              <Field label="Glow">
                 <select value={data.settings.bloom} disabled={!out.can_edit} onChange={(e) => update((d) => (d.settings.bloom = e.target.value as Settings["bloom"]))}>
                   <option value="auto">Auto (off on weak devices)</option>
                   <option value="on">Always on</option>
                   <option value="off">Off</option>
                 </select>
-              </label>
+              </Field>
             </div>
             <h2>Floors</h2>
             <table className="table table-compact">
@@ -506,34 +510,38 @@ export default function BuildingBuilder() {
                         </td>
                         <td className="small">{t?.name ?? <span className="muted">— (the reference plan)</span>}</td>
                         <td className="num">
-                          <input
-                            type="number"
-                            step="0.001"
-                            style={{ width: "6.5em" }}
-                            value={f.level_by_hand ? (f.elevation_m ?? "") : (el?.elevation_m ?? "")}
-                            disabled={!out.can_edit}
-                            onChange={(e) =>
-                              update((d) => {
-                                const x = d.floors.find((y) => y.node_id === f.node_id)!;
-                                x.elevation_m = e.target.value === "" ? null : Number(e.target.value);
-                                x.level_by_hand = e.target.value !== "";
-                              })
-                            }
-                            aria-label={`Level of ${f.name}`}
-                          />
+                          <Field label={`Level of ${f.name}`} bare>
+                            <input
+                              type="number"
+                              step="0.001"
+                              style={{ width: "6.5em" }}
+                              value={f.level_by_hand ? (f.elevation_m ?? "") : (el?.elevation_m ?? "")}
+                              disabled={!out.can_edit}
+                              onChange={(e) =>
+                                update((d) => {
+                                  const x = d.floors.find((y) => y.node_id === f.node_id)!;
+                                  x.elevation_m = e.target.value === "" ? null : Number(e.target.value);
+                                  x.level_by_hand = e.target.value !== "";
+                                })
+                              }
+                              aria-label={`Level of ${f.name}`}
+                            />
+                          </Field>
                           <div className="small muted">{src === "section" ? "from the section" : src === "hand" ? "typed" : "default"}</div>
                         </td>
                         <td className="num">
-                          <input
-                            type="number"
-                            step="0.001"
-                            style={{ width: "6em" }}
-                            placeholder={String(data.settings.floor_height_m)}
-                            value={f.height_m ?? ""}
-                            disabled={!out.can_edit}
-                            onChange={(e) => update((d) => (d.floors.find((x) => x.node_id === f.node_id)!.height_m = e.target.value ? Number(e.target.value) : null))}
-                            aria-label={`Height of ${f.name}`}
-                          />
+                          <Field label={`Height of ${f.name}`} bare>
+                            <input
+                              type="number"
+                              step="0.001"
+                              style={{ width: "6em" }}
+                              placeholder={String(data.settings.floor_height_m)}
+                              value={f.height_m ?? ""}
+                              disabled={!out.can_edit}
+                              onChange={(e) => update((d) => (d.floors.find((x) => x.node_id === f.node_id)!.height_m = e.target.value ? Number(e.target.value) : null))}
+                              aria-label={`Height of ${f.name}`}
+                            />
+                          </Field>
                         </td>
                       </tr>
                     );
@@ -545,8 +553,8 @@ export default function BuildingBuilder() {
                 Section levels no floor uses: {out.model!.unmatched_levels.map((v) => `${v >= 0 ? "+" : ""}${v.toFixed(3)}`).join(", ")} m (basements, a tank or a roof room the site structure has not got). Add the floor to the structure, or leave them.
               </p>
             )}
-          </div>
-          <div className="card builder-plan">
+          </Card>
+          <Card as="div" className="builder-plan">
             {out.model_drawing && out.model_drawing.state !== "ready" ? (
               <DrawingStateCard rev={out.model_drawing} canRead={out.can_read} busy={busy} onRead={(id) => void readDrawing(id)} />
             ) : geoError ? (
@@ -554,9 +562,9 @@ export default function BuildingBuilder() {
                 The drawing could not be shown: {geoError}
                 {out.can_read && out.model_drawing && (
                   <div>
-                    <button className="btn btn-small" disabled={busy} onClick={() => void readDrawing(out.model_drawing!.revision_id)}>
+                    <Button size="small" disabled={busy} onClick={() => void readDrawing(out.model_drawing!.revision_id)}>
                       Read the drawing again
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
@@ -567,7 +575,7 @@ export default function BuildingBuilder() {
             ) : (
               <p className="muted">Loading the drawing…</p>
             )}
-          </div>
+          </Card>
         </div>
       )}
     </div>
@@ -587,9 +595,9 @@ function DrawingStateCard({ rev, canRead, busy, onRead }: { rev: DrawingRev; can
       {rev.error && <div className="small">{rev.error}</div>}
       {canRead ? (
         <div>
-          <button className="btn btn-small btn-primary" disabled={busy} onClick={() => onRead(rev.revision_id)}>
+          <Button variant="primary" size="small" disabled={busy} onClick={() => onRead(rev.revision_id)}>
             {rev.state === "not read" ? "Read the drawing" : "Read the drawing again"}
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="small">Ask billing or planning to read it.</div>
@@ -611,7 +619,7 @@ function area(pts: Pt[]): number {
 function ChangesNote({ changes }: { changes: Changes }) {
   const cols = Object.entries(changes.columns ?? {});
   return (
-    <div className="card">
+    <Card as="div">
       <h2>What the new drawing revision changed</h2>
       <p className="small">
         Plans kept: {changes.plans_kept.length}
@@ -628,7 +636,7 @@ function ChangesNote({ changes }: { changes: Changes }) {
         {changes.rooms.resized.length ? `; resized: ${changes.rooms.resized.join(", ")}` : ""}
         {changes.rooms.removed.length ? `; gone: ${changes.rooms.removed.join(", ")}` : ""}.
       </p>
-    </div>
+    </Card>
   );
 }
 
@@ -763,15 +771,15 @@ function PlanCanvas({ geo, type, trace, tool, beamFrom, onClick }: { geo: Geo; t
       <canvas ref={glRef} className="plan-gl" aria-hidden="true" />
       <canvas ref={ref} onPointerDown={down} onPointerMove={move} onPointerUp={up} onWheel={wheel} aria-label="The plan" style={{ cursor: tool === "none" ? "grab" : "crosshair" }} />
       <div className="takeoff-zoom">
-        <button className="btn btn-small" onClick={() => setView((v) => ({ ...v, scale: v.scale * 1.5 }))} aria-label="Zoom in">
+        <Button size="small" onClick={() => setView((v) => ({ ...v, scale: v.scale * 1.5 }))} aria-label="Zoom in">
           +
-        </button>
-        <button className="btn btn-small" onClick={() => setView((v) => ({ ...v, scale: v.scale / 1.5 }))} aria-label="Zoom out">
+        </Button>
+        <Button size="small" onClick={() => setView((v) => ({ ...v, scale: v.scale / 1.5 }))} aria-label="Zoom out">
           −
-        </button>
-        <button className="btn btn-small" onClick={() => setView({ cx: 0, cy: 0, scale: 0 })}>
+        </Button>
+        <Button size="small" onClick={() => setView({ cx: 0, cy: 0, scale: 0 })}>
           Fit
-        </button>
+        </Button>
       </div>
     </div>
   );

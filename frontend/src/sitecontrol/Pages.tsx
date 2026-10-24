@@ -8,6 +8,7 @@ import { api, downloadFile, fetchObjectUrl } from "../api";
 import { useAuth } from "../auth";
 import { Modal } from "../ui/Overlay";
 import { errorText } from "../format";
+import { Button, buttonClass, Card, Field } from "../ui/components";
 
 const fmt = (d: string | null | undefined, time = true) =>
   d
@@ -101,14 +102,16 @@ export function Deliveries() {
       <div className="page-header">
         <h1>Deliveries at site</h1>
         <div className="page-actions">
-          <select value={site} onChange={(e) => set("site", e.target.value)} aria-label="Site">
-            <option value="">All sites</option>
-            {sites.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.code} · {s.name}
-              </option>
-            ))}
-          </select>
+          <Field label="Site" bare>
+            <select value={site} onChange={(e) => set("site", e.target.value)} aria-label="Site">
+              <option value="">All sites</option>
+              {sites.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.code} · {s.name}
+                </option>
+              ))}
+            </select>
+          </Field>
         </div>
       </div>
       {testLink && (
@@ -138,7 +141,7 @@ export function Deliveries() {
       ) : rows.length === 0 ? (
         <p className="empty">No deliveries here.</p>
       ) : (
-        <div className="table-wrap card">
+        <Card as="div" className="table-wrap">
           <table className="table">
             <thead>
               <tr>
@@ -175,7 +178,7 @@ export function Deliveries() {
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
     </>
   );
@@ -236,15 +239,15 @@ export function DeliveryDetail() {
           </p>
         </div>
         <div className="page-actions">
-          <button className="btn btn-small" onClick={() => void downloadFile(`/api/sitecontrol/deliveries/${d.id}/pdf`).catch((e) => setError(errorText(e)))}>
+          <Button size="small" onClick={() => void downloadFile(`/api/sitecontrol/deliveries/${d.id}/pdf`).catch((e) => setError(errorText(e)))}>
             ⤓ Delivery note (QR)
-          </button>
+          </Button>
           {store && d.status === "dispatched" && (
             <>
-              <button className="btn btn-small" onClick={() => setEdit(true)}>
+              <Button size="small" onClick={() => setEdit(true)}>
                 Driver / vehicle
-              </button>
-              <label className="btn btn-small btn-ghost">
+              </Button>
+              <label className={buttonClass({ variant: "ghost", size: "small" })}>
                 Driver's drop-off photo
                 <input type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && void drop(e.target.files[0])} />
               </label>
@@ -255,7 +258,7 @@ export function DeliveryDetail() {
       {error && <div className="alert alert-error">{error}</div>}
       {msg && <div className="alert alert-ok">{msg}</div>}
       <div className="grid-2">
-        <div className="card">
+        <Card as="div">
           <h2 className="section-title">Items</h2>
           <table className="table compact">
             <thead>
@@ -306,8 +309,8 @@ export function DeliveryDetail() {
               </ul>
             </div>
           ))}
-        </div>
-        <div className="card">
+        </Card>
+        <Card as="div">
           <h2 className="section-title">Receipt</h2>
           {d.confirmed_at ? (
             <p>
@@ -336,7 +339,7 @@ export function DeliveryDetail() {
             Vehicle {d.vehicle_no ?? "—"} · driver {d.driver_name ?? "—"} {d.driver_phone ?? ""}
           </p>
           {d.can_confirm && <ConfirmForm d={d} onDone={(x) => (setD(x), setMsg("Confirmed: stock now follows your count."))} />}
-        </div>
+        </Card>
       </div>
       {edit && (
         <EditDriver
@@ -372,31 +375,33 @@ function ConfirmForm({ d, onDone }: { d: DnDetail; onDone: (x: DnDetail) => void
       {d.lines.map((l) => (
         <div key={l.id} className="inline-form">
           <span className="grow">{l.product}</span>
-          <input
-            placeholder="received"
-            inputMode="decimal"
-            value={counts[l.id]?.received ?? ""}
-            onChange={(e) => setCounts({ ...counts, [l.id]: { received: e.target.value, damaged: counts[l.id]?.damaged ?? "" } })}
-          />
-          <input
-            placeholder="damaged"
-            inputMode="decimal"
-            value={counts[l.id]?.damaged ?? ""}
-            onChange={(e) => setCounts({ ...counts, [l.id]: { received: counts[l.id]?.received ?? "", damaged: e.target.value } })}
-          />
+          <Field label="received" bare>
+            <input
+              placeholder="received"
+              inputMode="decimal"
+              value={counts[l.id]?.received ?? ""}
+              onChange={(e) => setCounts({ ...counts, [l.id]: { received: e.target.value, damaged: counts[l.id]?.damaged ?? "" } })}
+            />
+          </Field>
+          <Field label="damaged" bare>
+            <input
+              placeholder="damaged"
+              inputMode="decimal"
+              value={counts[l.id]?.damaged ?? ""}
+              onChange={(e) => setCounts({ ...counts, [l.id]: { received: counts[l.id]?.received ?? "", damaged: e.target.value } })}
+            />
+          </Field>
           <span className="small muted">{l.unit}</span>
         </div>
       ))}
-      <label className="field">
-        <span>Photo: material as unloaded</span>
+      <Field label="Photo: material as unloaded">
         <input type="file" accept="image/*" capture="environment" onChange={(e) => setGoods(e.target.files?.[0] ?? null)} />
-      </label>
-      <label className="field">
-        <span>Photo: signed challan</span>
+      </Field>
+      <Field label="Photo: signed challan">
         <input type="file" accept="image/*" capture="environment" onChange={(e) => setChallan(e.target.files?.[0] ?? null)} />
-      </label>
+      </Field>
       {error && <div className="alert alert-error">{error}</div>}
-      <button className="btn btn-primary">Confirm delivery</button>
+      <Button type="submit" variant="primary">Confirm delivery</Button>
     </form>
   );
 }
@@ -408,24 +413,22 @@ function EditDriver({ d, onClose, onSaved }: { d: DnDetail; onClose: () => void;
     <Modal title={`${d.code}: driver and vehicle`} onClose={onClose}>
       <div className="form-grid two">
         {(["vehicle_no", "driver_name", "driver_phone"] as const).map((k) => (
-          <label key={k} className="field">
-            <span>{k.replace("_", " ")}</span>
+          <Field label={k.replace("_", " ")} key={k}>
             <input value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} />
-          </label>
+          </Field>
         ))}
-        <label className="field">
-          <span>Expected at site</span>
+        <Field label="Expected at site">
           <input type="datetime-local" value={f.expected_at} onChange={(e) => setF({ ...f, expected_at: e.target.value })} />
-        </label>
+        </Field>
       </div>
       <p className="small muted">The note is printed again with a new receipt link; the old one stops working.</p>
       {error && <div className="alert alert-error">{error}</div>}
       <div className="form-actions">
-        <button className="btn" onClick={onClose}>
+        <Button onClick={onClose}>
           Cancel
-        </button>
-        <button
-          className="btn btn-primary"
+        </Button>
+        <Button
+          variant="primary"
           onClick={() =>
             void api<DnDetail>(`/api/sitecontrol/deliveries/${d.id}`, { method: "PUT", json: { ...f, expected_at: new Date(f.expected_at).toISOString() } }).then(onSaved, (e) =>
               setError(errorText(e)),
@@ -433,7 +436,7 @@ function EditDriver({ d, onClose, onSaved }: { d: DnDetail; onClose: () => void;
           }
         >
           Save and print again
-        </button>
+        </Button>
       </div>
     </Modal>
   );
@@ -481,9 +484,9 @@ export function RateContracts() {
             <input type="checkbox" checked={current} onChange={(e) => setCurrent(e.target.checked)} /> In force today
           </label>
           {editor && (
-            <button className="btn btn-primary" onClick={() => setEditing("new")}>
+            <Button variant="primary" onClick={() => setEditing("new")}>
               New contract
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -496,7 +499,7 @@ export function RateContracts() {
       ) : rows.length === 0 ? (
         <p className="empty">No rate contracts yet.</p>
       ) : (
-        <div className="table-wrap card">
+        <Card as="div" className="table-wrap">
           <table className="table">
             <thead>
               <tr>
@@ -525,24 +528,24 @@ export function RateContracts() {
                   <td className="small">{c.agreed_by ?? "—"}</td>
                   <td>
                     {editor && (
-                      <button className="btn btn-small btn-ghost" onClick={() => setEditing(c)}>
+                      <Button variant="ghost" size="small" onClick={() => setEditing(c)}>
                         Edit
-                      </button>
+                      </Button>
                     )}
-                    <button className="btn btn-small btn-ghost" onClick={() => setVersions(c)}>
+                    <Button variant="ghost" size="small" onClick={() => setVersions(c)}>
                       v{c.version}
-                    </button>
+                    </Button>
                     {c.attachment && (
-                      <button className="btn btn-small btn-ghost" onClick={() => void downloadFile(`/api/sitecontrol/rate-contracts/${c.id}/attachment`)}>
+                      <Button variant="ghost" size="small" onClick={() => void downloadFile(`/api/sitecontrol/rate-contracts/${c.id}/attachment`)}>
                         ⤓ quote
-                      </button>
+                      </Button>
                     )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
       {editing && <ContractForm c={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={() => (setEditing(null), void load())} />}
       {versions && <ContractVersions c={versions} onClose={() => setVersions(null)} />}
@@ -603,8 +606,7 @@ function ContractForm({ c, onClose, onSaved }: { c: Contract | null; onClose: ()
   return (
     <Modal title={c ? `Rate contract · v${c.version}` : "New rate contract"} onClose={onClose}>
       <div className="form-grid two">
-        <label className="field">
-          <span>Vendor</span>
+        <Field label="Vendor">
           <select value={f.vendor_id} onChange={(e) => setF({ ...f, vendor_id: e.target.value })} disabled={!!c}>
             <option value="">Choose…</option>
             {vendors.map((v) => (
@@ -613,9 +615,8 @@ function ContractForm({ c, onClose, onSaved }: { c: Contract | null; onClose: ()
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Product</span>
+        </Field>
+        <Field label="Product">
           <select value={f.product_id} onChange={(e) => setF({ ...f, product_id: e.target.value })} disabled={!!c}>
             <option value="">Choose…</option>
             {products.map((p) => (
@@ -624,37 +625,30 @@ function ContractForm({ c, onClose, onSaved }: { c: Contract | null; onClose: ()
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Rate per {unit ?? "base unit"} (₹)</span>
+        </Field>
+        <Field label={<>Rate per {unit ?? "base unit"} (₹)</>}>
           <input inputMode="decimal" value={f.rate} onChange={(e) => setF({ ...f, rate: e.target.value })} />
           <LastPrice productId={f.product_id ? Number(f.product_id) : null} rate={f.rate} />
-        </label>
-        <label className="field">
-          <span>Freight terms</span>
+        </Field>
+        <Field label="Freight terms">
           <input value={f.freight_terms} placeholder="e.g. delivered to site" onChange={(e) => setF({ ...f, freight_terms: e.target.value })} />
-        </label>
-        <label className="field">
-          <span>Valid from</span>
+        </Field>
+        <Field label="Valid from">
           <input type="date" value={f.valid_from} onChange={(e) => setF({ ...f, valid_from: e.target.value })} />
-        </label>
-        <label className="field">
-          <span>Valid till</span>
+        </Field>
+        <Field label="Valid till">
           <input type="date" value={f.valid_till} onChange={(e) => setF({ ...f, valid_till: e.target.value })} />
-        </label>
-        <label className="field">
-          <span>Agreed by</span>
+        </Field>
+        <Field label="Agreed by">
           <input value={f.agreed_by} onChange={(e) => setF({ ...f, agreed_by: e.target.value })} />
-        </label>
-        <label className="field">
-          <span>Vendor's quote (attachment)</span>
+        </Field>
+        <Field label="Vendor's quote (attachment)">
           <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        </label>
+        </Field>
       </div>
-      <label className="field">
-        <span>Notes</span>
+      <Field label="Notes">
         <textarea rows={2} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
-      </label>
+      </Field>
       {c && (
         <label className="check">
           <input type="checkbox" checked={f.is_active} onChange={(e) => setF({ ...f, is_active: e.target.checked })} /> Active
@@ -662,12 +656,12 @@ function ContractForm({ c, onClose, onSaved }: { c: Contract | null; onClose: ()
       )}
       {error && <div className="alert alert-error">{error}</div>}
       <div className="form-actions">
-        <button className="btn" onClick={onClose}>
+        <Button onClick={onClose}>
           Cancel
-        </button>
-        <button className="btn btn-primary" onClick={() => void save()}>
+        </Button>
+        <Button variant="primary" onClick={() => void save()}>
           Save (new version)
-        </button>
+        </Button>
       </div>
     </Modal>
   );
@@ -759,15 +753,15 @@ export function ReadyToBill() {
           const list = rows.filter((r) => r.site_id === sid);
           const total = list.reduce((s, r) => s + Number(r.value ?? 0), 0);
           return (
-            <section key={sid} className="card top-gap">
+            <Card key={sid} className="top-gap">
               <div className="toolbar">
                 <h2 className="section-title">
                   {list[0].site} <span className="muted small">· {money(total)}</span>
                 </h2>
                 {can("billing.edit") && (
-                  <button className="btn btn-primary btn-small" onClick={() => void raise(sid)}>
+                  <Button variant="primary" size="small" onClick={() => void raise(sid)}>
                     Raise RA bill
-                  </button>
+                  </Button>
                 )}
               </div>
               <table className="table compact">
@@ -803,7 +797,7 @@ export function ReadyToBill() {
                   ))}
                 </tbody>
               </table>
-            </section>
+            </Card>
           );
         })
       )}
@@ -864,7 +858,7 @@ export function NewAreas() {
       ) : (
         <div className="area-queue">
           {rows.map((r) => (
-            <div key={r.id} className="card area-req">
+            <Card key={r.id} as="div" className="area-req">
               {r.photo && <Thumb path={`/api/sitecontrol/new-areas/${r.id}/photo`} alt={r.name} />}
               <div className="grow">
                 <h3>{r.name}</h3>
@@ -879,15 +873,15 @@ export function NewAreas() {
               </div>
               {r.status === "pending" && (
                 <div className="panel-actions">
-                  <button className="btn btn-primary btn-small" onClick={() => setDeciding({ r, how: "approve" })}>
+                  <Button variant="primary" size="small" onClick={() => setDeciding({ r, how: "approve" })}>
                     Approve
-                  </button>
-                  <button className="btn btn-small" onClick={() => setDeciding({ r, how: "reject" })}>
+                  </Button>
+                  <Button size="small" onClick={() => setDeciding({ r, how: "reject" })}>
                     Reject
-                  </button>
+                  </Button>
                 </div>
               )}
-            </div>
+            </Card>
           ))}
         </div>
       )}
@@ -916,8 +910,7 @@ function Decide({ r, how, onClose, onDone }: { r: AreaReq; how: "approve" | "rej
   }
   return (
     <Modal title={`${how === "approve" ? "Approve" : "Reject"}: ${r.name}`} onClose={onClose}>
-      <label className="field">
-        <span>{how === "approve" ? "Add it under" : "Move the booked work to"}</span>
+      <Field label={how === "approve" ? "Add it under" : "Move the booked work to"}>
         <select value={node} onChange={(e) => setNode(e.target.value)}>
           <option value="">{how === "approve" ? "the site (top level)" : "Choose a place…"}</option>
           {nodes.map((x) => (
@@ -926,10 +919,9 @@ function Decide({ r, how, onClose, onDone }: { r: AreaReq; how: "approve" | "rej
             </option>
           ))}
         </select>
-      </label>
+      </Field>
       {how === "approve" ? (
-        <label className="field">
-          <span>Kind of place</span>
+        <Field label="Kind of place">
           <select value={kind} onChange={(e) => setKind(e.target.value)}>
             {[
               "other",
@@ -953,21 +945,20 @@ function Decide({ r, how, onClose, onDone }: { r: AreaReq; how: "approve" | "rej
               </option>
             ))}
           </select>
-        </label>
+        </Field>
       ) : (
-        <label className="field">
-          <span>Why</span>
+        <Field label="Why">
           <input value={note} onChange={(e) => setNote(e.target.value)} />
-        </label>
+        </Field>
       )}
       {error && <div className="alert alert-error">{error}</div>}
       <div className="form-actions">
-        <button className="btn" onClick={onClose}>
+        <Button onClick={onClose}>
           Cancel
-        </button>
-        <button className="btn btn-primary" disabled={how === "reject" && !node} onClick={() => void go()}>
+        </Button>
+        <Button variant="primary" disabled={how === "reject" && !node} onClick={() => void go()}>
           {how === "approve" ? "Approve" : "Reject and move"}
-        </button>
+        </Button>
       </div>
     </Modal>
   );
@@ -1010,12 +1001,10 @@ export function NewAreaForm() {
       </div>
       <h1>New area</h1>
       <p className="muted small">A place not on the site's list. Planning approves it; you can book work and material on it meanwhile.</p>
-      <label className="field">
-        <span>Name</span>
+      <Field label="Name">
         <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required />
-      </label>
-      <label className="field">
-        <span>Area type</span>
+      </Field>
+      <Field label="Area type">
         <select value={f.area_type_id} onChange={(e) => setF({ ...f, area_type_id: e.target.value })}>
           <option value="">—</option>
           {types.map((t) => (
@@ -1024,13 +1013,11 @@ export function NewAreaForm() {
             </option>
           ))}
         </select>
-      </label>
-      <label className="field">
-        <span>Approximate size (sqm)</span>
+      </Field>
+      <Field label="Approximate size (sqm)">
         <input inputMode="decimal" value={f.approx_sqm} onChange={(e) => setF({ ...f, approx_sqm: e.target.value })} />
-      </label>
-      <label className="field">
-        <span>Where (under)</span>
+      </Field>
+      <Field label="Where (under)">
         <select value={f.parent_node_id} onChange={(e) => setF({ ...f, parent_node_id: e.target.value })}>
           <option value="">the site</option>
           {nodes.map((x) => (
@@ -1039,19 +1026,17 @@ export function NewAreaForm() {
             </option>
           ))}
         </select>
-      </label>
-      <label className="field">
-        <span>Photo</span>
+      </Field>
+      <Field label="Photo">
         <input type="file" accept="image/*" capture="environment" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
-      </label>
-      <label className="field">
-        <span>Note</span>
+      </Field>
+      <Field label="Note">
         <input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} />
-      </label>
+      </Field>
       {error && <div className="alert alert-error">{error}</div>}
-      <button className="btn btn-primary big-btn" disabled={busy}>
+      <Button type="submit" variant="primary" className="big-btn" disabled={busy}>
         Send to planning
-      </button>
+      </Button>
     </form>
   );
 }
@@ -1083,9 +1068,9 @@ export function Productivity() {
       <div className="page-header">
         <h1>Labour productivity</h1>
         <div className="page-actions">
-          <button className="btn btn-small" onClick={() => void downloadFile("/api/sitecontrol/reports/productivity?format=xlsx")}>
+          <Button size="small" onClick={() => void downloadFile("/api/sitecontrol/reports/productivity?format=xlsx")}>
             ⤓ Excel
-          </button>
+          </Button>
         </div>
       </div>
       <p className="muted small">
@@ -1093,7 +1078,7 @@ export function Productivity() {
         flagged and needs an override with a note.
       </p>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="table-wrap card">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -1133,23 +1118,25 @@ export function Productivity() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       <h2 className="section-title top-gap">Expected sqm per man-day</h2>
-      <div className="card norms">
+      <Card as="div" className="norms">
         {norms.map((x) => (
           <div key={x.system_id} className="inline-form">
             <span className="grow">{x.system}</span>
-            <input
-              className="norm-input"
-              defaultValue={x.sqm_per_manday ?? ""}
-              placeholder="to be set"
-              inputMode="decimal"
-              disabled={!can("settings.company")}
-              onBlur={(e) => e.target.value !== (x.sqm_per_manday ?? "") && void setNorm(x.system_id, e.target.value)}
-            />
+            <Field label="to be set" bare>
+              <input
+                className="norm-input"
+                defaultValue={x.sqm_per_manday ?? ""}
+                placeholder="to be set"
+                inputMode="decimal"
+                disabled={!can("settings.company")}
+                onBlur={(e) => e.target.value !== (x.sqm_per_manday ?? "") && void setNorm(x.system_id, e.target.value)}
+              />
+            </Field>
           </div>
         ))}
-      </div>
+      </Card>
     </>
   );
 }
@@ -1191,17 +1178,19 @@ export function Consumption() {
       <div className="page-header">
         <h1>Consumption variance</h1>
         <div className="page-actions">
-          <select value={site} onChange={(e) => setParams({ site: e.target.value })} aria-label="Site">
-            {sites.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.code} · {s.name}
-              </option>
-            ))}
-          </select>
+          <Field label="Site" bare>
+            <select value={site} onChange={(e) => setParams({ site: e.target.value })} aria-label="Site">
+              {sites.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.code} · {s.name}
+                </option>
+              ))}
+            </select>
+          </Field>
           {site && (
-            <button className="btn btn-small" onClick={() => void downloadFile(`/api/sitecontrol/reports/consumption?site_id=${site}&format=xlsx`)}>
+            <Button size="small" onClick={() => void downloadFile(`/api/sitecontrol/reports/consumption?site_id=${site}&format=xlsx`)}>
               ⤓ Excel
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -1210,7 +1199,7 @@ export function Consumption() {
         flagged; planning gets a weekly alert.
       </p>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="table-wrap card">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -1251,10 +1240,10 @@ export function Consumption() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       <h2 className="section-title top-gap">Site average (completed areas)</h2>
       <p className="muted small">The median actual consumption per sqm over completed areas, next to the system's figure. It never changes the system by itself.</p>
-      <div className="table-wrap card">
+      <Card as="div" className="table-wrap">
         <table className="table compact">
           <thead>
             <tr>
@@ -1284,7 +1273,7 @@ export function Consumption() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -1315,10 +1304,9 @@ export function SiteControlSettings() {
   }, []);
   if (!s) return <p className="muted">Loading…</p>;
   const field = (k: keyof ScSettings, label: string) => (
-    <label className="field">
-      <span>{label}</span>
+    <Field label={label}>
       <input inputMode="decimal" value={String(s[k] ?? "")} onChange={(e) => setS({ ...s, [k]: e.target.value })} />
-    </label>
+    </Field>
   );
   return (
     <>
@@ -1326,12 +1314,11 @@ export function SiteControlSettings() {
         <h1>Site control</h1>
       </div>
       {msg && <div className="alert alert-ok">{msg}</div>}
-      <div className="card settings-card">
+      <Card as="div" className="settings-card">
         <div className="form-grid two">
           {field("escalate_first_hours", "Delivery not confirmed: alert the site in-charge after (hours)")}
           {field("escalate_second_hours", "Then alert planning after (hours)")}
-          <label className="field">
-            <span>Planning (who gets the second alert)</span>
+          <Field label="Planning (who gets the second alert)">
             <select value={s.planning_user_id ?? ""} onChange={(e) => setS({ ...s, planning_user_id: e.target.value || null })}>
               <option value="">The office admins</option>
               {users.map((u) => (
@@ -1340,15 +1327,15 @@ export function SiteControlSettings() {
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
           {field("receipt_link_days", "Receipt link works for (days)")}
           {field("bill_alert_days", "Work done, not billed: alert after (days)")}
           {field("contract_expiry_days", "Rate contract ending: alert purchase (days before)")}
           {field("productivity_drop_percent", "Labour check: flag below expected by (%)")}
           {field("consumption_tolerance_percent", "Consumption variance: flag outside ± (%)")}
         </div>
-        <button
-          className="btn btn-primary"
+        <Button
+          variant="primary"
           onClick={() =>
             void api<ScSettings>("/api/sitecontrol/settings", { method: "PUT", json: s }).then(
               (r) => (setS(r), setMsg("Saved.")),
@@ -1357,8 +1344,8 @@ export function SiteControlSettings() {
           }
         >
           Save
-        </button>
-      </div>
+        </Button>
+      </Card>
     </>
   );
 }
@@ -1395,37 +1382,35 @@ export function SiteControlStrip({ siteId }: { siteId: number }) {
           {f.consumption_flags} consumption off the system
         </Link>
       )}
-      <Link className="btn btn-small btn-ghost" to={`/sites/${siteId}/new-area`}>
+      <Link className={buttonClass({ variant: "ghost", size: "small" })} to={`/sites/${siteId}/new-area`}>
         + New area
       </Link>
       <span className="small muted">
         Receiver when the supervisor is away: <b>{f.receiver_name ?? "none named"}</b> {f.receiver_phone ?? ""}
       </span>
       {can("site.edit") && (
-        <button className="btn btn-small btn-ghost" onClick={() => (setR({ receiver_name: f.receiver_name ?? "", receiver_phone: f.receiver_phone ?? "" }), setEdit(true))}>
+        <Button variant="ghost" size="small" onClick={() => (setR({ receiver_name: f.receiver_name ?? "", receiver_phone: f.receiver_phone ?? "" }), setEdit(true))}>
           Change
-        </button>
+        </Button>
       )}
       {edit && (
         <Modal title="Named receiver" onClose={() => setEdit(false)}>
           <p className="small muted">Who may confirm deliveries when the supervisor is away (labour leader, applicator). Anyone else who confirms is flagged for review.</p>
           <div className="form-grid two">
-            <label className="field">
-              <span>Name</span>
+            <Field label="Name">
               <input value={r.receiver_name} onChange={(e) => setR({ ...r, receiver_name: e.target.value })} />
-            </label>
-            <label className="field">
-              <span>Phone</span>
+            </Field>
+            <Field label="Phone">
               <input value={r.receiver_phone} onChange={(e) => setR({ ...r, receiver_phone: e.target.value })} />
-            </label>
+            </Field>
           </div>
           <div className="form-actions">
-            <button
-              className="btn btn-primary"
+            <Button
+              variant="primary"
               onClick={() => void api(`/api/sitecontrol/sites/${siteId}/receiver`, { method: "PUT", json: r }).then(() => (setEdit(false), void load()))}
             >
               Save
-            </button>
+            </Button>
           </div>
         </Modal>
       )}

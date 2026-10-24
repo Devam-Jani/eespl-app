@@ -32,7 +32,7 @@ const PortalTab = lazy(() => import("./site/PortalTab"));
 const SiteLocationTab = lazy(() => import("../field/Maps").then((m) => ({ default: m.SiteLocationTab })));
 import { SiteForm } from "./Sites";
 import { shortDate } from "./Tenders";
-import { BackButton, PageSkeleton, StatusChip } from "../ui/components";
+import { BackButton, Button, buttonClass, Card, Field, PageSkeleton, StatusChip } from "../ui/components";
 import type { Status } from "../ui/tokens";
 
 type Tab =
@@ -158,32 +158,34 @@ export default function SiteDetail() {
           {progress}% done · {chipText}
         </StatusChip>
         {can("site.update") && (
-          <Link className="btn btn-primary" to={`/my-site/${site.id}`}>
+          <Link className={buttonClass({ variant: "primary" })} to={`/my-site/${site.id}`}>
             Update work
           </Link>
         )}
       </header>
       {error && <div className="alert alert-error">{error}</div>}
       {/* on a phone the tabs are one menu */}
-      <select
-        className="tab-select"
-        value={tab}
-        onChange={(e) => (e.target.value.startsWith("/") ? navigate(e.target.value) : setTab(e.target.value as Tab))}
-        aria-label="Section"
-      >
-        {all.map(([key, label]) => (
-          <option key={key} value={key}>
-            {label}
-          </option>
-        ))}
-        {tools
-          .filter(([, , show]) => show)
-          .map(([label, to]) => (
-            <option key={to} value={to}>
-              Open: {label}
+      <Field label="Section" bare>
+        <select
+          className="tab-select"
+          value={tab}
+          onChange={(e) => (e.target.value.startsWith("/") ? navigate(e.target.value) : setTab(e.target.value as Tab))}
+          aria-label="Section"
+        >
+          {all.map(([key, label]) => (
+            <option key={key} value={key}>
+              {label}
             </option>
           ))}
-      </select>
+          {tools
+            .filter(([, , show]) => show)
+            .map(([label, to]) => (
+              <option key={to} value={to}>
+                Open: {label}
+              </option>
+            ))}
+        </select>
+      </Field>
       <div className="tabs site-tabs" role="tablist" aria-label="Site sections">
         {main.map(([key, label]) => (
           <button key={key} role="tab" aria-selected={tab === key} className={`tab ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>
@@ -191,36 +193,38 @@ export default function SiteDetail() {
           </button>
         ))}
         {more.length > 0 && (
-          <select
-            className={`tab tab-more ${inMore ? "active" : ""}`}
-            value={inMore ? tab : ""}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v.startsWith("/")) navigate(v);
-              else if (v) setTab(v as Tab);
-            }}
-            aria-label="More sections and the site's other pages"
-          >
-            <option value="">{inMore ? inMore[1] : "More"}</option>
-            <optgroup label="Sections">
-              {more.map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </optgroup>
-            {tools.some(([, , show]) => show) && (
-              <optgroup label="Open">
-                {tools
-                  .filter(([, , show]) => show)
-                  .map(([label, to]) => (
-                    <option key={to} value={to}>
-                      {label}
-                    </option>
-                  ))}
+          <Field label="More sections and the site's other pages" bare>
+            <select
+              className={`tab tab-more ${inMore ? "active" : ""}`}
+              value={inMore ? tab : ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v.startsWith("/")) navigate(v);
+                else if (v) setTab(v as Tab);
+              }}
+              aria-label="More sections and the site's other pages"
+            >
+              <option value="">{inMore ? inMore[1] : "More"}</option>
+              <optgroup label="Sections">
+                {more.map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
               </optgroup>
-            )}
-          </select>
+              {tools.some(([, , show]) => show) && (
+                <optgroup label="Open">
+                  {tools
+                    .filter(([, , show]) => show)
+                    .map(([label, to]) => (
+                      <option key={to} value={to}>
+                        {label}
+                      </option>
+                    ))}
+                </optgroup>
+              )}
+            </select>
+          </Field>
         )}
       </div>
       <div className="top-gap">
@@ -339,13 +343,13 @@ function Overview({ site, onChange }: { site: Site; onChange: (s: Site) => void 
 
   return (
     <div className="split">
-      <div className="card">
+      <Card as="div">
         <div className="toolbar">
           <h2 className="section-title">Site details</h2>
           {canEdit && lookups && (
-            <button className="btn btn-primary" onClick={() => setEditing(true)}>
+            <Button variant="primary" onClick={() => setEditing(true)}>
               Edit
-            </button>
+            </Button>
           )}
         </div>
         <dl className="detail-list">
@@ -404,8 +408,8 @@ function Overview({ site, onChange }: { site: Site; onChange: (s: Site) => void 
             </tbody>
           </table>
         )}
-      </div>
-      <div className="card">
+      </Card>
+      <Card as="div">
         <h2 className="section-title">Team on site</h2>
         {error && <div className="alert alert-error">{error}</div>}
         <table className="table compact">
@@ -414,33 +418,37 @@ function Overview({ site, onChange }: { site: Site; onChange: (s: Site) => void 
               <tr key={i}>
                 <td>
                   {canEdit && lookups ? (
-                    <select value={m.user_id} onChange={(e) => setMembers((ms) => ms.map((x, j) => (j === i ? { ...x, user_id: e.target.value } : x)))}>
-                      {lookups.users.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.full_name}
-                        </option>
-                      ))}
-                    </select>
+                    <Field label="Member" bare>
+                      <select value={m.user_id} onChange={(e) => setMembers((ms) => ms.map((x, j) => (j === i ? { ...x, user_id: e.target.value } : x)))}>
+                        {lookups.users.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.full_name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
                   ) : (
                     site.members.find((x) => x.user_id === m.user_id)?.full_name
                   )}
                 </td>
                 <td>
                   {canEdit ? (
-                    <select value={m.role_on_site} onChange={(e) => setMembers((ms) => ms.map((x, j) => (j === i ? { ...x, role_on_site: e.target.value } : x)))}>
-                      {ROLES.map((r) => (
-                        <option key={r}>{r}</option>
-                      ))}
-                    </select>
+                    <Field label="Role on site" bare>
+                      <select value={m.role_on_site} onChange={(e) => setMembers((ms) => ms.map((x, j) => (j === i ? { ...x, role_on_site: e.target.value } : x)))}>
+                        {ROLES.map((r) => (
+                          <option key={r}>{r}</option>
+                        ))}
+                      </select>
+                    </Field>
                   ) : (
                     m.role_on_site
                   )}
                 </td>
                 {canEdit && (
                   <td>
-                    <button className="btn btn-small btn-ghost" onClick={() => setMembers((ms) => ms.filter((_, j) => j !== i))}>
+                    <Button variant="ghost" size="small" onClick={() => setMembers((ms) => ms.filter((_, j) => j !== i))}>
                       Remove
-                    </button>
+                    </Button>
                   </td>
                 )}
               </tr>
@@ -449,8 +457,7 @@ function Overview({ site, onChange }: { site: Site; onChange: (s: Site) => void 
         </table>
         {canEdit && lookups && (
           <div className="form-actions">
-            <button
-              className="btn"
+            <Button
               onClick={() =>
                 setMembers((ms) => [
                   ...ms,
@@ -462,13 +469,13 @@ function Overview({ site, onChange }: { site: Site; onChange: (s: Site) => void 
               }
             >
               Add person
-            </button>
-            <button className="btn btn-primary" onClick={() => void saveMembers()}>
+            </Button>
+            <Button variant="primary" onClick={() => void saveMembers()}>
               Save team
-            </button>
+            </Button>
           </div>
         )}
-      </div>
+      </Card>
       {editing && lookups && (
         <SiteForm
           lookups={lookups}

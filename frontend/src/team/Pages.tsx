@@ -12,6 +12,7 @@ import { Modal } from "../ui/Overlay";
 import { errorText } from "../format";
 import { S } from "../receipt/strings";
 import type { Key } from "../receipt/strings";
+import { Button, buttonClass, Card, Field } from "../ui/components";
 
 const Dashboard = lazy(() => import("../analytics/Dashboard"));
 
@@ -85,14 +86,14 @@ export function MyWork() {
           </p>
         </div>
         <div className="page-actions">
-          <button className="btn btn-small btn-ghost" onClick={reload}>
+          <Button variant="ghost" size="small" onClick={reload}>
             ↻ Refresh
-          </button>
+          </Button>
         </div>
       </div>
       {data.sections.length === 0 && <p className="empty">Nothing waiting for you.</p>}
       {data.sections.map((s) => (
-        <section key={s.role} className="card mywork-section">
+        <Card key={s.role} className="mywork-section">
           <h2 className="section-title">
             {s.title} <span className="badge badge-muted">{s.items.length}</span>
           </h2>
@@ -115,7 +116,7 @@ export function MyWork() {
                     {i.age_days === null ? "" : i.age_days === 0 ? "today" : `${i.age_days} d`}
                   </span>
                   <span className="mywork-action">
-                    <Link className="btn btn-small btn-primary" to={i.link}>
+                    <Link className={buttonClass({ variant: "primary", size: "small" })} to={i.link}>
                       {i.action}
                     </Link>
                     {i.notification_id && <DoneButton id={i.notification_id} action={i.action} onDone={() => void reload()} />}
@@ -124,7 +125,7 @@ export function MyWork() {
               ))}
             </ul>
           )}
-        </section>
+        </Card>
       ))}
       {!supervisorOnly && (
         <section className="top-gap">
@@ -175,9 +176,9 @@ export function Enquiries() {
       <div className="page-header">
         <h1>Enquiries to allocate</h1>
         <div className="page-actions">
-          <button className="btn btn-primary" onClick={() => setAdding(true)}>
+          <Button variant="primary" onClick={() => setAdding(true)}>
             New enquiry
-          </button>
+          </Button>
         </div>
       </div>
       <p className="muted small">Enquiries that came to planning directly. Allocate each to a salesperson; they get it on their to-do.</p>
@@ -187,7 +188,7 @@ export function Enquiries() {
       ) : rows.length === 0 ? (
         <p className="empty">No enquiry waiting.</p>
       ) : (
-        <div className="table-wrap card">
+        <Card as="div" className="table-wrap">
           <table className="table">
             <thead>
               <tr>
@@ -208,24 +209,26 @@ export function Enquiries() {
                   <td className="num">{r.age_days} d</td>
                   <td>
                     <div className="inline-form">
-                      <select value={owner[r.id] ?? ""} onChange={(e) => setOwner({ ...owner, [r.id]: e.target.value })} aria-label="Salesperson">
-                        <option value="">Choose…</option>
-                        {sales.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                      <button className="btn btn-small btn-primary" disabled={!owner[r.id]} onClick={() => void allocate(r.id)}>
+                      <Field label="Salesperson" bare>
+                        <select value={owner[r.id] ?? ""} onChange={(e) => setOwner({ ...owner, [r.id]: e.target.value })} aria-label="Salesperson">
+                          <option value="">Choose…</option>
+                          {sales.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Button variant="primary" size="small" disabled={!owner[r.id]} onClick={() => void allocate(r.id)}>
                         Allocate
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
       {adding && <EnquiryForm onClose={() => setAdding(false)} onSaved={() => (setAdding(false), void load())} />}
     </>
@@ -249,22 +252,20 @@ function EnquiryForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
       <form onSubmit={(e) => void save(e)}>
         <div className="form-grid two">
           {(["name", "phone", "company", "city"] as const).map((k) => (
-            <label key={k} className="field">
-              <span>{k === "name" ? "Contact name *" : k[0].toUpperCase() + k.slice(1)}</span>
+            <Field label={k === "name" ? "Contact name *" : k[0].toUpperCase() + k.slice(1)} key={k}>
               <input value={f[k]} required={k === "name"} onChange={(e) => setF({ ...f, [k]: e.target.value })} />
-            </label>
+            </Field>
           ))}
         </div>
-        <label className="field">
-          <span>Requirement</span>
+        <Field label="Requirement">
           <textarea rows={3} value={f.requirement} onChange={(e) => setF({ ...f, requirement: e.target.value })} />
-        </label>
+        </Field>
         {error && <div className="alert alert-error">{error}</div>}
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Save to the queue</button>
+          </Button>
+          <Button type="submit" variant="primary">Save to the queue</Button>
         </div>
       </form>
     </Modal>
@@ -325,20 +326,19 @@ export function AssignmentPage() {
       </p>
       {error && <div className="alert alert-error">{error}</div>}
       {a.status === "done" ? (
-        <div className="card">
+        <Card as="div">
           <p>
             Salesperson <b>{a.salesperson}</b>, site engineer <b>{a.engineer}</b>, decided by {a.decided_by} on {fmt(a.decided_at)}.
           </p>
           <p className="small">{a.first_visit_logged ? "The first site visit is logged." : "The first site visit is not logged yet."}</p>
-        </div>
+        </Card>
       ) : (
-        <div className="card assignment-card">
+        <Card as="div" className="assignment-card">
           <p className="small muted">
             The site is made (or linked), both become its members, it goes on the status board as upcoming, and the salesperson gets the first site visit to do.
           </p>
           <div className="form-grid two">
-            <label className="field">
-              <span>Salesperson</span>
+            <Field label="Salesperson">
               <select value={sp} onChange={(e) => setSp(e.target.value)}>
                 <option value="">Choose…</option>
                 {sales.map((p) => (
@@ -347,9 +347,8 @@ export function AssignmentPage() {
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="field">
-              <span>Site engineer</span>
+            </Field>
+            <Field label="Site engineer">
               <select value={eng} onChange={(e) => setEng(e.target.value)}>
                 <option value="">Choose…</option>
                 {engineers.map((p) => (
@@ -358,16 +357,16 @@ export function AssignmentPage() {
                   </option>
                 ))}
               </select>
-            </label>
+            </Field>
           </div>
           {can("jobs.assign") ? (
-            <button className="btn btn-primary" disabled={!sp || !eng} onClick={() => void decide()}>
+            <Button variant="primary" disabled={!sp || !eng} onClick={() => void decide()}>
               Assign
-            </button>
+            </Button>
           ) : (
             <p className="small muted">The director decides (or planning, when the director allows it).</p>
           )}
-        </div>
+        </Card>
       )}
     </>
   );
@@ -419,16 +418,18 @@ export function StatusBoard() {
       <div className="small muted">
         {n(s.progress_percent, 0)}% done · updated {fmt(s.last_update)}
       </div>
-      <select className="board-move" value={s.column ?? ""} onChange={(e) => void move(s.id, e.target.value)} aria-label={`Move ${s.code}`}>
-        <option value="" disabled>
-          Move to…
-        </option>
-        {b.columns.map((c) => (
-          <option key={c.key} value={c.key}>
-            {c.label}
+      <Field label={`Move ${s.code}`} bare>
+        <select className="board-move" value={s.column ?? ""} onChange={(e) => void move(s.id, e.target.value)} aria-label={`Move ${s.code}`}>
+          <option value="" disabled>
+            Move to…
           </option>
-        ))}
-      </select>
+          {b.columns.map((c) => (
+            <option key={c.key} value={c.key}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+      </Field>
     </div>
   );
   return (
@@ -437,15 +438,15 @@ export function StatusBoard() {
         <h1>Site status board</h1>
         {can("planning.view") && (
           <div className="page-actions">
-            <button className="btn btn-small" onClick={() => void downloadFile("/api/team/allocation-list?format=pdf")}>
+            <Button size="small" onClick={() => void downloadFile("/api/team/allocation-list?format=pdf")}>
               ⤓ Allocation list (PDF)
-            </button>
-            <button className="btn btn-small" onClick={() => void downloadFile("/api/team/allocation-list?format=xlsx")}>
+            </Button>
+            <Button size="small" onClick={() => void downloadFile("/api/team/allocation-list?format=xlsx")}>
               ⤓ Excel
-            </button>
+            </Button>
             {can("planning.edit") && (
-              <button
-                className="btn btn-small btn-primary"
+              <Button
+                variant="primary" size="small"
                 onClick={() =>
                   void api<{ sent_to: number }>("/api/team/allocation-list/send", { method: "POST" }).then(
                     (r) => setMsg(`Sent to ${r.sent_to} person(s) in the app.`),
@@ -454,7 +455,7 @@ export function StatusBoard() {
                 }
               >
                 Send to recipients
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -558,7 +559,7 @@ export function MaterialPlan() {
       )}
       {plan && (
         <>
-          <div className="table-wrap card">
+          <Card as="div" className="table-wrap">
             <table className="table">
               <thead>
                 <tr>
@@ -585,13 +586,15 @@ export function MaterialPlan() {
                     <td className="num">{n(p.issued, 1)}</td>
                     <td className="num">{n(p.balance, 1)}</td>
                     <td className="num">
-                      <input
-                        className="input-num"
-                        inputMode="decimal"
-                        value={qty[p.product_id] ?? ""}
-                        onChange={(e) => setQty({ ...qty, [p.product_id]: e.target.value })}
-                        aria-label={`Indent ${p.product}`}
-                      />
+                      <Field label={`Indent ${p.product}`} bare>
+                        <input
+                          className="input-num"
+                          inputMode="decimal"
+                          value={qty[p.product_id] ?? ""}
+                          onChange={(e) => setQty({ ...qty, [p.product_id]: e.target.value })}
+                          aria-label={`Indent ${p.product}`}
+                        />
+                      </Field>
                     </td>
                   </tr>
                 ))}
@@ -604,15 +607,15 @@ export function MaterialPlan() {
                 )}
               </tbody>
             </table>
-          </div>
+          </Card>
           {can("indent.create") && (
-            <button className="btn btn-primary top-gap" disabled={!Object.values(qty).some((q) => Number(q) > 0)} onClick={() => void indent()}>
+            <Button variant="primary" className="top-gap" disabled={!Object.values(qty).some((q) => Number(q) > 0)} onClick={() => void indent()}>
               Create indent
-            </button>
+            </Button>
           )}
           <h2 className="section-title top-gap">{plan.by === "month" ? "By month" : "By stage (BOQ item)"}</h2>
           {plan.groups.map((g) => (
-            <div key={g.key} className="card top-gap">
+            <Card key={g.key} as="div" className="top-gap">
               <h3 className="section-title">{g.label}</h3>
               <table className="table compact">
                 <tbody>
@@ -627,7 +630,7 @@ export function MaterialPlan() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </Card>
           ))}
         </>
       )}
@@ -687,13 +690,15 @@ export function MeasurementBook() {
       <div className="page-header">
         <h1>Measurement book</h1>
         <div className="page-actions">
-          <select value={site} onChange={(e) => setParams({ site: e.target.value })} aria-label="Site">
-            {sites.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.code} · {s.name}
-              </option>
-            ))}
-          </select>
+          <Field label="Site" bare>
+            <select value={site} onChange={(e) => setParams({ site: e.target.value })} aria-label="Site">
+              {sites.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.code} · {s.name}
+                </option>
+              ))}
+            </select>
+          </Field>
         </div>
       </div>
       <p className="muted small">
@@ -703,7 +708,7 @@ export function MeasurementBook() {
       {error && <div className="alert alert-error">{error}</div>}
       {book && (
         <>
-          <div className="table-wrap card">
+          <Card as="div" className="table-wrap">
             <table className="table">
               <thead>
                 <tr>
@@ -738,13 +743,12 @@ export function MeasurementBook() {
                 )}
               </tbody>
             </table>
-          </div>
+          </Card>
           {can("measurement.edit") && book.lines.length > 0 && (
-            <form className="card top-gap measure-form" onSubmit={(e) => void add(e)}>
+            <Card as="form" className="top-gap measure-form" onSubmit={(e) => void add(e)}>
               <h2 className="section-title">Add a measurement</h2>
               <div className="form-grid four">
-                <label className="field">
-                  <span>Contract line</span>
+                <Field label="Contract line">
                   <select required value={f.contract_line_id} onChange={(e) => setF({ ...f, contract_line_id: e.target.value })}>
                     <option value="">Choose…</option>
                     {book.lines.map((l) => (
@@ -754,13 +758,11 @@ export function MeasurementBook() {
                       </option>
                     ))}
                   </select>
-                </label>
-                <label className="field">
-                  <span>Quantity</span>
+                </Field>
+                <Field label="Quantity">
                   <input required inputMode="decimal" value={f.qty} onChange={(e) => setF({ ...f, qty: e.target.value })} />
-                </label>
-                <label className="field">
-                  <span>Source</span>
+                </Field>
+                <Field label="Source">
                   <select value={f.source} onChange={(e) => setF({ ...f, source: e.target.value })}>
                     {book.sources.map((s) => (
                       <option key={s} value={s}>
@@ -768,21 +770,19 @@ export function MeasurementBook() {
                       </option>
                     ))}
                   </select>
-                </label>
-                <label className="field">
-                  <span>Measured on</span>
+                </Field>
+                <Field label="Measured on">
                   <input type="date" value={f.measured_on} onChange={(e) => setF({ ...f, measured_on: e.target.value })} />
-                </label>
+                </Field>
               </div>
-              <label className="field">
-                <span>Note</span>
+              <Field label="Note">
                 <input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} />
-              </label>
-              <button className="btn btn-primary">Add to the book</button>
-            </form>
+              </Field>
+              <Button type="submit" variant="primary">Add to the book</Button>
+            </Card>
           )}
           <h2 className="section-title top-gap">Entries</h2>
-          <div className="table-wrap card">
+          <Card as="div" className="table-wrap">
             <table className="table compact">
               <thead>
                 <tr>
@@ -816,7 +816,7 @@ export function MeasurementBook() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         </>
       )}
     </>
@@ -870,22 +870,18 @@ export function CertifyForm({ bill, onClose, onSaved }: { bill: Tracked; onClose
       <form onSubmit={(e) => void save(e)}>
         <p className="small muted">Recorded for the client (they need not verify in the portal). Attach their signed copy or the email.</p>
         <div className="form-grid two">
-          <label className="field">
-            <span>Approved at the client by</span>
+          <Field label="Approved at the client by">
             <input required value={f.approved_by} onChange={(e) => setF({ ...f, approved_by: e.target.value })} placeholder="Name, designation" />
-          </label>
-          <label className="field">
-            <span>Date</span>
+          </Field>
+          <Field label="Date">
             <input type="date" required value={f.on_date} onChange={(e) => setF({ ...f, on_date: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Certified amount (₹)</span>
+          </Field>
+          <Field label="Certified amount (₹)">
             <input inputMode="decimal" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Signed copy or email</span>
+          </Field>
+          <Field label="Signed copy or email">
             <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.eml,.msg" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          </label>
+          </Field>
         </div>
         <table className="table compact">
           <thead>
@@ -901,12 +897,14 @@ export function CertifyForm({ bill, onClose, onSaved }: { bill: Tracked; onClose
                 <td>#{l.contract_line_id}</td>
                 <td className="num">{n(l.qty, 3)}</td>
                 <td className="num">
-                  <input
-                    className="input-num"
-                    inputMode="decimal"
-                    value={qty[l.contract_line_id] ?? ""}
-                    onChange={(e) => setQty({ ...qty, [l.contract_line_id]: e.target.value })}
-                  />
+                  <Field label="Certified" bare>
+                    <input
+                      className="input-num"
+                      inputMode="decimal"
+                      value={qty[l.contract_line_id] ?? ""}
+                      onChange={(e) => setQty({ ...qty, [l.contract_line_id]: e.target.value })}
+                    />
+                  </Field>
                 </td>
               </tr>
             ))}
@@ -914,10 +912,10 @@ export function CertifyForm({ bill, onClose, onSaved }: { bill: Tracked; onClose
         </table>
         {error && <div className="alert alert-error">{error}</div>}
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Record certification</button>
+          </Button>
+          <Button type="submit" variant="primary">Record certification</Button>
         </div>
       </form>
     </Modal>
@@ -954,7 +952,7 @@ export function LabourCheck() {
       </div>
       <p className="muted small">Check each labour contractor bill against the work done. A bill flagged "productivity low" waits for the director's decision after your check.</p>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="table-wrap card">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -996,12 +994,12 @@ export function LabourCheck() {
                       ✓ {b.checked_by} · {fmt(b.checked_at)}
                     </>
                   ) : (
-                    <button
-                      className="btn btn-small btn-primary"
+                    <Button
+                      variant="primary" size="small"
                       onClick={() => void api(`/api/team/labour-check/${b.id}`, { method: "POST" }).then(load, (e) => setError(errorText(e)))}
                     >
                       Mark checked
-                    </button>
+                    </Button>
                   )}
                 </td>
               </tr>
@@ -1015,7 +1013,7 @@ export function LabourCheck() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -1052,7 +1050,7 @@ export function Scorecard() {
         themselves.
       </p>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="table-wrap card">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -1087,7 +1085,7 @@ export function Scorecard() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -1190,27 +1188,24 @@ export function SiteVisitForm({ siteId, leadId, onClose, onSaved }: { siteId?: n
   return (
     <Modal title="Log a site visit" onClose={onClose}>
       <form onSubmit={(e) => void save(e)}>
-        <label className="field">
-          <span>Date</span>
+        <Field label="Date">
           <input type="date" value={day} onChange={(e) => setDay(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Notes (who you met, what was agreed)</span>
+        </Field>
+        <Field label="Notes (who you met, what was agreed)">
           <textarea required rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Photos</span>
+        </Field>
+        <Field label="Photos">
           <input type="file" accept="image/*" capture="environment" multiple onChange={(e) => setPhotos(e.target.files)} />
-        </label>
+        </Field>
         <p className="small muted">
           {gps ? `GPS ${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)} (±${Math.round(gps.accuracy)} m)` : "Location is saved when the phone allows it."}
         </p>
         {error && <div className="alert alert-error">{error}</div>}
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Save visit</button>
+          </Button>
+          <Button type="submit" variant="primary">Save visit</Button>
         </div>
       </form>
     </Modal>
@@ -1230,12 +1225,12 @@ export function SiteVisits({ siteId }: { siteId: number }) {
   useEffect(load, [load]);
   if (!can("sitevisit.log")) return null;
   return (
-    <div className="card top-gap">
+    <Card as="div" className="top-gap">
       <div className="toolbar">
         <h2 className="section-title">Site visits</h2>
-        <button className="btn btn-small btn-primary" onClick={() => setOpen(true)}>
+        <Button variant="primary" size="small" onClick={() => setOpen(true)}>
           + Log a visit
-        </button>
+        </Button>
       </div>
       {rows.length === 0 ? (
         <p className="muted small">No visit logged.</p>
@@ -1251,7 +1246,7 @@ export function SiteVisits({ siteId }: { siteId: number }) {
         </ul>
       )}
       {open && <SiteVisitForm siteId={siteId} onClose={() => setOpen(false)} onSaved={() => (setOpen(false), load())} />}
-    </div>
+    </Card>
   );
 }
 
@@ -1309,19 +1304,25 @@ export function NegotiationLog({ quotationId, tenderId, revisions }: { quotation
         ))}
       </ol>
       <form onSubmit={(e) => void add(e)} className="neg-form">
-        <input required value={f.asked} placeholder='What the client asked ("match X on this item")' onChange={(e) => setF({ ...f, asked: e.target.value })} />
-        <input value={f.given} placeholder="What we gave" onChange={(e) => setF({ ...f, given: e.target.value })} />
+        <Field label='What the client asked ("match X on this item")' bare>
+          <input required value={f.asked} placeholder='What the client asked ("match X on this item")' onChange={(e) => setF({ ...f, asked: e.target.value })} />
+        </Field>
+        <Field label="What we gave" bare>
+          <input value={f.given} placeholder="What we gave" onChange={(e) => setF({ ...f, given: e.target.value })} />
+        </Field>
         {revisions && revisions.length > 0 && (
-          <select value={f.rev} onChange={(e) => setF({ ...f, rev: e.target.value })} aria-label="Revision that followed">
-            <option value="">Revision that followed…</option>
-            {revisions.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.label}
-              </option>
-            ))}
-          </select>
+          <Field label="Revision that followed" bare>
+            <select value={f.rev} onChange={(e) => setF({ ...f, rev: e.target.value })} aria-label="Revision that followed">
+              <option value="">Revision that followed…</option>
+              {revisions.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </Field>
         )}
-        <button className="btn btn-small">Log</button>
+        <Button type="submit" size="small">Log</Button>
       </form>
       {error && <div className="alert alert-error">{error}</div>}
     </div>
@@ -1367,29 +1368,29 @@ export function TenderAward({ tenderId }: { tenderId: number }) {
     <div className="award">
       {error && <div className="alert alert-error">{error}</div>}
       {msg && <div className="alert alert-ok">{msg}</div>}
-      <div className="card">
+      <Card as="div">
         <p>
           <span className="badge badge-info">{a.status}</span> {a.submitted_at && <>submitted {fmt(a.submitted_at)}</>} · last follow-up {fmt(a.last_followup_at)} · a reminder
           every {a.followup_days} days until won or lost
         </p>
         {a.status === "awaiting award" && (
-          <button
-            className="btn btn-small"
+          <Button
+            size="small"
             onClick={() => {
               const note = prompt("What did the client say?");
               if (note) void api(`/api/team/tenders/${tenderId}/award-followup`, { method: "POST", json: { note } }).then(load, (e) => setError(errorText(e)));
             }}
           >
             Log a follow-up
-          </button>
+          </Button>
         )}
         {a.send_check.length > 0 && (
           <div className="alert alert-warn top-gap">
             <b>Send checklist:</b> {a.send_check.join("; ")}
           </div>
         )}
-      </div>
-      <div className="card top-gap">
+      </Card>
+      <Card as="div" className="top-gap">
         <h3 className="section-title">Bidders</h3>
         <table className="table compact">
           <thead>
@@ -1410,9 +1411,9 @@ export function TenderAward({ tenderId }: { tenderId: number }) {
                 <td className="num">{money(x.rate)}</td>
                 <td>
                   {edit && !x.is_us && !x.is_winner && (
-                    <button className="btn btn-small btn-ghost" onClick={() => setWin({ id: x.id, on: "" })}>
+                    <Button variant="ghost" size="small" onClick={() => setWin({ id: x.id, on: "" })}>
                       They won
-                    </button>
+                    </Button>
                   )}
                 </td>
               </tr>
@@ -1421,13 +1422,19 @@ export function TenderAward({ tenderId }: { tenderId: number }) {
         </table>
         {edit && (
           <form className="inline-form top-gap" onSubmit={(e) => void addBidder(e)}>
-            <input required placeholder="Contractor" value={b.name} onChange={(e) => setB({ ...b, name: e.target.value })} />
-            <input placeholder="Rate (₹)" inputMode="decimal" value={b.rate} onChange={(e) => setB({ ...b, rate: e.target.value })} />
-            <input placeholder="Rank (1 = L1)" inputMode="numeric" value={b.rank} onChange={(e) => setB({ ...b, rank: e.target.value })} />
+            <Field label="Contractor" bare>
+              <input required placeholder="Contractor" value={b.name} onChange={(e) => setB({ ...b, name: e.target.value })} />
+            </Field>
+            <Field label="Rate (₹)" bare>
+              <input placeholder="Rate (₹)" inputMode="decimal" value={b.rate} onChange={(e) => setB({ ...b, rate: e.target.value })} />
+            </Field>
+            <Field label="Rank (1 = L1)" bare>
+              <input placeholder="Rank (1 = L1)" inputMode="numeric" value={b.rank} onChange={(e) => setB({ ...b, rank: e.target.value })} />
+            </Field>
             <label className="check">
               <input type="checkbox" checked={b.is_us} onChange={(e) => setB({ ...b, is_us: e.target.checked })} /> us
             </label>
-            <button className="btn btn-small">Add bidder</button>
+            <Button type="submit" size="small">Add bidder</Button>
           </form>
         )}
         {a.winner_lead_id && (
@@ -1435,22 +1442,21 @@ export function TenderAward({ tenderId }: { tenderId: number }) {
             Follow-up with the winner: <Link to={`/leads/${a.winner_lead_id}`}>lead</Link>
           </p>
         )}
-      </div>
-      <div className="card top-gap">
+      </Card>
+      <Card as="div" className="top-gap">
         <NegotiationLog tenderId={tenderId} />
-      </div>
+      </Card>
       {win && (
         <Modal title="Another contractor won" onClose={() => setWin(null)}>
           <p className="small muted">
             The tender is closed as lost to them, and a lead is opened with the winner to offer our waterproofing, followed up on the date you pick (their waterproofing stage).
           </p>
-          <label className="field">
-            <span>Follow up on</span>
+          <Field label="Follow up on">
             <input type="date" value={win.on} onChange={(e) => setWin({ ...win, on: e.target.value })} />
-          </label>
+          </Field>
           <div className="form-actions">
-            <button
-              className="btn btn-primary"
+            <Button
+              variant="primary"
               disabled={!win.on}
               onClick={() =>
                 void api<{ lead_code: string }>(`/api/team/tenders/${tenderId}/winner`, { method: "POST", json: { bidder_id: win.id, followup_on: win.on } }).then(
@@ -1460,7 +1466,7 @@ export function TenderAward({ tenderId }: { tenderId: number }) {
               }
             >
               Record the winner
-            </button>
+            </Button>
           </div>
         </Modal>
       )}
@@ -1496,22 +1502,18 @@ export function TeamSettings() {
         <h1>Team</h1>
       </div>
       {msg && <div className="alert alert-ok">{msg}</div>}
-      <div className="card settings-card">
+      <Card as="div" className="settings-card">
         <div className="form-grid two">
-          <label className="field">
-            <span>Monthly RA bills: billing gets the to-do on day</span>
+          <Field label="Monthly RA bills: billing gets the to-do on day">
             <input type="number" min={1} max={28} value={s.billing_day} onChange={(e) => setS({ ...s, billing_day: Number(e.target.value) })} />
-          </label>
-          <label className="field">
-            <span>Tender awaiting award: remind every (days)</span>
+          </Field>
+          <Field label="Tender awaiting award: remind every (days)">
             <input type="number" min={7} value={s.award_followup_days} onChange={(e) => setS({ ...s, award_followup_days: Number(e.target.value) })} />
-          </label>
-          <label className="field">
-            <span>Closure rate target (%)</span>
+          </Field>
+          <Field label="Closure rate target (%)">
             <input inputMode="decimal" value={s.closure_target_percent} onChange={(e) => setS({ ...s, closure_target_percent: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Site allocation list goes to</span>
+          </Field>
+          <Field label="Site allocation list goes to">
             <select
               multiple
               size={5}
@@ -1524,10 +1526,10 @@ export function TeamSettings() {
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
         </div>
-        <button
-          className="btn btn-primary"
+        <Button
+          variant="primary"
           onClick={() =>
             void api<TeamSettingsT>("/api/team/settings", { method: "PUT", json: s }).then(
               (r) => (setS(r), setMsg("Saved.")),
@@ -1536,13 +1538,13 @@ export function TeamSettings() {
           }
         >
           Save
-        </button>
-      </div>
+        </Button>
+      </Card>
       {can("grants.manage") && (
         <>
           <h2 className="section-title top-gap">Allowed per person (the director)</h2>
           <p className="muted small">On top of their roles: costs and margins (for example a planner), or deciding who handles a won job.</p>
-          <div className="table-wrap card">
+          <Card as="div" className="table-wrap">
             <table className="table compact">
               <thead>
                 <tr>
@@ -1566,7 +1568,7 @@ export function TeamSettings() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         </>
       )}
     </>

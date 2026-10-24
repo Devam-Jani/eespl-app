@@ -6,6 +6,7 @@ import type { TwoStep } from "../auth";
 import { useAuth } from "../auth";
 import { errorText } from "../format";
 import { TrainingBanner, useMode } from "../ops/Pages";
+import { Button, Field } from "../ui/components";
 
 export default function Login() {
   const mode = useMode();
@@ -85,8 +86,7 @@ export default function Login() {
             ) : (
               <p>Type the 6-digit code from your authenticator app.</p>
             )}
-            <label className="field">
-              <span>Code</span>
+            <Field label="Code">
               <input
                 inputMode="numeric"
                 autoComplete="one-time-code"
@@ -96,22 +96,21 @@ export default function Login() {
                 required
                 autoFocus
               />
-            </label>
-            <button className="btn btn-primary btn-block" disabled={busy}>
+            </Field>
+            <Button type="submit" variant="primary" block disabled={busy}>
               {busy ? "Checking…" : "Sign in"}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="btn btn-ghost btn-block"
+              variant="ghost" block
               onClick={() => (setStep(null), setCode(""), setPassword(""))}
             >
               Start again
-            </button>
+            </Button>
           </div>
         ) : (
           <>
-            <label className="field">
-              <span>Email</span>
+            <Field label="Email">
               <input
                 type="email"
                 autoComplete="username"
@@ -120,9 +119,8 @@ export default function Login() {
                 required
                 autoFocus
               />
-            </label>
-            <label className="field">
-              <span>Password</span>
+            </Field>
+            <Field label="Password">
               <input
                 type="password"
                 autoComplete="current-password"
@@ -130,10 +128,10 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
-            </label>
-            <button className="btn btn-primary btn-block" disabled={busy}>
+            </Field>
+            <Button type="submit" variant="primary" block disabled={busy}>
               {busy ? "Signing in…" : "Sign in"}
-            </button>
+            </Button>
           </>
         )}
       </form>

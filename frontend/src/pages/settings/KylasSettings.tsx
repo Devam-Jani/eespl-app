@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { api } from "../../api";
 import { errorText } from "../../format";
 import type { KylasSettings } from "../../types";
+import { Button, Card, Field } from "../../ui/components";
 
 /** Settings > Integrations > Kylas (super_admin). The API key is set in .env only: this page
  * shows whether it is set, never the key. */
@@ -72,38 +73,36 @@ export default function KylasSettingsPage() {
   }
 
   const field = (key: string, label: string, hint?: string) => (
-    <label className="field">
-      <span>{label}</span>
+    <Field label={label}>
       <input value={form[key] ?? ""} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} placeholder={hint} />
-    </label>
+    </Field>
   );
 
   return (
     <>
       <div className="page-header">
         <h1>Integrations › Kylas</h1>
-        <button className="btn" onClick={() => void testConnection()}>
+        <Button onClick={() => void testConnection()}>
           Test connection
-        </button>
+        </Button>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {notice && <div className="alert alert-ok">{notice}</div>}
       {test && <div className="alert alert-ok">{test}</div>}
       {data && (
         <div className="split">
-          <form className="card" onSubmit={save}>
+          <Card as="form" onSubmit={save}>
             <div className={`alert ${data.active ? "alert-ok" : "alert-warn"}`}>
               {data.active ? "Kylas sync is on: new leads are pushed, outcomes are polled." : `Kylas sync is off: ${data.inactive_reason}.`}
             </div>
             <div className="grid-2">
               {field("source_id", "Lead source id (the \"EESPL App\" source)", "empty = push off")}
-              <label className="field">
-                <span>Owner rule</span>
+              <Field label="Owner rule">
                 <select value={form.owner_rule} onChange={(e) => setForm((f) => ({ ...f, owner_rule: e.target.value }))}>
                   <option value="creator">The Kylas user of whoever entered the lead, else the default owner</option>
                   <option value="default">Always the default owner</option>
                 </select>
-              </label>
+              </Field>
               {field("default_owner_id", "Default owner (Kylas user id)")}
               {field("deal_pipeline_id", "Deal pipeline id (optional)", "empty = deal poll off")}
               {field("won_stage_id", "Won stage id (optional)", "empty = deal poll off")}
@@ -111,15 +110,14 @@ export default function KylasSettingsPage() {
               {field("lead_code_field", "Custom field for our lead code")}
               {field("category_field", "Custom field for the category")}
             </div>
-            <label className="field">
-              <span>Junk reasons (one per line; a lead closed in Kylas with one of these becomes junk)</span>
+            <Field label="Junk reasons (one per line; a lead closed in Kylas with one of these becomes junk)">
               <textarea rows={4} value={form.junk_reasons ?? ""} onChange={(e) => setForm((f) => ({ ...f, junk_reasons: e.target.value }))} />
-            </label>
+            </Field>
             <div className="form-actions">
-              <button className="btn btn-primary">Save</button>
+              <Button type="submit" variant="primary">Save</Button>
             </div>
-          </form>
-          <div className="card">
+          </Card>
+          <Card as="div">
             <h2 className="section-title">Environment</h2>
             <dl className="totals">
               <dt>KYLAS_ENABLED</dt>
@@ -140,7 +138,7 @@ export default function KylasSettingsPage() {
               ))}
             </dl>
             <p className="muted small">Ids for these fields: run python -m app.cli kylas-discover on the server.</p>
-          </div>
+          </Card>
         </div>
       )}
     </>

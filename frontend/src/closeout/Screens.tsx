@@ -6,6 +6,7 @@ import { useAuth } from "../auth";
 import { errorText } from "../format";
 import type { Tracked } from "../team/Pages";
 import { CertifyForm } from "../team/Pages";
+import { Button, buttonClass, Card, Field } from "../ui/components";
 
 const d = (v: string | null | undefined) =>
   v ? new Date(v.length === 10 ? `${v}T00:00:00` : v).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
@@ -61,7 +62,7 @@ export function ClientRolesSettings() {
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table role-grid">
           <thead>
             <tr>
@@ -101,20 +102,20 @@ export function ClientRolesSettings() {
               <td />
               {data.roles.map((r) => (
                 <td key={r.code} className="center">
-                  <button
-                    className="btn btn-small"
+                  <Button
+                    size="small"
                     disabled={r.rights.slice().sort().join() === r.default_rights.slice().sort().join()}
                     onClick={() => void run(api<Roles>(`/api/closeout/client-roles/${r.code}/reset`, { method: "POST" }), setError).then((x) => x && setData(x))}
                   >
                     Reset to default
-                  </button>
+                  </Button>
                 </td>
               ))}
             </tr>
           </tbody>
         </table>
         <p className="small muted">A tick that differs from the default is shaded.</p>
-      </div>
+      </Card>
     </>
   );
 }
@@ -179,32 +180,38 @@ function SizeInput({ label, value, onChange }: { label: string; value: Size; onC
         </div>
       </div>
       {value.mode === "m" ? (
-        <input
-          className="tap-input"
-          inputMode="decimal"
-          placeholder="metres"
-          value={value.m}
-          onChange={(e) => onChange({ ...value, m: e.target.value })}
-          aria-label={`${label} in metres`}
-        />
-      ) : (
-        <div className="ft-in">
-          <input
-            className="tap-input"
-            inputMode="numeric"
-            placeholder="ft"
-            value={value.ft}
-            onChange={(e) => onChange({ ...value, ft: e.target.value })}
-            aria-label={`${label} feet`}
-          />
+        <Field label={`${label} in metres`} bare>
           <input
             className="tap-input"
             inputMode="decimal"
-            placeholder="in"
-            value={value.inch}
-            onChange={(e) => onChange({ ...value, inch: e.target.value })}
-            aria-label={`${label} inches`}
+            placeholder="metres"
+            value={value.m}
+            onChange={(e) => onChange({ ...value, m: e.target.value })}
+            aria-label={`${label} in metres`}
           />
+        </Field>
+      ) : (
+        <div className="ft-in">
+          <Field label={`${label} feet`} bare>
+            <input
+              className="tap-input"
+              inputMode="numeric"
+              placeholder="ft"
+              value={value.ft}
+              onChange={(e) => onChange({ ...value, ft: e.target.value })}
+              aria-label={`${label} feet`}
+            />
+          </Field>
+          <Field label={`${label} inches`} bare>
+            <input
+              className="tap-input"
+              inputMode="decimal"
+              placeholder="in"
+              value={value.inch}
+              onChange={(e) => onChange({ ...value, inch: e.target.value })}
+              aria-label={`${label} inches`}
+            />
+          </Field>
         </div>
       )}
       {value.mode === "ft" && !Number.isNaN(metres(value)) && <div className="small muted">= {metres(value).toFixed(3)} m</div>}
@@ -306,9 +313,8 @@ export function MeasureEntry() {
       </div>
       {(error || form.error) && <div className="alert alert-error">{error || form.error}</div>}
       {saved && <div className="alert alert-ok">{saved}</div>}
-      <form className="card measure-form" onSubmit={(e) => void submit(e)}>
-        <label className="field">
-          <span>Item (its unit is the work order's)</span>
+      <Card as="form" className="measure-form" onSubmit={(e) => void submit(e)}>
+        <Field label="Item (its unit is the work order's)">
           <select className="tap-input" value={lineId} onChange={(e) => setLineId(e.target.value)} required>
             <option value="">Pick the item…</option>
             {form.data.lines.map((l) => (
@@ -318,11 +324,10 @@ export function MeasureEntry() {
             ))}
           </select>
           {line && <span className="small muted">{line.how}</span>}
-        </label>
+        </Field>
         <div className="place-pick">
           {levels.map((opts, i) => (
-            <label key={i} className="field">
-              <span>{["Tower / block", "Floor or flat", "Flat or area", "Area"][i]}</span>
+            <Field label={["Tower / block", "Floor or flat", "Flat or area", "Area"][i]} key={i}>
               <select
                 className="tap-input"
                 value={chosen[i] ?? ""}
@@ -338,12 +343,11 @@ export function MeasureEntry() {
                   </option>
                 ))}
               </select>
-            </label>
+            </Field>
           ))}
         </div>
         {form.data.cad_areas.length > 0 && (
-          <label className="field">
-            <span>Or the drawing's area</span>
+          <Field label="Or the drawing's area">
             <select
               className="tap-input"
               value={cadId}
@@ -361,7 +365,7 @@ export function MeasureEntry() {
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
         )}
         {!linear && (
           <div className="seg" role="group" aria-label="How it is measured">
@@ -377,49 +381,46 @@ export function MeasureEntry() {
           <SizeInput label={how === "run" ? "Running length" : how === "lb" ? "Length" : "Perimeter"} value={a} onChange={setA} />
           {how !== "run" && <SizeInput label={how === "lb" ? "Breadth" : "Height"} value={b} onChange={setB} />}
         </div>
-        <label className="field">
-          <span>Deductions ({linear ? "m" : "sqm"})</span>
+        <Field label={<>Deductions ({linear ? "m" : "sqm"})</>}>
           <input className="tap-input" inputMode="decimal" value={ded} onChange={(e) => setDed(e.target.value)} placeholder="0" />
-        </label>
+        </Field>
         <div className="qty-now">
           Quantity: <b>{qty === null ? "—" : `${qty.toFixed(3)} ${unit}`}</b>
         </div>
-        <label className="field">
-          <span>Note (optional)</span>
+        <Field label="Note (optional)">
           <input className="tap-input" value={note} onChange={(e) => setNote(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Reason, if this place is outside our RFI zones</span>
+        </Field>
+        <Field label="Reason, if this place is outside our RFI zones">
           <input className="tap-input" value={reason} onChange={(e) => setReason(e.target.value)} />
-        </label>
-        <label className="btn tap">
+        </Field>
+        <label className={buttonClass({ className: "tap" })}>
           Photos ({files.length})
           <input type="file" accept="image/*" capture="environment" multiple hidden onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
         </label>
-        <button className="btn btn-primary tap" disabled={!lineId || qty === null}>
+        <Button type="submit" variant="primary" className="tap" disabled={!lineId || qty === null}>
           Save the line
-        </button>
-      </form>
-      <div className="card top-gap">
+        </Button>
+      </Card>
+      <Card as="div" className="top-gap">
         <div className="bill-head">
           <h2 className="section-title">Lines ({book.data?.lines.length ?? 0})</h2>
           <div className="page-actions">
-            <button
-              className="btn btn-primary"
+            <Button
+              variant="primary"
               disabled={!sel.length}
               onClick={() => void run(api(`/api/closeout/sites/${id}/measurement-sets`, { method: "POST", json: { ids: sel } }), setError).then(() => (setSel([]), book.load()))}
             >
               Send {sel.length || ""} to the client
-            </button>
-            <button className="btn" onClick={() => setSel(toSend.map((m) => m.id))} disabled={!toSend.length}>
+            </Button>
+            <Button onClick={() => setSel(toSend.map((m) => m.id))} disabled={!toSend.length}>
               Pick all unsent
-            </button>
-            <button className="btn" onClick={() => void downloadFile(`/api/closeout/sites/${id}/measurement-sheet.xlsx`)}>
+            </Button>
+            <Button onClick={() => void downloadFile(`/api/closeout/sites/${id}/measurement-sheet.xlsx`)}>
               Excel
-            </button>
-            <button className="btn" onClick={() => void downloadFile(`/api/closeout/sites/${id}/measurement-sheet.pdf`)}>
+            </Button>
+            <Button onClick={() => void downloadFile(`/api/closeout/sites/${id}/measurement-sheet.pdf`)}>
               PDF
-            </button>
+            </Button>
           </div>
         </div>
         <div className="m-cards">
@@ -456,7 +457,7 @@ export function MeasureEntry() {
             </div>
           ))}
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
@@ -513,7 +514,7 @@ export function QualityChecklist({ siteId }: { siteId: number }) {
     void run(api(`/api/closeout/inspections/${s.inspection_id}/client-sign-record`, { method: "POST", form: fd }), setError).then(load);
   };
   return (
-    <div className="card top-gap">
+    <Card as="div" className="top-gap">
       <h2 className="section-title">Quality checklist</h2>
       <p className="small muted">
         Per area: each stage's start and end, our sign and the client's. The client signs in the portal, or our staff record the signed paper with its copy.
@@ -559,9 +560,9 @@ export function QualityChecklist({ siteId }: { siteId: number }) {
                         {s.our_sign ? (
                           <span className="badge badge-ok">✓ {s.our_sign}</span>
                         ) : edit ? (
-                          <button className="btn btn-small" onClick={() => sign(s)}>
+                          <Button size="small" onClick={() => sign(s)}>
                             Sign (with dates)
-                          </button>
+                          </Button>
                         ) : (
                           "—"
                         )}
@@ -573,7 +574,7 @@ export function QualityChecklist({ siteId }: { siteId: number }) {
                             {s.recorded_by_staff ? " (recorded by staff)" : " (in the app)"}
                           </span>
                         ) : s.inspection_id && edit ? (
-                          <label className="btn btn-small">
+                          <label className={buttonClass({ size: "small" })}>
                             Record the signed copy
                             <input type="file" hidden accept="image/*,.pdf" onChange={(e) => clientCopy(s, e.target.files?.[0])} />
                           </label>
@@ -595,7 +596,7 @@ export function QualityChecklist({ siteId }: { siteId: number }) {
           )}
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 }
 
@@ -658,23 +659,25 @@ export function Reconciliation() {
           </p>
         </div>
         <div className="page-actions">
-          <select value={period} onChange={(e) => setParams(e.target.value ? { period: e.target.value } : {}, { replace: true })} aria-label="Bill period">
-            <option value="">The whole site</option>
-            {data.periods.map((p) => (
-              <option key={p.key} value={p.key}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-          <button className="btn" onClick={() => void downloadFile(`/api/closeout/sites/${id}/reconciliation.xlsx${period ? `?period=${period}` : ""}`)}>
+          <Field label="Bill period" bare>
+            <select value={period} onChange={(e) => setParams(e.target.value ? { period: e.target.value } : {}, { replace: true })} aria-label="Bill period">
+              <option value="">The whole site</option>
+              {data.periods.map((p) => (
+                <option key={p.key} value={p.key}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Button onClick={() => void downloadFile(`/api/closeout/sites/${id}/reconciliation.xlsx${period ? `?period=${period}` : ""}`)}>
             Excel
-          </button>
+          </Button>
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {done && <div className="alert alert-ok">{done}</div>}
       {data.widths.length > 0 && (
-        <div className="card top-gap-small">
+        <Card as="div" className="top-gap-small">
           <h2 className="section-title">Lines measured per running metre</h2>
           <p className="small muted">Their system's consumption is per sqm: give each line's width once (running length × width = the area that needs material).</p>
           {data.widths.map((w) => (
@@ -683,15 +686,15 @@ export function Reconciliation() {
                 {w.description} · per {w.unit} · width {w.width_m ? `${num(w.width_m, 3)} m` : <b className="text-warn">not given</b>}
               </span>
               {can("closeout.billing") && (
-                <button className="btn btn-small" onClick={() => width(w)}>
+                <Button size="small" onClick={() => width(w)}>
                   {w.width_m ? "Change the width" : "Give the width"}
-                </button>
+                </Button>
               )}
             </div>
           ))}
-        </div>
+        </Card>
       )}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -726,9 +729,9 @@ export function Reconciliation() {
                 <td className="small muted">{r.basis.join("; ")}</td>
                 <td>
                   {r.state === "excess" && can("store.edit") && (
-                    <button className="btn btn-small" onClick={() => ret(r)}>
+                    <Button size="small" onClick={() => ret(r)}>
                       Return to godown
-                    </button>
+                    </Button>
                   )}
                 </td>
               </tr>
@@ -742,7 +745,7 @@ export function Reconciliation() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -799,7 +802,7 @@ export function LabourClaims() {
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -841,13 +844,13 @@ export function LabourClaims() {
                 <td className="small">
                   {c.status === "open" && can("closeout.billing") && (
                     <>
-                      <button className="btn btn-small btn-primary" onClick={() => decide(c, "approved")}>
+                      <Button variant="primary" size="small" onClick={() => decide(c, "approved")}>
                         Pay approved
-                      </button>{" "}
+                      </Button>{" "}
                       {Number(c.excess_claim) > 0 && (
-                        <button className="btn btn-small" onClick={() => decide(c, "claimed")}>
+                        <Button size="small" onClick={() => decide(c, "claimed")}>
                           Pay claimed…
-                        </button>
+                        </Button>
                       )}
                     </>
                   )}
@@ -857,12 +860,12 @@ export function LabourClaims() {
                       <div>{c.decision_reason}</div>
                       {can("closeout.claim_approve") && (
                         <div className="top-gap-small">
-                          <button className="btn btn-small btn-primary" onClick={() => director(c, true)}>
+                          <Button variant="primary" size="small" onClick={() => director(c, true)}>
                             Approve
-                          </button>{" "}
-                          <button className="btn btn-small" onClick={() => director(c, false)}>
+                          </Button>{" "}
+                          <Button size="small" onClick={() => director(c, false)}>
                             Refuse
-                          </button>
+                          </Button>
                         </div>
                       )}
                     </>
@@ -891,7 +894,7 @@ export function LabourClaims() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -968,11 +971,13 @@ export function Bills() {
           <p className="muted">Each RA bill's story on one page: quantities (billed, certified), its steps at the client, and the payment.</p>
         </div>
         <div className="page-actions">
-          <input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search bills" />
+          <Field label="Search bills" bare>
+            <input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search bills" />
+          </Field>
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -1000,7 +1005,7 @@ export function Bills() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -1020,11 +1025,13 @@ export function SalesBills() {
           <p className="muted">Your clients' bills: what was billed, what the client certified, what has come in, and how late the rest is. To chase a payment, speak to billing.</p>
         </div>
         <div className="page-actions">
-          <input placeholder="Search bill, site or client" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search bills" />
+          <Field label="Search bills" bare>
+            <input placeholder="Search bill, site or client" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search bills" />
+          </Field>
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -1064,7 +1071,7 @@ export function SalesBills() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -1131,7 +1138,7 @@ export function BillPage() {
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {tab === "quantities" && (
-        <div className="card table-wrap">
+        <Card as="div" className="table-wrap">
           <table className="table">
             <thead>
               <tr>
@@ -1162,9 +1169,9 @@ export function BillPage() {
                   <td className="small">
                     {l.reason ?? ""}
                     {!l.reason && l.difference !== null && Number(l.difference) !== 0 && can("billing.edit") && (
-                      <button className="btn btn-small btn-ghost" onClick={() => reason(l.line_id)}>
+                      <Button variant="ghost" size="small" onClick={() => reason(l.line_id)}>
                         Give the reason
-                      </button>
+                      </Button>
                     )}
                   </td>
                 </tr>
@@ -1187,24 +1194,24 @@ export function BillPage() {
                 <td className="num">{inr(data.quantities.difference)}</td>
                 <td>
                   {tracked?.has_document && (
-                    <button className="btn btn-small btn-ghost" onClick={() => void downloadFile(`/api/team/ra-bills/${tracked.id}/client-certification/document`)}>
+                    <Button variant="ghost" size="small" onClick={() => void downloadFile(`/api/team/ra-bills/${tracked.id}/client-certification/document`)}>
                       The client's copy
-                    </button>
+                    </Button>
                   )}
                   {tracked && ["submitted", "certified_by_client"].includes(tracked.status) && can("billing.edit") && (
-                    <button className="btn btn-small" onClick={() => setCertifying(true)}>
+                    <Button size="small" onClick={() => setCertifying(true)}>
                       Record certification
-                    </button>
+                    </Button>
                   )}
                 </td>
               </tr>
             </tbody>
           </table>
           {certifying && tracked && <CertifyForm bill={tracked} onClose={() => setCertifying(false)} onSaved={() => (setCertifying(false), load(), loadTracked())} />}
-        </div>
+        </Card>
       )}
       {tab === "steps" && (
-        <div className="card">
+        <Card as="div">
           {b.cycle && (
             <p className="small muted">
               Client's cycle: bills reach the site {b.cycle.submit_from_day}–{b.cycle.submit_to_day} · head office {b.cycle.ho_from_day}–{b.cycle.ho_to_day} · paid{" "}
@@ -1228,25 +1235,25 @@ export function BillPage() {
                     </div>
                   ) : can("closeout.billing") ? (
                     k === "signed_pm" ? (
-                      <label className="btn btn-small">
+                      <label className={buttonClass({ size: "small" })}>
                         Upload the signed copy
                         <input type="file" hidden accept="image/*,.pdf" onChange={(e) => addStep(k, e.target.files?.[0])} />
                       </label>
                     ) : (
-                      <button className="btn btn-small" onClick={() => addStep(k)}>
+                      <Button size="small" onClick={() => addStep(k)}>
                         Mark today
-                      </button>
+                      </Button>
                     )
                   ) : null}
                 </div>
               );
             })}
           </div>
-        </div>
+        </Card>
       )}
       {tab === "payment" && (
         <div className="grid-2">
-          <div className="card">
+          <Card as="div">
             <h2 className="section-title">Due and received</h2>
             <p>
               Due <b>{d(b.due_on)}</b> <span className="small muted">({b.due_how})</span>
@@ -1282,8 +1289,8 @@ export function BillPage() {
                 )}
               </tbody>
             </table>
-          </div>
-          <div className="card">
+          </Card>
+          <Card as="div">
             <h2 className="section-title">Follow-ups</h2>
             {b.followups.map((f, i) => (
               <div key={i} className="small followup">
@@ -1303,14 +1310,20 @@ export function BillPage() {
                 }}
               >
                 <div className="inline-form">
-                  <input placeholder="Who you spoke to" value={fu.spoke_to} onChange={(e) => setFu({ ...fu, spoke_to: e.target.value })} required />
-                  <input className="grow" placeholder="What was said" value={fu.said} onChange={(e) => setFu({ ...fu, said: e.target.value })} required />
-                  <input type="date" value={fu.promised_on} onChange={(e) => setFu({ ...fu, promised_on: e.target.value })} aria-label="Promised date" />
-                  <button className="btn btn-primary">Log the call</button>
+                  <Field label="Who you spoke to" bare>
+                    <input placeholder="Who you spoke to" value={fu.spoke_to} onChange={(e) => setFu({ ...fu, spoke_to: e.target.value })} required />
+                  </Field>
+                  <Field label="What was said" bare>
+                    <input className="grow" placeholder="What was said" value={fu.said} onChange={(e) => setFu({ ...fu, said: e.target.value })} required />
+                  </Field>
+                  <Field label="Promised date" bare>
+                    <input type="date" value={fu.promised_on} onChange={(e) => setFu({ ...fu, promised_on: e.target.value })} aria-label="Promised date" />
+                  </Field>
+                  <Button type="submit" variant="primary">Log the call</Button>
                 </div>
               </form>
             )}
-          </div>
+          </Card>
         </div>
       )}
     </>
@@ -1339,7 +1352,7 @@ export function ChecklistSites() {
         <h1>Billing checklist</h1>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card">
+      <Card as="div">
         <ul className="site-list">
           {(data?.items ?? []).map((s) => (
             <li key={s.id}>
@@ -1349,7 +1362,7 @@ export function ChecklistSites() {
             </li>
           ))}
         </ul>
-      </div>
+      </Card>
     </>
   );
 }

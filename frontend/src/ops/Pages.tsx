@@ -5,6 +5,7 @@ import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
 import { errorText } from "../format";
 import { MENU } from "../menu";
+import { Button, Card, Field } from "../ui/components";
 
 const when = (v: string | null | undefined) =>
   v
@@ -96,18 +97,16 @@ export function SetPassword() {
         {error && <div className="alert alert-error">{error}</div>}
         {who && (
           <>
-            <label className="field">
-              <span>New password (at least 10 characters, not a common one)</span>
+            <Field label="New password (at least 10 characters, not a common one)">
               <input type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} required minLength={10} autoFocus />
-            </label>
+            </Field>
             {hint && <p className="small text-warn">{hint}</p>}
-            <label className="field">
-              <span>Again</span>
+            <Field label="Again">
               <input type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} required />
-            </label>
-            <button className="btn btn-primary btn-block" disabled={!!hint || !pw}>
+            </Field>
+            <Button type="submit" variant="primary" block disabled={!!hint || !pw}>
               Set the password
-            </button>
+            </Button>
           </>
         )}
       </form>
@@ -160,8 +159,8 @@ export function Account() {
       {error && <div className="alert alert-error">{error}</div>}
       {msg && <div className="alert alert-ok">{msg}</div>}
       <div className="grid-2">
-        <form
-          className="card"
+        <Card
+          as="form"
           onSubmit={(e) => {
             e.preventDefault();
             if (pw.next !== pw.again) return setError("The two new passwords are not the same");
@@ -178,21 +177,18 @@ export function Account() {
         >
           <h2 className="section-title">Change my password</h2>
           <p className="small muted">At least 10 characters, not a common password, not your name or email. Every session of yours ends (sign in again everywhere).</p>
-          <label className="field">
-            <span>Current password</span>
+          <Field label="Current password">
             <input type="password" autoComplete="current-password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} required />
-          </label>
-          <label className="field">
-            <span>New password</span>
+          </Field>
+          <Field label="New password">
             <input type="password" autoComplete="new-password" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} required minLength={10} />
-          </label>
-          <label className="field">
-            <span>New password again</span>
+          </Field>
+          <Field label="New password again">
             <input type="password" autoComplete="new-password" value={pw.again} onChange={(e) => setPw({ ...pw, again: e.target.value })} required />
-          </label>
-          <button className="btn btn-primary">Change the password</button>
-        </form>
-        <div className="card">
+          </Field>
+          <Button type="submit" variant="primary">Change the password</Button>
+        </Card>
+        <Card as="div">
           <h2 className="section-title">Two-step sign-in</h2>
           {two.data && (
             <>
@@ -209,14 +205,13 @@ export function Account() {
                 )}
               </p>
               {!two.data.enabled && !setup && (
-                <button
-                  className="btn"
+                <Button
                   onClick={() =>
                     void api<{ ticket: string; secret: string; qr: string }>("/api/auth/two-step/start", { method: "POST" }).then(setSetup, (e) => setError(errorText(e)))
                   }
                 >
                   Set it up
-                </button>
+                </Button>
               )}
               {setup && (
                 <form
@@ -237,8 +232,10 @@ export function Account() {
                     Key: <code className="secret">{setup.secret}</code>
                   </p>
                   <div className="inline-form">
-                    <input inputMode="numeric" placeholder="6-digit code" value={code} onChange={(e) => setCode(e.target.value)} required />
-                    <button className="btn btn-primary">Turn it on</button>
+                    <Field label="6-digit code" bare>
+                      <input inputMode="numeric" placeholder="6-digit code" value={code} onChange={(e) => setCode(e.target.value)} required />
+                    </Field>
+                    <Button type="submit" variant="primary">Turn it on</Button>
                   </div>
                 </form>
               )}
@@ -256,13 +253,15 @@ export function Account() {
                     ).then((ok) => ok && setCode(""));
                   }}
                 >
-                  <input inputMode="numeric" placeholder="code to turn it off" value={code} onChange={(e) => setCode(e.target.value)} required />
-                  <button className="btn">Turn it off</button>
+                  <Field label="code to turn it off" bare>
+                    <input inputMode="numeric" placeholder="code to turn it off" value={code} onChange={(e) => setCode(e.target.value)} required />
+                  </Field>
+                  <Button type="submit">Turn it off</Button>
                 </form>
               )}
             </>
           )}
-        </div>
+        </Card>
       </div>
     </>
   );
@@ -304,7 +303,7 @@ export function SecuritySettings() {
       {error && <div className="alert alert-error">{error}</div>}
       {saved && <div className="alert alert-ok">Saved</div>}
       <div className="grid-2">
-        <div className="card">
+        <Card as="div">
           <h2 className="section-title">Two-step sign-in</h2>
           <label className="check">
             <input type="checkbox" checked={data.totp_required} onChange={(e) => save({ totp_required: e.target.checked })} /> Required for these roles (they set it up at their
@@ -329,23 +328,21 @@ export function SecuritySettings() {
               ))}
           </div>
           <p className="small muted">The office admin resets a person's two-step sign-in in Users when a phone is lost.</p>
-        </div>
-        <div className="card">
+        </Card>
+        <Card as="div">
           <h2 className="section-title">Sessions and passwords</h2>
-          <label className="field">
-            <span>End a session after this many hours unused on a phone</span>
+          <Field label="End a session after this many hours unused on a phone">
             <input type="number" min={1} max={72} defaultValue={data.idle_hours_phone} onBlur={(e) => save({ idle_hours_phone: Number(e.target.value) })} />
-          </label>
-          <label className="field">
-            <span>…on a desktop</span>
+          </Field>
+          <Field label="…on a desktop">
             <input type="number" min={1} max={72} defaultValue={data.idle_hours_desktop} onBlur={(e) => save({ idle_hours_desktop: Number(e.target.value) })} />
-          </label>
+          </Field>
           <p className="small muted">
             Passwords: at least {data.min_password_length} characters, not a common one. {data.lock_after} wrong passwords lock the sign-in for {data.lock_minutes} minutes; the{" "}
             {data.admin_unlock_after_lockouts}
             rd lock in a row waits for the office admin (Users &gt; Unlock). A password change ends every session.
           </p>
-        </div>
+        </Card>
       </div>
     </>
   );
@@ -393,7 +390,7 @@ export function BackupsPage() {
       {b.missed && <div className="alert alert-error">The last backup is missing or failed{b.error ? `: ${b.error}` : ""}. The director and the office admin have been told.</div>}
       {!b.enabled && <div className="alert alert-warn">Backups run on the server (the backup container). This copy of the app does not back itself up.</div>}
       <div className="grid-2">
-        <div className="card">
+        <Card as="div">
           <h2 className="section-title">The last backup</h2>
           <table className="table compact">
             <tbody>
@@ -421,8 +418,8 @@ export function BackupsPage() {
               </tr>
             </tbody>
           </table>
-        </div>
-        <div className="card">
+        </Card>
+        <Card as="div">
           <h2 className="section-title">Health</h2>
           <table className="table compact">
             <tbody>
@@ -447,9 +444,9 @@ export function BackupsPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       </div>
-      <div className="card top-gap">
+      <Card as="div" className="top-gap">
         <h2 className="section-title">
           Files (photos, drawings, PDFs): {size(data.media.bytes)} in {data.media.files.toLocaleString("en-IN")} files
         </h2>
@@ -471,7 +468,7 @@ export function BackupsPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -534,25 +531,25 @@ export function UserImport() {
           </p>
         </div>
         <div className="page-actions">
-          <button className="btn" onClick={() => void downloadFile("/api/ops/user-import/template.xlsx")}>
+          <Button onClick={() => void downloadFile("/api/ops/user-import/template.xlsx")}>
             Download the template
-          </button>
+          </Button>
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card">
+      <Card as="div">
         <div className="inline-form">
           <input type="file" accept=".xlsx" onChange={(e) => (setFile(e.target.files?.[0] ?? null), setCheck(null), setMade(null))} aria-label="The filled template" />
-          <button className="btn" disabled={!file} onClick={() => void send("/api/ops/user-import/check").then((r) => r && setCheck(r as typeof check))}>
+          <Button disabled={!file} onClick={() => void send("/api/ops/user-import/check").then((r) => r && setCheck(r as typeof check))}>
             Check the file
-          </button>
-          <button
-            className="btn btn-primary"
+          </Button>
+          <Button
+            variant="primary"
             disabled={!check || check.errors > 0 || check.new === 0}
             onClick={() => void send("/api/ops/user-import/save").then((r) => r && setMade((r as { users: typeof made }).users))}
           >
             Save {check ? check.new : ""} new user(s)
-          </button>
+          </Button>
         </div>
         {check && (
           <p className="top-gap">
@@ -561,9 +558,9 @@ export function UserImport() {
             {check.errors > 0 && <span className="small text-danger"> Fix the rows below in the file and check it again.</span>}
           </p>
         )}
-      </div>
+      </Card>
       {check && !made && (
-        <div className="card top-gap table-wrap">
+        <Card as="div" className="top-gap table-wrap">
           <table className="table compact">
             <thead>
               <tr>
@@ -600,10 +597,10 @@ export function UserImport() {
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
       {made && (
-        <div className="card top-gap">
+        <Card as="div" className="top-gap">
           <h2 className="section-title">Saved: the one-time links (shown once)</h2>
           <p className="small muted">Copy each link and send it to the person. It works once, for 7 days.</p>
           <table className="table compact">
@@ -615,16 +612,16 @@ export function UserImport() {
                   <td className="small">{u.link ? <code className="secret">{base + u.link}</code> : <span className="muted">{u.status}</span>}</td>
                   <td>
                     {u.link && (
-                      <button className="btn btn-small" onClick={() => void navigator.clipboard?.writeText(base + u.link)}>
+                      <Button size="small" onClick={() => void navigator.clipboard?.writeText(base + u.link)}>
                         Copy
-                      </button>
+                      </Button>
                     )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
     </>
   );
@@ -653,12 +650,12 @@ export function RolesReport() {
           <p className="muted">Each role's pages and actions in plain words, and what it never sees. Export the PDF for the director to sign before go-live.</p>
         </div>
         <div className="page-actions">
-          <button className="btn btn-primary" onClick={() => void downloadFile("/api/ops/roles-report.pdf")}>
+          <Button variant="primary" onClick={() => void downloadFile("/api/ops/roles-report.pdf")}>
             PDF for sign-off
-          </button>
+          </Button>
         </div>
       </div>
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -710,7 +707,7 @@ export function RolesReport() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -740,7 +737,7 @@ export function HelpSettings() {
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table compact">
           <thead>
             <tr>
@@ -762,28 +759,28 @@ export function HelpSettings() {
                   <b>{h.title}</b> · {h.steps.length} steps {h.edited && <span className="badge badge-info">edited{h.updated_by ? ` by ${h.updated_by}` : ""}</span>}
                 </td>
                 <td className="nowrap">
-                  <button className="btn btn-small" onClick={() => setEdit({ ...h, steps: [...h.steps] })}>
+                  <Button size="small" onClick={() => setEdit({ ...h, steps: [...h.steps] })}>
                     Edit
-                  </button>{" "}
+                  </Button>{" "}
                   {h.edited && (
-                    <button
-                      className="btn btn-small btn-ghost"
+                    <Button
+                      variant="ghost" size="small"
                       onClick={() =>
                         void api(`/api/help?page=${encodeURIComponent(h.page)}&role=${encodeURIComponent(h.role)}`, { method: "DELETE" }).then(load, (e) => setError(errorText(e)))
                       }
                     >
                       Reset
-                    </button>
+                    </Button>
                   )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
       {edit && (
-        <form
-          className="card top-gap"
+        <Card
+          as="form" className="top-gap"
           onSubmit={(e) => {
             e.preventDefault();
             void api("/api/help", {
@@ -803,13 +800,11 @@ export function HelpSettings() {
           <h2 className="section-title">
             {label(edit.page)} · {edit.role || "everyone"}
           </h2>
-          <label className="field">
-            <span>Title</span>
+          <Field label="Title">
             <input value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} required />
-          </label>
+          </Field>
           {[0, 1, 2, 3, 4, 5].map((i) => (
-            <label key={i} className="field">
-              <span>Step {i + 1}</span>
+            <Field label={<>Step {i + 1}</>} key={i}>
               <input
                 value={edit.steps[i] ?? ""}
                 onChange={(e) =>
@@ -822,15 +817,15 @@ export function HelpSettings() {
                 }
                 required={i < 3}
               />
-            </label>
+            </Field>
           ))}
           <div className="inline-form">
-            <button className="btn btn-primary">Save</button>
-            <button type="button" className="btn btn-ghost" onClick={() => setEdit(null)}>
+            <Button type="submit" variant="primary">Save</Button>
+            <Button type="button" variant="ghost" onClick={() => setEdit(null)}>
               Cancel
-            </button>
+            </Button>
           </div>
-        </form>
+        </Card>
       )}
     </>
   );
@@ -960,16 +955,16 @@ export function HelpButton() {
   if (!help) return null;
   return (
     <>
-      <button className="btn btn-ghost help-button" aria-label="Help for this page" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <Button variant="ghost" className="help-button" aria-label="Help for this page" aria-expanded={open} onClick={() => setOpen(!open)}>
         ?
-      </button>
+      </Button>
       {open && (
         <div className="help-panel" role="dialog" aria-label="How to use this page">
           <div className="help-head">
             <b>{help.title}</b>
-            <button className="btn btn-ghost btn-small" onClick={() => setOpen(false)} aria-label="Close">
+            <Button variant="ghost" size="small" onClick={() => setOpen(false)} aria-label="Close">
               ×
-            </button>
+            </Button>
           </div>
           <ol>
             {help.steps.map((s, i) => (

@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { errorText, inr } from "../format";
 import { NearRates } from "./Picker";
 import type { Brief, Proposal, ProductRow } from "./Picker";
+import { Button, Card, Field } from "../ui/components";
 
 type Report = {
   last_run: Record<string, unknown>;
@@ -68,7 +69,7 @@ export function KnowledgeHome() {
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {r && (
-        <div className="card">
+        <Card as="div">
           <h2 className="section-title">Reading report</h2>
           <div className="stat-row">
             <Stat label="Files read" value={r.live.files_by_status.read ?? 0} />
@@ -114,21 +115,25 @@ export function KnowledgeHome() {
               </ul>
             </details>
           )}
-        </div>
+        </Card>
       )}
       <ReviewQueue />
       <ProductsToReview />
-      <div className="card top-gap">
+      <Card as="div" className="top-gap">
         <div className="form-row">
-          <input value={q} onChange={(e) => setP("q", e.target.value)} placeholder="Search templates (sunken toilet, crystalline, PU…)" aria-label="Search" />
-          <select value={area} onChange={(e) => setP("area", e.target.value)} aria-label="Area">
-            <option value="">All areas</option>
-            {areas.map((a) => (
-              <option key={a.key} value={a.key}>
-                {a.label}
-              </option>
-            ))}
-          </select>
+          <Field label="Search" bare>
+            <input value={q} onChange={(e) => setP("q", e.target.value)} placeholder="Search templates (sunken toilet, crystalline, PU…)" aria-label="Search" />
+          </Field>
+          <Field label="Area" bare>
+            <select value={area} onChange={(e) => setP("area", e.target.value)} aria-label="Area">
+              <option value="">All areas</option>
+              {areas.map((a) => (
+                <option key={a.key} value={a.key}>
+                  {a.label}
+                </option>
+              ))}
+            </select>
+          </Field>
           <label className="small">
             <input type="checkbox" checked={singles} onChange={(e) => setP("singles", e.target.checked ? "1" : "")} /> show single-line templates
           </label>
@@ -162,7 +167,7 @@ export function KnowledgeHome() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -247,42 +252,41 @@ export function TemplatePage() {
         </div>
         {t.can_edit && (
           <div className="page-actions">
-            <button className="btn" onClick={() => setEdit({ name: t.name, description: t.description, steps: t.steps.join("\n") })}>
+            <Button onClick={() => setEdit({ name: t.name, description: t.description, steps: t.steps.join("\n") })}>
               Edit
-            </button>
-            <button className="btn" onClick={() => void run(api(`/api/knowledge/templates/${t.id}`, { method: "PUT", json: { hidden: !t.hidden } }))}>
+            </Button>
+            <Button onClick={() => void run(api(`/api/knowledge/templates/${t.id}`, { method: "PUT", json: { hidden: !t.hidden } }))}>
               {t.hidden ? "Show" : "Hide"}
-            </button>
+            </Button>
             <span className="inline-form">
-              <input className="input-small" value={mergeInto} onChange={(e) => setMergeInto(e.target.value)} placeholder="template no." aria-label="Merge into" />
-              <button
-                className="btn btn-small"
+              <Field label="Merge into" bare>
+                <input className="input-small" value={mergeInto} onChange={(e) => setMergeInto(e.target.value)} placeholder="template no." aria-label="Merge into" />
+              </Field>
+              <Button
+                size="small"
                 disabled={!mergeInto}
                 onClick={() => void run(api(`/api/knowledge/templates/${t.id}/merge`, { method: "POST", json: { into_id: Number(mergeInto) } }))}
               >
                 Merge into
-              </button>
+              </Button>
             </span>
           </div>
         )}
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {edit && (
-        <div className="card">
-          <label className="field">
-            <span>Name</span>
+        <Card as="div">
+          <Field label="Name">
             <input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Standard description (the client text)</span>
+          </Field>
+          <Field label="Standard description (the client text)">
             <textarea rows={6} value={edit.description} onChange={(e) => setEdit({ ...edit, description: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Method statement (one step a line)</span>
+          </Field>
+          <Field label="Method statement (one step a line)">
             <textarea rows={6} value={edit.steps} onChange={(e) => setEdit({ ...edit, steps: e.target.value })} />
-          </label>
-          <button
-            className="btn btn-primary"
+          </Field>
+          <Button
+            variant="primary"
             onClick={() =>
               void run(
                 api(`/api/knowledge/templates/${t.id}`, {
@@ -300,11 +304,11 @@ export function TemplatePage() {
             }
           >
             Save
-          </button>
-        </div>
+          </Button>
+        </Card>
       )}
       <div className="grid-2">
-        <div className="card">
+        <Card as="div">
           <h3>Standard description</h3>
           <p className="small">{t.description}</p>
           <h3>Method statement</h3>
@@ -378,11 +382,13 @@ export function TemplatePage() {
               </table>
             </>
           )}
-        </div>
-        <div className="card">
+        </Card>
+        <Card as="div">
           <div className="form-row">
             <h3>Past rates by location</h3>
-            <input value={city} onChange={(e) => setCity(e.target.value)} aria-label="Location" placeholder="City" />
+            <Field label="Location" bare>
+              <input value={city} onChange={(e) => setCity(e.target.value)} aria-label="Location" placeholder="City" />
+            </Field>
           </div>
           <NearRates r={t.rates} />
           <p className="small muted">Older than {t.rates.old_after_months} months: marked old.</p>
@@ -415,9 +421,9 @@ export function TemplatePage() {
                   </td>
                   {t.can_edit && (
                     <td>
-                      <button className="btn btn-small btn-ghost" onClick={() => setFix({ line: r.line_id, field: "rate", value: r.rate, reason: "" })}>
+                      <Button variant="ghost" size="small" onClick={() => setFix({ line: r.line_id, field: "rate", value: r.rate, reason: "" })}>
                         Fix
-                      </button>
+                      </Button>
                     </td>
                   )}
                 </tr>
@@ -426,17 +432,23 @@ export function TemplatePage() {
           </table>
           {fix && (
             <div className="form-row">
-              <select value={fix.field} onChange={(e) => setFix({ ...fix, field: e.target.value })} aria-label="Field">
-                {["rate", "city", "on_date", "surface", "coats", "min_kg_sqm", "template_id", "hidden"].map((x) => (
-                  <option key={x} value={x}>
-                    {x}
-                  </option>
-                ))}
-              </select>
-              <input value={fix.value} onChange={(e) => setFix({ ...fix, value: e.target.value })} aria-label="Value" />
-              <input value={fix.reason} onChange={(e) => setFix({ ...fix, reason: e.target.value })} placeholder="Reason (required)" aria-label="Reason" />
-              <button
-                className="btn btn-small btn-primary"
+              <Field label="Field" bare>
+                <select value={fix.field} onChange={(e) => setFix({ ...fix, field: e.target.value })} aria-label="Field">
+                  {["rate", "city", "on_date", "surface", "coats", "min_kg_sqm", "template_id", "hidden"].map((x) => (
+                    <option key={x} value={x}>
+                      {x}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Value" bare>
+                <input value={fix.value} onChange={(e) => setFix({ ...fix, value: e.target.value })} aria-label="Value" />
+              </Field>
+              <Field label="Reason" bare>
+                <input value={fix.reason} onChange={(e) => setFix({ ...fix, reason: e.target.value })} placeholder="Reason (required)" aria-label="Reason" />
+              </Field>
+              <Button
+                variant="primary" size="small"
                 disabled={fix.reason.trim().length < 5}
                 onClick={() =>
                   void run(
@@ -448,7 +460,7 @@ export function TemplatePage() {
                 }
               >
                 Save the fix
-              </button>
+              </Button>
             </div>
           )}
           <MergeSuggestions id={t.id} canEdit={t.can_edit} onMerged={(into) => (window.location.href = `/knowledge/templates/${into}`)} />
@@ -465,7 +477,7 @@ export function TemplatePage() {
             </details>
           )}
           {!can("knowledge.cost") && <p className="small muted">Costs and margins are for the estimator, planning and the director.</p>}
-        </div>
+        </Card>
       </div>
     </>
   );
@@ -538,12 +550,12 @@ export function MatchPage() {
                 ) : (
                   <>
                     {m.template && (
-                      <button className="btn btn-small" onClick={() => void set(m, "accepted", m.template!.id)}>
+                      <Button size="small" onClick={() => void set(m, "accepted", m.template!.id)}>
                         Accept
-                      </button>
+                      </Button>
                     )}
-                    <button
-                      className="btn btn-small btn-ghost"
+                    <Button
+                      variant="ghost" size="small"
                       onClick={() => {
                         const v = window.prompt("Template number (blank: none)");
                         if (v === null) return;
@@ -551,7 +563,7 @@ export function MatchPage() {
                       }}
                     >
                       Change
-                    </button>
+                    </Button>
                   </>
                 )}
               </td>
@@ -571,7 +583,7 @@ function ReviewQueue() {
   }, []);
   if (!rows.length) return null;
   return (
-    <details className="card top-gap" open>
+    <Card as="details" className="top-gap" open>
       <summary>
         <b>Review queue</b> <span className="small muted">templates not reviewed yet, the most used first</span>
       </summary>
@@ -588,7 +600,7 @@ function ReviewQueue() {
           ))}
         </tbody>
       </table>
-    </details>
+    </Card>
   );
 }
 
@@ -607,7 +619,7 @@ function ProductsToReview() {
   if (!rows.length) return null;
   const decide = (r: Review, json: Record<string, unknown>) => api(`/api/knowledge/product-reviews/${r.id}`, { method: "POST", json }).then(load, (e) => setError(errorText(e)));
   return (
-    <details className="card top-gap" open>
+    <Card as="details" className="top-gap" open>
       <summary>
         <b>Products to review ({rows.length})</b> <span className="small muted">not in the product master: accept, merge into a product we have, or reject</span>
       </summary>
@@ -633,16 +645,16 @@ function ProductsToReview() {
                 {can("knowledge.edit") && (
                   <span className="inline-form">
                     {r.suggested && (
-                      <button className="btn btn-small" onClick={() => void decide(r, { action: "merge", product_id: r.suggested!.id })}>
+                      <Button size="small" onClick={() => void decide(r, { action: "merge", product_id: r.suggested!.id })}>
                         Merge into {r.suggested.name}
-                      </button>
+                      </Button>
                     )}
-                    <button className="btn btn-small" onClick={() => void decide(r, { action: "accept" })}>
+                    <Button size="small" onClick={() => void decide(r, { action: "accept" })}>
                       Accept
-                    </button>
-                    <button className="btn btn-small btn-ghost" onClick={() => void decide(r, { action: "reject" })}>
+                    </Button>
+                    <Button variant="ghost" size="small" onClick={() => void decide(r, { action: "reject" })}>
                       Reject
-                    </button>
+                    </Button>
                   </span>
                 )}
               </td>
@@ -650,7 +662,7 @@ function ProductsToReview() {
           ))}
         </tbody>
       </table>
-    </details>
+    </Card>
   );
 }
 
@@ -672,12 +684,12 @@ function MergeSuggestions({ id, canEdit, onMerged }: { id: number; canEdit: bool
               </td>
               <td>
                 {canEdit && (
-                  <button
-                    className="btn btn-small"
+                  <Button
+                    size="small"
                     onClick={() => void api(`/api/knowledge/templates/${id}/merge`, { method: "POST", json: { into_id: x.id } }).then(() => onMerged(x.id))}
                   >
                     Merge this into it
-                  </button>
+                  </Button>
                 )}
               </td>
             </tr>

@@ -7,7 +7,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
 import { errorText } from "../format";
 import type { SiteTask } from "../types";
-import { BackButton, Button, EmptyState, Icon, ProgressBar, Skeleton } from "../ui/components";
+import { BackButton, Button, Card, EmptyState, Icon, ProgressBar, Skeleton } from "../ui/components";
 import { checkFtIn, FtInInput } from "../ui/FtIn";
 import { useToast } from "../ui/Overlay";
 import { flush, sendOrKeep, type QueuedReport } from "./reportQueue";
@@ -164,7 +164,7 @@ export default function TodayReport() {
         <EmptyState title="Nothing to report today" hint="No step on this site is under way or due today." />
       ) : (
         <div className="report-form">
-          <div className="card card-sm current-task">
+          <Card as="div" size="small" className="current-task">
             <span className={`swatch swatch-${step.status === "blocked" ? "block" : "prog"}`} aria-hidden="true" />
             <div>
               <b>{place.name}</b>
@@ -175,7 +175,7 @@ export default function TodayReport() {
             <button type="button" className="link-button" onClick={() => setChanging(!changing)} aria-expanded={changing}>
               Change
             </button>
-          </div>
+          </Card>
           {changing && (
             <ul className="place-list" aria-label="Places to report today">
               {places.map((p) => (

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { ART } from "../../ui/tokens";
+import { Button } from "../../ui/components";
 
 /** Draw a signature with a finger or the mouse; reports a PNG data URL (or null when cleared). */
 export default function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void }) {
@@ -58,9 +59,9 @@ export default function SignaturePad({ onChange }: { onChange: (dataUrl: string 
   return (
     <div className="signature">
       <canvas ref={canvas} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerLeave={up} aria-label="Signature pad" />
-      <button type="button" className="btn btn-small" onClick={clear}>
+      <Button type="button" size="small" onClick={clear}>
         Clear
-      </button>
+      </Button>
     </div>
   );
 }

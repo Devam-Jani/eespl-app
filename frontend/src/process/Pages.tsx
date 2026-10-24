@@ -6,6 +6,7 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import { DoneButton } from "../components/DoneButton";
 import { errorText } from "../format";
+import { Button, buttonClass, Card, Field } from "../ui/components";
 
 type Note = {
   id: number;
@@ -51,7 +52,7 @@ export function Notifications() {
       <div className="page-header">
         <h1>Notifications</h1>
         <div className="page-actions">
-          <Link className="btn btn-small btn-ghost" to="/my-notifications">
+          <Link className={buttonClass({ variant: "ghost", size: "small" })} to="/my-notifications">
             My email choices
           </Link>
         </div>
@@ -69,7 +70,7 @@ export function Notifications() {
         ))}
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card">
+      <Card as="div">
         {!data ? (
           <p className="muted">Loading…</p>
         ) : data.items.length === 0 ? (
@@ -99,9 +100,9 @@ export function Notifications() {
                 </button>
                 {n.needs_action && !n.closed_label ? (
                   <span className="note-actions">
-                    <button className="btn btn-small btn-primary" onClick={() => void open(n)}>
+                    <Button variant="primary" size="small" onClick={() => void open(n)}>
                       {n.action ?? "Open"}
-                    </button>
+                    </Button>
                     <DoneButton id={n.id} action={n.action} onDone={() => void load()} />
                   </span>
                 ) : (
@@ -111,7 +112,7 @@ export function Notifications() {
             ))}
           </ul>
         )}
-      </div>
+      </Card>
     </>
   );
 }
@@ -141,7 +142,7 @@ export function ProcessTab({ siteId }: { siteId: number }) {
   if (error) return <div className="alert alert-error">{error}</div>;
   if (!t) return <p className="muted">Loading…</p>;
   return (
-    <div className="card">
+    <Card as="div">
       <h2 className="section-title">Process: enquiry to payment</h2>
       <p className="small muted">Each step, who did it and when; the current step is highlighted with how long it has been waiting.</p>
       <ol className="timeline">
@@ -182,7 +183,7 @@ export function ProcessTab({ siteId }: { siteId: number }) {
           </li>
         ))}
       </ol>
-    </div>
+    </Card>
   );
 }
 
@@ -217,7 +218,7 @@ export function Escalated() {
       <Suspense fallback={null}>
         <DelaysCard />
       </Suspense>
-      <div className="table-wrap card">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -245,7 +246,7 @@ export function Escalated() {
                 <td className="small">{r.waiting_on}</td>
                 <td>
                   {r.link && (
-                    <Link className="btn btn-small" to={r.link}>
+                    <Link className={buttonClass({ size: "small" })} to={r.link}>
                       Open
                     </Link>
                   )}
@@ -261,7 +262,7 @@ export function Escalated() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -329,12 +330,11 @@ export function ProcessRules() {
       <Suspense fallback={null}>
         <CostingSettingsCard />
       </Suspense>
-      <div className="card settings-card">
+      <Card as="div" className="settings-card">
         <h2 className="section-title">Defaults</h2>
         <div className="form-grid two">
           {["planning", "billing", "accounts", "store_purchase", "estimator", "salesperson", "site_engineer", "supervisor"].map((role) => (
-            <label key={role} className="field">
-              <span>Default {role.replace(/_/g, " ")} (a site with nobody in the role)</span>
+            <Field label={<>Default {role.replace(/_/g, " ")} (a site with nobody in the role)</>} key={role}>
               <select
                 disabled={!edit}
                 value={s.default_users[role] ?? ""}
@@ -347,10 +347,9 @@ export function ProcessRules() {
                   </option>
                 ))}
               </select>
-            </label>
+            </Field>
           ))}
-          <label className="field">
-            <span>Stage bill limit (days): the director is told after</span>
+          <Field label="Stage bill limit (days): the director is told after">
             <input
               type="number"
               min={1}
@@ -358,9 +357,8 @@ export function ProcessRules() {
               defaultValue={s.stage_bill_days ?? 7}
               onBlur={(e) => void saveSettings({ ...s, stage_bill_days: Number(e.target.value) })}
             />
-          </label>
-          <label className="field">
-            <span>Daily summary email at (hour, IST)</span>
+          </Field>
+          <Field label="Daily summary email at (hour, IST)">
             <input
               type="number"
               min={0}
@@ -369,45 +367,49 @@ export function ProcessRules() {
               defaultValue={s.summary_hour}
               onBlur={(e) => void saveSettings({ ...s, summary_hour: Number(e.target.value) })}
             />
-          </label>
+          </Field>
         </div>
         <h3 className="section-title top-gap">Wastage per application (material plans)</h3>
         <div className="wastage-grid">
           {Object.entries(s.wastage).map(([app, w]) => (
             <div key={app} className="inline-form">
               <span className="grow">{app}</span>
-              <input
-                className="input-num"
-                disabled={!edit}
-                defaultValue={w.min}
-                aria-label={`${app} min`}
-                onBlur={(e) => void saveSettings({ ...s, wastage: { ...s.wastage, [app]: { ...w, min: Number(e.target.value) } } })}
-              />
+              <Field label={`${app} min`} bare>
+                <input
+                  className="input-num"
+                  disabled={!edit}
+                  defaultValue={w.min}
+                  aria-label={`${app} min`}
+                  onBlur={(e) => void saveSettings({ ...s, wastage: { ...s.wastage, [app]: { ...w, min: Number(e.target.value) } } })}
+                />
+              </Field>
               –
-              <input
-                className="input-num"
-                disabled={!edit}
-                defaultValue={w.max}
-                aria-label={`${app} max`}
-                onBlur={(e) => void saveSettings({ ...s, wastage: { ...s.wastage, [app]: { ...w, max: Number(e.target.value) } } })}
-              />
+              <Field label={`${app} max`} bare>
+                <input
+                  className="input-num"
+                  disabled={!edit}
+                  defaultValue={w.max}
+                  aria-label={`${app} max`}
+                  onBlur={(e) => void saveSettings({ ...s, wastage: { ...s.wastage, [app]: { ...w, max: Number(e.target.value) } } })}
+                />
+              </Field>
               %
             </div>
           ))}
           {edit && (
-            <button
-              className="btn btn-small"
+            <Button
+              size="small"
               onClick={() => {
                 const name = prompt("Application (a word found in the place's name, e.g. podium)");
                 if (name) void saveSettings({ ...s, wastage: { ...s.wastage, [name.trim().toLowerCase()]: { min: 5, max: 7 } } });
               }}
             >
               + Application
-            </button>
+            </Button>
           )}
         </div>
-      </div>
-      <div className="table-wrap card top-gap">
+      </Card>
+      <Card as="div" className="table-wrap top-gap">
         <table className="table rules-table">
           <thead>
             <tr>
@@ -436,19 +438,21 @@ export function ProcessRules() {
                     </div>
                   ))}
                   {edit && (
-                    <select
-                      className="small"
-                      value=""
-                      aria-label={`Add a recipient to ${r.title}`}
-                      onChange={(e) => e.target.value && void put(r.code, { recipients: [...r.recipients, { ...r.recipients[0], role: e.target.value }] })}
-                    >
-                      <option value="">+ another recipient…</option>
-                      {data.roles.map((role) => (
-                        <option key={role} value={role}>
-                          {role.replace(/_/g, " ")}
-                        </option>
-                      ))}
-                    </select>
+                    <Field label={`Add a recipient to ${r.title}`} bare>
+                      <select
+                        className="small"
+                        value=""
+                        aria-label={`Add a recipient to ${r.title}`}
+                        onChange={(e) => e.target.value && void put(r.code, { recipients: [...r.recipients, { ...r.recipients[0], role: e.target.value }] })}
+                      >
+                        <option value="">+ another recipient…</option>
+                        {data.roles.map((role) => (
+                          <option key={role} value={role}>
+                            {role.replace(/_/g, " ")}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
                   )}
                 </td>
                 <td className="small">
@@ -461,15 +465,17 @@ export function ProcessRules() {
                       <div key={i}>
                         after{" "}
                         {edit ? (
-                          <input
-                            className="input-num"
-                            defaultValue={e.after_hours}
-                            aria-label={`${r.title} escalation hours`}
-                            onBlur={(ev) =>
-                              Number(ev.target.value) !== e.after_hours &&
-                              void put(r.code, { escalations: r.escalations.map((x, j) => (j === i ? { ...x, after_hours: Number(ev.target.value) } : x)) })
-                            }
-                          />
+                          <Field label={`${r.title} escalation hours`} bare>
+                            <input
+                              className="input-num"
+                              defaultValue={e.after_hours}
+                              aria-label={`${r.title} escalation hours`}
+                              onBlur={(ev) =>
+                                Number(ev.target.value) !== e.after_hours &&
+                                void put(r.code, { escalations: r.escalations.map((x, j) => (j === i ? { ...x, after_hours: Number(ev.target.value) } : x)) })
+                              }
+                            />
+                          </Field>
                         ) : (
                           e.after_hours
                         )}{" "}
@@ -488,7 +494,7 @@ export function ProcessRules() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -513,7 +519,7 @@ export function MyNotificationSettings() {
       </div>
       <p className="muted small">Per step: in the app only, in the app and by email, or in one summary email at 9:00 am. Escalations always come by email.</p>
       {msg && <div className="alert alert-ok">{msg}</div>}
-      <div className="table-wrap card">
+      <Card as="div" className="table-wrap">
         <table className="table compact">
           <tbody>
             {(rows ?? []).map((r) => (
@@ -521,17 +527,19 @@ export function MyNotificationSettings() {
                 <td>{r.number % 1 === 0 ? r.number : r.number.toFixed(1)}</td>
                 <td>{r.title}</td>
                 <td>
-                  <select value={r.mode} onChange={(e) => void set(r.code, e.target.value)} aria-label={r.title}>
-                    <option value="app">App only{r.default === "app" ? " (default)" : ""}</option>
-                    <option value="email">App and email{r.default === "email" ? " (default)" : ""}</option>
-                    <option value="summary">Daily summary email (9:00)</option>
-                  </select>
+                  <Field label={r.title} bare>
+                    <select value={r.mode} onChange={(e) => void set(r.code, e.target.value)} aria-label={r.title}>
+                      <option value="app">App only{r.default === "app" ? " (default)" : ""}</option>
+                      <option value="email">App and email{r.default === "email" ? " (default)" : ""}</option>
+                      <option value="summary">Daily summary email (9:00)</option>
+                    </select>
+                  </Field>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }

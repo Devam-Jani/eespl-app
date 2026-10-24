@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import * as THREE from "three";
@@ -17,7 +18,7 @@ import { TaskDialog } from "./TasksTab";
 import type { Building, TimelineRow } from "../../xray/geometry";
 import { ART } from "../../ui/tokens";
 import type { Status } from "../../ui/tokens";
-import { Button, StatusChip } from "../../ui/components";
+import { Button, buttonClass, Card, Field, StatusChip } from "../../ui/components";
 import type { XRoom } from "../../xray/geometry";
 
 type XRoomLite = Pick<XRoom, "area_sqm" | "sunk_m" | "wp_height_m">;
@@ -595,8 +596,7 @@ export default function Site3DTab({
         {!portal && (
           <div className="xray-side">
             {floorRooms.length > 0 && (
-              <section className="card card-sm floor-rooms" aria-label={`${floorName} rooms`}>
-                <h2 className="card-title">{floorName} rooms</h2>
+              <Card size="small" className="floor-rooms" aria-label={`${floorName} rooms`} title={`${floorName} rooms`}>
                 <ul>
                   {floorRooms.map((r) => {
                     const n = byId.get(r.node_id);
@@ -612,7 +612,7 @@ export default function Site3DTab({
                     );
                   })}
                 </ul>
-              </section>
+              </Card>
             )}
             {selected !== null && byId.get(selected) ? (
               <NodePanel
@@ -628,9 +628,9 @@ export default function Site3DTab({
                 }}
               />
             ) : (
-              <section className="card card-sm">
+              <Card size="small">
                 <p className="muted">Pick a room in the list or in the building to see its steps, dates and photos.</p>
-              </section>
+              </Card>
             )}
           </div>
         )}
@@ -640,12 +640,12 @@ export default function Site3DTab({
 
   return (
     <div className="split-3d">
-      <div className="card">
+      <Card as="div">
         {schematic && (
           <div className="schematic-note">
             <span className="badge badge-muted">Schematic</span> Boxes from the site structure, not the real building.
             {canBuild && (
-              <Link className="btn btn-small" to={`/sites/${site.id}/building`}>
+              <Link className={buttonClass({ size: "small" })} to={`/sites/${site.id}/building`}>
                 Build from AutoCAD
               </Link>
             )}
@@ -666,15 +666,15 @@ export default function Site3DTab({
                 </button>
               )}
             </div>
-            <button className="btn btn-small" onClick={() => view("reset")}>
+            <Button size="small" onClick={() => view("reset")}>
               Reset view
-            </button>
-            <button className="btn btn-small" onClick={() => view("top")}>
+            </Button>
+            <Button size="small" onClick={() => view("top")}>
               Top
-            </button>
-            <button className="btn btn-small" onClick={() => view("front")}>
+            </Button>
+            <Button size="small" onClick={() => view("front")}>
               Front
-            </button>
+            </Button>
             {hasBelow && (
               <label className="check">
                 <input type="checkbox" checked={below} onChange={(e) => setBelow(e.target.checked)} /> Below ground
@@ -693,43 +693,49 @@ export default function Site3DTab({
                 <strong>{maxLevel === null ? "all" : maxLevel === 0 ? "G" : maxLevel < 0 ? `B${-maxLevel}` : maxLevel}</strong>
               </label>
             )}
-            <select aria-label="Open floor" value={cutaway ?? ""} onChange={(e) => setCutaway(e.target.value ? Number(e.target.value) : null)}>
-              <option value="">Open floor…</option>
-              {boxes
-                .filter((b) => b.role === "floor")
-                .sort((a, b) => (a.tower_id ?? 0) - (b.tower_id ?? 0) || b.level! - a.level!)
-                .map((b) => (
-                  <option key={b.node_id} value={b.node_id}>
-                    {byId.get(b.tower_id ?? -1)?.name ?? ""} {byId.get(b.node_id)?.name}
+            <Field label="Open floor" bare>
+              <select aria-label="Open floor" value={cutaway ?? ""} onChange={(e) => setCutaway(e.target.value ? Number(e.target.value) : null)}>
+                <option value="">Open floor…</option>
+                {boxes
+                  .filter((b) => b.role === "floor")
+                  .sort((a, b) => (a.tower_id ?? 0) - (b.tower_id ?? 0) || b.level! - a.level!)
+                  .map((b) => (
+                    <option key={b.node_id} value={b.node_id}>
+                      {byId.get(b.tower_id ?? -1)?.name ?? ""} {byId.get(b.node_id)?.name}
+                    </option>
+                  ))}
+              </select>
+            </Field>
+            <Field label="Work" bare>
+              <select value={templateFilter} onChange={(e) => setTemplateFilter(e.target.value)}>
+                <option value="">All work</option>
+                {usedTemplates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
                   </option>
                 ))}
-            </select>
-            <select value={templateFilter} onChange={(e) => setTemplateFilter(e.target.value)}>
-              <option value="">All work</option>
-              {usedTemplates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="">All statuses</option>
-              {CATEGORIES.filter((c) => c !== "none").map((c) => (
-                <option key={c} value={c}>
-                  {CATEGORY_LABEL[c]}
-                </option>
-              ))}
-            </select>
-            <button className="btn btn-small" onClick={saveImage} disabled={!nodes.length} title={nodes.length ? undefined : "Add a structure first"}>
+              </select>
+            </Field>
+            <Field label="Status" bare>
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                <option value="">All statuses</option>
+                {CATEGORIES.filter((c) => c !== "none").map((c) => (
+                  <option key={c} value={c}>
+                    {CATEGORY_LABEL[c]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Button size="small" onClick={saveImage} disabled={!nodes.length} title={nodes.length ? undefined : "Add a structure first"}>
               Save image
-            </button>
+            </Button>
           </div>
           {cutNode && (
             <span className="inline-form">
               <span className="badge badge-info">Cutaway: {cutNode.name}</span>
-              <button className="btn btn-small btn-ghost" onClick={() => setCutaway(null)}>
+              <Button variant="ghost" size="small" onClick={() => setCutaway(null)}>
                 Show all floors
-              </button>
+              </Button>
             </span>
           )}
         </div>
@@ -758,11 +764,11 @@ export default function Site3DTab({
             <div className="legend3d-overlay" aria-label="Survey colours">
               {SURVEY_LEGEND.map((l) => (
                 <span key={l.key} className="legend-item">
-                  <span className="swatch" style={{ background: SURVEY_COLORS[l.key] }} /> {l.label}
+                  <span className="swatch paint" style={{ "--swatch": SURVEY_COLORS[l.key] } as CSSProperties} /> {l.label}
                 </span>
               ))}
               <span className="legend-item">
-                <span className="swatch outline" style={{ borderColor: READY_COLOR }} /> Work front ready ({readySet.size})
+                <span className="swatch outline paint-border" style={{ "--swatch": READY_COLOR } as CSSProperties} /> Work front ready ({readySet.size})
               </span>
             </div>
           )}
@@ -771,9 +777,9 @@ export default function Site3DTab({
               <div className="empty3d-box">
                 <p>No structure yet. Add a tower in the Structure tab.</p>
                 {onOpenStructure && (
-                  <button className="btn btn-primary" onClick={onOpenStructure}>
+                  <Button variant="primary" onClick={onOpenStructure}>
                     Go to the Structure tab
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -783,13 +789,13 @@ export default function Site3DTab({
           {mode === "survey" ? (
             <>
               <span className="legend-item">
-                <span className="swatch" style={{ background: SURVEY_COLORS.measured }} /> Measured (laser / by hand)
+                <span className="swatch paint" style={{ "--swatch": SURVEY_COLORS.measured } as CSSProperties} /> Measured (laser / by hand)
               </span>
               <span className="legend-item">
-                <span className="swatch" style={{ background: SURVEY_COLORS.camera }} /> Measured by camera only
+                <span className="swatch paint" style={{ "--swatch": SURVEY_COLORS.camera } as CSSProperties} /> Measured by camera only
               </span>
               <span className="legend-item">
-                <span className="swatch" style={{ background: SURVEY_COLORS.none }} /> Not measured
+                <span className="swatch paint" style={{ "--swatch": SURVEY_COLORS.none } as CSSProperties} /> Not measured
               </span>
               <span className="legend-item muted">
                 Approved surveys only{surveyMap?.unplaced_areas ? ` · ${surveyMap.unplaced_areas} area(s) not placed on the structure` : ""}
@@ -799,7 +805,7 @@ export default function Site3DTab({
             <>
               {CATEGORIES.map((c) => (
                 <span key={c} className="legend-item">
-                  <span className={`swatch ${c === "none" ? "swatch-ghost" : ""}`} style={{ background: STATUS_COLORS[c] }} /> {CATEGORY_LABEL[c]} ({legend[c]})
+                  <span className={`swatch paint ${c === "none" ? "swatch-ghost" : ""}`} style={{ "--swatch": STATUS_COLORS[c] } as CSSProperties} /> {CATEGORY_LABEL[c]} ({legend[c]})
                 </span>
               ))}
               <span className="legend-item">
@@ -814,7 +820,7 @@ export default function Site3DTab({
             {portal ? "Click a floor to open it · drag to turn" : "Click a floor to open it · click a room for its steps · updates every minute"}
           </span>
         </div>
-      </div>
+      </Card>
       {mode === "survey" && surveyMap && (
         <SurveyPanel
           map={surveyMap}
@@ -914,12 +920,12 @@ function NodePanel({
     : `${node.kind.replace("_", " ")} · ${Math.round(node.status.percent)}% done`;
 
   return (
-    <aside className="card card-sm panel3d" aria-label={`Selected: ${node.name}`}>
+    <Card as="aside" size="small" className="panel3d" aria-label={`Selected: ${node.name}`}>
       <div className="panel3d-head">
         <span className="muted small">Selected</span>
-        <button className="btn btn-ghost btn-icon" onClick={onClose} aria-label="Close the selected room">
+        <Button variant="ghost" icon onClick={onClose} aria-label="Close the selected room">
           ×
-        </button>
+        </Button>
       </div>
       <h2 className="card-title">{node.name}</h2>
       <p className="muted small panel3d-meta">{meta}</p>
@@ -966,7 +972,7 @@ function NodePanel({
             Update this step
           </Button>
         )}
-        <Link className="btn btn-secondary" to={`/snags?new=1&site=${site.id}&node=${node.id}`}>
+        <Link className={buttonClass({ variant: "secondary" })} to={`/snags?new=1&site=${site.id}&node=${node.id}`}>
           Raise a snag
         </Link>
       </div>
@@ -984,7 +990,7 @@ function NodePanel({
           }}
         />
       )}
-    </aside>
+    </Card>
   );
 }
 
@@ -1021,13 +1027,13 @@ function SurveyPanel({ map, nodes, focus, name, onClose }: { map: SurveyMap; nod
     return { id: fid, name: label, products: [...sum.values()].sort((a, b) => a.name.localeCompare(b.name)) };
   });
   return (
-    <aside className="card node-panel survey-panel">
+    <Card as="aside" className="node-panel survey-panel">
       <div className="toolbar">
         <h2 className="section-title">Products · {name ?? "whole site"}</h2>
         {focus !== null && (
-          <button className="btn btn-small btn-ghost" onClick={onClose}>
+          <Button variant="ghost" size="small" onClick={onClose}>
             Whole site
-          </button>
+          </Button>
         )}
       </div>
       {groups.every((g) => g.products.length === 0) && <p className="muted small">No approved survey quantities here yet.</p>}
@@ -1051,6 +1057,6 @@ function SurveyPanel({ map, nodes, focus, name, onClose }: { map: SurveyMap; nod
           </div>
         ))}
       <p className="muted small">Exact quantities; whole packs are rounded on the survey or indent total.</p>
-    </aside>
+    </Card>
   );
 }
