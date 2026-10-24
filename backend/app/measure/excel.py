@@ -49,7 +49,7 @@ def _total_formula(r: int, unit: str | None) -> str:
     return f"=ROUND(G{r},3)"
 
 
-def export(sheet, site, lines: list[MeasureLine], cumulative: list[dict], areas: dict, slope: dict, company: str) -> bytes:
+def export(sheet, site, lines: list[MeasureLine], cumulative: list[dict], areas: dict, slope: dict, company: str, sqft: Decimal = geom.SQFT_PER_SQM) -> bytes:
     """The billing team's layout: the area's header line, then its lines; deductions negative with
     their reason; the abstract per work-order item (previous, this bill, up to date)."""
     wb = Workbook()
@@ -62,7 +62,7 @@ def export(sheet, site, lines: list[MeasureLine], cumulative: list[dict], areas:
     ws["A2"], ws["A2"].font = "MEASUREMENT SHEET", bold
     ws["A3"] = f"Site: {site.code} {site.name}"
     ws["D3"] = f"Sheet {sheet.code} · measured on {sheet.measured_on:%d-%m-%Y}"
-    ws["G3"], ws["H3"], ws["I3"] = "1 sqm =", float(geom.SQFT_PER_SQM), "sqft"
+    ws["G3"], ws["H3"], ws["I3"] = "1 sqm =", float(sqft), "sqft"
     ws["G3"].font = ws["H3"].font = bold
     ws["A4"] = "Quantities from the drawing at full precision; each line's total rounded to 3 decimals (half up, never truncated)."
     for i, h in enumerate(HEAD, start=1):
@@ -71,9 +71,23 @@ def export(sheet, site, lines: list[MeasureLine], cumulative: list[dict], areas:
         c.fill = PatternFill("solid", fgColor="DDE7E1")
     ws.cell(row=6, column=KEY, value="item key").font = Font(color="999999")
     r = FIRST
+    block = FIRST  # where the item's lines start (a study converting per item totals them once)
     for ln in lines:
         if ln.kind == "area":
+            if ln.wo_line_id and not ln.area_id:
+                block = r + 1
+                ws.cell(row=r, column=1, value=ln.item_no).font = bold
             ws.cell(row=r, column=2, value=ln.particulars).font = bold
+            r += 1
+            continue
+        if ln.kind == "total":
+            ws.cell(row=r, column=2, value=ln.particulars).font = bold
+            ws.cell(row=r, column=7, value=f"=SUM(G{block}:G{r - 1})").font = bold
+            ws.cell(row=r, column=8, value=_total_formula(r, ln.unit)).font = bold
+            ws.cell(row=r, column=9, value=ln.unit)
+            ws.cell(row=r, column=KEY, value=f"wo:{ln.wo_line_id}").font = Font(color="999999")
+            ws.cell(row=r, column=7).number_format = "0.000000"
+            ws.cell(row=r, column=8).number_format = "0.000"
             r += 1
             continue
         ws.cell(row=r, column=1, value=ln.item_no)
@@ -89,12 +103,13 @@ def export(sheet, site, lines: list[MeasureLine], cumulative: list[dict], areas:
             ws.cell(row=r, column=6, value=_f(ln.height_m))
             q = _qty_formula(r, ln)
             if ln.part == "slope" and ln.area_id in slope:
-                plan, rise, run = slope[ln.area_id]
-                q = f"={plan!r}*SQRT({rise!r}^2+{run!r}^2)/{run!r}"
+                plan, rise, run, length = slope[ln.area_id]
+                q = f"={plan!r}*{length!r}/{run!r}" if length else f"={plan!r}*SQRT({rise!r}^2+{run!r}^2)/{run!r}"
             ws.cell(row=r, column=7, value=q)
-            ws.cell(row=r, column=8, value=_total_formula(r, ln.unit))
+            if ln.total is not None:
+                ws.cell(row=r, column=8, value=_total_formula(r, ln.unit))
         ws.cell(row=r, column=9, value=ln.unit)
-        ws.cell(row=r, column=KEY, value=f"wo:{ln.wo_line_id}" if ln.wo_line_id else None).font = Font(color="999999")
+        ws.cell(row=r, column=KEY, value=f"wo:{ln.wo_line_id}" if ln.wo_line_id and ln.total is not None else None).font = Font(color="999999")
         for col in range(3, 9):
             ws.cell(row=r, column=col).number_format = "0.000" if col == 8 else "0.0000"
         r += 1
@@ -147,7 +162,11 @@ def export(sheet, site, lines: list[MeasureLine], cumulative: list[dict], areas:
 
 # --- formulas ------------------------------------------------------------------------------------
 
-_TOKEN = re.compile(r'\s*(?:(\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)|("(?:[^"]|"")*")|(\$?[A-Z]{1,3}\$?\d+(?::\$?[A-Z]{1,3}\$?\d+)?)|([A-Z]+(?=\())|(\*\*|[-+*/^(),:<>=&]))')
+_TOKEN = re.compile(
+    r'\s*(?:(\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)|("(?:[^"]|"")*")'
+    r"|((?:'(?:[^']|'')+'|[A-Za-z_][\w.]*)!\$?[A-Z]{1,3}\$?\d+(?::\$?[A-Z]{1,3}\$?\d+)?)"  # another sheet's cell or range
+    r'|(\$?[A-Z]{1,3}\$?\d+(?::\$?[A-Z]{1,3}\$?\d+)?)|([A-Z]+(?=\())|(\*\*|[-+*/^(),:<>=&]))'
+)
 
 
 def _col(s: str) -> int:
@@ -163,22 +182,42 @@ def _ref(s: str) -> tuple[int, int]:
 
 
 class _Eval:
-    def __init__(self, ws):
-        self.ws, self.cache, self.busy = ws, {}, set()
+    def __init__(self, ws, values=None):
+        """ws: the sheet with formulas; values: the same workbook's calculated values, used first
+        where the file has them (a reference to another sheet reads that sheet)."""
+        self.ws, self.values, self.cache, self.busy = ws, values, {}, set()
 
-    def cell(self, row: int, col: int):
-        k = (row, col)
+    def cell(self, row: int, col: int, sheet=None):
+        ws = sheet if sheet is not None else self.ws
+        k = (ws.title, row, col)
         if k in self.cache:
             return self.cache[k]
         if k in self.busy:
             raise ValueError("circular reference")
-        v = self.ws.cell(row=row, column=col).value
+        if self.values is not None and ws.title in self.values.sheetnames:
+            cached = self.values[ws.title].cell(row=row, column=col).value
+            if cached is not None:
+                self.cache[k] = cached
+                return cached
+        v = ws.cell(row=row, column=col).value
         if isinstance(v, str) and v.startswith("="):
             self.busy.add(k)
-            v = self.formula(v[1:])
-            self.busy.discard(k)
+            here, self.ws = self.ws, ws
+            try:
+                v = self.formula(v[1:])
+            finally:
+                self.ws = here
+                self.busy.discard(k)
         self.cache[k] = v
         return v
+
+    def _sheet_ref(self, t: str):
+        name, ref = t.rsplit("!", 1)
+        name = name[1:-1].replace("''", "'") if name.startswith("'") else name
+        wb = self.ws.parent
+        if name not in wb.sheetnames:
+            raise ValueError(f"no sheet {name}")
+        return wb[name], ref
 
     def num(self, v) -> float:
         if v is None or v == "":
@@ -258,21 +297,28 @@ class _Eval:
                     self.take()
             self.take()
             return self.call(t, args)
+        if "!" in t:
+            sheet, ref = self._sheet_ref(t)
+            return self.range(ref, sheet) if ":" in ref else self.cell(*_ref(ref), sheet=sheet)
         if ":" in t:
             return self.range(t)
         return self.cell(*_ref(t))
 
     def arg(self):
         t = self.peek()
-        if t and ":" in t and re.fullmatch(r"\$?[A-Z]{1,3}\$?\d+:\$?[A-Z]{1,3}\$?\d+", t):
+        if t and ":" in t and "!" not in t and re.fullmatch(r"\$?[A-Z]{1,3}\$?\d+:\$?[A-Z]{1,3}\$?\d+", t):
             self.take()
             return self.range(t)
+        if t and "!" in t and ":" in t.rsplit("!", 1)[1]:
+            self.take()
+            sheet, ref = self._sheet_ref(t)
+            return self.range(ref, sheet)
         return self.expr()
 
-    def range(self, t: str) -> list:
+    def range(self, t: str, sheet=None) -> list:
         a, b = t.split(":")
         (r1, c1), (r2, c2) = _ref(a), _ref(b)
-        return [self.cell(r, c) for r in range(min(r1, r2), max(r1, r2) + 1) for c in range(min(c1, c2), max(c1, c2) + 1)]
+        return [self.cell(r, c, sheet) for r in range(min(r1, r2), max(r1, r2) + 1) for c in range(min(c1, c2), max(c1, c2) + 1)]
 
     def call(self, name: str, args: list):
         if name == "ROUND":
@@ -299,7 +345,7 @@ def evaluate(ws, row: int, col: int):
 # --- reading old sheets --------------------------------------------------------------------------
 
 _HEADS = {
-    "item": ("sr / wo item", "wo item", "item no", "item", "sr no", "sr. no", "sr", "s no", "s.no", "sl no"),
+    "item": ("sr / wo item", "wo item", "item no", "item", "sr no", "sr. no", "sr", "s no", "s.no", "sl no", "sr no./ wo item no.", "sr no./wo item no."),
     "particulars": ("particulars", "description", "details"),
     "no": ("no", "nos", "no."),
     "length": ("length", "length (m)", "l"),
@@ -307,37 +353,48 @@ _HEADS = {
     "height": ("height / depth (m)", "height/depth", "height", "depth", "h"),
     "qty": ("qty", "quantity"),
     "total": ("total qty", "total quantity", "total"),
-    "unit": ("unit",),
+    "unit": ("unit", "uom", "u.o.m."),
     "rate": ("rate",),
     "amount": ("amount", "amount (rs)", "amount ₹", "this bill ₹"),
     "previous": ("previous", "previous qty"),
     "this": ("this bill", "this bill qty", "present"),
     "upto": ("up to date", "upto date", "cumulative", "total up to date"),
 }
+UNIT_WORDS = {"sq ft": "sqft", "sqft": "sqft", "sq. ft": "sqft", "sq mt": "sqm", "sq m": "sqm", "sqm": "sqm", "sq. mt": "sqm", "nos": "nos", "no": "nos", "rmt": "rmt", "r mt": "rmt"}
 
 
 def _norm(v) -> str:
     return re.sub(r"\s+", " ", str(v or "")).strip().lower()
 
 
+def _head_key(h: str) -> str | None:
+    for key, names in _HEADS.items():
+        if h in names:
+            return key
+    if h.startswith(("sr no", "sr. no")) or "wo item" in h:
+        return "item"  # "Sr No./ WO item No." and the like
+    return None
+
+
 def _header(ws, need: tuple[str, ...]) -> tuple[int, dict[str, int]] | None:
     for r in range(1, min(ws.max_row, 40) + 1):
         cols: dict[str, int] = {}
         for c in range(1, min(ws.max_column, 30) + 1):
-            h = _norm(ws.cell(row=r, column=c).value)
-            for key, names in _HEADS.items():
-                if h in names and key not in cols:
-                    cols[key] = c
+            key = _head_key(_norm(ws.cell(row=r, column=c).value))
+            if key and key not in cols:
+                cols[key] = c
         if all(k in cols for k in need):
             return r, cols
     return None
 
 
 def _value(ev: _Eval, ws, r: int, c: int | None):
+    """A cell's value: the file's calculated one, else its formula worked out (another sheet's
+    cells followed)."""
     if c is None:
         return None
     v = ws.cell(row=r, column=c).value
-    if isinstance(v, str) and v.startswith("="):
+    if v is None or (isinstance(v, str) and v.startswith("=")):
         try:
             v = ev.cell(r, c)
         except Exception:  # noqa: BLE001
@@ -366,72 +423,106 @@ def _item_no(v) -> str | None:
     return s or None
 
 
+def _unit(v) -> str:
+    s = _norm(v).rstrip(".")
+    return UNIT_WORDS.get(s, s)
+
+
 def _workbooks(data: bytes):
     """The calculated values where the file has them; the formulas to work out where not."""
     return load_workbook(io.BytesIO(data), data_only=True), load_workbook(io.BytesIO(data))
 
 
 def read_sheet(data: bytes) -> dict:
-    """An old measurement sheet: the total per work-order item (the lines under each item, the
-    area headers and the total rows not added), and every row with a number that could not be
-    placed."""
+    """An old measurement sheet: per work-order item its quantity: the item's own total row ("Total
+    Quantity =", in the unit printed under it) where the sheet has one, else its lines added up.
+    The area headers, the abstract and the sheet's own total rows are never added again. A line
+    with no item number is counted under the item above it, and listed to check unless the item's
+    own total row confirms it. Every row with a number that could not be placed is listed."""
     try:
         values, formulas = _workbooks(data)
     except Exception as exc:  # noqa: BLE001
         raise ValueError("This is not an Excel workbook (.xlsx) that can be read") from exc
     items: dict[str, dict] = {}
     skipped: list[str] = []
-    assumed: list[str] = []  # a line with no item number, counted under the item above it
+    assumed: dict[str, list[str]] = {}  # per item: its lines with no item number
     for name in values.sheetnames:
         ws, wf = values[name], formulas[name]
         found = _header(ws, ("particulars", "qty"))
+        priced = _header(ws, ("rate", "amount"))
+        if priced and (not found or priced[0] <= found[0]):
+            continue  # a proforma's page (its priced header first): read by read_proforma
         if not found:
-            skipped.append(f"Sheet '{name}': no header row with Particulars and Qty")
+            if ws.max_row > 2:
+                skipped.append(f"Sheet '{name}': no header row with Particulars and Qty")
             continue
         hr, cols = found
-        ev = _Eval(wf)
+        ev = _Eval(wf, values)
         current = None
-        for r in range(hr + 1, ws.max_row + 1):
+        r = hr
+        while r < ws.max_row:
+            r += 1
             part = str(ws.cell(row=r, column=cols["particulars"]).value or "").strip()
             first = _norm(ws.cell(row=r, column=1).value)
             if first.startswith(("abstract", "summary")) or _norm(part).startswith(("abstract", "summary")):
                 break  # the abstract repeats the totals: not added again
             item = _item_no(ws.cell(row=r, column=cols["item"]).value) if "item" in cols else None
-            total = None
-            for key in ("total", "qty"):
-                v = ws.cell(row=r, column=cols[key]).value if key in cols else None
-                if v is None and key in cols:
-                    v = _value(ev, wf, r, cols[key])
-                total = _number(v)
-                if total is not None or (isinstance(v, str) and v.strip() in ("-", DASH)):
-                    break
-            numbers = [x for x in (total,) if x is not None]
+            qty = _number(_value(ev, ws, r, cols.get("qty")))
+            total = _number(_value(ev, ws, r, cols.get("total")))
             if _norm(part).startswith(("total", "sub total", "subtotal", "grand total", "net total")):
+                # the item's own total: its quantity in the unit printed on the row below (Sq Ft)
+                if current and (total is not None or qty is not None):
+                    row = items.setdefault(current, _new(current, part))
+                    unit_below = _unit(ws.cell(row=r + 1, column=cols["total"]).value) if "total" in cols and r + 1 <= ws.max_row else ""
+                    row["total_row"] = {"qty": qty, "total": total, "unit": unit_below or row["unit"], "row": r}
                 continue
-            if not numbers:
-                if part and not item:
-                    current = None  # an area's header: the item comes with its lines
-                elif item:
+            value = total if total is not None else qty
+            if value is None:
+                if item:  # an item's heading; an area's heading or "work not done" inside it go on
                     current = item
+                    items.setdefault(item, _new(item, part))
                 continue
-            if not item and current:
-                assumed.append(f"Sheet '{name}' row {r}: no item number, counted under item {current} (the line above): {part[:50]}")
-            item = item or current
+            if not item and not current:
+                skipped.append(f"Sheet '{name}' row {r}: {value} with no work-order item ({part[:60] or 'no particulars'})")
+                continue
             if not item:
-                skipped.append(f"Sheet '{name}' row {r}: {total} with no work-order item ({part[:60] or 'no particulars'})")
-                continue
+                assumed.setdefault(current, []).append(f"Sheet '{name}' row {r}: no item number, counted under item {current} (the line above): {part[:50]}")
+            item = item or current
             current = item
-            unit = str(ws.cell(row=r, column=cols["unit"]).value or "").strip() if "unit" in cols else ""
-            row = items.setdefault(item, {"item_no": item, "description": part, "unit": unit, "qty": Decimal(0), "rows": 0})
-            row["qty"] += total
+            unit = _unit(ws.cell(row=r, column=cols["unit"]).value) if "unit" in cols else ""
+            row = items.setdefault(item, _new(item, part))
+            row["lines_qty"] += qty if qty is not None else value
+            row["lines_total"] += value
             row["rows"] += 1
             row["unit"] = row["unit"] or unit
-    return {"items": items, "skipped": skipped, "assumed": assumed}
+    notes: list[str] = []
+    for key, row in list(items.items()):
+        t = row.pop("total_row", None)
+        if t:
+            row["qty"] = t["total"] if t["total"] is not None else t["qty"]
+            row["unit"] = (t["unit"] or row["unit"]) if t["total"] is not None else row["unit"]
+            row["sqm"] = t["qty"] if t["total"] is not None else None
+            agree = (t["qty"] is not None and abs(t["qty"] - row["lines_qty"]) <= Decimal("0.0005")) or (
+                t["qty"] is None and t["total"] is not None and abs(t["total"] - row["lines_total"]) <= Decimal("0.0005"))  # fmt: skip
+            if agree:
+                assumed.pop(key, None)  # the item's own total row confirms the lines counted under it
+            else:
+                notes.append(f"Item {key}: its lines add to {row['lines_qty']} but its total row says {t['qty'] if t['qty'] is not None else t['total']}")
+        else:
+            row["qty"] = row["lines_total"]
+        if not row["rows"] and not t:
+            items.pop(key)  # an item heading with nothing measured ("work not done")
+    return {"items": items, "skipped": skipped, "assumed": [a for rows in assumed.values() for a in rows], "notes": notes}
+
+
+def _new(item: str, part: str) -> dict:
+    return {"item_no": item, "description": part, "unit": "", "qty": Decimal(0), "lines_qty": Decimal(0), "lines_total": Decimal(0), "rows": 0}
 
 
 def read_proforma(data: bytes) -> dict:
     """An old proforma: per item its quantity (up to date where the bill shows it, else this
-    bill's), rate and amount; the basic and the grand total as printed."""
+    bill's), rate and amount, the item number taken from the row that starts the item; the basic
+    and the grand total as printed."""
     try:
         values, formulas = _workbooks(data)
     except Exception as exc:  # noqa: BLE001
@@ -445,16 +536,13 @@ def read_proforma(data: bytes) -> dict:
         if not found:
             continue
         hr, cols = found
-        ev = _Eval(wf)
+        ev = _Eval(wf, values)
         qcol = cols.get("upto") or cols.get("qty") or cols.get("this")
+        current = None
         for r in range(hr + 1, ws.max_row + 1):
-            label = " ".join(_norm(ws.cell(row=r, column=c).value) for c in range(1, min(ws.max_column, 12) + 1))
-            amount = _number(_value(ev, wf, r, cols["amount"]))
-            if amount is None:
-                # a total printed in the last number of its row
-                nums = [_number(_value(ev, wf, r, c)) for c in range(1, min(ws.max_column, 14) + 1)]
-                nums = [n for n in nums if n is not None]
-                amount = nums[-1] if nums else None
+            raw = [ws.cell(row=r, column=c).value for c in range(1, min(ws.max_column, 12) + 1)]
+            label = " ".join(_norm(v) for v in raw if isinstance(v, str))
+            amount = _number(_value(ev, ws, r, cols["amount"]))
             if "grand total" in label or "total amount" in label or "invoice total" in label:
                 grand = amount if amount is not None else grand
                 continue
@@ -464,15 +552,18 @@ def read_proforma(data: bytes) -> dict:
             if any(w in label for w in ("cgst", "sgst", "igst", "round off", "round-off", "gst")):
                 continue
             item = _item_no(ws.cell(row=r, column=cols["item"]).value) if "item" in cols else None
-            qty = _number(_value(ev, wf, r, qcol)) if qcol else None
-            rate = _number(_value(ev, wf, r, cols["rate"]))
-            if item and qty is not None and rate is not None:
+            if item:
+                current = item
+            qty = _number(_value(ev, ws, r, qcol)) if qcol else None
+            rate = _number(_value(ev, ws, r, cols["rate"]))
+            if qty is not None and rate is not None and (item or current):
+                key = item or current
                 desc = str(ws.cell(row=r, column=cols["particulars"]).value or "").strip() if "particulars" in cols else ""
-                unit = str(ws.cell(row=r, column=cols["unit"]).value or "").strip() if "unit" in cols else ""
-                items[item] = {"item_no": item, "description": desc, "unit": unit, "qty": qty, "rate": rate, "amount": amount}
+                unit = _unit(_value(ev, ws, r, cols.get("unit"))) if "unit" in cols else ""
+                items[key] = {"item_no": key, "description": desc, "unit": unit, "qty": qty, "rate": rate, "amount": amount}
+                current = None  # the item's quantity is read: the next starts with its own number
             elif amount is not None or qty is not None:
-                raw = " ".join(str(v) for c in range(1, min(ws.max_column, 12) + 1) if (v := ws.cell(row=r, column=c).value) is not None)
-                skipped.append(f"Sheet '{name}' row {r}: {raw[:80]} (no item number, or no quantity and rate)")
+                skipped.append(f"Sheet '{name}' row {r}: " + " ".join(str(v) for v in raw if v is not None)[:80] + " (no item number, or no quantity and rate)")
     return {"items": items, "basic": basic, "grand": grand, "skipped": skipped}
 
 

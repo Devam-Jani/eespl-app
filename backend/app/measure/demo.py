@@ -130,9 +130,8 @@ def old_files(qty: dict[str, Decimal]) -> list[str]:
     for k, q in qty.items():
         unit = "nos" if k == "2" else "sqft"
         ws.append([k, f"Item {k} as measured in AutoCAD", 1, None, None, None, float(q), float(q), unit])
-    ws.append([None, "Lift pit (extra, to be agreed)"])
+    ws.append([None, "Lift pit (extra, to be agreed: no work-order item)"])
     ws.append([None, "Floor 2.1 x 1.8", 1, 2.1, 1.8, None, 3.78, 40.688, "sqft"])
-    ws.append([None, "Total", None, None, None, None, None, float(sum(qty.values())), None])
     sheet = folder / "old-measurement-sheet-RA1.xlsx"
     wb.save(sheet)
     wb = Workbook()

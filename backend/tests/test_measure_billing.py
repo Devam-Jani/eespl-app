@@ -407,15 +407,30 @@ def test_an_old_row_without_an_item_is_listed_never_silently_added():
     ws.append([None, "A - Pool"])
     ws.append(["1", "Floor", 1, None, None, None, 10, 107.639, "sqft"])
     ws.append([None, "Walls (the same item, no number)", 1, 10, None, 1, 10, 107.639, "sqft"])
-    ws.append([None, "Lift pit (extra)"])
+    ws.append([None, "Lift pit (extra)"])  # an area's header inside the item: the item goes on
     ws.append([None, "Floor", 1, 2, 2, None, 4, 43.056, "sqft"])
-    ws.append([None, "Total", None, None, None, None, None, 258.334])
     buf = io.BytesIO()
     wb.save(buf)
     read = excel.read_sheet(buf.getvalue())
-    assert read["items"]["1"]["qty"] == D("215.278")
-    assert len(read["assumed"]) == 1 and "counted under item 1" in read["assumed"][0]
-    assert len(read["skipped"]) == 1 and "43.056 with no work-order item" in read["skipped"][0]
+    assert read["items"]["1"]["qty"] == D("258.334")
+    assert len(read["assumed"]) == 2 and all("counted under item 1" in a for a in read["assumed"])  # listed to check
+    # the item's own total row confirms the lines under it: nothing left to check
+    ws.append([None, "Total Quantity =", None, None, None, None, 24, 258.334])
+    ws.append([None, None, None, None, None, None, "Sq Mt", "Sq Ft"])
+    buf = io.BytesIO()
+    wb.save(buf)
+    read = excel.read_sheet(buf.getvalue())
+    assert read["items"]["1"]["qty"] == D("258.334") and read["items"]["1"]["unit"] == "sqft" and read["items"]["1"]["sqm"] == 24
+    assert read["assumed"] == [] and read["skipped"] == []
+    # a row with a number before any item is never placed
+    wb2 = openpyxl.Workbook()
+    w2 = wb2.active
+    w2.append(["Sr / WO item", "Particulars", "No", "Length", "Width", "Height / Depth", "Qty", "Total qty", "Unit"])
+    w2.append([None, "Lift pit (extra)", 1, 2, 2, None, 4, 43.056, "sqft"])
+    buf = io.BytesIO()
+    wb2.save(buf)
+    read = excel.read_sheet(buf.getvalue())
+    assert read["items"] == {} and "43.056 with no work-order item" in read["skipped"][0]
 
 
 def test_a_shared_edge_along_an_arc_is_found_with_its_true_length():

@@ -41,10 +41,10 @@ Exact = Numeric(24, 10)  # sizes and quantities at full precision
 Total = Numeric(16, 3)  # a sheet line's total, rounded half up to 3 decimals
 
 AREA_KINDS = ("area", "slope")
-EDGE_ANSWERS = ("both", "open", "weir")
+EDGE_ANSWERS = ("both", "open", "weir", "none")  # none: drawn close, not one wall
 PARTS = ("floor", "walls", "tops", "slope", "count")
-SHEET_STATUSES = ("draft", "sent", "approved", "billed")
-LINE_KINDS = ("area", "line", "deduction", "not_done")
+SHEET_STATUSES = ("draft", "sent", "approved", "billed", "study")  # study: a what-if, never sent or billed
+LINE_KINDS = ("area", "line", "deduction", "not_done", "total")
 
 
 def _in(column: str, values: tuple[str, ...]) -> str:
@@ -71,6 +71,10 @@ class MeasureArea(Tracked, Base):
     layer: Mapped[str | None] = mapped_column(String(200))
     area_sqm: Mapped[Decimal] = mapped_column(Exact)  # the outline's, exact
     periphery_m: Mapped[Decimal] = mapped_column(Exact)
+    # a polyline drawn round but not closed (its ends this far apart): the app closes it; the line
+    # as drawn (without the closing gap) is what AutoCAD shows as its length
+    closed_gap_mm: Mapped[Decimal | None] = mapped_column(Exact)
+    drawn_length_m: Mapped[Decimal | None] = mapped_column(Exact)
     trim_with: Mapped[list[int]] = mapped_column(JSONB, server_default="[]")  # area ids cut away
     net_area_sqm: Mapped[Decimal] = mapped_column(Exact)  # after the trim
     net_periphery_m: Mapped[Decimal] = mapped_column(Exact)
@@ -84,6 +88,7 @@ class MeasureArea(Tracked, Base):
     # a slope: its rise over its horizontal run (mm), from the section
     rise_mm: Mapped[Decimal | None] = mapped_column(Exact)
     run_mm: Mapped[Decimal | None] = mapped_column(Exact)
+    slope_mm: Mapped[Decimal | None] = mapped_column(Exact)  # the slope's own length (a picked line, an arc kept)
     slope_source: Mapped[str | None] = mapped_column(Text)
     # what is drawn inside it, counted when it was picked: {"layer:SLEEVE": 4, "block:SLV": 2}
     counts: Mapped[dict[str, int]] = mapped_column(JSONB, server_default="{}")
@@ -111,6 +116,9 @@ class MeasureEdge(Base):
     weir_mm: Mapped[Decimal | None] = mapped_column(Exact)
     answered_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # drawn as its own line between two areas drawn apart (not found from the outlines): kept
+    source: Mapped[str | None] = mapped_column(Text)
+    manual: Mapped[bool] = mapped_column(Boolean, server_default="false")
 
 
 class MeasureItem(Base):
@@ -133,6 +141,8 @@ class MeasureItem(Base):
     layers: Mapped[int] = mapped_column(Integer, server_default="1")
     layers_answer: Mapped[str | None] = mapped_column(String(4))
     areas: Mapped[list[int] | None] = mapped_column(JSONB)  # only these areas (none: every area)
+    skip: Mapped[dict[str, list[str]]] = mapped_column(JSONB, server_default="{}")  # {area id: parts not done there}
+    manual: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")  # {area id: count on site}
 
 
 class MeasureSheet(Tracked, Base):
@@ -151,6 +161,10 @@ class MeasureSheet(Tracked, Base):
     status: Mapped[str] = mapped_column(String(8), server_default="draft")
     # (area, item, layer) the billing team marked as work not done on this bill: "–" on the sheet
     not_done: Mapped[list[Any]] = mapped_column(JSONB, server_default="[]")
+    # a study sheet's way of measuring (another way to compare with the app's): its areas, sizes
+    # truncated or not, sqft per sqm, converted per line or per item, grouped by area or item, and
+    # what it takes differently for an area, an edge or an item
+    options: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
     set_id: Mapped[int | None] = mapped_column(ForeignKey("measurement_sets.id", ondelete="SET NULL"))
     ra_bill_id: Mapped[int | None] = mapped_column(ForeignKey("ra_bills.id", ondelete="SET NULL"))
     # read from an old Excel sheet: its quantities are the "previous" (what could not be read is kept)

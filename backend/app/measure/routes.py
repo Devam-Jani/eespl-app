@@ -78,12 +78,13 @@ def _area_out(a: MeasureArea, billed: set[int]) -> dict:
             "cad_file_id": a.cad_file_id, "area_sqm": _s(a.area_sqm), "periphery_m": _s(a.periphery_m), "trim_with": a.trim_with,
             "net_area_sqm": _s(a.net_area_sqm), "net_periphery_m": _s(a.net_periphery_m), "height_mm": _s(a.height_mm), "height_source": a.height_source,
             "height2_mm": _s(a.height2_mm), "height2_source": a.height2_source, "wall_top_mm": _s(a.wall_top_mm), "rise_mm": _s(a.rise_mm), "run_mm": _s(a.run_mm),
-            "slope_source": a.slope_source, "counts": a.counts, "billed": a.id in billed}  # fmt: skip
+            "slope_source": a.slope_source, "slope_mm": _s(a.slope_mm), "closed_gap_mm": _s(a.closed_gap_mm), "drawn_length_m": _s(a.drawn_length_m),
+            "counts": a.counts, "billed": a.id in billed}  # fmt: skip
 
 
 def _edge_out(e: MeasureEdge, codes: dict[int, str]) -> dict:
     return {"id": e.id, "area_a_id": e.area_a_id, "area_b_id": e.area_b_id, "a": codes.get(e.area_a_id), "b": codes.get(e.area_b_id), "length_m": _s(e.length_m),
-            "line": e.line, "answer": e.answer, "weir_mm": _s(e.weir_mm)}  # fmt: skip
+            "line": e.line, "answer": e.answer, "weir_mm": _s(e.weir_mm), "manual": e.manual, "source": e.source}  # fmt: skip
 
 
 @router.get("/sites/{site_id}")
@@ -110,7 +111,8 @@ def state(site_id: int, db: DbSession, principal: CurrentPrincipal, scope: View)
         "items": [{"wo_line_id": w.id, "item_no": w.item_no, "description": w.description, "unit": w.unit, "qty": _s(w.qty), "rate": _s(w.rate), "per_layer": w.per_layer,
                    "wo_layers": w.layers, "sac": w.sac, "parts": items[w.id].parts if w.id in items else [], "count_of": items[w.id].count_of if w.id in items else None,
                    "layers": items[w.id].layers if w.id in items else w.layers, "layers_answer": items[w.id].layers_answer if w.id in items else None,
-                   "areas": items[w.id].areas if w.id in items else None, "measured": w.id in items} for w in wo],  # fmt: skip
+                   "areas": items[w.id].areas if w.id in items else None, "skip": items[w.id].skip if w.id in items else {},
+                   "manual": items[w.id].manual if w.id in items else {}, "measured": w.id in items} for w in wo],  # fmt: skip
         "sheets": [{"id": s.id, "code": s.code, "seq": s.seq, "title": s.title, "measured_on": s.measured_on, "status": s.status, "imported_from": s.imported_from, "ra_bill_id": s.ra_bill_id} for s in sheets],
         "parts": list(PARTS),
         "sqft_per_sqm": str(geom.SQFT_PER_SQM),
@@ -127,10 +129,49 @@ def drawing(site_id: int, cad_file_id: int, db: DbSession, principal: CurrentPri
     return {"id": f.id, "unit_m": f.unit_m, "outlines": d["outlines"], "texts": ms.texts_m(f)}
 
 
+def _file(db, site: Site, cad_file_id: int) -> CadFile:
+    f = db.get(CadFile, cad_file_id)
+    if f is None or f.site_id != site.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Drawing not found")
+    return f
+
+
+@router.get("/sites/{site_id}/drawing/{cad_file_id}/at")
+def outlines_at(site_id: int, cad_file_id: int, x: float, y: float, db: DbSession, principal: CurrentPrincipal, scope: View) -> list[dict]:
+    """Every outline around a click, smallest first, to choose the one to measure."""
+    site = _site(db, site_id, principal, scope)
+    f = _file(db, site, cad_file_id)
+    taken = {a.handle for a in ms.areas_of(db, site.id) if a.cad_file_id == f.id and a.handle}
+    return [c | {"area_sqm": f"{c['area_sqm']:.6f}", "periphery_m": f"{c['periphery_m']:.6f}"} for c in _said(ms.candidates, f, x, y, taken)]
+
+
+@router.get("/sites/{site_id}/drawing/{cad_file_id}/near")
+def lines_near(site_id: int, cad_file_id: int, x: float, y: float, db: DbSession, principal: CurrentPrincipal, scope: View, within_m: float = 0.5) -> list[dict]:
+    """The lines and arcs near a click (a slope line on a section, a wall drawn on its own), nearest
+    first, with their true length."""
+    from shapely.geometry import LineString, Point  # noqa: PLC0415
+
+    site = _site(db, site_id, principal, scope)
+    f = _file(db, site, cad_file_id)
+    pt = Point(x, y)
+    out = []
+    for ln in _said(ms.drawing, f)["lines"]:
+        pts = ln["points"]
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        if not (min(xs) - within_m <= x <= max(xs) + within_m and min(ys) - within_m <= y <= max(ys) + within_m):
+            continue
+        path = geom.flatten_open(pts)
+        dist = LineString(path).distance(pt) if len(path) > 1 else pt.distance(Point(path[0]))
+        if dist <= within_m:
+            out.append({"handle": ln["handle"], "layer": ln["layer"], "length_m": f"{ln['length_m']:.6f}", "distance_m": dist, "path": [round(v, 6) for p in path[:: max(1, len(path) // 96)] for v in p]})
+    return sorted(out, key=lambda r: r["distance_m"])[:8]
+
+
 class AreaIn(BaseModel):
     cad_file_id: int | None = None
     x: float | None = None  # a click inside an outline (metres)
     y: float | None = None
+    handle: str | None = Field(default=None, max_length=20)  # or the outline chosen among those around the click
     outline: list[list[float]] | None = None  # or traced: [[x, y, bulge], ...]
     code: str | None = Field(default=None, max_length=10)
     name: str = Field(min_length=1, max_length=200)
@@ -147,15 +188,20 @@ def add_area(site_id: int, body: AreaIn, request: Request, db: DbSession, princi
     if body.outline:
         a = _said(ms.make_area, db, site.id, body.outline, code=body.code, name=body.name, kind=body.kind, cad_file=f, picked=False, user_id=principal.user.id)
     else:
-        if f is None or body.x is None or body.y is None:
+        if f is None or (body.handle is None and (body.x is None or body.y is None)):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Click inside an outline on a drawing, or trace one")
-        outlines = _said(ms.drawing, f)["outlines"]
         taken = {a.handle for a in ms.areas_of(db, site.id) if a.cad_file_id == f.id and a.handle}
-        hit = geom.pick([(i, o["outline"]) for i, o in enumerate(outlines) if o["handle"] not in taken], body.x, body.y)
-        if hit is None:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "No closed outline around that point (not measured yet): trace it instead")
-        o = outlines[hit]
-        a = _said(ms.make_area, db, site.id, o["outline"], code=body.code, name=body.name, kind=body.kind, cad_file=f, handle=o["handle"], layer=o["layer"], user_id=principal.user.id)
+        if body.handle:
+            if body.handle in taken:
+                raise HTTPException(status.HTTP_409_CONFLICT, "That outline is measured already")
+            o = _said(ms.outline_of, f, body.handle)
+        else:
+            around = _said(ms.candidates, f, body.x, body.y, taken)
+            if not around:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "No closed outline around that point (not measured yet): trace it instead")
+            o = _said(ms.outline_of, f, around[0]["handle"])  # the smallest around the click
+        a = _said(ms.make_area, db, site.id, o["outline"], code=body.code, name=body.name, kind=body.kind, cad_file=f, handle=o["handle"], layer=o["layer"],
+                  user_id=principal.user.id, gap_m=o.get("gap_m"), drawn_m=o.get("drawn_m"))  # fmt: skip
     record(db, request, principal, "measure.area", "measure_area", a.id, after={"code": a.code, "area_sqm": str(a.area_sqm), "periphery_m": str(a.periphery_m)})
     db.commit()
     return _area_out(a, set())
@@ -214,9 +260,25 @@ def delete_area(area_id: int, request: Request, db: DbSession, principal: Curren
 
 class HeightIn(BaseModel):
     section: str = Field(min_length=1, max_length=100)  # "Section Y-Y"
-    top: str = Field(min_length=1, max_length=60)  # the level texts as picked: "+1800"
-    bottom: str = Field(min_length=1, max_length=60)
+    top: str | None = Field(default=None, max_length=60)  # the level texts as picked: "+1800"
+    bottom: str | None = Field(default=None, max_length=60)
+    sum_of: list[str] | None = Field(default=None, max_length=6)  # or numbers picked and added: ["750", "150"]
+    cad_file_id: int | None = None  # or a line picked on the drawing (a slope's length as a wall's height)
+    line_handle: str | None = Field(default=None, max_length=20)
     which: Literal[1, 2] = 1  # 2: the deep end of a floor that slopes
+
+
+def _height(db, a: MeasureArea, body: HeightIn) -> tuple[Decimal, str]:
+    if body.line_handle:
+        site = db.get(Site, a.site_id)
+        ln = _said(ms.line_of, _file(db, site, body.cad_file_id or a.cad_file_id or 0), body.line_handle)
+        h = geom.d(ln["length_m"] * 1000)
+        return h, f"{body.section}: the line on layer {ln['layer']}, {h.quantize(Decimal('0.01'))} mm long (an arc measured as an arc)"
+    if body.sum_of:
+        return _said(geom.height_sum, body.section, body.sum_of)
+    if not body.top or not body.bottom:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Pick two levels, numbers to add, or a line")
+    return _said(geom.height_from, body.section, body.top, body.bottom)
 
 
 @router.post("/areas/{area_id}/height")
@@ -224,7 +286,7 @@ def set_height(area_id: int, body: HeightIn, request: Request, db: DbSession, pr
     a = _area(db, area_id, principal, scope)
     _edit(db, principal, a.site_id)
     _not_billed(db, a)
-    h, src = _said(geom.height_from, body.section, body.top, body.bottom)
+    h, src = _height(db, a, body)
     if body.which == 1:
         a.height_mm, a.height_source = h, src
     else:
@@ -236,10 +298,12 @@ def set_height(area_id: int, body: HeightIn, request: Request, db: DbSession, pr
 
 class SlopeIn(BaseModel):
     section: str = Field(min_length=1, max_length=100)
-    top: str = Field(min_length=1, max_length=60)
-    bottom: str = Field(min_length=1, max_length=60)
-    run_mm: Decimal = Field(gt=0, le=1_000_000)
+    top: str | None = Field(default=None, max_length=60)
+    bottom: str | None = Field(default=None, max_length=60)
+    run_mm: Decimal | None = Field(default=None, gt=0, le=1_000_000)
     run_source: str | None = Field(default=None, max_length=100)
+    cad_file_id: int | None = None  # or the slope's line picked on the section
+    line_handle: str | None = Field(default=None, max_length=20)
 
 
 @router.post("/areas/{area_id}/slope")
@@ -247,16 +311,56 @@ def set_slope(area_id: int, body: SlopeIn, request: Request, db: DbSession, prin
     a = _area(db, area_id, principal, scope)
     _edit(db, principal, a.site_id)
     _not_billed(db, a)
-    rise, src = _said(geom.height_from, body.section, body.top, body.bottom)
-    a.kind, a.rise_mm, a.run_mm = "slope", rise, body.run_mm
-    a.slope_source = f"{src.replace(' = ', ', rise ')}; run {body.run_mm.normalize():f} mm{f' ({body.run_source})' if body.run_source else ''}"
-    record(db, request, principal, "measure.slope", "measure_area", a.id, after={"rise_mm": str(rise), "run_mm": str(body.run_mm)})
+    if body.line_handle:
+        site = db.get(Site, a.site_id)
+        ln = _said(ms.line_of, _file(db, site, body.cad_file_id or a.cad_file_id or 0), body.line_handle)
+        if ln["run_m"] <= 0:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "That line has no horizontal run: pick the slope's line")
+        a.kind, a.slope_mm, a.run_mm, a.rise_mm = "slope", geom.d(ln["length_m"] * 1000), geom.d(ln["run_m"] * 1000), geom.d(ln["rise_m"] * 1000)
+        a.slope_source = (f"{body.section}: the slope line on layer {ln['layer']}, {Decimal(a.slope_mm).quantize(Decimal('0.01'))} mm long over a "
+                          f"{Decimal(a.run_mm).quantize(Decimal('0.01'))} mm run (rise {Decimal(a.rise_mm).quantize(Decimal('0.01'))} mm)")  # fmt: skip
+    else:
+        if not body.top or not body.bottom or body.run_mm is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Pick the slope's line, or two levels and its run")
+        rise, src = _said(geom.height_from, body.section, body.top, body.bottom)
+        a.kind, a.rise_mm, a.run_mm, a.slope_mm = "slope", rise, body.run_mm, None
+        a.slope_source = f"{src.replace(' = ', ', rise ')}; run {body.run_mm.normalize():f} mm{f' ({body.run_source})' if body.run_source else ''}"
+    record(db, request, principal, "measure.slope", "measure_area", a.id, after={"rise_mm": str(a.rise_mm), "run_mm": str(a.run_mm), "slope_mm": _s(a.slope_mm)})
     db.commit()
     return _area_out(a, set())
 
 
+class DrawnEdgeIn(BaseModel):
+    area_a_id: int
+    area_b_id: int
+    cad_file_id: int
+    line_handle: str = Field(min_length=1, max_length=20)
+
+
+@router.post("/sites/{site_id}/edges", status_code=status.HTTP_201_CREATED)
+def drawn_edge(site_id: int, body: DrawnEdgeIn, request: Request, db: DbSession, principal: CurrentPrincipal, scope: View) -> dict:
+    """The wall between two areas drawn apart (each outline on its own), taken from the line drawn
+    for it: its true length, asked once like any shared edge."""
+    site = _site(db, site_id, principal, scope)
+    _edit(db, principal, site.id)
+    ids = {body.area_a_id, body.area_b_id}
+    found = {a.id: a for a in ms.areas_of(db, site.id) if a.id in ids}
+    if len(found) != 2:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Pick two areas of this site")
+    ln = _said(ms.line_of, _file(db, site, body.cad_file_id), body.line_handle)
+    a_id, b_id = sorted(ids)
+    seq = len(list(db.scalars(select(MeasureEdge.id).where(MeasureEdge.area_a_id == a_id, MeasureEdge.area_b_id == b_id))))
+    path = geom.flatten_open(ln["points"])
+    e = MeasureEdge(site_id=site.id, area_a_id=a_id, area_b_id=b_id, seq=seq + 100, length_m=geom.d(ln["length_m"]), manual=True,
+                    line=[round(v, 6) for p in path[:: max(1, len(path) // 96)] for v in p], source=f"the line on layer {ln['layer']} drawn between them")  # fmt: skip
+    db.add(e)
+    record(db, request, principal, "measure.edge.drawn", "measure_edge", None, after={"areas": [a_id, b_id], "length_m": str(e.length_m)})
+    db.commit()
+    return _edge_out(e, {a.id: a.code for a in found.values()})
+
+
 class EdgeIn(BaseModel):
-    answer: Literal["both", "open", "weir"]
+    answer: Literal["both", "open", "weir", "none"]  # none: drawn close, not one wall
     weir_mm: Decimal | None = Field(default=None, ge=0, le=100_000)
 
 
@@ -284,6 +388,8 @@ class ItemIn(BaseModel):
     layers: int = Field(default=1, ge=1, le=10)
     layers_answer: Literal["each", "once"] | None = None
     areas: list[int] | None = None
+    skip: dict[str, list[Literal["floor", "walls", "tops", "slope", "count"]]] = {}
+    manual: dict[str, Decimal] = {}
 
 
 @router.put("/sites/{site_id}/items/{wo_line_id}")
@@ -292,10 +398,11 @@ def set_item(site_id: int, wo_line_id: int, body: ItemIn, request: Request, db: 
     _edit(db, principal, site.id)
     if wo_line_id not in {w.id for w in ms.work_order_lines(db, site.id)}:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not an item of this site's work order")
-    if "count" in body.parts and not body.count_of:
+    if "count" in body.parts and not body.count_of and not body.manual:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Say what to count: a layer or a block")
     m = db.scalar(select(MeasureItem).where(MeasureItem.site_id == site.id, MeasureItem.wo_line_id == wo_line_id)) or MeasureItem(site_id=site.id, wo_line_id=wo_line_id)
     m.parts, m.count_of, m.layers, m.layers_answer, m.areas = list(body.parts), body.count_of, body.layers, body.layers_answer, body.areas
+    m.skip, m.manual = {k: list(v) for k, v in body.skip.items()}, {k: str(v) for k, v in body.manual.items()}
     db.add(m)
     record(db, request, principal, "measure.item", "measure_item", wo_line_id, after=body.model_dump(mode="json"))
     db.commit()
@@ -308,6 +415,23 @@ def set_item(site_id: int, wo_line_id: int, body: ItemIn, request: Request, db: 
 class SheetIn(BaseModel):
     measured_on: date
     title: str | None = Field(default=None, max_length=200)
+
+
+class StudyOptions(BaseModel):
+    """Another way of measuring, to compare with the app's (never sent or billed)."""
+
+    areas: list[int] | None = None
+    sizes: Literal["full", "truncate3"] = "full"
+    sqft_per_sqm: Decimal = Field(default=Decimal("10.7639"), gt=10, lt=11)
+    convert: Literal["line", "item"] = "line"
+    periphery: Literal["closed", "drawn"] = "closed"
+    areas_as: dict[str, dict[str, str | float | int | None]] = {}
+    edges_as: dict[str, dict[str, str | float | int | None]] = {}
+    items_as: dict[str, dict] = {}
+
+
+class StudyIn(SheetIn):
+    options: StudyOptions
 
 
 def _sheet(db, sheet_id: int, principal, scope) -> MeasureSheet:
@@ -327,13 +451,14 @@ def sheet_out(db, s: MeasureSheet) -> dict:
     mb.status_of(db, s)
     site = db.get(Site, s.site_id)
     questions = []
-    if s.status == "draft":
+    live = s.status in ("draft", "study")
+    if live:
         built = ms.build(db, s)
         lines, questions = [_line_out(x) for x in built.lines], built.questions
     else:
         lines = [_line_out(x) for x in ms.lines_of(db, s.id)]
     wo = ms.work_order_lines(db, s.site_id)
-    if s.status == "draft":
+    if live:
         this: dict[int, Decimal] = {}
         for ln in lines:
             if ln["wo_line_id"] and ln["total"] is not None:
@@ -349,7 +474,7 @@ def sheet_out(db, s: MeasureSheet) -> dict:
     return {"id": s.id, "code": s.code, "seq": s.seq, "title": s.title, "measured_on": s.measured_on, "status": s.status, "site_id": site.id, "site_code": site.code, "site_name": site.name,
             "not_done": s.not_done, "imported_from": s.imported_from, "import_skipped": s.import_skipped, "ra_bill_id": s.ra_bill_id, "ra_code": ra.code if ra else None,
             "lines": lines, "questions": questions, "cumulative": [{k: (_s(v) if isinstance(v, Decimal) else v) for k, v in r.items()} for r in cum],
-            "corrections": mb.corrections(db, s), "sqft_per_sqm": str(geom.SQFT_PER_SQM)}  # fmt: skip
+            "corrections": mb.corrections(db, s), "sqft_per_sqm": str(ms.Way.of(s).sqft), "way": ms.Way.of(s).label(), "options": s.options}  # fmt: skip
 
 
 @router.post("/sites/{site_id}/sheets", status_code=status.HTTP_201_CREATED)
@@ -360,6 +485,17 @@ def new_sheet(site_id: int, body: SheetIn, request: Request, db: DbSession, prin
         raise HTTPException(status.HTTP_409_CONFLICT, "Send or delete the draft sheet first")
     s = ms.new_sheet(db, site, body.measured_on, body.title, principal.user.id)
     record(db, request, principal, "measure.sheet", "measure_sheet", s.id, after={"code": s.code})
+    db.commit()
+    return sheet_out(db, s)
+
+
+@router.post("/sites/{site_id}/studies", status_code=status.HTTP_201_CREATED)
+def new_study(site_id: int, body: StudyIn, request: Request, db: DbSession, principal: CurrentPrincipal, scope: View) -> dict:
+    site = _site(db, site_id, principal, scope)
+    _edit(db, principal, site.id)
+    s = ms.new_sheet(db, site, body.measured_on, body.title, principal.user.id)
+    s.status, s.options = "study", body.options.model_dump(mode="json")
+    record(db, request, principal, "measure.study", "measure_sheet", s.id, after={"code": s.code, "options": s.options})
     db.commit()
     return sheet_out(db, s)
 
@@ -397,7 +533,7 @@ def not_done(sheet_id: int, body: NotDoneIn, request: Request, db: DbSession, pr
 def delete_sheet(sheet_id: int, request: Request, db: DbSession, principal: CurrentPrincipal, scope: View) -> Response:
     s = _sheet(db, sheet_id, principal, scope)
     _edit(db, principal, s.site_id)
-    if s.status != "draft":
+    if s.status not in ("draft", "study"):
         raise HTTPException(status.HTTP_409_CONFLICT, f"{s.code} is {s.status}: it stays")
     db.delete(s)
     record(db, request, principal, "measure.sheet.delete", "measure_sheet", sheet_id)
@@ -418,8 +554,9 @@ def send_sheet(sheet_id: int, request: Request, db: DbSession, principal: Curren
 def _slopes(db, s: MeasureSheet) -> dict:
     out = {}
     for a in ms.areas_of(db, s.site_id):
-        if a.kind == "slope" and a.rise_mm and a.run_mm:
-            out[a.id] = (float(a.net_area_sqm), float(Decimal(a.rise_mm) / 1000), float(Decimal(a.run_mm) / 1000))
+        if a.kind == "slope" and a.run_mm and (a.rise_mm or a.slope_mm):
+            out[a.id] = (float(a.net_area_sqm), float(Decimal(a.rise_mm or 0) / 1000), float(Decimal(a.run_mm) / 1000),
+                         float(Decimal(a.slope_mm) / 1000) if a.slope_mm else None)  # fmt: skip
     return out
 
 
@@ -427,12 +564,12 @@ def _slopes(db, s: MeasureSheet) -> dict:
 def sheet_xlsx(sheet_id: int, db: DbSession, principal: CurrentPrincipal, scope: View) -> Response:
     s = _sheet(db, sheet_id, principal, scope)
     site = db.get(Site, s.site_id)
-    if s.status == "draft":
-        lines = ms.store(db, s, ms.build(db, s))  # the draft as it is now (not kept)
+    if s.status in ("draft", "study"):
+        lines = ms.store(db, s, ms.build(db, s))  # the draft (or study) as it is now (not kept)
     else:
         lines = ms.lines_of(db, s.id)
     cum = ms.cumulative(db, s, ms.work_order_lines(db, s.site_id))
-    data = excel.export(s, site, lines, cum, {}, _slopes(db, s), company(db).name)
+    data = excel.export(s, site, lines, cum, {}, _slopes(db, s), company(db).name, sqft=ms.Way.of(s).sqft)
     db.rollback()
     return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f'attachment; filename="{s.code}.xlsx"'})
 
@@ -523,10 +660,12 @@ async def _read(f: UploadFile | None) -> tuple[str, bytes] | None:
 
 @router.post("/sites/{site_id}/import", status_code=status.HTTP_201_CREATED)
 async def import_old(site_id: int, request: Request, db: DbSession, principal: CurrentPrincipal, scope: View,
-                     measured_on: Annotated[date, Form()], sheet: Annotated[UploadFile | None, File()] = None, proforma: Annotated[UploadFile | None, File()] = None) -> dict:  # fmt: skip
+                     measured_on: Annotated[date, Form()], sheet: Annotated[UploadFile | None, File()] = None, proforma: Annotated[UploadFile | None, File()] = None,
+                     ra_no: Annotated[int | None, Form(ge=1, le=999)] = None) -> dict:  # fmt: skip
     site = _site(db, site_id, principal, scope)
     _edit(db, principal, site.id)
-    out = _said(importer.run, db, site, sheet_file=await _read(sheet), proforma_file=await _read(proforma), measured_on=measured_on, user=principal.user)
+    out = _said(importer.run, db, site, sheet_file=await _read(sheet), proforma_file=await _read(proforma), measured_on=measured_on, user=principal.user, ra_no=ra_no)
     record(db, request, principal, "measure.import", "measure_sheet", out["sheet_id"], after={"items": len(out["items"]), "skipped": len(out["skipped"])})
     db.commit()
-    return {k: v for k, v in out.items()} | {"totals": {k: _s(v) for k, v in out["totals"].items()}, "items": [r | {"qty": _s(r["qty"])} for r in out["items"]]}
+    return {k: v for k, v in out.items()} | {"totals": {k: _s(v) for k, v in out["totals"].items()},
+                                             "items": [r | {"qty": _s(r["qty"]), "read": _s(r["read"]), "sqm": _s(r["sqm"])} for r in out["items"]]}  # fmt: skip

@@ -37,6 +37,12 @@ def to_sqft(sqm: Decimal) -> Decimal:
     return Decimal(sqm) * SQFT_PER_SQM
 
 
+def _bulge(p) -> float:
+    """A vertex's bulge; one too small to make an arc (under 1e-9) is a straight segment."""
+    b = (p[2] if len(p) > 2 else 0.0) or 0.0
+    return b if abs(b) >= 1e-9 else 0.0
+
+
 def _arc(p, q, b: float) -> tuple[float, float, float]:
     """(included angle, radius, chord) of the segment p -> q with bulge b (angle signed)."""
     chord = math.dist(p[:2], q[:2])
@@ -49,7 +55,7 @@ def _segments(o: Outline):
     n = len(o)
     for i in range(n):
         p, q = o[i], o[(i + 1) % n]
-        yield p, q, (p[2] if len(p) > 2 else 0.0) or 0.0
+        yield p, q, _bulge(p)
 
 
 def signed_area(o: Outline) -> float:
@@ -62,6 +68,38 @@ def signed_area(o: Outline) -> float:
             theta, r, _ = _arc(p, q, b)
             s += r * r / 2 * (theta - math.sin(theta))
     return s
+
+
+def open_length(points: list[list[float]]) -> float:
+    """A polyline's length as drawn, not closed (each segment to the next, arcs as arcs)."""
+    total = 0.0
+    for p, q in zip(points, points[1:], strict=False):
+        b = _bulge(p)
+        theta, r, chord = _arc(p, q, b)
+        total += abs(r * theta) if b else chord
+    return total
+
+
+CLOSE_TOL_M = 0.05  # a polyline whose ends are this close was drawn round: the app closes it
+SAME_POINT_M = 0.002  # ends this close are one point (the last vertex repeats the first)
+
+
+def closable(points: list[list[float]], closed: bool) -> tuple[list[list[float]], float, float | None] | None:
+    """An outline from a polyline: (its vertices, the gap closed in metres, its length as drawn), or
+    None when it is open (its ends further apart than CLOSE_TOL_M). Closed in the drawing: no gap."""
+    if len(points) < 2:
+        return None
+    if closed:
+        return points, 0.0, None
+    gap = math.dist(points[0][:2], points[-1][:2])
+    if gap > CLOSE_TOL_M or len(points) < 3:
+        return None
+    drawn = open_length(points)
+    if gap <= SAME_POINT_M:
+        return points[:-1], gap, drawn
+    pts = [list(p) for p in points]
+    pts[-1] = [pts[-1][0], pts[-1][1], 0.0]  # the app's closing segment is straight
+    return pts, gap, drawn
 
 
 def area(o: Outline) -> float:
@@ -78,7 +116,9 @@ def periphery(o: Outline) -> float:
 
 def _arc_points(p, q, b: float) -> list[tuple[float, float]]:
     """The points of the arc p -> q after p (q included), each chord within SAGITTA_M of it."""
-    theta, r, _ = _arc(p, q, b)
+    theta, r, chord = _arc(p, q, b)
+    if chord <= 1e-12:
+        return [(q[0], q[1])]  # a zero-length segment (a repeated vertex) has no arc
     step = 2 * math.acos(max(-1.0, 1 - SAGITTA_M / r)) if r > SAGITTA_M else abs(theta)
     n = min(200_000, max(1, math.ceil(abs(theta) / step)))
     # the centre: from the chord's midpoint, along its normal
@@ -102,6 +142,20 @@ def flatten(o: Outline) -> list[tuple[float, float]]:
         else:
             pts.append((q[0], q[1]))
     return pts[:-1]  # the last is the first again
+
+
+def flatten_open(points: list[list[float]]) -> list[tuple[float, float]]:
+    """An open polyline (or arc) in chords, for drawing it and measuring distances to it."""
+    if not points:
+        return []
+    out = [(points[0][0], points[0][1])]
+    for p, q in zip(points, points[1:], strict=False):
+        b = _bulge(p)
+        if b:
+            out.extend(_arc_points(p, q, b))
+        else:
+            out.append((q[0], q[1]))
+    return out
 
 
 def polygon(o: Outline) -> Polygon:
@@ -252,6 +306,20 @@ def level_mm(text: str) -> Decimal | None:
     if unit == "m" or (unit is None and "." in m.group(2)):
         v *= 1000
     return sign * v
+
+
+def height_sum(section: str, parts: list[str]) -> tuple[Decimal, str]:
+    """A height added up from numbers on the drawing ("750 + 150 = 900 mm"), with its source."""
+    vals = []
+    for p in parts:
+        m = re.search(r"\d+(?:\.\d+)?", p.replace(",", ""))
+        if not m:
+            raise ValueError(f"'{p}' is not a number")
+        vals.append(Decimal(m.group(0)))
+    if not vals:
+        raise ValueError("Pick the numbers to add")
+    h = sum(vals, Decimal(0))
+    return h, f"{section.strip()}: {' + '.join(f'{v.normalize():f}' for v in vals)} = {h.normalize():f} mm"
 
 
 def height_from(section: str, top: str, bottom: str) -> tuple[Decimal, str]:
