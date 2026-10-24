@@ -507,6 +507,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     p.add_argument("folder")
     p.add_argument("--out", default=None, help="the comparison workbook to write (.xlsx)")
+    p.add_argument("--part", choices=("pool", "billing", "all"), default="all")
     sub.add_parser(
         "demo-measure",
         help="DEMO: a swimming pool measured from its drawing, two RA bills (DEMO-POOL)",
@@ -673,14 +674,23 @@ def main(argv: list[str] | None = None) -> None:
         import json  # noqa: PLC0415
 
         import app.main  # noqa: F401, PLC0415  (every model registered)
-        from app.measure import realcheck  # noqa: PLC0415
+        from app.measure import (
+            billingcheck,  # noqa: PLC0415
+            realcheck,  # noqa: PLC0415
+        )
 
+        shown: dict = {}
         with SessionLocal() as db:
-            out = realcheck.run(db, Path(args.folder))
-            if args.out:
-                Path(args.out).write_bytes(realcheck.workbook(out))
-        imported = {k: out["imported"][k] for k in ("ra_code", "totals", "skipped", "checks")}
-        shown = {k: v for k, v in out.items() if k != "imported"} | {"imported": imported}
+            if args.part in ("pool", "all"):
+                out = realcheck.run(db, Path(args.folder))
+                if args.out:
+                    Path(args.out).write_bytes(realcheck.workbook(out))
+                imp = out["imported"]
+                kept = {k: imp[k] for k in ("ra_code", "totals", "skipped", "checks")}
+                rest = {k: v for k, v in out.items() if k != "imported"}
+                shown["pool"] = rest | {"imported": kept}
+            if args.part in ("billing", "all"):
+                shown["billing"] = billingcheck.run(db, Path(args.folder))
         print(json.dumps(shown, indent=1, default=str))
     elif args.command == "demo-measure":
         import json  # noqa: PLC0415

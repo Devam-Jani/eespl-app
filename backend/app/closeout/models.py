@@ -192,6 +192,8 @@ class ClientWorkOrderLine(Base):
     per_layer: Mapped[bool] = mapped_column(Boolean, server_default="false")
     layers: Mapped[int] = mapped_column(Integer, server_default="1")
     sac: Mapped[str | None] = mapped_column(String(8))  # the line's own SAC (else the contract's)
+    # what the item is made of (its system's products and their coverage): the bill's material check
+    system_id: Mapped[int | None] = mapped_column(ForeignKey("systems.id", ondelete="SET NULL"))
 
 
 class WoDeviation(Base):

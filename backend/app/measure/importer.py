@@ -30,6 +30,9 @@ def run(db: Session, site: Site, *, sheet_file: tuple[str, bytes] | None, profor
     c = mb.contract_of(db, site.id)
     if db.scalar(select(RaBill.id).where(RaBill.contract_id == c.id, RaBill.imported.is_(False), RaBill.status != "cancelled")):
         raise mb.Clash("The site has RA bills made in the app: import the old sheets before the first one")
+    # the old bill's own number (RA 10): never one the site has given, even to a cancelled bill
+    if ra_no and db.scalar(select(RaBill.id).where(RaBill.contract_id == c.id, RaBill.seq >= ra_no)):
+        raise mb.Clash(f"RA {ra_no} or a later bill exists for this site: RA numbers are never reused")
     wo_lines = ms.work_order_lines(db, site.id)
     if not wo_lines:
         raise mb.Refused("The site has no work order to match the old items to")
@@ -75,9 +78,6 @@ def run(db: Session, site: Site, *, sheet_file: tuple[str, bytes] | None, profor
     by_wo = mb.contract_lines_by_wo(c)
     seq = (db.scalar(select(RaBill.seq).where(RaBill.contract_id == c.id).order_by(RaBill.seq.desc()).limit(1)) or 0) + 1
     if ra_no:
-        # the old bill's own number (RA 10): the app's next bill is RA 11
-        if db.scalar(select(RaBill.id).where(RaBill.contract_id == c.id, RaBill.seq >= ra_no)):
-            raise mb.Clash(f"RA {ra_no} or a later bill exists for this site")
         seq = ra_no
     b = RaBill(code=f"RA-{site.code}-{seq:02d}", contract_id=c.id, site_id=site.id, seq=seq, period_to=measured_on, status="certified", imported=True,
                certified_at=svc.now(), remark=f"Imported from {names}", created_by=user.id)  # fmt: skip

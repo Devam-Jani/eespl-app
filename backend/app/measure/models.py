@@ -25,11 +25,14 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Identity,
+    Index,
     Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
+    func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -171,6 +174,13 @@ class MeasureSheet(Tracked, Base):
     imported_from: Mapped[str | None] = mapped_column(String(300))
     import_skipped: Mapped[list[Any] | None] = mapped_column(JSONB)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # a bill from a site slip: the client's handwritten page (photo or PDF) with its lines in ft-in,
+    # signed and dated by the client's person on site (their role, never a name)
+    slip_path: Mapped[str | None] = mapped_column(String(400))
+    slip_name: Mapped[str | None] = mapped_column(String(300))
+    slip_on: Mapped[date | None] = mapped_column(Date)
+    signed_by: Mapped[str | None] = mapped_column(String(200))
+    signed_on: Mapped[date | None] = mapped_column(Date)
 
 
 class MeasureLine(Base):
@@ -197,6 +207,51 @@ class MeasureLine(Base):
     unit: Mapped[str | None] = mapped_column(String(20))
     formula: Mapped[str | None] = mapped_column(Text)  # how the qty was worked out, in words
     reason: Mapped[str | None] = mapped_column(Text)  # a deduction's
+    # a slip's line as written ({"no": "26", "length": "16'0\"", "width": null}) and whether it is
+    # billed (a line the billing team leaves out stays listed, with the reason)
+    typed: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    billed: Mapped[bool] = mapped_column(Boolean, server_default="true")
+
+
+class BillRevision(Base):
+    """One version of an RA bill (R0, R1 ...) as it was made: its lines and totals kept as they
+    were, where it came from (the app, or an old file: "Not for invoice", "revised"), and the one
+    sent to the client."""
+
+    __tablename__ = "bill_revisions"
+    __table_args__ = (
+        UniqueConstraint("ra_bill_id", "rev_no"),
+        Index("ux_bill_revisions_one_sent", "ra_bill_id", unique=True, postgresql_where=text("sent")),  # one sent per bill
+    )
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    ra_bill_id: Mapped[int] = mapped_column(ForeignKey("ra_bills.id", ondelete="CASCADE"), index=True)
+    rev_no: Mapped[int] = mapped_column(Integer)
+    label: Mapped[str | None] = mapped_column(String(200))
+    source: Mapped[str | None] = mapped_column(String(300))  # "the app", or the old file's name
+    made_on: Mapped[date | None] = mapped_column(Date)
+    lines: Mapped[list[Any]] = mapped_column(JSONB, server_default="[]")  # [{item_no, description, unit, qty, rate, amount}]
+    basic: Mapped[Decimal] = mapped_column(Numeric(14, 2), server_default="0")
+    gst: Mapped[Decimal] = mapped_column(Numeric(14, 2), server_default="0")
+    total: Mapped[Decimal] = mapped_column(Numeric(14, 2), server_default="0")
+    sent: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class RegisterImport(Tracked, Base):
+    """An old bill register (the billing team's Excel) and the project folder read for a site: the
+    register's rows as written, and what was found (numbers missing or used twice, dates out of
+    order, bills missing from the register)."""
+
+    __tablename__ = "register_imports"
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    site_id: Mapped[int] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"), index=True)
+    source: Mapped[str] = mapped_column(String(300))
+    rows: Mapped[list[Any]] = mapped_column(JSONB, server_default="[]")
+    files: Mapped[list[Any]] = mapped_column(JSONB, server_default="[]")  # the folder's bill files as read
+    findings: Mapped[list[Any]] = mapped_column(JSONB, server_default="[]")
 
 
 class MeasureBilled(Base):

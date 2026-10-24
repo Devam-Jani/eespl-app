@@ -6,6 +6,7 @@ measures, answers the questions, sends sheets and makes the bills."""
 
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import (
@@ -37,6 +38,7 @@ from app.measure.models import (
     MeasureBilled,
     MeasureEdge,
     MeasureItem,
+    MeasureLine,
     MeasureSheet,
 )
 from app.sites.models import Drawing, DrawingRevision, Site
@@ -442,16 +444,19 @@ def _sheet(db, sheet_id: int, principal, scope) -> MeasureSheet:
 
 
 def _line_out(ln) -> dict:
-    g = (lambda k: ln.get(k)) if isinstance(ln, dict) else (lambda k: getattr(ln, k))
+    g = (lambda k: ln.get(k)) if isinstance(ln, dict) else (lambda k: getattr(ln, k, None))
     return {k: (_s(g(k)) if k in ("no", "length_m", "width_m", "height_m", "qty", "total") else g(k))
-            for k in ("kind", "area_id", "edge_id", "wo_line_id", "item_no", "layer", "part", "particulars", "no", "length_m", "width_m", "height_m", "qty", "total", "unit", "formula", "reason")}  # fmt: skip
+            for k in ("id", "kind", "area_id", "edge_id", "wo_line_id", "item_no", "layer", "part", "particulars", "no", "length_m", "width_m", "height_m", "qty", "total", "unit",
+                      "formula", "reason", "typed", "billed")}  # fmt: skip
 
 
 def sheet_out(db, s: MeasureSheet) -> dict:
     mb.status_of(db, s)
     site = db.get(Site, s.site_id)
+    from app.measure import slip  # noqa: PLC0415
+
     questions = []
-    live = s.status in ("draft", "study")
+    live = s.status in ("draft", "study") and not slip.is_slip(s)
     if live:
         built = ms.build(db, s)
         lines, questions = [_line_out(x) for x in built.lines], built.questions
@@ -474,7 +479,9 @@ def sheet_out(db, s: MeasureSheet) -> dict:
     return {"id": s.id, "code": s.code, "seq": s.seq, "title": s.title, "measured_on": s.measured_on, "status": s.status, "site_id": site.id, "site_code": site.code, "site_name": site.name,
             "not_done": s.not_done, "imported_from": s.imported_from, "import_skipped": s.import_skipped, "ra_bill_id": s.ra_bill_id, "ra_code": ra.code if ra else None,
             "lines": lines, "questions": questions, "cumulative": [{k: (_s(v) if isinstance(v, Decimal) else v) for k, v in r.items()} for r in cum],
-            "corrections": mb.corrections(db, s), "sqft_per_sqm": str(ms.Way.of(s).sqft), "way": ms.Way.of(s).label(), "options": s.options}  # fmt: skip
+            "corrections": mb.corrections(db, s), "sqft_per_sqm": str(ms.Way.of(s).sqft), "way": ms.Way.of(s).label(), "options": s.options,
+            "slip": {"name": s.slip_name, "on": s.slip_on, "signed_by": s.signed_by, "signed_on": s.signed_on, "has_file": bool(s.slip_path),
+                     "unbilled": slip.unmapped(db, s), "typed": {ln.id: ln.typed for ln in ms.lines_of(db, s.id) if ln.typed}} if slip.is_slip(s) else None}  # fmt: skip
 
 
 @router.post("/sites/{site_id}/sheets", status_code=status.HTTP_201_CREATED)
@@ -581,6 +588,99 @@ def sheet_pdf(sheet_id: int, db: DbSession, principal: CurrentPrincipal, scope: 
     return pdf_response(mpdf.sheet(db, out), s.code)
 
 
+# --- bills from a site slip ----------------------------------------------------------------------
+
+SLIP_TYPES = (".jpg", ".jpeg", ".png", ".pdf", ".webp", ".heic")
+
+
+@router.post("/sites/{site_id}/slips", status_code=status.HTTP_201_CREATED)
+async def new_slip(site_id: int, request: Request, db: DbSession, principal: CurrentPrincipal, scope: View,
+                   measured_on: Annotated[date, Form()], signed_by: Annotated[str, Form(min_length=1, max_length=200)], signed_on: Annotated[date, Form()],
+                   slip_on: Annotated[date | None, Form()] = None, title: Annotated[str | None, Form(max_length=200)] = None,
+                   file: Annotated[UploadFile | None, File()] = None) -> dict:  # fmt: skip
+    """A bill from a site slip: its photo or PDF, the date on it, who signed it (their role) and when."""
+    from app.config import settings  # noqa: PLC0415
+    from app.measure import slip  # noqa: PLC0415
+
+    site = _site(db, site_id, principal, scope)
+    _edit(db, principal, site.id)
+    if db.scalar(select(MeasureSheet.id).where(MeasureSheet.site_id == site.id, MeasureSheet.status == "draft")):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Send or delete the draft sheet first")
+    rel = name = None
+    if file is not None and file.filename:
+        if not file.filename.lower().endswith(SLIP_TYPES):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "The slip as a photo (jpg, png) or a PDF")
+        data = await file.read(MAX_XLSX + 1)
+        if len(data) > MAX_XLSX:
+            raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "The slip is over 15 MB")
+        s = slip.new(db, site, measured_on=measured_on, title=title, slip_path=None, slip_name=file.filename[:300], slip_on=slip_on, signed_by=signed_by.strip(), signed_on=signed_on, user_id=principal.user.id)
+        rel = f"sites/{site.id}/slips/{s.code}{Path(file.filename).suffix.lower()}"
+        dst = Path(settings.media_dir) / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_bytes(data)
+        s.slip_path, name = rel, file.filename
+    else:
+        s = slip.new(db, site, measured_on=measured_on, title=title, slip_path=None, slip_name=None, slip_on=slip_on, signed_by=signed_by.strip(), signed_on=signed_on, user_id=principal.user.id)
+    record(db, request, principal, "measure.slip", "measure_sheet", s.id, after={"code": s.code, "slip": name, "signed_by": s.signed_by})
+    db.commit()
+    return sheet_out(db, s)
+
+
+class SlipLineIn(BaseModel):
+    particulars: str = Field(min_length=1, max_length=300)
+    no: str | None = Field(default=None, max_length=20)  # as written: 26, -1
+    length: str | None = Field(default=None, max_length=30)  # 16'0", 116'9", 13.83
+    width: str | None = Field(default=None, max_length=30)
+    wo_line_id: int | None = None  # none: not mapped to a work-order item (listed, not billed)
+    billed: bool = True
+    reason: str | None = Field(default=None, max_length=300)
+
+
+@router.post("/sheets/{sheet_id}/slip-lines", status_code=status.HTTP_201_CREATED)
+def add_slip_line(sheet_id: int, body: SlipLineIn, request: Request, db: DbSession, principal: CurrentPrincipal, scope: View) -> dict:
+    from app.measure import slip  # noqa: PLC0415
+
+    s = _sheet(db, sheet_id, principal, scope)
+    _edit(db, principal, s.site_id)
+    if body.wo_line_id and body.wo_line_id not in {w.id for w in ms.work_order_lines(db, s.site_id)}:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Not an item of this site's work order")
+    ln = _said(slip.add_line, db, s, particulars=body.particulars, no=body.no, length=body.length, width=body.width, wo_line_id=body.wo_line_id, billed=body.billed, reason=body.reason)
+    record(db, request, principal, "measure.slip.line", "measure_line", ln.id, after=body.model_dump())
+    db.commit()
+    return sheet_out(db, s)
+
+
+@router.delete("/sheets/{sheet_id}/slip-lines/{line_id}")
+def delete_slip_line(sheet_id: int, line_id: int, request: Request, db: DbSession, principal: CurrentPrincipal, scope: View) -> dict:
+    s = _sheet(db, sheet_id, principal, scope)
+    _edit(db, principal, s.site_id)
+    if s.status != "draft":
+        raise HTTPException(status.HTTP_409_CONFLICT, f"{s.code} is {s.status}")
+    ln = db.get(MeasureLine, line_id)
+    if ln is None or ln.sheet_id != s.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Line not found")
+    db.delete(ln)
+    record(db, request, principal, "measure.slip.line.delete", "measure_line", line_id)
+    db.commit()
+    return sheet_out(db, s)
+
+
+@router.get("/sheets/{sheet_id}/slip")
+def slip_file(sheet_id: int, db: DbSession, principal: CurrentPrincipal, scope: View):
+    """The slip as scanned (photo or PDF)."""
+    from fastapi.responses import FileResponse  # noqa: PLC0415
+
+    from app.config import settings  # noqa: PLC0415
+
+    s = _sheet(db, sheet_id, principal, scope)
+    if not s.slip_path:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No slip attached")
+    p = Path(settings.media_dir) / s.slip_path
+    if not p.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "The slip's file is missing")
+    return FileResponse(p, filename=s.slip_name or p.name)
+
+
 # --- the RA bill from the sheet ------------------------------------------------------------------
 
 
@@ -640,6 +740,105 @@ def tax_invoice(rid: int, body: InvoiceIn, request: Request, db: DbSession, prin
     db.commit()
     return {"id": inv.id, "number": inv.number, "taxable": _s(inv.taxable), "cgst": _s(inv.cgst), "sgst": _s(inv.sgst), "igst": _s(inv.igst),
             "round_off": _s(inv.round_off), "total": _s(inv.total), "lines": len(inv.lines)}  # fmt: skip
+
+
+# --- the register, revisions, material check -----------------------------------------------------
+
+
+def _plain(v):
+    if isinstance(v, Decimal):
+        return _s(v)
+    if isinstance(v, list):
+        return [_plain(x) for x in v]
+    if isinstance(v, dict):
+        return {k: _plain(x) for k, x in v.items()}
+    return v
+
+
+@router.get("/sites/{site_id}/register")
+def site_register(site_id: int, db: DbSession, principal: CurrentPrincipal, scope: View) -> dict:
+    """The site's RA bills in order (proforma or tax invoice, date, basic, GST, total, received,
+    revisions), the old register beside them and what was found."""
+    from app.measure import register  # noqa: PLC0415
+
+    site = _site(db, site_id, principal, scope)
+    return _plain(register.site_register(db, site.id))
+
+
+@router.post("/sites/{site_id}/register", status_code=status.HTTP_201_CREATED)
+async def import_register(site_id: int, request: Request, db: DbSession, principal: CurrentPrincipal, scope: View, file: Annotated[UploadFile, File()]) -> dict:
+    """The billing team's old register (Excel): its rows matched to the site's bills by basic; the
+    bills missing from it listed."""
+    from app.measure import register  # noqa: PLC0415
+    from app.measure.models import RegisterImport  # noqa: PLC0415
+
+    site = _site(db, site_id, principal, scope)
+    _edit(db, principal, site.id)
+    got = await _read(file)
+    try:
+        rows = register.read_register(got[1])
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{got[0]}: not a register that can be read") from exc
+    bills = list(db.scalars(select(RaBill).where(RaBill.site_id == site.id).order_by(RaBill.seq)))
+    for r in rows:
+        hit = next((b for b in bills if abs(Decimal(b.certified_gross if b.certified_gross is not None else b.gross) - Decimal(r["basic"])) <= 1), None)
+        r["ra"] = hit.seq if hit else None
+    matched = {r["ra"] for r in rows if r["ra"] is not None}
+    found = [{"kind": "register", "ra": None, "text": f"Missing from the old register: {', '.join(f'RA {b.seq}' for b in bills if b.seq not in matched)}"}] if any(b.seq not in matched for b in bills) else []
+    imp = RegisterImport(site_id=site.id, source=got[0][:300], rows=_plain([{k: (v.isoformat() if isinstance(v, date) else v) for k, v in r.items()} for r in rows]), files=[], findings=found, created_by=principal.user.id)
+    db.add(imp)
+    record(db, request, principal, "measure.register", "register_import", None, after={"rows": len(rows)})
+    db.commit()
+    return _plain(register.site_register(db, site.id))
+
+
+@router.get("/bills/{rid}/revisions")
+def bill_revisions(rid: int, db: DbSession, principal: CurrentPrincipal, scope: View) -> list[dict]:
+    from app.measure import register  # noqa: PLC0415
+
+    return _plain(register.revisions(db, _bill(db, rid, principal, scope)))
+
+
+class RevisionIn(BaseModel):
+    label: str | None = Field(default=None, max_length=200)
+
+
+@router.post("/bills/{rid}/revisions", status_code=status.HTTP_201_CREATED)
+def new_revision(rid: int, body: RevisionIn, request: Request, db: DbSession, principal: CurrentPrincipal, scope: View) -> list[dict]:
+    """The bill as it is now kept as its next revision (R0, R1 ...)."""
+    from app.measure import register  # noqa: PLC0415
+
+    b = _bill(db, rid, principal, scope)
+    _edit(db, principal, b.site_id)
+    r = register.add_revision(db, b, label=body.label, source="the app", made_on=date.today(), user_id=principal.user.id)
+    record(db, request, principal, "ra.revision", "ra_bill", b.id, after={"rev": r.rev_no, "basic": str(r.basic)})
+    db.commit()
+    return _plain(register.revisions(db, b))
+
+
+@router.post("/bills/{rid}/revisions/{rev_id}/sent")
+def revision_sent(rid: int, rev_id: int, request: Request, db: DbSession, principal: CurrentPrincipal, scope: View) -> list[dict]:
+    """The revision sent to the client (one per bill)."""
+    from app.measure import register  # noqa: PLC0415
+    from app.measure.models import BillRevision  # noqa: PLC0415
+
+    b = _bill(db, rid, principal, scope)
+    _edit(db, principal, b.site_id)
+    r = db.get(BillRevision, rev_id)
+    if r is None or r.ra_bill_id != b.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Revision not found")
+    register.mark_sent(db, b, r)
+    record(db, request, principal, "ra.revision.sent", "ra_bill", b.id, after={"rev": r.rev_no})
+    db.commit()
+    return _plain(register.revisions(db, b))
+
+
+@router.get("/bills/{rid}/material")
+def bill_material(rid: int, db: DbSession, principal: CurrentPrincipal, scope: View) -> dict:
+    """What the bills up to this one need of each product against what the site used."""
+    from app.measure import register  # noqa: PLC0415
+
+    return _plain(register.material_check(db, _bill(db, rid, principal, scope)))
 
 
 # --- old Excel bills -----------------------------------------------------------------------------
