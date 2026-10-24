@@ -35,19 +35,32 @@ const masks = (page: Page) => [
   page.locator("td"),
 ];
 
-const SCREENS: { name: string; who: string; path: string }[] = [
+/** The DEMO pool site's Measure and bill page (its id changes with each nightly rebuild). */
+async function measurePath(page: Page): Promise<string> {
+  await page.goto("/sites", { waitUntil: "networkidle" });
+  const href = await page.locator("a[href^='/sites/']", { hasText: "DEMO-POOL" }).first().getAttribute("href");
+  return `${(href ?? "/sites/0").split("?")[0]}/measure?ask=no`;
+}
+
+const SCREENS: { name: string; who: string; path: string | ((page: Page) => Promise<string>) }[] = [
   { name: "dashboard", who: "demo-director@demo.invalid", path: "/dashboard" },
   { name: "site-3d", who: "demo-director@demo.invalid", path: "/sites/13?tab=3d" },
   { name: "phone-report", who: "demo-site-engineer@demo.invalid", path: "/my-site/13/report" },
   { name: "how-it-works", who: "demo-director@demo.invalid", path: "/help/how-it-works" },
   { name: "portal", who: "demo-client-pm@example.com", path: "/portal" },
+  // the Measure and bill page and the five heaviest pages moved to the shared components
+  { name: "measure", who: "demo-billing@demo.invalid", path: measurePath },
+  { name: "quotations", who: "demo-director@demo.invalid", path: "/quotations" },
+  { name: "surveys", who: "demo-director@demo.invalid", path: "/surveys" },
+  { name: "measurement-book", who: "demo-director@demo.invalid", path: "/measurements" },
+  { name: "deliveries", who: "demo-director@demo.invalid", path: "/deliveries" },
 ];
 
 for (const s of SCREENS) {
   for (const theme of ["dark", "light"] as const) {
     test(`${s.name} (${theme})`, async ({ page }) => {
       await signIn(page, s.who);
-      await settle(page, s.path, theme);
+      await settle(page, typeof s.path === "string" ? s.path : await s.path(page), theme);
       await expect(page).toHaveScreenshot(`${s.name}-${theme}.png`, { mask: masks(page), fullPage: false });
     });
   }

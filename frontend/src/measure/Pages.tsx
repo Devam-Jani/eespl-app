@@ -396,6 +396,15 @@ function DrawingView(props: {
   }, [drawing]);
   const [vb, setVb] = useState(extent);
   useEffect(() => setVb(extent), [extent]);
+  // an area picked (in the list, or a number on the sheet): the drawing comes to it, with the
+  // areas around it in view
+  useEffect(() => {
+    const a = areas.find((x) => x.id === pick.areaId);
+    if (!a) return;
+    const [x1, y1, x2, y2] = bbox(flatten(a.outline, 16));
+    const m = Math.max(x2 - x1, y2 - y1) * 1.2 + 1;
+    setVb({ x: x1 - m, y: -(y2 + m), w: x2 - x1 + 2 * m, h: y2 - y1 + 2 * m });
+  }, [pick.areaId, areas]);
   // picking levels: the whole drawing, so the sections beside the plan are in view
   useEffect(() => {
     if (mode !== "levels") return;
