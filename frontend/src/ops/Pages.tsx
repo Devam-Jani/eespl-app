@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, matchPath, useLocation, useNavigate, useParams } from "react-router-dom";
-import { api, ApiError, downloadFile } from "../api";
+import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
 import { errorText } from "../format";
 import { MENU } from "../menu";
@@ -519,7 +519,7 @@ export function UserImport() {
     try {
       return await api<unknown>(path, { method: "POST", form });
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : errorText(e));
+      setError(errorText(e));
     }
   };
   const base = typeof window !== "undefined" ? window.location.origin : "";

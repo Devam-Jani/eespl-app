@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import Modal from "../components/Modal";
+import { Modal } from "../ui/Overlay";
 import { errorText, inr } from "../format";
 
 export type Stats = { n: number; min: string; median: string; max: string; latest: { rate: string; on_date: string | null; city: string | null } } | null;

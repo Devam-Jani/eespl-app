@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { api } from "../../api";
 import { useAuth } from "../../auth";
 import ExportButton from "../../components/ExportButton";
-import Modal from "../../components/Modal";
+import { Modal } from "../../ui/Overlay";
 import { errorText } from "../../format";
 import type { CompanyBank } from "../../types";
 

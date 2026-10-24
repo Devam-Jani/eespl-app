@@ -8,7 +8,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
 import { DoneButton } from "../components/DoneButton";
-import Modal from "../components/Modal";
+import { Modal } from "../ui/Overlay";
 import { errorText } from "../format";
 import { S } from "../receipt/strings";
 import type { Key } from "../receipt/strings";
@@ -1124,7 +1124,7 @@ export function SupervisorDay() {
     { k: "stepAttendance", to: `/sites/${id}?tab=labour`, open: pending("attendance") },
     { k: "stepDeliveries", to: `/deliveries?site=${id}&state=unconfirmed`, open: pending("delivery") },
     { k: "stepIssue", to: `/sites/${id}?tab=material`, open: pending("issue") },
-    { k: "stepWork", to: `/sites/${id}?tab=dpr`, open: pending("dpr_today", "dpr_returned") },
+    { k: "stepWork", to: `/my-site/${id}/report`, open: pending("dpr_today", "dpr_returned") },
     { k: "stepSnags", to: `/snags?site=${id}`, open: pending("snag") },
   ];
   return (

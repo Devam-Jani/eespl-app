@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { downloadFile } from "../api";
-import { errorText } from "../format";
+import { showError } from "../format";
 
 /** "Export Excel" for a list page. `path` is the list's /export endpoint with the same filters;
  * the server applies the same permission and field hiding as the list. */
@@ -15,7 +15,7 @@ export default function ExportButton({ path, label = "Export Excel" }: { path: s
         try {
           await downloadFile(path);
         } catch (err) {
-          alert(`Export failed: ${errorText(err)}`);
+          showError(err);
         } finally {
           setBusy(false);
         }

@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { api } from "../../api";
 import { useAuth } from "../../auth";
-import Modal from "../../components/Modal";
+import { Modal } from "../../ui/Overlay";
 import { errorText } from "../../format";
 import type { Site, SiteNode } from "../../types";
-import { ProgressBar } from "../Sites";
+import { ProgressBar } from "../../ui/components";
 
 export const NODE_KINDS = [
   "tower", "wing", "basement", "floor", "flat", "toilet", "kitchen", "balcony", "terrace", "podium",
@@ -146,7 +146,7 @@ export default function StructureTab({ site, onChange }: { site: Site; onChange:
                   {n.area_sqm && <span className="muted small"> · {n.area_sqm} sqm</span>}
                 </td>
                 <td style={{ width: "9rem" }}>
-                  <ProgressBar value={n.progress_percent} />
+                  <ProgressBar value={n.progress_percent} showValue />
                 </td>
                 {canEdit && (
                   <td className="row-actions nowrap">

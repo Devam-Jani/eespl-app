@@ -9,6 +9,8 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DataError, IntegrityError, SQLAlchemyError
 
+from app import search
+from app.analytics import home
 from app.analytics import routers as analytics
 from app.auth import account as account_routes
 from app.auth.router import router as auth_router
@@ -106,6 +108,8 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(search.router)
+app.include_router(home.router)
 app.include_router(users.router)
 app.include_router(roles.router)
 app.include_router(permissions.router)

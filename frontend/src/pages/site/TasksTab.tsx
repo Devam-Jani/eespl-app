@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, fetchObjectUrl, queryString } from "../../api";
 import { useAuth } from "../../auth";
-import Modal from "../../components/Modal";
-import { errorText, num } from "../../format";
+import { Modal } from "../../ui/Overlay";
+import { errorText, num, showError } from "../../format";
 import type { Site, SiteTask } from "../../types";
 import { shortDate } from "../Tenders";
 
@@ -346,7 +346,7 @@ export function ShareTick({ path, shared }: { path: string; shared: boolean }) {
       const r = await api<{ share_with_client: boolean }>(path, { method: "PUT", json: { share: next } });
       setOn(r.share_with_client);
     } catch (err) {
-      alert(errorText(err));
+      showError(err);
     } finally {
       setBusy(false);
     }

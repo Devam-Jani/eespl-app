@@ -8,6 +8,7 @@ import type { Day, MapSettings } from "./common";
 import MapView from "./MapView";
 import type { MapCircle, MapLine, MapPin } from "./MapView";
 import { mapsLink } from "./tracker";
+import { ART } from "../ui/tokens";
 
 /** A person's day: tracked points as a line, stops as numbered pins (times in and out, the
  * selfie), the road route between the stops, km per leg and the total, flags in red. */
@@ -34,7 +35,7 @@ export function DayMap() {
         label: String(s.seq),
         kind: s.in_outside || s.out_outside ? "flag" : "stop",
         title: `${s.seq}. ${s.name} ${time(s.in_at)}–${time(s.out_at)}`,
-        popup: `<b>${s.seq}. ${escape(s.name)}</b><br>in ${time(s.in_at)} · out ${time(s.out_at)}${s.minutes !== null ? ` · ${s.minutes} min` : ""}${s.in_outside ? `<br><span style="color:#b42318">${Math.round(s.in_distance_m ?? 0)} m from the pin: ${escape(s.in_reason ?? "")}</span>` : ""}`,
+        popup: `<b>${s.seq}. ${escape(s.name)}</b><br>in ${time(s.in_at)} · out ${time(s.out_at)}${s.minutes !== null ? ` · ${s.minutes} min` : ""}${s.in_outside ? `<br><span style="color:${ART.mapFlag}">${Math.round(s.in_distance_m ?? 0)} m from the pin: ${escape(s.in_reason ?? "")}</span>` : ""}`,
       }),
     );
     // the tracked line, broken where no point came for over 10 minutes (a gap is shown as a gap)
@@ -47,8 +48,8 @@ export function DayMap() {
       prev = t;
     }
     const lines: MapLine[] = [];
-    if (day.road) lines.push({ points: day.road, color: "#9ca3af", weight: 9 });
-    for (const seg of segments) if (seg.length > 1) lines.push({ points: seg, color: "#1f6feb", weight: 3 });
+    if (day.road) lines.push({ points: day.road, color: ART.mapRoad, weight: 9 });
+    for (const seg of segments) if (seg.length > 1) lines.push({ points: seg, color: ART.mapRoute, weight: 3 });
     return { pins, lines };
   }, [day]);
   if (!day) return error ? <div className="alert alert-error">{error}</div> : <p className="muted">Loading…</p>;

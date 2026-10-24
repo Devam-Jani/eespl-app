@@ -44,6 +44,7 @@ class MeUser(BaseModel):
     full_name: str
     phone: str | None
     job_title: str | None = None  # printed on letters and signatures
+    ui_theme: str | None = None  # "dark" or "light"; None: the default (dark)
 
 
 class MeOut(BaseModel):

@@ -4,6 +4,7 @@ import type { NodeStatus } from "./colors";
 import { FLOOR_H, layout, overlaps } from "./layout";
 import type { Box, LayoutNode } from "./layout";
 import { headerLines, legendText, wrapRows } from "./snapshot";
+import { ART } from "../../../ui/tokens";
 
 let next = 1;
 function node(kind: string, name: string, parent: number | null, extra: Partial<LayoutNode> = {}): LayoutNode {
@@ -136,8 +137,8 @@ describe("colours", () => {
     const parent = status({ has_scope: false, percent: 50 });
     const c = workColor(parent, true);
     expect(c.category).toBe("rollup");
-    expect(rollupColor(0)).toBe("#dfe3e6");
-    expect(rollupColor(100)).toBe(STATUS_COLORS.done);
+    expect(rollupColor(0)).toBe(ART.rollupEmpty.toLowerCase());
+    expect(rollupColor(100)).toBe(STATUS_COLORS.done.toLowerCase());
     expect(c.color).toBe(rollupColor(50));
     expect(workColor(status({ has_scope: false }), false)).toEqual({ color: STATUS_COLORS.none, category: "none", ghost: true });
   });

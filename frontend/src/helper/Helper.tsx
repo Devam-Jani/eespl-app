@@ -9,7 +9,7 @@ import { api, ApiError, onApiFailure, type FieldProblem } from "../api";
 import { crashReport, currentAction, formValues, pagePath, reportForFailure, send, trackActions } from "./report";
 
 type Problem =
-  | { kind: "mistake"; message: string; fields: FieldProblem[]; requestId: string | null }
+  | { kind: "mistake"; message: string; fields: FieldProblem[]; unmarked: FieldProblem[]; requestId: string | null }
   | { kind: "error"; message: string; requestId: string | null; issueId: number | null };
 
 // --- the wrong fields, marked beside themselves ------------------------------------------------------
@@ -27,7 +27,7 @@ const norm = (s: string) =>
 export function findField(p: FieldProblem, root: ParentNode = document): HTMLElement | null {
   const scope = root.querySelector(".modal") ?? root;
   if (p.field) {
-    const named = scope.querySelector<HTMLElement>(`[name="${CSS.escape(p.field)}"]`);
+    const named = scope.querySelector<HTMLElement>(`[name="${p.field.replace(/["\\]/g, "")}"]`);
     if (named) return named.closest("label") ?? named;
   }
   const labels = Array.from(scope.querySelectorAll<HTMLLabelElement>("label.field"));
@@ -59,13 +59,18 @@ export function clearMarks(root: ParentNode = document) {
   });
 }
 
-/** Marks each wrong field and writes its problem and fix beside it; returns how many were found. */
-export function markFields(fields: FieldProblem[], root: ParentNode = document): number {
+/** Marks each wrong field and writes its problem and fix beside it; returns the problems whose
+ * field is not on the page (the card says those; the marked ones are said beside their field). */
+export function markFields(fields: FieldProblem[], root: ParentNode = document): FieldProblem[] {
   clearMarks(root);
   let found = 0;
+  const unmarked: FieldProblem[] = [];
   for (const p of fields) {
     const el = findField(p, root);
-    if (!el) continue;
+    if (!el) {
+      unmarked.push(p);
+      continue;
+    }
     found += 1;
     el.classList.add("field-wrong");
     const input = el.querySelector("input, select, textarea") ?? el;
@@ -88,7 +93,7 @@ export function markFields(fields: FieldProblem[], root: ParentNode = document):
     );
     if (found === 1 && input instanceof HTMLElement && typeof input.focus === "function") input.focus({ preventScroll: false });
   }
-  return found;
+  return unmarked;
 }
 
 // --- the card ----------------------------------------------------------------------------------------
@@ -115,8 +120,10 @@ export function showCrash(err: unknown) {
   });
 }
 
-export function HelperCard({ portal = false }: { portal?: boolean }) {
+/** Mounted once for the whole app (App.tsx): staff pages, the portal and the sign-in page. */
+export function HelperCard() {
   const location = useLocation();
+  const portal = location.pathname.startsWith("/portal");
   const [problem, setProblem] = useState<Problem | null>(null);
   const [ai, setAi] = useState(false);
   const [mode, setMode] = useState<"" | "report" | "ask">("");
@@ -147,9 +154,9 @@ export function HelperCard({ portal = false }: { portal?: boolean }) {
       if (!r) return;
       r.action = [currentAction(), r.action].filter(Boolean).join(" · ") || null;
       if (r.kind === "mistake") {
-        markFields(e.fields);
+        const unmarked = markFields(e.fields);
         void send(r); // "user mistake, guided" in the log book
-        open({ kind: "mistake", message: e.message, fields: e.fields, requestId: e.requestId });
+        open({ kind: "mistake", message: e.message, fields: e.fields, unmarked, requestId: e.requestId });
       } else {
         void send(r).then((rec) => open({ kind: "error", message: e.message, requestId: e.requestId, issueId: rec?.issue_id ?? null }));
       }
@@ -243,13 +250,22 @@ export function HelperCard({ portal = false }: { portal?: boolean }) {
         </button>
       </div>
       {problem.kind === "mistake" ? (
-        <ul className="helper-fields">
-          {problem.fields.map((f, i) => (
-            <li key={i}>
-              <b>{f.plain}</b> {f.fix}
-            </li>
-          ))}
-        </ul>
+        <>
+          {problem.unmarked.length < problem.fields.length && (
+            <p className="helper-text">
+              {problem.fields.length - problem.unmarked.length === 1 ? "The marked field needs a change" : `The ${problem.fields.length - problem.unmarked.length} marked fields need a change`}: what is wrong is written beside it.
+            </p>
+          )}
+          {problem.unmarked.length > 0 && (
+            <ul className="helper-fields">
+              {problem.unmarked.map((f, i) => (
+                <li key={i}>
+                  <b>{f.plain}</b> {f.fix}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       ) : (
         <p className="helper-text">
           {problem.message}

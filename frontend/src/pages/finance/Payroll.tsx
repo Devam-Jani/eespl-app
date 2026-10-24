@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { api, downloadFile } from "../../api";
 import { useAuth } from "../../auth";
-import Modal from "../../components/Modal";
+import { Modal } from "../../ui/Overlay";
 import { errorText, inr, num } from "../../format";
 import type { PayrollRun } from "../../finance/types";
 import type { SiteLookups } from "../../types";

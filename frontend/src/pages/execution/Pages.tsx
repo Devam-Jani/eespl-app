@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
 import { useAuth } from "../../auth";
-import Modal from "../../components/Modal";
+import { Modal } from "../../ui/Overlay";
 import { errorText, inr, num } from "../../format";
 import type { AssetOut, Checklist, ChecklistItem, DprRow, Subcontractor, Usage, WorkOrder, Worker } from "../../execution/types";
 import { useMaterialLookups } from "../material/common";

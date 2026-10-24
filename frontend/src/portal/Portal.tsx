@@ -5,12 +5,14 @@ import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useM
 import type { FormEvent, ReactNode } from "react";
 import { Link, Navigate, Outlet, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { HandoverTab, MeasurementsTab, OverdueList } from "./CloseoutTabs";
-import { api, ApiError, downloadFile, fetchObjectUrl } from "../api";
+import { api, downloadFile, fetchObjectUrl } from "../api";
 import { useAuth } from "../auth";
 import Bell from "../components/Bell";
-import { HelperCard, PageErrorBoundary } from "../helper/Helper";
+import { PageErrorBoundary } from "../helper/Helper";
+import { initials } from "../ui/components";
+import { useTheme } from "../ui/theme";
 import { isClientLogin } from "../components/Guards";
-import Modal from "../components/Modal";
+import { Modal } from "../ui/Overlay";
 import { errorText, inr, num } from "../format";
 import SignaturePad from "../pages/site/SignaturePad";
 
@@ -91,6 +93,15 @@ function Logo() {
 export function PortalLayout() {
   const { me, logout } = useAuth();
   const location = useLocation();
+  const [theme, setTheme] = useTheme(me?.user.id ?? null, me?.user.ui_theme ?? null);
+  const [client, setClient] = useState<string | null>(null);
+  useEffect(() => {
+    if (!me) return;
+    api<{ clients: string[] }>("/api/portal/me").then(
+      (r) => setClient(r.clients[0] ?? null),
+      () => setClient(null),
+    );
+  }, [me]);
   if (me && !isClientLogin(me.permissions)) return <Navigate to="/" replace />;
   return (
     <div className="portal">
@@ -98,8 +109,20 @@ export function PortalLayout() {
         <Link to="/portal" className="portal-brand">
           <Logo /> <span>EESPL · Client portal</span>
         </Link>
+        {client && (
+          // the client's logo slot: their initials until a logo is set for them
+          <span className="portal-client" title={client}>
+            <span className="portal-client-mark" aria-hidden="true">
+              {initials(client)}
+            </span>
+            <span className="portal-client-name">{client}</span>
+          </span>
+        )}
         <div className="portal-actions">
           <Bell />
+          <button className="btn btn-ghost btn-small" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label={`Use the ${theme === "dark" ? "light" : "dark"} look`}>
+            {theme === "dark" ? "Light" : "Dark"}
+          </button>
           <Link to="/portal/reports" className="btn btn-ghost btn-small">
             My reports
           </Link>
@@ -112,7 +135,6 @@ export function PortalLayout() {
         <PageErrorBoundary key={location.pathname}>
           <Outlet />
         </PageErrorBoundary>
-        <HelperCard portal />
       </main>
     </div>
   );
@@ -1271,7 +1293,7 @@ export function InviteAccept() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   useEffect(() => {
-    api<{ full_name: string; email: string }>(`/api/portal/invite/${token}`).then(setInfo, (err) => setError(err instanceof ApiError ? err.message : errorText(err)));
+    api<{ full_name: string; email: string }>(`/api/portal/invite/${token}`).then(setInfo, (err) => setError(errorText(err)));
   }, [token]);
   async function submit(e: FormEvent) {
     e.preventDefault();

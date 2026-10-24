@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -6,6 +7,12 @@ const apiTarget = process.env.API_PROXY_TARGET ?? "http://localhost:8001";
 
 export default defineConfig({
   plugins: [react()],
+  // the visual tests (e2e/) run with Playwright against a running stack, not with vitest
+  test: { exclude: ["e2e/**", "node_modules/**", "dist/**"] },
+  build: {
+    // the design's icons stay files (cached once), not base64 inside the main script
+    assetsInlineLimit: (file: string) => (file.endsWith(".svg") ? false : undefined),
+  },
   server: {
     host: "0.0.0.0",
     port: 5173,

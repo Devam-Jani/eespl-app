@@ -3,8 +3,8 @@ import type { FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile, fetchObjectUrl } from "../api";
 import { useAuth } from "../auth";
-import Modal from "../components/Modal";
-import { errorText } from "../format";
+import { Modal } from "../ui/Overlay";
+import { errorText, showError } from "../format";
 import type { SiteNode } from "../types";
 import { formatArea, formatLength, parseLength, parseSize } from "./units";
 import type { Unit } from "./units";
@@ -118,10 +118,10 @@ export function SurveysList() {
           <Link to="/surveys/pilot" className="btn btn-small btn-ghost">
             Camera pilot
           </Link>
-          <button className="btn btn-small btn-ghost" onClick={() => void downloadFile("/api/surveys/marker-sheet.pdf").catch((e) => alert(errorText(e)))}>
+          <button className="btn btn-small btn-ghost" onClick={() => void downloadFile("/api/surveys/marker-sheet.pdf").catch((e) => showError(e))}>
             ⤓ Marker sheet A4 (up to 1.5 m)
           </button>
-          <button className="btn btn-small btn-ghost" onClick={() => void downloadFile("/api/surveys/marker-sheet.pdf?size=a3").catch((e) => alert(errorText(e)))}>
+          <button className="btn btn-small btn-ghost" onClick={() => void downloadFile("/api/surveys/marker-sheet.pdf?size=a3").catch((e) => showError(e))}>
             ⤓ Marker sheet A3 (up to 2.5 m)
           </button>
           {can("survey.edit") && (

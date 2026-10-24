@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { api } from "../../api";
 import { useAuth } from "../../auth";
@@ -277,6 +277,25 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
     focusGrid();
   }
 
+  // the rows re-render only when their own state changes (the cursor or editor entering or
+  // leaving them, their line, being selected): with 2,000 lines a key press stays instant
+  const live = useRef({ commit, startEdit, setEditing, onEditorKey, setCursor, setSelected, editing });
+  live.current = { commit, startEdit, setEditing, onEditorKey, setCursor, setSelected, editing };
+  const rowHandlers: RowHandlers = useMemo(
+    () => ({
+      down: (ri, ci, lineId, editingHere) => {
+        if (live.current.editing !== null && !editingHere) void live.current.commit();
+        live.current.setCursor({ row: ri, col: ci });
+        live.current.setSelected(lineId);
+      },
+      double: () => live.current.startEdit(),
+      change: (v) => live.current.setEditing(v),
+      key: (e) => live.current.onEditorKey(e),
+      blur: () => void live.current.commit(),
+    }),
+    [],
+  );
+
   function onGridKey(e: KeyboardEvent<HTMLDivElement>) {
     if (editing !== null) return; // the editor handles its own keys
     const { row, col } = cursor;
@@ -465,52 +484,16 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
                         <td className="num nowrap">{inr(r.total)}</td>
                       </tr>
                     ) : (
-                      <tr key={r.line.id} className={`${r.line.status === "not_quoted" ? "row-muted" : ""} ${selected === r.line.id ? "row-current" : ""}`}>
-                        {columns.map((c, ci) => {
-                          const active = cursor.row === ri && cursor.col === ci;
-                          const isEditing = active && editing !== null;
-                          return (
-                            <td
-                              key={c.key}
-                              data-cell={`${ri}-${ci}`}
-                              className={`boq-cell ${c.num ? "num" : ""} ${c.cost ? "cost-col" : ""} ${c.muted ? "cell-muted" : ""} ${active ? "cell-active" : ""} ${
-                                c.editable(r.line) ? "cell-editable" : ""
-                              }`}
-                              onMouseDown={() => {
-                                if (editing !== null && !isEditing) void commit();
-                                setCursor({ row: ri, col: ci });
-                                setSelected(r.line.id);
-                              }}
-                              onDoubleClick={() => startEdit()}
-                            >
-                              {isEditing ? (
-                                c.key === "description" || c.key === "our_remarks" ? (
-                                  <textarea
-                                    className="cell-editor"
-                                    autoFocus
-                                    rows={3}
-                                    value={editing}
-                                    onChange={(e) => setEditing(e.target.value)}
-                                    onKeyDown={onEditorKey}
-                                    onBlur={() => void commit()}
-                                  />
-                                ) : (
-                                  <input
-                                    className="cell-editor"
-                                    autoFocus
-                                    value={editing}
-                                    onChange={(e) => setEditing(e.target.value)}
-                                    onKeyDown={onEditorKey}
-                                    onBlur={() => void commit()}
-                                  />
-                                )
-                              ) : (
-                                <CellView line={r.line} col={c.key} />
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
+                      <LineRow
+                        key={r.line.id}
+                        line={r.line}
+                        ri={ri}
+                        columns={columns}
+                        activeCol={cursor.row === ri ? cursor.col : -1}
+                        editing={cursor.row === ri ? editing : null}
+                        current={selected === r.line.id}
+                        on={rowHandlers}
+                      />
                     ),
                   )}
                 </tbody>
@@ -554,6 +537,44 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
     </>
   );
 }
+
+type RowHandlers = {
+  down: (ri: number, ci: number, lineId: number, editingHere: boolean) => void;
+  double: () => void;
+  change: (v: string) => void;
+  key: (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  blur: () => void;
+};
+
+const LineRow = memo(function LineRow({ line, ri, columns, activeCol, editing, current, on }: { line: BoqLine; ri: number; columns: Col[]; activeCol: number; editing: string | null; current: boolean; on: RowHandlers }) {
+  return (
+    <tr className={`${line.status === "not_quoted" ? "row-muted" : ""} ${current ? "row-current" : ""}`}>
+      {columns.map((c, ci) => {
+        const active = activeCol === ci;
+        const isEditing = active && editing !== null;
+        return (
+          <td
+            key={c.key}
+            data-cell={`${ri}-${ci}`}
+            className={`boq-cell ${c.num ? "num" : ""} ${c.cost ? "cost-col" : ""} ${c.muted ? "cell-muted" : ""} ${active ? "cell-active" : ""} ${c.editable(line) ? "cell-editable" : ""}`}
+            onMouseDown={() => on.down(ri, ci, line.id, isEditing)}
+            onDoubleClick={on.double}
+          >
+            {isEditing ? (
+              c.key === "description" || c.key === "our_remarks" ? (
+                <textarea className="cell-editor" autoFocus rows={3} value={editing!} onChange={(e) => on.change(e.target.value)} onKeyDown={on.key} onBlur={on.blur} />
+              ) : (
+                <input className="cell-editor" autoFocus value={editing!} onChange={(e) => on.change(e.target.value)} onKeyDown={on.key} onBlur={on.blur} />
+              )
+            ) : (
+              <CellView line={line} col={c.key} />
+            )}
+          </td>
+        );
+      })}
+    </tr>
+  );
+});
 
 function CellView({ line, col }: { line: BoqLine; col: string }) {
   switch (col) {

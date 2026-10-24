@@ -1,10 +1,11 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { api, ApiError } from "../api";
+import { api } from "../api";
 import type { Scope } from "../api";
-import Modal from "../components/Modal";
+import { Modal } from "../ui/Overlay";
 import { SCOPES } from "../scopes";
 import type { Permission, Role } from "../types";
+import { errorText } from "../format";
 
 type Grid = Record<number, Record<string, Scope>>;
 
@@ -29,7 +30,7 @@ export default function Roles() {
       setPermissions(p);
       setDraft(Object.fromEntries(r.map((role) => [role.id, { ...role.permissions }])));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : String(err));
+      setError(errorText(err));
     }
   }, []);
 
@@ -64,7 +65,7 @@ export default function Roles() {
       setNotice(`Permissions for ${role.name} saved.`);
       await load();
     } catch (err) {
-      setError(`${role.name}: ${err instanceof ApiError ? err.message : String(err)}`);
+      setError(`${role.name}: ${errorText(err)}`);
     } finally {
       setSaving(null);
     }
@@ -79,7 +80,7 @@ export default function Roles() {
       setNotice(`Role ${role.name} deleted.`);
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : String(err));
+      setError(errorText(err));
     }
   }
 
@@ -234,7 +235,7 @@ function NewRole({ onClose, onCreated }: { onClose: () => void; onCreated: (role
       });
       await onCreated(role);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : String(err));
+      setError(errorText(err));
     }
   }
 

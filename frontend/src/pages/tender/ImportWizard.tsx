@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api } from "../../api";
-import Modal from "../../components/Modal";
+import { Modal } from "../../ui/Overlay";
 import { errorText, inr, num } from "../../format";
 import type { ImportPreview, ImportReport } from "../../types";
 

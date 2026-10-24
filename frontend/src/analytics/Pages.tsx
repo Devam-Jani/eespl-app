@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
-import { errorText } from "../format";
+import { errorText, showError } from "../format";
 import { BarChart, FunnelChart, HBarChart, LineChart, PALETTE, ScatterChart } from "./charts";
 import type { Row } from "./charts";
 import type { Column, Drill, Table } from "./ui";
@@ -727,7 +727,7 @@ export function ReportsPage() {
   const { data: sites } = useData<{ items: { id: number; code: string; name: string }[] }>("/api/sites?limit=500&status=active");
   const [site, setSite] = useState("");
   const { can } = useAuth();
-  const dl = (path: string) => void downloadFile(path).catch((err) => alert(errorText(err)));
+  const dl = (path: string) => void downloadFile(path).catch((err) => showError(err));
   return (
     <>
       <div className="page-header">
@@ -736,7 +736,7 @@ export function ReportsPage() {
           <p className="muted small">The management summary is filed every Monday at 8 am (IST) and announced in the bell. No email yet.</p>
         </div>
         <div className="page-actions">
-          <button className="btn btn-small" onClick={() => void api("/api/analytics/reports/weekly", { method: "POST" }).then(reload, (err) => alert(errorText(err)))}>
+          <button className="btn btn-small" onClick={() => void api("/api/analytics/reports/weekly", { method: "POST" }).then(reload, (err) => showError(err))}>
             File this week's now
           </button>
         </div>

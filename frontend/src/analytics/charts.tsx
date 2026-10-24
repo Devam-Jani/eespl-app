@@ -1,8 +1,9 @@
+import { CHART } from "../ui/tokens";
 // Small SVG charts for the analytics pages (no chart library: this chunk is lazy-loaded).
 // Okabe–Ito colours (safe for colour-blind readers); every bar / point carries its value as a
 // label and a tooltip, and can be clicked through to the records behind it.
 
-export const PALETTE = ["#0072B2", "#E69F00", "#009E73", "#D55E00", "#CC79A7", "#56B4E9", "#F0E442", "#000000"];
+export const PALETTE = CHART;
 
 export type Row = Record<string, unknown>;
 export type Series = { key: string; label: string; color?: string; kind?: "bar" | "line" };

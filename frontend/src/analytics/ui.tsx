@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
-import { errorText, inr, inrCompact } from "../format";
+import { errorText, inr, inrCompact, showError } from "../format";
 
 export type Drill = Record<string, string | number> & { kind: string };
 export type Tile = {
@@ -76,7 +76,7 @@ export function ExportButton({ path, label = "Excel" }: { path: string; label?: 
       onClick={() => {
         setBusy(true);
         void downloadFile(path)
-          .catch((err) => alert(errorText(err)))
+          .catch((err) => showError(err))
           .finally(() => setBusy(false));
       }}
     >

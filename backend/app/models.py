@@ -54,6 +54,8 @@ class User(Base):
     kylas_user_id: Mapped[int | None] = mapped_column(BigInteger)  # owner of their Kylas leads
     # survey entry: "m" (metres) or "ftin" (feet-inches); sizes are always stored in metres
     measure_unit: Mapped[str] = mapped_column(String(4), server_default="m")
+    # the app's look for this person: "dark" (the default) or "light" (printing, bright sites)
+    ui_theme: Mapped[str | None] = mapped_column(String(5))
     # sales: closure rate target (percent); empty: the team setting
     closure_target_percent: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     # invented analytics demo data (python -m app.cli seed-demo-analytics); never real

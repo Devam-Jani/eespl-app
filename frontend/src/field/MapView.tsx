@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { ART } from "../ui/tokens";
 
 /** What a map shows. Tiles come from the settings (OpenStreetMap by default, no key), with the
  * credit shown; pins are drawn as HTML (numbered), so no marker images are fetched. */
@@ -54,12 +55,12 @@ export default function MapView({
     g.clearLayers();
     const bounds = L.latLngBounds([]);
     for (const c of circles) {
-      L.circle([c.lat, c.lng], { radius: c.radius, color: c.color ?? "#2f6f4f", weight: 1, fillOpacity: 0.08 }).addTo(g);
+      L.circle([c.lat, c.lng], { radius: c.radius, color: c.color ?? ART.mapPlace, weight: 1, fillOpacity: 0.08 }).addTo(g);
       bounds.extend(L.latLng(c.lat, c.lng).toBounds(c.radius * 2));
     }
     for (const line of lines) {
       if (line.points.length < 2) continue;
-      L.polyline(line.points, { color: line.color ?? "#1f6feb", weight: line.weight ?? 4, opacity: 0.85, dashArray: line.dashed ? "6 8" : undefined }).addTo(g);
+      L.polyline(line.points, { color: line.color ?? ART.mapRoute, weight: line.weight ?? 4, opacity: 0.85, dashArray: line.dashed ? "6 8" : undefined }).addTo(g);
       line.points.forEach((p) => bounds.extend(p));
     }
     for (const p of pins) {

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { api, ApiError } from "../api";
+import { api } from "../api";
 import { useAuth } from "../auth";
 import ExportButton from "../components/ExportButton";
-import Modal from "../components/Modal";
+import { Modal } from "../ui/Overlay";
 import { canGrant } from "../scopes";
 import type { Role, User } from "../types";
+import { errorText } from "../format";
 
 type Dialog = { kind: "create" } | { kind: "edit"; user: User } | { kind: "password"; user: User } | null;
 
@@ -28,7 +29,7 @@ export default function Users() {
       setUsers(u);
       setRoles(r);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : String(err));
+      setError(errorText(err));
     }
   }, []);
 
@@ -42,7 +43,7 @@ export default function Users() {
       setNotice(done);
       void load();
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : String(err));
+      setNotice(errorText(err));
     }
   }
   async function passwordLink(u: { id: string; full_name: string }) {
@@ -57,7 +58,7 @@ export default function Users() {
         `One-time link for ${u.full_name} (copied; works once, ${r.expires_in_days} days): ${url}`,
       );
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : String(err));
+      setNotice(errorText(err));
     }
   }
   async function toggleActive(user: User) {
@@ -73,7 +74,7 @@ export default function Users() {
       }
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : String(err));
+      setError(errorText(err));
     }
   }
 
@@ -281,7 +282,7 @@ function UserForm({ user, roles, onClose, onSaved }: { user: User | null; roles:
         await onSaved(`${fullName} added.`);
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : String(err));
+      setError(errorText(err));
     } finally {
       setBusy(false);
     }
@@ -364,7 +365,7 @@ function PasswordForm({ user, onClose, onSaved }: { user: User; onClose: () => v
       await api(`/api/users/${user.id}/reset-password`, { method: "POST", json: { password } });
       onSaved(`Password reset for ${user.full_name}. They have been signed out everywhere.`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : String(err));
+      setError(errorText(err));
     } finally {
       setBusy(false);
     }

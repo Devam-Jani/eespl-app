@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, queryString } from "../../api";
 import { useAuth } from "../../auth";
-import Modal from "../../components/Modal";
+import { Modal } from "../../ui/Overlay";
 import { errorText, inr, num } from "../../format";
 import type { Issue, LedgerRow, MaterialLookups, StockRow, StoreRow, Transfer } from "../../material/types";
 import type { Page } from "../../types";

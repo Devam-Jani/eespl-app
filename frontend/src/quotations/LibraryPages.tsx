@@ -9,6 +9,7 @@ import { useAuth } from "../auth";
 import { errorText } from "../format";
 import { loadLookups, MarkupField, plain, SectionsEditor, useLookups } from "./common";
 import type { Lookups, Section } from "./common";
+import { ART } from "../ui/tokens";
 
 type Kind = "letterhead" | "letter" | "spec" | "line" | "item" | "reference" | "preset";
 type Row = Record<string, unknown> & { id: number; version: number; needs_check: boolean; is_active: boolean; updated_at: string };
@@ -151,8 +152,8 @@ const BLANK: Record<Kind, Record<string, unknown>> = {
     brand: "",
     header_text: "",
     footer_text: "",
-    primary_color: "#0F6E5A",
-    accent_color: "#E69F00",
+    primary_color: ART.letterheadPrimary,
+    accent_color: ART.letterheadAccent,
   },
   letter: { name: "", opening: "", subject: "SUB: OFFER FOR {areas_list} WATERPROOFING WORK.", body: "", enclosures: "Technical Specification\nBudgetary Offer" },
   spec: { title: "", heading_prefix: "TECHNICAL SPECIFICATION FOR", option_label: "", area_type_id: null, sections: [] },

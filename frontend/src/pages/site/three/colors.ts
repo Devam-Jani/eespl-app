@@ -1,3 +1,4 @@
+import { ART, MATERIALS, THEMES } from "../../../ui/tokens";
 /**
  * Colour rules for the 3D view (pure; unit-tested in colors.test.ts).
  *
@@ -38,14 +39,14 @@ export const CATEGORY_LABEL: Record<Category, string> = {
 };
 
 export const STATUS_COLORS: Record<Exclude<Category, "rollup">, string> = {
-  done: "#3f9a5c",
-  progress: "#f0a531",
-  hold: "#8e5cc8",
-  blocked: "#d64545",
-  not_started: "#c9ced3",
-  none: "#eef1f3",
+  done: THEMES.dark.done,
+  progress: THEMES.dark.prog,
+  hold: THEMES.dark.hold,
+  blocked: THEMES.dark.block,
+  not_started: THEMES.dark.idle,
+  none: ART.notOurs,
 };
-export const LATE_COLOR = "#d00000";
+export const LATE_COLOR = ART.late;
 
 export function categoryOf(s: NodeStatus): Exclude<Category, "rollup"> {
   if (s.tasks === 0) return s.has_scope ? "not_started" : "none";
@@ -71,7 +72,7 @@ function mix(a: string, b: string, t: number): string {
 
 /** A parent's tint: light grey at 0 %, green at 100 %. */
 export function rollupColor(percent: number): string {
-  return mix("#dfe3e6", STATUS_COLORS.done, Math.max(0, Math.min(100, percent)) / 100);
+  return mix(ART.rollupEmpty, STATUS_COLORS.done, Math.max(0, Math.min(100, percent)) / 100);
 }
 
 /** The work-status colour of a node, and whether it is see-through. */
@@ -82,24 +83,7 @@ export function workColor(s: NodeStatus, hasWorkBelow: boolean): { color: string
 }
 
 /** Concrete / brick tones by kind, for client presentations. */
-export const REALISTIC: Record<string, string> = {
-  floor: "#b3aea5",
-  basement: "#8f8a82",
-  flat: "#b9765a",
-  toilet: "#e3ddd0",
-  kitchen: "#d6cdb8",
-  balcony: "#c4bdb0",
-  terrace: "#9a958c",
-  oh_tank: "#7d8a93",
-  ug_tank: "#6e7b84",
-  raft: "#7a756d",
-  retaining_wall: "#8a847b",
-  podium: "#a39e95",
-  swimming_pool: "#5aa3c9",
-  stp: "#7d8a93",
-  lift_pit: "#6f6a63",
-  other: "#a0a0a0",
-};
+export const REALISTIC: Record<string, string> = MATERIALS;
 
 export function realisticColor(kind: string): string {
   return REALISTIC[kind] ?? REALISTIC.other;

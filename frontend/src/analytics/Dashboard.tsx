@@ -2,7 +2,7 @@ import { lazy, Suspense, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
-import { errorText } from "../format";
+import { errorText, showError } from "../format";
 import { MENU, shows } from "../menu";
 import { HBarChart, PALETTE } from "./charts";
 import type { Drill, Tile } from "./ui";
@@ -68,7 +68,7 @@ export default function Dashboard({ embedded = false }: { embedded?: boolean } =
           </button>
           <ExportButton path={`/api/dashboard/${current.key}/xlsx${q}`} />
           {current.key === "company" && home.can_export && (
-            <button className="btn btn-small btn-ghost" onClick={() => void downloadFile(`/api/analytics/pdf/management${q}`).catch((err) => alert(errorText(err)))}>
+            <button className="btn btn-small btn-ghost" onClick={() => void downloadFile(`/api/analytics/pdf/management${q}`).catch((err) => showError(err))}>
               ⤓ PDF summary
             </button>
           )}

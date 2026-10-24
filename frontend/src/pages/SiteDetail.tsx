@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { errorText } from "../format";
@@ -30,8 +30,10 @@ const FinanceTab = lazy(() => import("./site/FinanceTab"));
 // the portal tab carries the client portal pages (for the preview)
 const PortalTab = lazy(() => import("./site/PortalTab"));
 const SiteLocationTab = lazy(() => import("../field/Maps").then((m) => ({ default: m.SiteLocationTab })));
-import { ProgressBar, SiteForm, SiteStatusBadge } from "./Sites";
+import { SiteForm } from "./Sites";
 import { shortDate } from "./Tenders";
+import { BackButton, PageSkeleton, StatusChip } from "../ui/components";
+import type { Status } from "../ui/tokens";
 
 type Tab =
   | "overview"
@@ -58,6 +60,7 @@ type Tab =
 export default function SiteDetail() {
   const { id } = useParams();
   const { can } = useAuth();
+  const navigate = useNavigate();
   const [site, setSite] = useState<Site | null>(null);
   const [params, setParams] = useSearchParams();
   const tab = (params.get("tab") as Tab | null) ?? "overview";
@@ -76,19 +79,66 @@ export default function SiteDetail() {
     void load();
   }, [load]);
 
-  if (!site) return error ? <div className="alert alert-error">{error}</div> : <p className="muted">Loading…</p>;
+  if (!site) return error ? <div className="alert alert-error">{error}</div> : <PageSkeleton label="Loading the site" />;
+
+  const tools: [string, string, boolean][] = [
+    ["Surveys", `/surveys?site=${site.id}`, can("survey.view")],
+    ["Work fronts", `/sites/${site.id}/fronts`, can("survey.view")],
+    ["Material plan", `/sites/${site.id}/material-plan`, can("planning.view", "indent.view")],
+    ["Measurement book", `/measurements?site=${site.id}`, can("measurement.view")],
+    ["AutoCAD takeoff", `/sites/${site.id}/takeoff`, can("takeoff.view")],
+    ["Methodology", `/sites/${site.id}/methodology`, can("methodology.site")],
+    ["RFI zones", `/sites/${site.id}/zones`, can("closeout.site") || can("closeout.billing")],
+    ["Measure", `/sites/${site.id}/measurements`, can("closeout.billing")],
+    ["Billing checklist", `/sites/${site.id}/billing-checklist`, can("closeout.billing")],
+    ["Material reconciliation", `/sites/${site.id}/reconciliation`, can("closeout.billing")],
+    ["Labour claims", `/sites/${site.id}/labour-claims`, can("closeout.billing")],
+    ["Bills", `/bills?site=${site.id}`, can("closeout.billing")],
+    ["Work completion", `/sites/${site.id}/work-completions`, can("closeout.billing")],
+    ["Issues", `/issues?site=${site.id}`, can("issues.view")],
+  ];
+  const progress = Math.round(Number(site.progress_percent) || 0);
+  const chip: Status = site.late ? "block" : site.status === "on_hold" ? "hold" : site.status === "planned" ? "idle" : progress >= 100 ? "done" : "prog";
+  const chipText = site.late ? "late" : site.status === "on_hold" ? "on hold" : site.status === "planned" ? "not started" : progress >= 100 ? "done" : "in progress";
+  // the design's seven sections first; the rest of the site's sections under "More"
+  const all = (
+    [
+      ["overview", "Overview", true],
+      ["3d", "3D building", true],
+      ["tasks", "Stages", true],
+      ["dpr", "Daily reports", can("dpr.view")],
+      ["material", "Materials", can("indent.view", "indent.create", "store.view", "grn.view", "po.view")],
+      ["finance", "Measurements & bills", can("billing.view")],
+      ["drawings", "Drawings", true],
+      ["process", "Process", true],
+      ["handover", "Handover", true],
+      ["location", "Location & visits", true],
+      ["lots", "Plan & lots", can("planning.view", "indent.view", "indent.create")],
+      ["labour", "Labour", can("labour.view")],
+      ["inspections", "Inspections", can("inspection.view")],
+      ["workorders", "Work orders", can("subcon.view")],
+      ["mom", "MOM", can("inspection.view")],
+      ["assets", "Assets", can("asset.view")],
+      ["budget", "Budget", can("budget.view")],
+      ["structure", "Structure", true],
+      ["scope", "Scope", true],
+      ["portal", "Portal", can("portal.manage")],
+    ] as [Tab, string, boolean][]
+  ).filter(([, , show]) => show);
+  const main = all.slice(0, 7);
+  const more = all.slice(7);
+  const inMore = more.find(([k]) => k === tab);
 
   return (
     <>
-      <p className="breadcrumb">
-        <Link to="/sites">Sites</Link> / <code>{site.code}</code>
-      </p>
-      <div className="page-header">
-        <div>
-          <h1>
-            {site.name} <SiteStatusBadge status={site.status} />
-          </h1>
-          <p className="muted">
+      <header className="site-head">
+        <BackButton onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/sites"))} label="Back to sites" />
+        <div className="site-title">
+          <p className="muted small">
+            <Link to="/sites">Sites</Link> · <code>{site.code}</code>
+          </p>
+          <h1>{site.name}</h1>
+          <p className="muted site-scope">
             {site.client_name ?? "Client unknown"}
             {site.channel_name ? ` · via ${site.channel_name}` : ""}
             {site.tender_code && (
@@ -98,128 +148,59 @@ export default function SiteDetail() {
               </>
             )}
             {" · target "}
-            <span className={site.late ? "text-danger" : ""}>{shortDate(site.target_date)}</span>
-            {can("survey.view") && (
-              <>
-                {" · "}
-                <Link to={`/surveys?site=${site.id}`}>Surveys</Link> · <Link to={`/sites/${site.id}/fronts`}>Work fronts</Link>
-              </>
-            )}
-            {can("planning.view", "indent.view") && (
-              <>
-                {" · "}
-                <Link to={`/sites/${site.id}/material-plan`}>Material plan</Link>
-              </>
-            )}
-            {can("measurement.view") && (
-              <>
-                {" · "}
-                <Link to={`/measurements?site=${site.id}`}>Measurement book</Link>
-              </>
-            )}
-            {can("site.update") && (
-              <>
-                {" · "}
-                <Link to={`/my-site/${site.id}`}>My site today</Link>
-              </>
-            )}
-            {can("takeoff.view") && (
-              <>
-                {" · "}
-                <Link to={`/sites/${site.id}/takeoff`}>AutoCAD takeoff</Link>
-              </>
-            )}
-            {can("methodology.site") && (
-              <>
-                {" · "}
-                <Link to={`/sites/${site.id}/methodology`}>Methodology</Link>
-              </>
-            )}
-            {(can("closeout.site") || can("closeout.billing")) && (
-              <>
-                {" · "}
-                <Link to={`/sites/${site.id}/zones`}>RFI zones</Link>
-              </>
-            )}
-            {can("closeout.billing") && (
-              <>
-                {" · "}
-                <Link to={`/sites/${site.id}/measurements`}>Measure</Link>
-                {" · "}
-                <Link to={`/sites/${site.id}/billing-checklist`}>Billing checklist</Link>
-                {" · "}
-                <Link to={`/sites/${site.id}/reconciliation`}>Material reconciliation</Link>
-                {" · "}
-                <Link to={`/sites/${site.id}/labour-claims`}>Labour claims</Link>
-                {" · "}
-                <Link to={`/bills?site=${site.id}`}>Bills</Link>
-                {" · "}
-                <Link to={`/sites/${site.id}/work-completions`}>Work completion</Link>
-              </>
-            )}
-            {can("issues.view") && (
-              <>
-                {" · "}
-                <Link to={`/issues?site=${site.id}`}>Issues</Link>
-              </>
-            )}
+            <span className={site.late ? "tone-block" : ""}>{shortDate(site.target_date)}</span>
           </p>
         </div>
-        <div className="rate-badge">
-          <span className="muted small">Progress</span>
-          <ProgressBar value={site.progress_percent} />
-        </div>
-      </div>
+        <StatusChip status={chip}>
+          {progress}% done · {chipText}
+        </StatusChip>
+        {can("site.update") && (
+          <Link className="btn btn-primary" to={`/my-site/${site.id}`}>
+            Update work
+          </Link>
+        )}
+      </header>
+      {tools.some(([, , show]) => show) && (
+        <nav className="site-tools" aria-label="Site tools">
+          {tools
+            .filter(([, , show]) => show)
+            .map(([label, to]) => (
+              <Link key={to} to={to} className="chip">
+                {label}
+              </Link>
+            ))}
+        </nav>
+      )}
       {error && <div className="alert alert-error">{error}</div>}
       <Suspense fallback={null}>
         <SiteControlStrip siteId={site.id} />
         <SiteVisits siteId={site.id} />
       </Suspense>
-      {(() => {
-        const tabs = (
-          [
-            ["overview", "Overview", true],
-            ["process", "Process", true],
-            ["handover", "Handover", true],
-            ["location", "Location & visits", true],
-            ["lots", "Plan & lots", can("planning.view", "indent.view", "indent.create")],
-            ["dpr", "DPR", can("dpr.view")],
-            ["tasks", "Tasks", true],
-            ["labour", "Labour", can("labour.view")],
-            ["material", "Material", can("indent.view", "indent.create", "store.view", "grn.view", "po.view")],
-            ["inspections", "Inspections", can("inspection.view")],
-            ["workorders", "Work orders", can("subcon.view")],
-            ["mom", "MOM", can("inspection.view")],
-            ["assets", "Assets", can("asset.view")],
-            ["budget", "Budget", can("budget.view")],
-            ["finance", "Finance", can("billing.view")],
-            ["structure", "Structure", true],
-            ["scope", "Scope", true],
-            ["drawings", "Drawings", true],
-            ["3d", "3D", true],
-            ["portal", "Portal", can("portal.manage")],
-          ] as [Tab, string, boolean][]
-        ).filter(([, , show]) => show);
-        return (
-          <>
-            {/* on a phone the tab bar is a menu */}
-            <select className="tab-select tap-input" value={tab} onChange={(e) => setTab(e.target.value as Tab)} aria-label="Section">
-              {tabs.map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
-            <div className="tabs tabs-inline tab-bar">
-              {tabs.map(([key, label]) => (
-                <button key={key} className={`tab ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          </>
-        );
-      })()}
+      {/* on a phone the tabs are one menu */}
+      <select className="tab-select" value={tab} onChange={(e) => setTab(e.target.value as Tab)} aria-label="Section">
+        {all.map(([key, label]) => (
+          <option key={key} value={key}>
+            {label}
+          </option>
+        ))}
+      </select>
+      <div className="tabs site-tabs" role="tablist" aria-label="Site sections">
+        {main.map(([key, label]) => (
+          <button key={key} role="tab" aria-selected={tab === key} className={`tab ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>
+            {label}
+          </button>
+        ))}
+        {more.length > 0 && (
+          <select className={`tab tab-more ${inMore ? "active" : ""}`} value={inMore ? tab : ""} onChange={(e) => e.target.value && setTab(e.target.value as Tab)} aria-label="More sections">
+            <option value="">{inMore ? inMore[1] : "More"}</option>
+            {more.map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
       <div className="top-gap">
         {tab === "overview" && <Overview site={site} onChange={setSite} />}
         {tab === "structure" && <StructureTab site={site} onChange={load} />}

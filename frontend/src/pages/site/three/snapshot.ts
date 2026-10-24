@@ -1,3 +1,4 @@
+import { ART } from "../../../ui/tokens";
 /**
  * "Save image" for the 3D view: the WebGL picture composed on a white page with a header (site
  * name, code, date, overall %), the floor and tower labels with their %, and the colour legend
@@ -64,19 +65,19 @@ export function composeSnapshot(source: HTMLCanvasElement, scale: number, o: Sna
   out.width = W;
   out.height = headerH + source.height + legendH;
   const ctx = out.getContext("2d")!;
-  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = ART.paper;
   ctx.fillRect(0, 0, out.width, out.height);
 
   // header
   const [title, sub] = headerLines(o);
-  ctx.fillStyle = "#14231c";
+  ctx.fillStyle = ART.ink;
   ctx.font = font(18, true);
   ctx.textBaseline = "top";
   ctx.fillText(title, pad, 12 * s);
   ctx.font = font(13);
-  ctx.fillStyle = "#4a5a52";
+  ctx.fillStyle = ART.inkSoft;
   ctx.fillText(sub, pad, 38 * s);
-  ctx.fillStyle = "#2f6f4f";
+  ctx.fillStyle = ART.inkBrand;
   ctx.fillRect(0, headerH - 2 * s, W, 2 * s);
 
   // the 3D picture and its labels
@@ -89,7 +90,7 @@ export function composeSnapshot(source: HTMLCanvasElement, scale: number, o: Sna
     const y = headerH + l.y * s;
     ctx.fillStyle = "rgba(255,255,255,0.85)";
     ctx.fillRect(x - 4 * s, y - 16 * s, tw + 8 * s, 16 * s);
-    ctx.fillStyle = l.late ? "#b00000" : "#14231c";
+    ctx.fillStyle = l.late ? ART.inkLate : ART.ink;
     ctx.fillText(l.text, x, y - 2 * s);
   }
 
@@ -110,18 +111,18 @@ export function composeSnapshot(source: HTMLCanvasElement, scale: number, o: Sna
         ctx.globalAlpha = item.ghost ? 0.5 : 1;
         ctx.fillRect(x, y, swatch, swatch);
         ctx.globalAlpha = 1;
-        ctx.strokeStyle = "#9aa3a0";
+        ctx.strokeStyle = ART.inkMuted;
         ctx.lineWidth = s;
         ctx.strokeRect(x, y, swatch, swatch);
       }
-      ctx.fillStyle = "#14231c";
+      ctx.fillStyle = ART.ink;
       ctx.fillText(legendText(item), x + swatch + 6 * s, y + swatch / 2);
       x += widths[i] + 18 * s;
     }
     y += rowH;
   }
   if (o.note) {
-    ctx.fillStyle = "#4a5a52";
+    ctx.fillStyle = ART.inkSoft;
     ctx.fillText(o.note, pad, y + swatch / 2);
   }
   return out;

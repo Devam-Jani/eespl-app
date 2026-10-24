@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { api, queryString } from "../../api";
 import { useAuth } from "../../auth";
-import Modal from "../../components/Modal";
+import { Modal } from "../../ui/Overlay";
 import { errorText, inr } from "../../format";
 import type { FreightReportRow, FreightRow, MaterialLookups } from "../../material/types";
 import type { Page } from "../../types";

@@ -1,3 +1,5 @@
+import { ApiError } from "./api";
+
 const rupees = new Intl.NumberFormat("en-IN", {
   style: "currency",
   currency: "INR",
@@ -41,6 +43,15 @@ export const LOST_REASONS: Record<string, string> = {
   main_job_lost: "Main job lost by the contractor",
 };
 
+/** What a page shows for an error: nothing when the helper card shows it already (a wrong entry
+ * beside its fields, a failure on our side with its request id), so an error is shown once. */
 export function errorText(err: unknown): string {
+  if (err instanceof ApiError && err.shownByHelper) return "";
   return err instanceof Error ? err.message : String(err);
+}
+
+/** An error from a button with no place on the page for it (a download): said once. */
+export function showError(err: unknown): void {
+  const text = errorText(err);
+  if (text) window.alert(text);
 }

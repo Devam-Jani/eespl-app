@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { api, queryString } from "../api";
 import { useAuth } from "../auth";
 import ExportButton from "../components/ExportButton";
-import Modal from "../components/Modal";
+import { Modal } from "../ui/Overlay";
 import { errorText } from "../format";
 import type { Channel, ChannelType, Page } from "../types";
 import { Pager } from "./Clients";

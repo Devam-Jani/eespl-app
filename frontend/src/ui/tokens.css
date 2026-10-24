@@ -1,0 +1,119 @@
+/* Written from src/ui/tokens.ts (UPDATE_TOKENS=1 npx vitest run src/ui/tokens.test.ts). Do not edit by hand. */
+
+:root {
+  --bg: #0B1220;
+  --panel: #0E1729;
+  --surface: #111B30;
+  --surface-2: #121D33;
+  --raised: #18304A;
+  --border: #1E2B45;
+  --border-2: #24344F;
+  --text: #E6EDF7;
+  --muted: #9FB0CC;
+  --soft: #C9D5EA;
+  --primary: #19C39C;
+  --on-primary: #04201A;
+  --primary-ink: #19C39C;
+  --accent: #5CC8FF;
+  --accent-ink: #5CC8FF;
+  --stage: #070F1D;
+  --done: #3FC68A;
+  --prog: #F5A524;
+  --hold: #A78BFA;
+  --block: #F26D6D;
+  --idle: #5B6B86;
+  --done-ink: #3FC68A;
+  --prog-ink: #F5A524;
+  --hold-ink: #A78BFA;
+  --block-ink: #FF9A9A;
+  --idle-ink: #C9D5EA;
+  --shade: #000000;
+  --white: #FFFFFF;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --r-input: 12px;
+  --r-small: 14px;
+  --r-card-sm: 16px;
+  --r-card: 20px;
+  --r-pill: 999px;
+  --touch: 44px;
+  --sidebar: 248px;
+  --font-text: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --t-fast: 150ms;
+  --t-med: 220ms;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg: #F3F6FA;
+  --panel: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-2: #F5F8FC;
+  --raised: #E4ECF6;
+  --border: #D8E1EC;
+  --border-2: #C4D0DF;
+  --text: #0E1729;
+  --muted: #4A5873;
+  --soft: #2A3852;
+  --primary: #19C39C;
+  --on-primary: #04201A;
+  --primary-ink: #087A60;
+  --accent: #2B9BDB;
+  --accent-ink: #0A649E;
+  --stage: #E8EEF6;
+  --done: #3FC68A;
+  --prog: #F5A524;
+  --hold: #A78BFA;
+  --block: #F26D6D;
+  --idle: #8A98B0;
+  --done-ink: #17734B;
+  --prog-ink: #8A5300;
+  --hold-ink: #5B3CC4;
+  --block-ink: #B42323;
+  --idle-ink: #3D4A61;
+  --shade: #0E1729;
+  --white: #FFFFFF;
+  color-scheme: light;
+}
+
+@media print {
+  :root {
+    --bg: #F3F6FA;
+    --panel: #FFFFFF;
+    --surface: #FFFFFF;
+    --surface-2: #F5F8FC;
+    --raised: #E4ECF6;
+    --border: #D8E1EC;
+    --border-2: #C4D0DF;
+    --text: #0E1729;
+    --muted: #4A5873;
+    --soft: #2A3852;
+    --primary: #19C39C;
+    --on-primary: #04201A;
+    --primary-ink: #087A60;
+    --accent: #2B9BDB;
+    --accent-ink: #0A649E;
+    --stage: #E8EEF6;
+    --done: #3FC68A;
+    --prog: #F5A524;
+    --hold: #A78BFA;
+    --block: #F26D6D;
+    --idle: #8A98B0;
+    --done-ink: #17734B;
+    --prog-ink: #8A5300;
+    --hold-ink: #5B3CC4;
+    --block-ink: #B42323;
+    --idle-ink: #3D4A61;
+    --shade: #0E1729;
+    --white: #FFFFFF;
+    color-scheme: light;
+  }
+}
+

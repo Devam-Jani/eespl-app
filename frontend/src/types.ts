@@ -3,7 +3,7 @@ import type { Scope } from "./api";
 export type RoleRef = { id: number; code: string; name: string };
 
 export type Me = {
-  user: { id: string; email: string | null; full_name: string; phone: string | null; job_title?: string | null };
+  user: { id: string; email: string | null; full_name: string; phone: string | null; job_title?: string | null; ui_theme?: "dark" | "light" | null };
   roles: RoleRef[];
   permissions: Record<string, Scope>;
 };
