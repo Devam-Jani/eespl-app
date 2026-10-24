@@ -20,14 +20,7 @@ type Rule = "button" | "field" | "card" | "table" | "input" | "style";
 
 // The few cases that must stay: a file, a rule, how many, and why. A new one beyond the count fails.
 // Keep it small; never skip a whole file.
-const ALLOW: { file: string; rule: Rule; count: number; why: string }[] = [
-  {
-    file: "measure/Pages.tsx",
-    rule: "input",
-    count: 1,
-    why: "the weir height is typed inside the sentence of a radio option (\"Weir or cut wall, height [ ] mm\"), already named by aria-label; a Field there would nest a label in the option's label",
-  },
-];
+const ALLOW: { file: string; rule: Rule; count: number; why: string }[] = [];
 
 const NOT_TEXT = new Set(["checkbox", "radio", "file", "hidden", "range", "color"]);
 const COLOUR_PROPS = new Set(["color", "background", "backgroundColor", "borderColor", "fill", "stroke", "outlineColor"]);
