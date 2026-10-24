@@ -104,12 +104,12 @@ async function crawlRole(browser, role, pw, findings, timings) {
   const portal = new URL(page.url()).pathname.startsWith("/portal");
   // the menu's pages (every group opened; the portal: its home and each site)
   for (let i = 0; i < 20; i++) {
-    const closed = page.locator("aside.sidebar .nav-toggle[aria-expanded='false']").first();
+    const closed = page.locator(".app-sidebar .nav-toggle[aria-expanded='false']").first();
     if (!(await closed.count())) break;
     await closed.click().catch(() => {});
   }
   const links = await page.evaluate((p) => {
-    const sel = p ? ".portal-main a[href^='/portal'], .portal-top a[href^='/portal']" : "aside.sidebar a[href^='/']";
+    const sel = p ? ".portal-main a[href^='/portal'], .portal-top a[href^='/portal']" : ".app-sidebar a[href^='/']";
     return [...new Set([...document.querySelectorAll(sel)].map((a) => a.getAttribute("href")))];
   }, portal);
   const queue = [...new Set([portal ? "/portal" : "/my-work", ...links])];
@@ -121,7 +121,7 @@ async function crawlRole(browser, role, pw, findings, timings) {
     here = path;
     const t0 = Date.now();
     await page.goto(`${BASE}${path}`, { waitUntil: "networkidle", timeout: 60000 }).catch((e) => add("page did not load", e.message));
-    await page.waitForFunction(() => !document.body.innerText.includes("Loading…"), null, { timeout: 30000 }).catch(() => add("still loading", "The page still said Loading… after 30 s"));
+    await page.waitForFunction(() => !document.body.innerText.includes("Loading…") && !document.querySelector(".page-skeleton"), null, { timeout: 30000 }).catch(() => add("still loading", "The page still said Loading… after 30 s"));
     const ms = Date.now() - t0;
     timings.push({ role, page: path, ms });
     if (ms > SLOW_MS) add("slow page", `The page took ${(ms / 1000).toFixed(1)} s to open (over ${SLOW_MS / 1000} s)`, { ms });
@@ -156,7 +156,7 @@ async function crawlRole(browser, role, pw, findings, timings) {
       const labels = await page
         .$$eval("main button", (bs) =>
           bs
-            .filter((b) => b.offsetParent !== null && !b.disabled && b.type !== "submit")
+            .filter((b) => b.offsetParent !== null && !b.disabled && b.type !== "submit" && b.getAttribute("aria-pressed") !== "true" && b.getAttribute("aria-selected") !== "true")
             .map((b) => (b.getAttribute("aria-label") || b.innerText || "").replace(/\s+/g, " ").trim()),
         )
         .catch(() => []);

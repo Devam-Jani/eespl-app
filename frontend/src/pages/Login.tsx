@@ -5,8 +5,10 @@ import { ApiError } from "../api";
 import type { TwoStep } from "../auth";
 import { useAuth } from "../auth";
 import { errorText } from "../format";
+import { TrainingBanner, useMode } from "../ops/Pages";
 
 export default function Login() {
+  const mode = useMode();
   const { me, login, finishTwoStep } = useAuth();
   const [step, setStep] = useState<TwoStep | null>(null);
   const [code, setCode] = useState("");
@@ -45,14 +47,19 @@ export default function Login() {
 
   return (
     <div className="login-page">
-      <form className="login-card" onSubmit={submit}>
+      <TrainingBanner mode={mode} />
+      <form className="login-card" onSubmit={submit} aria-labelledby="login-title">
         <div className="login-brand">
-          <span className="brand-mark">E</span>
+          <span className="app-mark" aria-hidden="true">
+            E
+          </span>
           <div>
-            <h1>EESPL App</h1>
-            <p className="muted">Sign in to continue</p>
+            <b>EESPL</b>
+            <small>Waterproofing ERP</small>
           </div>
         </div>
+        <h1 id="login-title">Sign in</h1>
+        <p className="muted login-lead">{mode?.training ? "The training company: practise freely, nothing here is real." : "Your sites, bills and approvals in one place."}</p>
         {error && <div className="alert alert-error">{error}</div>}
         {step ? (
           <div className="two-step">

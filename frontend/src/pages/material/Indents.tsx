@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, queryString } from "../../api";
 import { useAuth } from "../../auth";
-import Modal from "../../components/Modal";
+import { Modal } from "../../ui/Overlay";
 import { errorText, num } from "../../format";
 import type { Indent, MaterialLookups, Rfq } from "../../material/types";
 import type { Page } from "../../types";

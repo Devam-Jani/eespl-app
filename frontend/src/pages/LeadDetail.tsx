@@ -4,7 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
 import { errorText, inr, LOST_REASONS } from "../format";
-import Modal from "../components/Modal";
+import { Modal } from "../ui/Overlay";
 import type { LeadDetail as Detail, LeadLookups } from "../types";
 import { KylasBadge, LEAD_SOURCES, LEAD_STATUSES, LeadForm, LeadStatusBadge } from "./Leads";
 import { shortDate } from "./Tenders";

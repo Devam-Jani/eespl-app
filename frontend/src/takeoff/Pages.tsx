@@ -11,6 +11,7 @@ import { decodeGeometry, useGlPlan } from "./glplan";
 import type { Geo as PlanGeo, GeoV2 } from "./glplan";
 import { useAuth } from "../auth";
 import { errorText, num } from "../format";
+import { ART } from "../ui/tokens";
 
 type Layer = { name: string; count: number; color: number; off: boolean; frozen: boolean; role: string | null };
 type CadFile = {
@@ -100,7 +101,7 @@ type DrawingRow = { drawing_id: number; title: string; revisions: { revision_id:
 type SiteNode = { id: number; parent_id: number | null; kind: string; name: string; path: string };
 
 // AutoCAD colour index, the common ones; the rest drawn in grey
-const ACI: Record<number, string> = { 1: "#d62728", 2: "#b8a000", 3: "#2ca02c", 4: "#17a2b8", 5: "#1f4fd8", 6: "#c218c2", 7: "#333", 8: "#888", 9: "#bbb" };
+const ACI: Record<number, string> = { 1: ART.aci1, 2: ART.aci2, 3: ART.aci3, 4: ART.aci4, 5: ART.aci5, 6: ART.aci6, 7: ART.aci7, 8: ART.aci8, 9: ART.aci9 };
 const ROLES = ["walls", "rooms", "dimensions", "text", "hide"];
 
 export function TakeoffPage() {
@@ -559,12 +560,12 @@ function DrawingCanvas({
     const colors = new Map(geo.layers.map((l) => [l.name, l.color]));
     ctx.lineWidth = 1;
     if (!glOk.current) {
-      ctx.fillStyle = "#fff"; // no WebGL here: the lines on this canvas
+      ctx.fillStyle = ART.paper; // no WebGL here: the lines on this canvas
       ctx.fillRect(0, 0, w, h);
     }
     for (const [layer, g] of glOk.current ? [] : Object.entries(geo.geometry)) {
       if (hidden.has(layer)) continue;
-      ctx.strokeStyle = ACI[Math.abs(colors.get(layer) ?? 7)] ?? "#999";
+      ctx.strokeStyle = ACI[Math.abs(colors.get(layer) ?? 7)] ?? ART.drawLine;
       ctx.beginPath();
       const s = g.s;
       for (let i = 0; i < s.length; i += 4) {
@@ -579,7 +580,7 @@ function DrawingCanvas({
       ctx.stroke();
     }
     // texts when they are big enough to read
-    ctx.fillStyle = "#555";
+    ctx.fillStyle = ART.drawText;
     for (const [x, y, th, layer, text] of geo.texts) {
       if (hidden.has(layer) || x < minX || x > maxX || y < minY || y > maxY) continue;
       const px = (th || 0) * scale;
@@ -596,14 +597,14 @@ function DrawingCanvas({
         ctx.closePath();
         ctx.fillStyle = a.label_trace_flagged ? "rgba(214,39,40,0.18)" : a.status === "accepted" ? "rgba(15,107,92,0.22)" : "rgba(31,79,216,0.15)";
         ctx.fill();
-        ctx.strokeStyle = sel ? "#d62728" : "#0f6b5c";
+        ctx.strokeStyle = sel ? ART.aci1 : ART.drawAccepted;
         ctx.lineWidth = sel ? 3 : 2;
         ctx.stroke();
         ctx.lineWidth = 1;
       }
       ctx.beginPath();
       ctx.arc(X(a.x), Y(a.y), sel ? 7 : 5, 0, Math.PI * 2);
-      ctx.fillStyle = a.status === "accepted" ? "#0f6b5c" : a.status === "mapped" ? "#1f4fd8" : "#e69f00";
+      ctx.fillStyle = a.status === "accepted" ? ART.drawAccepted : a.status === "mapped" ? ART.drawMapped : ART.drawOpen;
       ctx.fill();
     }
     const poly = (pts: [number, number][], color: string, closed: boolean) => {
@@ -621,8 +622,8 @@ function DrawingCanvas({
         ctx.fillRect(X(p[0]) - 4, Y(p[1]) - 4, 8, 8);
       }
     };
-    if (proposed) poly(proposed, "#c218c2", true);
-    if (tracePoints && tracePoints.length) poly(tracePoints, "#d62728", tracePoints.length > 2);
+    if (proposed) poly(proposed, ART.aci6, true);
+    if (tracePoints && tracePoints.length) poly(tracePoints, ART.aci1, tracePoints.length > 2);
   }, [geo, hidden, areas, selected, view, tracePoints, proposed, glOk]);
   useEffect(() => {
     const id = requestAnimationFrame(draw);
@@ -1080,7 +1081,7 @@ function LayersPanel({
                 />
               </td>
               <td>
-                <span className="layer-swatch" style={{ background: ACI[Math.abs(l.color)] ?? "#999" }} /> {l.name}
+                <span className="layer-swatch" style={{ background: ACI[Math.abs(l.color)] ?? ART.drawLine }} /> {l.name}
               </td>
               <td className="num">{l.count}</td>
               <td>

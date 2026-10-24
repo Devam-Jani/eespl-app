@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, fetchObjectUrl, queryString } from "../../api";
 import { useAuth } from "../../auth";
-import Modal from "../../components/Modal";
+import { Modal } from "../../ui/Overlay";
 import { errorText, num, showError } from "../../format";
 import type { Site, SiteTask } from "../../types";
 import { shortDate } from "../Tenders";

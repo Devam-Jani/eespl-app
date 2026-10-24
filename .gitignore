@@ -32,3 +32,7 @@ Thumbs.db
 
 # Company data files (never commit)
 data/
+
+# Playwright run output (the approved pictures stay in frontend/e2e/*-snapshots)
+frontend/test-results/
+frontend/playwright-report/

@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile, fetchObjectUrl } from "../api";
 import { useAuth } from "../auth";
-import Modal from "../components/Modal";
+import { Modal } from "../ui/Overlay";
 import { errorText, showError } from "../format";
 import type { SiteNode } from "../types";
 import { formatArea, formatLength, parseLength, parseSize } from "./units";

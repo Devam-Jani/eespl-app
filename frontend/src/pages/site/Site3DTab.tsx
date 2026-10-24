@@ -7,7 +7,7 @@ import { useAuth } from "../../auth";
 import { errorText } from "../../format";
 import type { Site, SiteTask } from "../../types";
 import { shortDate } from "../Tenders";
-import { CATEGORY_LABEL, LATE_COLOR, legendCounts, realisticColor, STATUS_COLORS, workColor } from "./three/colors";
+import { CATEGORY_LABEL, categoryOf, LATE_COLOR, legendCounts, realisticColor, STATUS_COLORS, workColor } from "./three/colors";
 import type { Category, NodeStatus } from "./three/colors";
 import { layout } from "./three/layout";
 import { composeSnapshot } from "./three/snapshot";
@@ -15,6 +15,15 @@ import type { SnapLabel } from "./three/snapshot";
 import type { Box, LayoutNode } from "./three/layout";
 import { TaskDialog } from "./TasksTab";
 import type { Building, TimelineRow } from "../../xray/geometry";
+import { ART } from "../../ui/tokens";
+import type { Status } from "../../ui/tokens";
+import { Button, StatusChip } from "../../ui/components";
+import type { XRoom } from "../../xray/geometry";
+
+type XRoomLite = Pick<XRoom, "area_sqm" | "sunk_m" | "wp_height_m">;
+// the work categories as the design's five states (chips, swatches, the legend)
+const STATUS_OF: Record<Category, Status> = { done: "done", progress: "prog", hold: "hold", blocked: "block", not_started: "idle", none: "idle", rollup: "idle" };
+const CATEGORY_SHORT: Record<Category, string> = { done: "Done", progress: "In progress", hold: "Hold point", blocked: "Blocked", not_started: "Not started", none: "No work here", rollup: "In progress" };
 
 const XrayView = lazy(() => import("../../xray/XrayView"));
 
@@ -29,8 +38,8 @@ type SurveyMap = {
   unplaced_areas: number;
   ready?: number[];
 };
-const SURVEY_COLORS = { measured: "#009E73", camera: "#E69F00", none: "#d9dedb" } as const;
-const READY_COLOR = "#0072B2"; // "work front ready": a blue outline in the survey mode
+const SURVEY_COLORS = { measured: ART.camGood, camera: ART.camWarn, none: ART.surveyNone } as const;
+const READY_COLOR = ART.ready; // "work front ready": a blue outline in the survey mode
 const SURVEY_LEGEND = [
   { key: "measured", label: "Measured (laser / by hand)" },
   { key: "camera", label: "Camera only" },
@@ -68,6 +77,7 @@ export default function Site3DTab({
   const [templates, setTemplates] = useState<{ id: number; name: string }[]>([]);
   const [hover, setHover] = useState<Hover>(null);
   const [selected, setSelected] = useState<number | null>(null);
+  const [xFloor, setXFloor] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   // a building model from the AutoCAD drawing: the X-ray view; otherwise the schematic boxes
   const schematic = model !== null && !model.building;
@@ -165,15 +175,15 @@ export default function Site3DTab({
     renderer.setSize(el.clientWidth, el.clientHeight);
     el.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#f3f5f4");
+    scene.background = new THREE.Color(ART.sceneBg);
     const camera = new THREE.PerspectiveCamera(45, el.clientWidth / el.clientHeight, 0.5, 5000);
     camera.position.set(60, 50, 80);
     const controls = new OrbitControls(camera, renderer.domElement);
-    scene.add(new THREE.HemisphereLight("#ffffff", "#b8b4aa", 1.7));
-    const sun = new THREE.DirectionalLight("#ffffff", 1.6);
+    scene.add(new THREE.HemisphereLight(ART.sceneSky, ART.sceneGroundLight, 1.7));
+    const sun = new THREE.DirectionalLight(ART.sceneSky, 1.6);
     sun.position.set(80, 140, 60);
     scene.add(sun);
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ color: "#d3dccf", roughness: 1 }));
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ color: ART.sceneGround, roughness: 1 }));
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
     const content = new THREE.Group();
@@ -254,7 +264,7 @@ export default function Site3DTab({
   const look = useCallback(
     (b: Box): { color: string; ghost: boolean; late: boolean } => {
       const n = byId.get(b.node_id);
-      if (!n) return { color: "#cccccc", ghost: false, late: false };
+      if (!n) return { color: ART.sceneUnknown, ghost: false, late: false };
       if (mode === "survey") {
         const st = surveyState.get(n.id) ?? "none";
         return { color: SURVEY_COLORS[st], ghost: st === "none" && b.role === "flat", late: readySet.has(n.id) };
@@ -359,7 +369,7 @@ export default function Site3DTab({
     const centre = all.isEmpty() ? new THREE.Vector3() : all.getCenter(new THREE.Vector3());
     t.ground.scale.set(size.x + 40, size.z + 40, 1);
     t.ground.position.set(centre.x, -0.02, centre.z);
-    (t.ground.material as THREE.MeshStandardMaterial).color.set(mode === "real" ? "#a9b994" : "#d3dccf");
+    (t.ground.material as THREE.MeshStandardMaterial).color.set(mode === "real" ? ART.sceneGroundReal : ART.sceneGround);
     t.ground.visible = !below;
     // labels: towers with their %, floors with theirs (work view)
     const labels: { el: HTMLDivElement; pos: THREE.Vector3 }[] = [];
@@ -551,43 +561,82 @@ export default function Site3DTab({
   const cutNode = cutaway !== null ? byId.get(cutaway) : undefined;
   const hasBelow = boxes.some((b) => b.below);
 
-  if (model?.building)
+  if (model?.building) {
+    const b = model.building;
+    // the floor open in the 3D (cutaway), else the selected room's floor, else the lowest with rooms
+    const roomLevel = selected !== null ? b.rooms.find((r) => r.node_id === selected)?.level : undefined;
+    const level = xFloor ?? roomLevel ?? (b.rooms.length ? Math.min(...b.rooms.map((r) => r.level)) : null);
+    const floorRooms = b.rooms.filter((r) => r.level === level);
+    const floorName = b.floors.find((f) => f.level === level)?.name ?? "";
     return (
-      <div className="split-3d">
-        <div className="card card-xray">
-          <Suspense fallback={<p className="muted">Loading the building…</p>}>
+      <div className={portal ? "xray-solo" : "xray-split"}>
+        <div className="xray-main">
+          <Suspense fallback={<div className="skeleton" style={{ height: 560, borderRadius: 20 }} />}>
             <XrayView
               site={{ id: site.id, name: site.name, code: site.code, progress: model.site_progress ?? Number(site.progress_percent) }}
-              building={model.building}
+              building={b}
               nodes={model.nodes}
               portal={!!portal}
               cover={!!portal}
               onPick={portal ? undefined : (id) => setSelected(id)}
               canLink={canBuild}
               ifcHeaders={portal?.headers}
+              selected={selected}
+              floor={xFloor}
+              onFloor={setXFloor}
             />
           </Suspense>
           {canBuild && (
             <p className="small muted">
-              Built from the AutoCAD drawing (model version {model.building.version}). <Link to={`/sites/${site.id}/building`}>Edit the building model</Link>
+              Built from the AutoCAD drawing (model version {b.version}). <Link to={`/sites/${site.id}/building`}>Edit the building model</Link>
             </p>
           )}
         </div>
-        {!portal && selected !== null && byId.get(selected) && (
-          <NodePanel
-            site={site as Site}
-            node={byId.get(selected)!}
-            canUpdate={canUpdate}
-            canEdit={canEdit}
-            onClose={() => setSelected(null)}
-            onChanged={() => {
-              void load();
-              onChange();
-            }}
-          />
+        {!portal && (
+          <div className="xray-side">
+            {floorRooms.length > 0 && (
+              <section className="card card-sm floor-rooms" aria-label={`${floorName} rooms`}>
+                <h2 className="card-title">{floorName} rooms</h2>
+                <ul>
+                  {floorRooms.map((r) => {
+                    const n = byId.get(r.node_id);
+                    const cat = n ? categoryOf(n.status) : "none";
+                    return (
+                      <li key={r.node_id}>
+                        <button type="button" className="room-row" aria-pressed={selected === r.node_id} onClick={() => setSelected(selected === r.node_id ? null : r.node_id)}>
+                          <span className={`swatch swatch-${STATUS_OF[cat]}`} aria-hidden="true" />
+                          <span className="room-name">{n?.name ?? r.name}</span>
+                          <span className="muted small">{r.area_sqm !== null ? `${r.area_sqm.toFixed(2)} sqm` : ""}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
+            {selected !== null && byId.get(selected) ? (
+              <NodePanel
+                site={site as Site}
+                node={byId.get(selected)!}
+                room={b.rooms.find((r) => r.node_id === selected) ?? null}
+                canUpdate={canUpdate}
+                canEdit={canEdit}
+                onClose={() => setSelected(null)}
+                onChanged={() => {
+                  void load();
+                  onChange();
+                }}
+              />
+            ) : (
+              <section className="card card-sm">
+                <p className="muted">Pick a room in the list or in the building to see its steps, dates and photos.</p>
+              </section>
+            )}
+          </div>
         )}
       </div>
     );
+  }
 
   return (
     <div className="split-3d">
@@ -795,17 +844,10 @@ export default function Site3DTab({
   );
 }
 
-const STEP_BADGE: Record<string, string> = {
-  not_started: "badge-muted",
-  in_progress: "badge-info",
-  done: "badge-warn",
-  certified: "badge-ok",
-  blocked: "badge-danger",
-};
-
 function NodePanel({
   site,
   node,
+  room,
   canUpdate,
   canEdit,
   onClose,
@@ -813,6 +855,7 @@ function NodePanel({
 }: {
   site: Site;
   node: ModelNode;
+  room?: XRoomLite | null;
   canUpdate: boolean;
   canEdit: boolean;
   onClose: () => void;
@@ -860,55 +903,73 @@ function NodePanel({
     for (const t of tasks) out.set(t.area_scope_id, [...(out.get(t.area_scope_id) ?? []), t]);
     return [...out.entries()].map(([scopeId, list]) => ({ scopeId, list, where: list[0]?.node_path?.split(" › ").pop() ?? "" }));
   }, [tasks]);
+  const steps = tasks.filter((t) => t.node_id === node.id);
+  const current = steps.find((t) => t.status !== "done" && t.status !== "certified") ?? null;
+  const at = current ? steps.indexOf(current) + 1 : steps.length;
+  const cat = categoryOf(node.status);
+  const meta = room
+    ? [room.area_sqm !== null ? `${room.area_sqm.toFixed(2)} sqm` : null, room.sunk_m ? `sunk ${Math.round(room.sunk_m * 39.37)} in` : null, room.wp_height_m ? `walls up to ${Math.round(room.wp_height_m * 1000)} mm` : null]
+        .filter(Boolean)
+        .join(" · ")
+    : `${node.kind.replace("_", " ")} · ${Math.round(node.status.percent)}% done`;
 
   return (
-    <aside className="card panel3d">
-      <div className="toolbar">
-        <div>
-          <h2 className="section-title">{node.name}</h2>
-          <span className="muted small">
-            {node.kind.replace("_", " ")} · {Math.round(node.status.percent)}% done
-          </span>
-        </div>
-        <button className="btn btn-ghost btn-icon" onClick={onClose} aria-label="Close">
+    <aside className="card card-sm panel3d" aria-label={`Selected: ${node.name}`}>
+      <div className="panel3d-head">
+        <span className="muted small">Selected</span>
+        <button className="btn btn-ghost btn-icon" onClick={onClose} aria-label="Close the selected room">
           ×
         </button>
       </div>
+      <h2 className="card-title">{node.name}</h2>
+      <p className="muted small panel3d-meta">{meta}</p>
+      <StatusChip status={STATUS_OF[cat]}>
+        {CATEGORY_SHORT[cat]}
+        {steps.length > 0 && current ? ` · step ${at} of ${steps.length}` : ""}
+      </StatusChip>
       {error && <div className="alert alert-error">{error}</div>}
-      {photos.length > 0 && <div className="photo-strip">{photos.map((p) => (p.url ? <img key={p.key} src={p.url} alt={p.name} /> : null))}</div>}
       {groups.length === 0 && <p className="muted">No work scheduled here.</p>}
       {groups.map(({ scopeId, list, where }) => (
-        <div key={scopeId ?? 0} className="top-gap">
-          <strong className="small">
-            {list[0]?.node_id !== node.id && `${where}: `}
-            {(scopeId && scopeNames.get(scopeId)) || "Tasks"}
-          </strong>
-          <table className="table compact">
-            <tbody>
-              {list.map((t) => (
-                <tr key={t.id}>
-                  <td>
-                    {t.name} {t.hold_point && <span className="badge badge-orange">hold</span>}
-                    <div className={`muted small ${t.late ? "text-danger" : ""}`}>
-                      {shortDate(t.planned_start)} – {shortDate(t.planned_end)}
-                    </div>
-                  </td>
-                  <td>
-                    <span className={`badge ${STEP_BADGE[t.status]}`}>{t.status.replace("_", " ")}</span>
-                  </td>
-                  <td>
-                    {canUpdate && (
-                      <button className="btn btn-small" onClick={() => setOpen(t)}>
-                        Update task
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div key={scopeId ?? 0} className="steps">
+          {groups.length > 1 && (
+            <strong className="small muted">
+              {list[0]?.node_id !== node.id && `${where}: `}
+              {(scopeId && scopeNames.get(scopeId)) || "Steps"}
+            </strong>
+          )}
+          <ol>
+            {list.map((t, i) => {
+              const done = t.status === "done" || t.status === "certified";
+              const now = !done && t === current;
+              return (
+                <li key={t.id} className={`step ${done ? "step-done" : now ? "step-now" : t.status === "blocked" ? "step-block" : ""}`}>
+                  <span className="step-dot" aria-hidden="true">
+                    {done ? "✓" : i + 1}
+                  </span>
+                  <span className="step-name">
+                    {t.name}
+                    {t.hold_point && <span className="chip chip-hold">hold point</span>}
+                  </span>
+                  <span className={`muted small ${t.late ? "tone-block" : ""}`}>{done ? shortDate(t.actual_end ?? t.planned_end) : now ? (t.actual_start ? "today" : shortDate(t.planned_start)) : t.planned_start ? shortDate(t.planned_start) : "—"}</span>
+                </li>
+              );
+            })}
+          </ol>
         </div>
       ))}
+      <div className="photo-grid">
+        {photos.length > 0 ? photos.map((p) => (p.url ? <img key={p.key} src={p.url} alt={p.name} /> : null)) : <p className="muted small">No photos yet.</p>}
+      </div>
+      <div className="panel3d-actions">
+        {canUpdate && (
+          <Button variant="primary" disabled={!current} onClick={() => current && setOpen(current)}>
+            Update this step
+          </Button>
+        )}
+        <Link className="btn btn-secondary" to={`/snags?new=1&site=${site.id}&node=${node.id}`}>
+          Raise a snag
+        </Link>
+      </div>
       {open && (
         <TaskDialog
           site={site}

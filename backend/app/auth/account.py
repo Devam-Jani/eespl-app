@@ -7,7 +7,7 @@ import hashlib
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Literal
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -43,6 +43,19 @@ def _ip(request: Request) -> str | None:
 class ChangeIn(BaseModel):
     current: str = Field(min_length=1, max_length=256)
     new: str = Field(min_length=1, max_length=256)
+
+
+class ThemeIn(BaseModel):
+    theme: Literal["dark", "light"]
+
+
+@router.put("/api/auth/theme")
+def set_theme(body: ThemeIn, db: DbSession, principal: CurrentPrincipal) -> dict:
+    """The person's look (dark or light), remembered for them on every device."""
+    user = db.get(User, principal.user.id)
+    user.ui_theme = body.theme
+    db.commit()
+    return {"theme": user.ui_theme}
 
 
 @router.post("/api/auth/password", status_code=status.HTTP_204_NO_CONTENT)

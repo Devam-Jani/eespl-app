@@ -4,11 +4,12 @@ import { useNavigate } from "react-router-dom";
 import { api, queryString } from "../api";
 import { useAuth } from "../auth";
 import ExportButton from "../components/ExportButton";
-import Modal from "../components/Modal";
+import { Modal } from "../ui/Overlay";
 import { errorText } from "../format";
 import type { Page, Site, SiteLookups } from "../types";
 import { Pager } from "./Clients";
 import { shortDate } from "./Tenders";
+import { ProgressBar } from "../ui/components";
 
 export const SITE_STATUSES: Record<string, string> = {
   planned: "Planned",
@@ -28,16 +29,6 @@ const PAGE_SIZE = 25;
 
 export function SiteStatusBadge({ status }: { status: string }) {
   return <span className={`badge ${STATUS_BADGE[status] ?? ""}`}>{SITE_STATUSES[status] ?? status}</span>;
-}
-
-export function ProgressBar({ value }: { value: string | number }) {
-  const n = Math.max(0, Math.min(100, Number(value) || 0));
-  return (
-    <span className="progress" title={`${n.toFixed(1)}%`}>
-      <span className="progress-fill" style={{ width: `${n}%` }} />
-      <span className="progress-label">{n.toFixed(0)}%</span>
-    </span>
-  );
 }
 
 export default function Sites() {
@@ -193,7 +184,7 @@ export default function Sites() {
                   )}
                 </td>
                 <td>
-                  <ProgressBar value={s.progress_percent} />
+                  <ProgressBar value={s.progress_percent} showValue />
                 </td>
                 {showMargin && (
                   <td className={`num ${margins[s.id]?.over_cost ? "text-danger" : ""}`} title={margins[s.id]?.over_cost ? "Cost to date is more than billed" : undefined}>

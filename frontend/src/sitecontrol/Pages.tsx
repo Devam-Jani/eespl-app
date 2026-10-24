@@ -6,7 +6,7 @@ import type { FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile, fetchObjectUrl } from "../api";
 import { useAuth } from "../auth";
-import Modal from "../components/Modal";
+import { Modal } from "../ui/Overlay";
 import { errorText } from "../format";
 
 const fmt = (d: string | null | undefined, time = true) =>

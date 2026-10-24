@@ -9,7 +9,7 @@ import { useAuth } from "../auth";
 import { NegotiationLog } from "../team/Pages";
 import { UnsentRates } from "../pages/TenderDetail";
 import type { Unsent } from "../pages/TenderDetail";
-import Modal from "../components/Modal";
+import { Modal } from "../ui/Overlay";
 import { errorText } from "../format";
 import { loadLookups, MarkupField, money, plain, SectionsEditor, STATUS_BADGE, useLookups } from "./common";
 import type { Lookups, QItem, QLine, Quotation, Ref, SpecCopy, Term } from "./common";

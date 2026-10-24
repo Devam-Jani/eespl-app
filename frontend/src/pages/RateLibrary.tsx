@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, queryString } from "../api";
 import { useAuth } from "../auth";
 import ExportButton from "../components/ExportButton";
-import Modal from "../components/Modal";
+import { Modal } from "../ui/Overlay";
 import { errorText, inr, num } from "../format";
 import type { LibraryHit, LibraryItemDetail, LibraryLine, LibrarySearch } from "../types";
 import { useUnits } from "./Products";

@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile, queryString } from "../api";
 import { useAuth } from "../auth";
-import Modal from "../components/Modal";
+import { Modal } from "../ui/Overlay";
 import { errorText, inr, LOST_REASONS } from "../format";
 import type { Clause, Page, Revision, Tender, TenderLookups, TenderStatus, TenderTc } from "../types";
 import BoqTab from "./tender/BoqTab";

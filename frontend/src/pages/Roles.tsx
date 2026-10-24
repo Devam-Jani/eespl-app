@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { api } from "../api";
 import type { Scope } from "../api";
-import Modal from "../components/Modal";
+import { Modal } from "../ui/Overlay";
 import { SCOPES } from "../scopes";
 import type { Permission, Role } from "../types";
 import { errorText } from "../format";

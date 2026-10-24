@@ -16,6 +16,7 @@ import type { Category } from "../pages/site/three/colors";
 import { LATE_COLOR, STATUS_COLORS } from "../pages/site/three/colors";
 import type { Building, P, XFloor, XRoom, XType } from "./geometry";
 import type { IfcElement } from "./ifc";
+import { ART, num, VIEWER } from "../ui/tokens";
 import { bounds, centroid, explodeOffset, polygonArea, roomSolid, stairSteps } from "./geometry";
 
 export type Mode = "xray" | "status" | "real";
@@ -30,10 +31,11 @@ const RAIL_H = 0.9;
 type RoomSpan = { room: XRoom; start: number; count: number; lineStart: number; lineCount: number; volStart: number; volCount: number };
 type FloorParts = { floor: XFloor; index: number; group: THREE.Group; rooms: THREE.Mesh | null; roomLines: THREE.LineSegments | null; volume: THREE.Mesh | null; late: THREE.LineSegments; spans: RoomSpan[] };
 
-const PALETTE: Record<Mode, { bg: string; fog: number; line: string; lineOpacity: number; shell: string; face: string; faceOpacity: number; slab: string; glass: string; roomOpacity: number }> = {
-  xray: { bg: "#03070d", fog: 0.0065, line: "#5fb8ff", lineOpacity: 0.3, shell: "#bfe7ff", face: "#1d5c8f", faceOpacity: 0.05, slab: "#1d5c8f", glass: "#1d5c8f", roomOpacity: 0.78 },
-  status: { bg: "#f3f5f6", fog: 0, line: "#8f989e", lineOpacity: 0.55, shell: "#5d676d", face: "#d9dee1", faceOpacity: 0.28, slab: "#e3e6e8", glass: "#d9dee1", roomOpacity: 1 },
-  real: { bg: "#dfe8ef", fog: 0.002, line: "#6e6a63", lineOpacity: 0.35, shell: "#55524c", face: "#a9c9dc", faceOpacity: 0.3, slab: "#bdb8ae", glass: "#9fc6dc", roomOpacity: 1 },
+const PALETTE: Record<Mode, { bg: string; fog: number; line: string; lineOpacity: number; shell: string; face: string; faceOpacity: number; slab: string; glass: string; cut: string; selected: string; roomOpacity: number }> = {
+  // the token colours (src/ui/tokens.ts VIEWER): X-ray on the stage with cyan edges and a soft glow
+  xray: { ...VIEWER.xray, fog: 0.0065, lineOpacity: 0.3, faceOpacity: 0.05, roomOpacity: 0.78 },
+  status: { ...VIEWER.status, fog: 0, lineOpacity: 0.55, faceOpacity: 0.28, roomOpacity: 1 },
+  real: { ...VIEWER.real, fog: 0.002, lineOpacity: 0.35, faceOpacity: 0.3, roomOpacity: 1 },
 };
 
 const v3 = (x: number, y: number, h: number) => new THREE.Vector3(x, h, -y);
@@ -243,6 +245,8 @@ export class XrayScene {
   private composer: EffectComposer | null = null;
   private bloomPass: UnrealBloomPass | null = null;
   private floors: FloorParts[] = [];
+  private selectMat: LineMaterial;
+  private selection: LineSegments2 | null = null;
   private mats: Record<string, THREE.Material> = {};
   private shellMat: LineMaterial;
   private sun: THREE.DirectionalLight;
@@ -285,9 +289,10 @@ export class XrayScene {
     this.controls.autoRotate = !!opts.autoTurn;
     canvas.addEventListener("pointerdown", () => (this.controls.autoRotate = false), { once: true });
     for (const ev of ["pointerdown", "wheel"]) canvas.addEventListener(ev, () => (this.touched = true), { once: true, passive: true });
-    this.shellMat = new LineMaterial({ color: 0xffffff, linewidth: 2, transparent: true, opacity: 0.9 });
-    this.ambient = new THREE.AmbientLight(0xffffff, 0.7);
-    this.sun = new THREE.DirectionalLight(0xffffff, 1.2);
+    this.shellMat = new LineMaterial({ color: num(VIEWER.xray.shell), linewidth: 2, transparent: true, opacity: 0.9 });
+    this.selectMat = new LineMaterial({ color: num(VIEWER.xray.selected), linewidth: 3, transparent: true, opacity: 1, depthTest: false });
+    this.ambient = new THREE.AmbientLight(num(ART.sceneSky), 0.7);
+    this.sun = new THREE.DirectionalLight(num(ART.sceneSky), 1.2);
     this.scene.add(this.ambient, this.sun);
     this.build();
     this.setMode(opts.mode ?? "xray");
@@ -420,7 +425,8 @@ export class XrayScene {
     this.shellMat.color.set(p.shell);
     this.shellMat.opacity = (mode === "xray" ? 0.55 : 0.8) * (this.roomsFirst ? 0.4 : 1);
     const cutFace = this.mats.cutFace as THREE.MeshBasicMaterial;
-    cutFace.color.set(mode === "xray" ? "#5fb8ff" : mode === "status" ? "#c8cfd3" : p.slab);
+    cutFace.color.set(p.cut);
+    this.selectMat.color.set(p.selected);
     cutFace.opacity = mode === "xray" ? 0.14 : 0.35;
     const face = this.mats.face as THREE.MeshBasicMaterial;
     face.color.set(mode === "real" ? p.slab : p.face);
@@ -453,6 +459,33 @@ export class XrayScene {
     for (const k of Object.keys(this.mats)) this.mats[k].needsUpdate = true;
     this.paint();
     if (this.bloomPass) this.bloomPass.enabled = this.bloom && mode === "xray";
+  }
+
+  /** The selected room: a white outline at its floor and storey (follows explode and the cutaway). */
+  setSelected(nodeId: number | null): void {
+    if (this.selection) {
+      this.selection.parent?.remove(this.selection);
+      this.selection.geometry.dispose();
+      this.selection = null;
+    }
+    if (nodeId == null) return;
+    for (const fp of this.floors) {
+      const span = fp.spans.find((s) => s.room.node_id === nodeId);
+      if (!span) continue;
+      const pts = span.room.outline;
+      if (pts.length < 3) return;
+      const top = Math.max(0.6, Math.min(fp.floor.height_m - this.building.settings.slab_m, 2.4));
+      const pos: number[] = [];
+      pts.forEach(([x, y], i) => {
+        const [x2, y2] = pts[(i + 1) % pts.length];
+        for (const h of [0.08, top]) pos.push(x, h, -y, x2, h, -y2);
+        pos.push(x, 0.08, -y, x, top, -y);
+      });
+      this.selection = new LineSegments2(new LineSegmentsGeometry().setPositions(pos), this.selectMat);
+      this.selection.renderOrder = 10;
+      fp.group.add(this.selection);
+      return;
+    }
   }
 
   setRoomsFirst(on: boolean): void {
@@ -674,6 +707,7 @@ export class XrayScene {
     // laid out after it was made (a tab, a phone): frame the building again until the user moves it
     if (!this.touched && this.cut == null && Math.abs(was - this.camera.aspect) > 0.05) this.view(this.preset, false);
     this.shellMat.resolution.set(w, h);
+    this.selectMat.resolution.set(w, h);
     this.composer?.setSize(w, h);
     this.bloomPass?.setSize(w / 2, h / 2);
   }

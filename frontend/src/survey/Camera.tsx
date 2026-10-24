@@ -14,6 +14,7 @@ import type { Calibration, Detected, Measurement, Pt } from "./marker";
 import { verdict } from "./quality";
 import type { Quality } from "./quality";
 import type { Area, Survey } from "./SurveyPages";
+import { ART } from "../ui/tokens";
 
 type Mode = "marker" | "ar" | "photo";
 type Shot = { blob: Blob; width: number; height: number; work: ImageData; url: string; quality: Quality };
@@ -517,14 +518,14 @@ function MarkerReview({
     const g = c.getContext("2d")!;
     g.putImageData(shot.work, 0, 0);
     g.lineWidth = Math.max(3, W / 400);
-    g.strokeStyle = "#009E73";
+    g.strokeStyle = ART.camGood;
     for (const mk of cal.markers) {
       g.beginPath();
       mk.corners.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)));
       g.closePath();
       g.stroke();
     }
-    g.strokeStyle = "#E69F00";
+    g.strokeStyle = ART.camWarn;
     g.fillStyle = "rgba(230,159,0,0.18)";
     g.beginPath();
     taps.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)));
@@ -532,8 +533,8 @@ function MarkerReview({
     g.fill();
     g.stroke();
     g.font = `bold ${Math.round(W / 45)}px sans-serif`;
-    g.fillStyle = "#111";
-    g.strokeStyle = "#fff";
+    g.fillStyle = ART.camDark;
+    g.strokeStyle = ART.camLight;
     g.lineWidth = 6;
     taps.forEach((p, i) => {
       const q = taps[(i + 1) % taps.length];

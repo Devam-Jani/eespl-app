@@ -3,6 +3,7 @@
 // the area show live. Then the wall height: tap the floor-wall line, then the top of the wall
 // (when the phone finds vertical surfaces), else it is typed in.
 import * as THREE from "three";
+import { ART, num } from "../ui/tokens";
 
 export type ArResult = { polygon: [number, number][]; wallHeight: number | null };
 type XRNav = { xr?: { isSessionSupported: (mode: string) => Promise<boolean>; requestSession: (mode: string, init: object) => Promise<XRSessionLike> } };
@@ -56,12 +57,12 @@ export async function measure(
   await renderer.xr.setSession(session as unknown as XRSession);
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera();
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2));
-  const reticle = new THREE.Mesh(new THREE.RingGeometry(0.04, 0.055, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x009e73 }));
+  scene.add(new THREE.HemisphereLight(num(ART.camLight), num(ART.camShade), 2));
+  const reticle = new THREE.Mesh(new THREE.RingGeometry(0.04, 0.055, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: num(ART.camGood) }));
   reticle.matrixAutoUpdate = false;
   reticle.visible = false;
   scene.add(reticle);
-  const lineMat = new THREE.LineBasicMaterial({ color: 0xe69f00 });
+  const lineMat = new THREE.LineBasicMaterial({ color: num(ART.camWarn) });
   const points: THREE.Vector3[] = [];
   let line: THREE.Line | null = null;
   let phase: "floor" | "wall" = "floor";
@@ -83,7 +84,7 @@ export async function measure(
     const p = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
     if (phase === "floor") {
       points.push(p);
-      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.02), new THREE.MeshBasicMaterial({ color: 0xd55e00 }));
+      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.02), new THREE.MeshBasicMaterial({ color: num(ART.camBad) }));
       dot.position.copy(p);
       scene.add(dot);
       redraw();
@@ -141,20 +142,20 @@ export function planImage(polygon: [number, number][], label: string): Promise<B
   c.width = 1200;
   c.height = 900;
   const g = c.getContext("2d")!;
-  g.fillStyle = "#fff";
+  g.fillStyle = ART.camLight;
   g.fillRect(0, 0, c.width, c.height);
   const xs = polygon.map((p) => p[0]);
   const ys = polygon.map((p) => p[1]);
   const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
   const scale = Math.min(1000 / Math.max(0.1, maxX - minX), 700 / Math.max(0.1, maxY - minY));
   const P = (p: [number, number]) => [100 + (p[0] - minX) * scale, 120 + (p[1] - minY) * scale] as const;
-  g.strokeStyle = "#E69F00";
+  g.strokeStyle = ART.camWarn;
   g.lineWidth = 6;
   g.beginPath();
   polygon.forEach((p, i) => (i ? g.lineTo(...P(p)) : g.moveTo(...P(p))));
   g.closePath();
   g.stroke();
-  g.fillStyle = "#111";
+  g.fillStyle = ART.camDark;
   g.font = "28px sans-serif";
   sideLengths(polygon).forEach((s, i) => {
     const a = P(polygon[i]);

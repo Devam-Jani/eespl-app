@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { api, queryString } from "../api";
 import { useAuth } from "../auth";
 import ExportButton from "../components/ExportButton";
-import Modal from "../components/Modal";
+import { Modal } from "../ui/Overlay";
 import { errorText, inr } from "../format";
 import type { Page, Tender, TenderLookups } from "../types";
 import { Pager } from "./Clients";

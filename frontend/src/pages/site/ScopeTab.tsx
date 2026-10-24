@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../../api";
 import { useAuth } from "../../auth";
-import Modal from "../../components/Modal";
+import { Modal } from "../../ui/Overlay";
 import { errorText, num } from "../../format";
 import type { AreaScope, ScopeLine, ScopeOverview, Site, SiteLookups, SiteNode } from "../../types";
-import { ProgressBar } from "../Sites";
+import { ProgressBar } from "../../ui/components";
 import { NODE_KINDS, depthOf, useNodes } from "./StructureTab";
 
 const STATE: Record<string, [string, string]> = {
@@ -147,7 +147,7 @@ function ScopeTable({ scopes, canEdit, siteId, onDone }: { scopes: AreaScope[]; 
               {s.tasks} ({s.started} started)
             </td>
             <td style={{ width: "8rem" }}>
-              <ProgressBar value={s.progress_percent} />
+              <ProgressBar value={s.progress_percent} showValue />
             </td>
             {canEdit && (
               <td className="row-actions nowrap">

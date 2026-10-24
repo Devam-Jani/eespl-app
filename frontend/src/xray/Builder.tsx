@@ -11,6 +11,7 @@ import { errorText } from "../format";
 import { decodeGeometry, useGlPlan } from "../takeoff/glplan";
 import type { Geo as PlanGeo, GeoV2 } from "../takeoff/glplan";
 import { ReadProgress } from "../takeoff/ReadProgress";
+import { ART, THEMES } from "../ui/tokens";
 
 type Pt = [number, number];
 type Core = { kind: "stair" | "lift"; outline: Pt[]; risers: number | null };
@@ -667,11 +668,11 @@ function PlanCanvas({ geo, type, trace, tool, beamFrom, onClick }: { geo: Geo; t
     const X = (x: number) => (x - cx) * scale + w / 2;
     const Y = (y: number) => h / 2 - (y - cy) * scale;
     const [minX, maxX, minY, maxY] = [cx - w / 2 / scale, cx + w / 2 / scale, cy - h / 2 / scale, cy + h / 2 / scale];
-    ctx.strokeStyle = "#9aa2a6";
+    ctx.strokeStyle = ART.drawGrid;
     ctx.lineWidth = 1;
     ctx.beginPath();
     if (!glOk.current) {
-      ctx.fillStyle = "#fff"; // no WebGL here: the lines on this canvas
+      ctx.fillStyle = ART.paper; // no WebGL here: the lines on this canvas
       ctx.fillRect(0, 0, w, h);
     }
     for (const [layer, g] of glOk.current ? [] : Object.entries(geo.geometry)) {
@@ -697,10 +698,10 @@ function PlanCanvas({ geo, type, trace, tool, beamFrom, onClick }: { geo: Geo; t
       ctx.lineWidth = width;
       ctx.stroke();
     };
-    poly(type.outline, "#0b84c6", "rgba(11,132,198,0.08)");
-    type.cores.forEach((c) => poly(c.outline, "#8e5cc8", "rgba(142,92,200,0.18)"));
+    poly(type.outline, ART.drawOutline, "rgba(11,132,198,0.08)");
+    type.cores.forEach((c) => poly(c.outline, ART.drawCore, "rgba(142,92,200,0.18)"));
     ctx.lineWidth = 3;
-    ctx.strokeStyle = "#e67e22";
+    ctx.strokeStyle = ART.drawBeam;
     for (const [i, j] of type.beams) {
       const a = type.columns[i];
       const b = type.columns[j];
@@ -711,15 +712,15 @@ function PlanCanvas({ geo, type, trace, tool, beamFrom, onClick }: { geo: Geo; t
       ctx.stroke();
     }
     type.columns.forEach(([x, y, cw, cd], i) => {
-      ctx.fillStyle = i === beamFrom ? "#d64545" : type.columns_confirmed ? "#2e8b57" : "#f0a531";
+      ctx.fillStyle = i === beamFrom ? THEMES.dark.block : type.columns_confirmed ? THEMES.dark.done : THEMES.dark.prog;
       ctx.fillRect(X(x - cw / 2), Y(y + cd / 2), Math.max(4, cw * scale), Math.max(4, cd * scale));
     });
     if (trace.length) {
       ctx.setLineDash([6, 4]);
-      poly(trace, "#d62728", null, false, 2);
+      poly(trace, ART.aci1, null, false, 2);
       ctx.setLineDash([]);
       for (const p of trace) {
-        ctx.fillStyle = "#d62728";
+        ctx.fillStyle = ART.aci1;
         ctx.fillRect(X(p[0]) - 4, Y(p[1]) - 4, 8, 8);
       }
     }

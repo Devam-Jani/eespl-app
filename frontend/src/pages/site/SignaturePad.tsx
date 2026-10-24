@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { ART } from "../../ui/tokens";
 
 /** Draw a signature with a finger or the mouse; reports a PNG data URL (or null when cleared). */
 export default function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void }) {
@@ -16,7 +17,7 @@ export default function SignaturePad({ onChange }: { onChange: (dataUrl: string 
     ctx.scale(ratio, ratio);
     ctx.lineWidth = 2;
     ctx.lineCap = "round";
-    ctx.strokeStyle = "#14231c";
+    ctx.strokeStyle = ART.ink;
   }, []);
 
   const point = (e: React.PointerEvent) => {

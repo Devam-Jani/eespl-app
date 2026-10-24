@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { api, queryString } from "../../api";
 import ExportButton from "../../components/ExportButton";
-import Modal from "../../components/Modal";
+import { Modal } from "../../ui/Overlay";
 import { errorText, num } from "../../format";
 import type { Conversion, Page, Product, Unit } from "../../types";
 

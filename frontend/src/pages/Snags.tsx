@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, fetchObjectUrl, queryString } from "../api";
 import { useAuth } from "../auth";
-import Modal from "../components/Modal";
+import { Modal } from "../ui/Overlay";
 import { errorText } from "../format";
 import { day, Thread } from "../portal/Portal";
 
