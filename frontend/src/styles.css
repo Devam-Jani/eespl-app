@@ -4575,3 +4575,4 @@ label.field-wrong textarea,
   .m-slip { grid-template-columns: 1fr; }
   .m-slip-pic img, .m-slip-pic iframe { max-height: 360px; }
 }
+.m-list .row-actions { flex-wrap: wrap; justify-content: flex-start; }

@@ -231,7 +231,8 @@ def make_area(db: Session, site_id: int, outline: geom.Outline, *, code: str | N
 
 def _overlaps(a: geom.Outline, b: geom.Outline) -> bool:
     pa, pb = geom.polygon(a), geom.polygon(b)
-    return pa.intersects(pb) and pa.intersection(pb).area > 1e-6
+    # under a square centimetre: two outlines drawn to meet, crossing by a hair, not an overlap
+    return pa.intersects(pb) and pa.intersection(pb).area > 1e-4
 
 
 def areas_of(db: Session, site_id: int) -> list[MeasureArea]:
@@ -640,7 +641,8 @@ def billed_totals(db: Session, sheet: MeasureSheet) -> dict[int, Decimal]:
 def cumulative(db: Session, sheet: MeasureSheet, wo_lines: list[ClientWorkOrderLine]) -> list[dict]:
     """Per item: the previous sheets' (sent or later, imported ones included), this sheet's and up
     to date, as billed (the client's approved figure); this sheet's drawing figure beside it."""
-    earlier = list(db.scalars(select(MeasureSheet).where(MeasureSheet.site_id == sheet.site_id, MeasureSheet.seq < sheet.seq, MeasureSheet.status.in_(("sent", "approved", "billed")))))
+    # a study is not a bill in the series: it shows its own quantities only
+    earlier = [] if sheet.status == "study" else list(db.scalars(select(MeasureSheet).where(MeasureSheet.site_id == sheet.site_id, MeasureSheet.seq < sheet.seq, MeasureSheet.status.in_(("sent", "approved", "billed")))))
     prev: dict[int, Decimal] = {}
     for s in earlier:
         for k, v in billed_totals(db, s).items():

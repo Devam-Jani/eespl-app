@@ -96,7 +96,7 @@ def closable(points: list[list[float]], closed: bool) -> tuple[list[list[float]]
         return None
     drawn = open_length(points)
     if gap <= SAME_POINT_M:
-        return points[:-1], gap, drawn
+        return points[:-1], 0.0, drawn  # the last vertex repeats the first: drawn closed
     pts = [list(p) for p in points]
     pts[-1] = [pts[-1][0], pts[-1][1], 0.0]  # the app's closing segment is straight
     return pts, gap, drawn
