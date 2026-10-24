@@ -50,6 +50,7 @@ from app.masters.routers import (
     vendors,
 )
 from app.material import routers as material
+from app.measure import routes as measure
 from app.methodology import routes as methodology
 from app.ops import routes as ops
 from app.ops.exports import ExportAudit
@@ -156,6 +157,7 @@ for _r in (
     labour_rates.router,
     schedule.router,
     takeoff.router,
+    measure.router,
     building.router,
     building.tiles,
     issues.me,

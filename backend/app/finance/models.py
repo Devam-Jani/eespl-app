@@ -163,6 +163,9 @@ class RaBill(Tracked, Base):
     __tablename__ = "ra_bills"
     __table_args__ = (
         CheckConstraint(_in("status", RA_STATUSES), name="status_valid"),
+        CheckConstraint(
+            "order_basis IS NULL OR order_basis IN ('wo', 'verbal')", name="order_basis_valid"
+        ),
         UniqueConstraint("contract_id", "seq"),
     )
 
@@ -202,6 +205,15 @@ class RaBill(Tracked, Base):
     )
     client_acted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     remark: Mapped[str | None] = mapped_column(Text)
+    # the proforma invoice made from it: its number from the counter, its date, and the order it
+    # is billed against (the work order, or a verbal order: who at the client confirmed it, when)
+    proforma_no: Mapped[str | None] = mapped_column(String(20), unique=True)
+    proforma_on: Mapped[date | None] = mapped_column(Date)
+    order_basis: Mapped[str | None] = mapped_column(String(6))  # wo | verbal
+    verbal_by: Mapped[str | None] = mapped_column(String(200))
+    verbal_on: Mapped[date | None] = mapped_column(Date)
+    # an old bill read from Excel (its quantities are the first app bill's previous)
+    imported: Mapped[bool] = mapped_column(Boolean, server_default="false")
 
     lines: Mapped[list["RaBillLine"]] = relationship(
         lazy="selectin",

@@ -188,6 +188,10 @@ class ClientWorkOrderLine(Base):
     quotation_line_id: Mapped[int | None] = mapped_column(
         ForeignKey("quotation_lines.id", ondelete="SET NULL")
     )
+    # the rate is per layer (sqft per layer): each layer is billed; and how many layers the order has
+    per_layer: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    layers: Mapped[int] = mapped_column(Integer, server_default="1")
+    sac: Mapped[str | None] = mapped_column(String(8))  # the line's own SAC (else the contract's)
 
 
 class WoDeviation(Base):

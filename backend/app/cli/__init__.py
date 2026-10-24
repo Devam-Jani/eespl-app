@@ -502,6 +502,10 @@ def main(argv: list[str] | None = None) -> None:
     )
     p.add_argument("--if-empty", action="store_true")
     sub.add_parser(
+        "demo-measure",
+        help="DEMO: a swimming pool measured from its drawing, two RA bills (DEMO-POOL)",
+    )
+    sub.add_parser(
         "demo-closeout",
         help="DEMO: work order, approved measurements, bill tracking, WCC, issues (DEMO Shela)",
     )
@@ -659,6 +663,16 @@ def main(argv: list[str] | None = None) -> None:
         from app.ops import training  # noqa: PLC0415
 
         print(json.dumps(training.reset(if_empty=args.if_empty), indent=1))
+    elif args.command == "demo-measure":
+        import json  # noqa: PLC0415
+
+        import app.main  # noqa: F401, PLC0415  (every model registered)
+        from app.measure import demo as measure_demo  # noqa: PLC0415
+
+        with SessionLocal() as db:
+            out = measure_demo.run(db)
+            db.commit()
+        print(json.dumps(out, indent=1, default=str))
     elif args.command == "demo-closeout":
         import json  # noqa: PLC0415
 
