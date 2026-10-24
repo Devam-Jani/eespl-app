@@ -95,3 +95,12 @@ def test_a_5000_line_boq_opens_in_under_a_second(boss, db):  # noqa: F811
     assert r.status_code == 200
     assert len(r.json()["lines"]) == 5000
     assert took < 1.0, took
+
+
+def test_a_site_without_areas_keeps_its_stored_progress(db):
+    site = Site(code="S-P0-9002", name="Invented imported site", status="active", progress_percent=Decimal(40))
+    db.add(site)
+    db.commit()
+    assert progress.site_percents(db, [site.id])[site.id] == 40
+    assert progress.rollup(db, site.id)[0] == 40
+    assert progress.refresh(db, site) == 40

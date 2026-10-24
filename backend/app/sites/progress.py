@@ -85,6 +85,11 @@ def rollup(db: Session, site_id: int) -> tuple[Decimal, dict[int, Decimal]]:
     by_node: dict[int, list[tuple[Decimal, Decimal]]] = defaultdict(list)
     for _sid, node_id, qty, pct in _area_rows(db, [site_id]):
         by_node[node_id].append((qty, pct))
+    if not by_node:
+        # no areas to work it out from (imported, or set by hand): the numbers as stored
+        site = db.get(Site, site_id)
+        stored = db.execute(select(SiteNode.id, SiteNode.progress_percent).where(SiteNode.site_id == site_id)).all()
+        return Decimal(site.progress_percent or 0) if site else Decimal(0), {nid: Decimal(p or 0) for nid, p in stored}
     nodes = db.execute(select(SiteNode.id, SiteNode.parent_id).where(SiteNode.site_id == site_id)).all()
     kids: dict[int | None, list[int]] = defaultdict(list)
     for nid, parent in nodes:
@@ -110,7 +115,9 @@ def site_percents(db: Session, site_ids: list[int]) -> dict[int, Decimal]:
     by_site: dict[int, list[tuple[Decimal, Decimal]]] = defaultdict(list)
     for sid, _node, qty, pct in _area_rows(db, site_ids):
         by_site[sid].append((qty, pct))
-    return {sid: _weighted(by_site.get(sid, [])) for sid in site_ids}
+    bare = [sid for sid in site_ids if sid not in by_site]
+    stored = dict(db.execute(select(Site.id, Site.progress_percent).where(Site.id.in_(bare))).all()) if bare else {}
+    return {sid: _weighted(by_site[sid]) if sid in by_site else Decimal(stored.get(sid) or 0) for sid in site_ids}
 
 
 def site_percent(db: Session, site_id: int) -> Decimal:
@@ -123,6 +130,8 @@ def refresh(db: Session, site: Site, scopes: list[AreaScope] | None = None) -> D
     the site. Returns the site's progress."""
     if scopes is None:
         scopes = list(db.scalars(select(AreaScope).where(AreaScope.site_id == site.id)))
+    if not scopes and not db.scalar(select(AreaScope.id).where(AreaScope.site_id == site.id).limit(1)):
+        return Decimal(site.progress_percent or 0)  # nothing to work it out from: kept as stored
     for sc in scopes:
         sc.progress_percent = scope_percent(db, sc)
     db.flush()

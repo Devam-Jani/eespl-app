@@ -18,7 +18,7 @@ from sqlalchemy import create_engine, select, text
 from app.config import settings
 
 log = logging.getLogger("eespl.training")
-STEPS = ("analytics", "team", "field", "closeout")  # field and close-out use the team's DEMO people
+STEPS = ("analytics", "team", "field", "closeout", "measure")  # all but analytics use the team's DEMO people
 
 
 def _require_training() -> None:
@@ -64,6 +64,10 @@ def _seed_demo() -> dict:
                     from app.closeout import demo as cdemo  # noqa: PLC0415
 
                     cdemo.run(db)
+                elif step == "measure":
+                    from app.measure import demo as mdemo  # noqa: PLC0415
+
+                    mdemo.run(db)
                 db.commit()
             done[step] = "ok"
         except (Exception, SystemExit) as exc:  # noqa: BLE001
