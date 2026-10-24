@@ -13,6 +13,8 @@ import { Modal } from "../ui/Overlay";
 import { CHART } from "../ui/tokens";
 import { bbox, flatten, levelOf, outlinePath } from "./geom";
 import { DrawnWallStart, ItemAreas, LineChoice, OutlineChooser, StudyForm, SumHeight } from "./Picking";
+import { MaterialCheck, RegisterView, Revisions, SlipNew, SlipPanel } from "./Billing";
+import type { SlipInfo } from "./Billing";
 import type { Pt } from "./geom";
 
 const Measure3D = lazy(() => import("./Measure3D").then((m) => ({ default: m.Measure3D })));
@@ -40,7 +42,7 @@ type Drawing = { id: number; outlines: Outline[]; texts: [number, number, number
 type Line = {
   kind: "area" | "line" | "deduction" | "not_done" | "total"; area_id: number | null; edge_id: number | null; wo_line_id: number | null; item_no: string | null; layer: number;
   part: string | null; particulars: string; no: string | null; length_m: string | null; width_m: string | null; height_m: string | null; qty: string | null;
-  total: string | null; unit: string | null; formula: string | null; reason: string | null;
+  total: string | null; unit: string | null; formula: string | null; reason: string | null; id?: number; typed?: Record<string, string | null> | null; billed?: boolean;
 }; // prettier-ignore
 type Cum = {
   wo_line_id: number; item_no: string | null; description: string; unit: string | null; wo_qty: string | null; rate: string | null; previous: string;
@@ -50,7 +52,7 @@ type Sheet = {
   id: number; code: string; title: string | null; measured_on: string; status: string; site_id: number; not_done: [number, number, number][]; imported_from: string | null;
   import_skipped: string[] | null; ra_bill_id: number | null; ra_code: string | null; lines: Line[]; questions: { kind: string; text: string; edge_id?: number; area_id?: number }[];
   cumulative: Cum[]; corrections: { field: string; old: string; new: string; remark: string | null; by: string; at: string; status: string }[]; sqft_per_sqm: string;
-  way: string; options: Record<string, unknown>;
+  way: string; options: Record<string, unknown>; slip: SlipInfo | null;
 }; // prettier-ignore
 type Check = { key: string; label: string; ok: boolean; detail: string[] };
 type Bill = {
@@ -87,6 +89,8 @@ export function MeasurePage() {
   const [sumFor, setSumFor] = useState<{ area: Area; which: 1 | 2 } | null>(null);
   const [wallStart, setWallStart] = useState(false);
   const [studyNew, setStudyNew] = useState(false);
+  const [slipNew, setSlipNew] = useState(false);
+  const showRegister = params.get("register") === "1";
   const sheetId = params.get("sheet") ? Number(params.get("sheet")) : null;
   const billId = params.get("bill") ? Number(params.get("bill")) : null;
 
@@ -149,6 +153,9 @@ export function MeasurePage() {
           </Button>
           <Button variant="ghost" type="button" onClick={() => setView3d(!view3d)} disabled={!st.areas.length}>
             {view3d ? "Drawing" : "3D"}
+          </Button>
+          <Button variant="ghost" type="button" onClick={() => open({ register: showRegister ? null : "1" })}>
+            Register
           </Button>
         </div>
       </header>
@@ -223,7 +230,7 @@ export function MeasurePage() {
           )}
           {tab === "edges" && <EdgesPanel st={st} onAsk={setAsking} onWall={() => setWallStart(true)} />}
           {tab === "items" && <ItemsPanel st={st} reload={load} />}
-          {tab === "sheets" && <SheetsPanel st={st} reload={load} onOpen={(s) => open({ sheet: String(s), bill: null })} onStudy={() => setStudyNew(true)} />}
+          {tab === "sheets" && <SheetsPanel st={st} reload={load} onOpen={(s) => open({ sheet: String(s), bill: null })} onStudy={() => setStudyNew(true)} onSlip={() => setSlipNew(true)} />}
           {tab === "import" && <ImportPanel siteId={siteId} reload={load} />}
         </div>
       </div>
@@ -239,7 +246,19 @@ export function MeasurePage() {
           onClose={() => open({ sheet: null })}
         />
       )}
+      {showRegister && <RegisterView siteId={siteId} onOpen={(b) => open({ bill: String(b) })} onClose={() => open({ register: null })} />}
       {billId && <BillView key={billId} billId={billId} onClose={() => open({ bill: null })} />}
+      {slipNew && (
+        <SlipNew
+          siteId={siteId}
+          onClose={() => setSlipNew(false)}
+          onDone={async (sid) => {
+            setSlipNew(false);
+            await load();
+            open({ sheet: String(sid), bill: null });
+          }}
+        />
+      )}
       {naming && (
         <NameArea
           siteId={siteId}
@@ -736,7 +755,7 @@ function ItemsPanel({ st, reload }: { st: State; reload: () => Promise<void> }) 
   );
 }
 
-function SheetsPanel({ st, reload, onOpen, onStudy }: { st: State; reload: () => Promise<void>; onOpen: (id: number) => void; onStudy: () => void }) {
+function SheetsPanel({ st, reload, onOpen, onStudy, onSlip }: { st: State; reload: () => Promise<void>; onOpen: (id: number) => void; onStudy: () => void; onSlip: () => void }) {
   const [on, setOn] = useState(new Date().toISOString().slice(0, 10));
   const [err, setErr] = useState("");
   const draft = st.sheets.some((s) => s.status === "draft");
@@ -776,6 +795,9 @@ function SheetsPanel({ st, reload, onOpen, onStudy }: { st: State; reload: () =>
         </div>
       )}
       <div className="row-actions">
+        <Button type="button" onClick={onSlip} disabled={draft}>
+          Bill from a slip
+        </Button>
         <Button type="button" onClick={onStudy} disabled={!st.areas.length}>
           Compare another way
         </Button>
@@ -1086,7 +1108,11 @@ function SheetView({ sheetId, st, pick, onPick, onBill, reload, onClose }: { she
       <p className="muted">
         1 sqm = {s.sqft_per_sqm} sqft · sizes in metres · Click a number to find its outline.
       </p>
-      <p className={`m-way ${s.status === "study" ? "study" : ""}`}>{s.way}</p>
+      {s.slip ? (
+        <SlipPanel sheetId={s.id} slip={s.slip} items={st.items} draft={draft} onChanged={(out) => setS(out as Sheet)} />
+      ) : (
+        <p className={`m-way ${s.status === "study" ? "study" : ""}`}>{s.way}</p>
+      )}
       <div className="table-wrap">
         <table className="table compact m-sheet">
           <thead>
@@ -1140,6 +1166,11 @@ function SheetView({ sheetId, st, pick, onPick, onBill, reload, onClose }: { she
                   <td>{ln.unit}</td>
                   {draft && (
                     <td>
+                      {s.slip && ln.id && ln.kind !== "total" && (
+                        <Button size="small" variant="ghost" type="button" onClick={async () => setS(await api<Sheet>(`/api/measure/sheets/${s.id}/slip-lines/${ln.id}`, { method: "DELETE" }))}>
+                          Remove
+                        </Button>
+                      )}
                       {ln.area_id && ln.wo_line_id && (ln.kind === "not_done" || pair.get(`${ln.area_id},${ln.wo_line_id},${ln.layer}`) === ln) && (
                         <Button
                           size="small"
@@ -1460,6 +1491,8 @@ function BillView({ billId, onClose }: { billId: number; onClose: () => void }) 
           </tfoot>
         </table>
       </div>
+      <Revisions billId={b.id} canEdit />
+      <MaterialCheck billId={b.id} />
       <h3>Billing checklist</h3>
       <ul className="m-checks">
         {b.checklist.map((c) => (

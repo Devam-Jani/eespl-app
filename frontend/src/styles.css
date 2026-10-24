@@ -4563,3 +4563,15 @@ label.field-wrong textarea,
 .m-sheet tr.m-total td { font-weight: 700; border-top: 2px solid var(--border-2); }
 .m-item-areas summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .m-count { width: 90px; }
+.m-slip { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-4); margin: var(--space-3) 0; }
+.m-slip-pic img, .m-slip-pic iframe { width: 100%; max-height: 560px; object-fit: contain; border: 1px solid var(--border); border-radius: var(--r-card-sm); background: var(--surface-2); }
+.m-slip-pic iframe { height: 560px; }
+.m-slip-form { display: flex; flex-direction: column; gap: var(--space-2); }
+.m-slip-sizes { display: grid; grid-template-columns: 70px 1fr 1fr; gap: var(--space-2); }
+.m-findings { list-style: none; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); font-size: 13px; }
+.m-revisions, .m-material { margin-top: var(--space-4); }
+.m-over { color: var(--block-ink); font-weight: 700; }
+@media (max-width: 760px) {
+  .m-slip { grid-template-columns: 1fr; }
+  .m-slip-pic img, .m-slip-pic iframe { max-height: 360px; }
+}
