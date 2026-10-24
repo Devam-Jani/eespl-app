@@ -69,6 +69,9 @@ def _timeline(t) -> list:
 
 
 def build(db: Session, site_id: int, client: bool = False) -> dict[str, Any]:
+    from app.sites import progress  # noqa: PLC0415
+
+    _total, live = progress.rollup(db, site_id)
     nodes = db.scalars(
         select(SiteNode)
         .where(SiteNode.site_id == site_id)
@@ -116,7 +119,7 @@ def build(db: Session, site_id: int, client: bool = False) -> dict[str, Any]:
                 "autocad_sqm": round(autocad[n.id], 2) if n.id in autocad else None,
                 "sort_order": n.sort_order,
                 "status": {
-                    "percent": float(n.progress_percent or 0),
+                    "percent": float(live.get(n.id, 0)),
                     "counts": counts,
                     "tasks": len(own),
                     "current_step": current,

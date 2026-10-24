@@ -24,7 +24,7 @@ from fastapi import (
     status,
 )
 from sqlalchemy import func, or_, select, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, lazyload
 
 from app import audit
 from app.auth.deps import CurrentPrincipal, Principal, require_permission
@@ -225,14 +225,18 @@ def _candidate_out(c: BoqLineCandidate, with_cost: bool) -> CandidateOut:
 
 
 def _boq(db: Session, tender: Tender, with_cost: bool) -> BoqOut:
-    totals = pricing.tender_totals(db, tender)
+    # the lines once, for the totals and the list (a 5,000-line BOQ opens in well under a second)
+    lines = list(
+        db.scalars(
+            select(BoqLine)
+            .where(BoqLine.tender_id == tender.id)
+            .options(lazyload("*"))
+            .order_by(BoqLine.sort_order, BoqLine.id)
+        )
+    )
+    totals = pricing.tender_totals(db, tender, lines)
     sections = db.scalars(
         select(BoqSection).where(BoqSection.tender_id == tender.id).order_by(BoqSection.sort_order)
-    )
-    lines = db.scalars(
-        select(BoqLine)
-        .where(BoqLine.tender_id == tender.id)
-        .order_by(BoqLine.sort_order, BoqLine.id)
     )
     base = dict(
         subtotal=totals.subtotal,
@@ -563,9 +567,13 @@ def update_tender(
 # --- BOQ grid ------------------------------------------------------------------------------------
 
 
-@router.get("/{tender_id}/boq")
-def get_boq(tender_id: int, db: DbSession, principal: CurrentPrincipal, scope: ViewScope) -> BoqOut:
-    return _boq(db, get_visible(db, tender_id, scope, principal), can_cost(principal))
+@router.get("/{tender_id}/boq", response_model=BoqOut)
+def get_boq(
+    tender_id: int, db: DbSession, principal: CurrentPrincipal, scope: ViewScope
+) -> Response:
+    """The BOQ, serialised once (validated as it is built, not a second time on the way out)."""
+    out = _boq(db, get_visible(db, tender_id, scope, principal), can_cost(principal))
+    return Response(out.model_dump_json(), media_type="application/json")
 
 
 def _next_sort(db: Session, tender: Tender) -> int:

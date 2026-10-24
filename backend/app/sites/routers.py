@@ -40,7 +40,7 @@ from app.masters.routers.common import Limit, Offset, Search, like, paginate, un
 from app.masters.schemas import Page
 from app.material import service as material
 from app.models import User
-from app.sites import builder, model3d, service, work
+from app.sites import builder, model3d, progress, service, work
 from app.sites.models import (
     AreaScope,
     Drawing,
@@ -128,7 +128,7 @@ def _late(target: date | None, done: bool) -> bool:
     return bool(target and target < date.today() and not done)
 
 
-def _site_out(db: Session, site: Site) -> SiteOut:
+def _site_out(db: Session, site: Site, pct: dict[int, Decimal] | None = None) -> SiteOut:
     tender_code = (
         db.scalar(select(Tender.code).where(Tender.id == site.tender_id))
         if (site.tender_id)
@@ -158,7 +158,7 @@ def _site_out(db: Session, site: Site) -> SiteOut:
         notes=site.notes,
         source=site.source,
         source_ref=site.source_ref,
-        progress_percent=site.progress_percent,
+        progress_percent=(pct or progress.site_percents(db, [site.id])).get(site.id, Decimal(0)),
         members=[
             MemberOut(user_id=m.user_id, full_name=m.user.full_name, role_on_site=m.role_on_site)
             for m in site.members
@@ -222,7 +222,9 @@ def list_sites(
         scope, principal, q, status, client_id, channel_id, incharge_id, late, source
     )
     rows, total = paginate(db, query, limit, offset)
-    return Page(items=[_site_out(db, s) for s in rows], total=total, limit=limit, offset=offset)
+    pct = progress.site_percents(db, [s.id for s in rows])
+    items = [_site_out(db, s, pct) for s in rows]
+    return Page(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/export")
@@ -241,7 +243,9 @@ def export_sites(
     query = _list_query(
         scope, principal, q, status, client_id, channel_id, incharge_id, late, source
     ).limit(EXPORT_ROW_LIMIT)
-    sites = [_site_out(db, s) for s in db.scalars(query)]
+    rows = list(db.scalars(query))
+    pct = progress.site_percents(db, [s.id for s in rows])
+    sites = [_site_out(db, s, pct) for s in rows]
     return xlsx_response(
         "sites",
         [
@@ -468,6 +472,7 @@ def _nodes_out(db: Session, site: Site) -> list[NodeOut]:
         if who
         else {}
     )
+    _total, live = progress.rollup(db, site.id)
     return [
         NodeOut(
             id=n.id,
@@ -479,7 +484,7 @@ def _nodes_out(db: Session, site: Site) -> list[NodeOut]:
             level_no=n.level_no,
             area_sqm=n.area_sqm,
             meta=n.meta,
-            progress_percent=n.progress_percent,
+            progress_percent=live.get(n.id, Decimal(0)),
             front_ready=n.front_ready,
             front_ready_by_name=names.get(n.front_ready_by),
             front_ready_at=n.front_ready_at,
@@ -565,7 +570,7 @@ def site_model(
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
     payload = model3d.build(db, site.id)
     payload["version"] = tag
-    payload["site_progress"] = float(site.progress_percent or 0)
+    payload["site_progress"] = float(progress.rollup(db, site.id)[0])
     return JSONResponse(payload, headers={"ETag": etag, "Cache-Control": "no-cache"})
 
 

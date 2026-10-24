@@ -7,6 +7,7 @@ import { useAuth } from "../auth";
 import ExportButton from "../components/ExportButton";
 import { errorText } from "../format";
 import { pagePath, send } from "./report";
+import { Button, Card, Field } from "../ui/components";
 
 export const STATUS_LABEL: Record<string, string> = {
   new: "New",
@@ -104,8 +105,7 @@ export function IssueLog() {
         </div>
       )}
       <div className="card filters">
-        <label className="field">
-          <span>Status</span>
+        <Field label="Status">
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="">Any</option>
             {Object.entries(STATUS_LABEL).map(([k, v]) => (
@@ -114,9 +114,8 @@ export function IssueLog() {
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Kind</span>
+        </Field>
+        <Field label="Kind">
           <select value={kind} onChange={(e) => setKind(e.target.value)}>
             <option value="">Any</option>
             {Object.entries(KIND_LABEL).map(([k, v]) => (
@@ -125,11 +124,10 @@ export function IssueLog() {
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Search</span>
+        </Field>
+        <Field label="Search">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="error, page…" />
-        </label>
+        </Field>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {rows === null ? (
@@ -235,7 +233,7 @@ export function IssuePage() {
         {when(issue.first_seen)}, last {when(issue.last_seen)} · roles {issue.roles.join(", ") || "—"} · found by {issue.found_by}
       </p>
       <div className="grid-2">
-        <div className="card">
+        <Card as="div">
           <h3>What happened</h3>
           {issue.error && <pre className="issue-error">{issue.error}</pre>}
           {issue.stack && (
@@ -257,11 +255,10 @@ export function IssuePage() {
               ))}
             </>
           )}
-        </div>
-        <div className="card">
+        </Card>
+        <Card as="div">
           <h3>Status and fix</h3>
-          <label className="field">
-            <span>Status</span>
+          <Field label="Status">
             <select value={form.status} onChange={set("status")} disabled={!editable}>
               {Object.entries(STATUS_LABEL).map(([k, v]) => (
                 <option key={k} value={k}>
@@ -269,29 +266,24 @@ export function IssuePage() {
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
           {isBug && (
             <>
-              <label className="field">
-                <span>Cause</span>
+              <Field label="Cause">
                 <textarea rows={2} value={form.cause} onChange={set("cause")} disabled={!editable} />
-              </label>
-              <label className="field">
-                <span>Fix</span>
+              </Field>
+              <Field label="Fix">
                 <textarea rows={2} value={form.fix} onChange={set("fix")} disabled={!editable} />
-              </label>
-              <label className="field">
-                <span>Pull request link</span>
+              </Field>
+              <Field label="Pull request link">
                 <input value={form.pr_url} onChange={set("pr_url")} disabled={!editable} placeholder="https://github.com/owner/repo/pull/12" />
-              </label>
-              <label className="field">
-                <span>Commit</span>
+              </Field>
+              <Field label="Commit">
                 <input value={form.commit} onChange={set("commit")} disabled={!editable} placeholder="b89a83c" className="mono" />
-              </label>
-              <label className="field">
-                <span>Fixed at</span>
+              </Field>
+              <Field label="Fixed at">
                 <input type="datetime-local" value={form.fixed_at} onChange={set("fixed_at")} disabled={!editable} />
-              </label>
+              </Field>
               <p className="muted small">
                 Released: {issue.released_at ? when(issue.released_at) : "not yet (marked on the deploy that carries the commit)"}
                 {issue.pr_url && (
@@ -308,11 +300,11 @@ export function IssuePage() {
           {error && <div className="alert alert-error">{error}</div>}
           {saved && <div className="alert alert-ok">Saved.</div>}
           {editable && (
-            <button className="btn btn-primary" onClick={() => void save()}>
+            <Button variant="primary" type="submit" onClick={() => void save()}>
               Save
-            </button>
+            </Button>
           )}
-        </div>
+        </Card>
       </div>
       <h3>Each time ({issue.events.length})</h3>
       <div className="table-wrap">
@@ -387,16 +379,15 @@ export function MyReports() {
       <div className="page-header">
         <h1>My reports</h1>
       </div>
-      <div className="card">
-        <label className="field">
-          <span>Report a problem</span>
+      <Card as="div">
+        <Field label="Report a problem">
           <textarea rows={3} value={words} onChange={(e) => setWords(e.target.value)} maxLength={2000} placeholder="What were you doing, and what went wrong?" />
-        </label>
-        <button className="btn btn-primary" disabled={!words.trim()} onClick={() => void report()}>
+        </Field>
+        <Button variant="primary" type="submit" disabled={!words.trim()} onClick={() => void report()}>
           Send
-        </button>
+        </Button>
         {note && <p className="helper-note">{note}</p>}
-      </div>
+      </Card>
       {rows === null ? (
         <p className="muted">Loading…</p>
       ) : rows.length === 0 ? (

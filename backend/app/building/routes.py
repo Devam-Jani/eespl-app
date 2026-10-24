@@ -14,6 +14,7 @@ from app.auth.deps import CurrentPrincipal, require_permission
 from app.building import service
 from app.building.models import BuildingModel
 from app.db import DbSession
+from app.sites import progress
 from app.sites import service as sites
 from app.sites.models import Drawing, DrawingRevision, Site
 from app.takeoff.models import CadFile
@@ -235,7 +236,7 @@ def active_sites(db: DbSession, principal: CurrentPrincipal, view: View) -> list
         if site.id in seen or not sites.covers(view, principal, site):
             continue
         seen.add(site.id)
-        out.append({"site_id": site.id, "code": site.code, "name": site.name, "version": version, "progress": float(site.progress_percent or 0)})
+        out.append({"site_id": site.id, "code": site.code, "name": site.name, "version": version, "progress": float(progress.site_percent(db, site.id))})
     return out
 
 

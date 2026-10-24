@@ -25,9 +25,11 @@ type Props<T> = {
   empty?: { title: string; hint?: ReactNode; action?: ReactNode };
   onOpen?: (row: T) => void;
   label?: string;
+  /** on a phone each row is a card (the first column its title, the others label: value) */
+  cards?: boolean;
 };
 
-export function Table<T>({ rows, columns, rowKey, filters, pageSize = 25, empty, onOpen, label }: Props<T>) {
+export function Table<T>({ rows, columns, rowKey, filters, pageSize = 25, empty, onOpen, label, cards }: Props<T>) {
   const [filter, setFilter] = useState(filters?.[0]?.key ?? "");
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null);
   const [page, setPage] = useState(0);
@@ -53,7 +55,7 @@ export function Table<T>({ rows, columns, rowKey, filters, pageSize = 25, empty,
   const slice = shown.slice(at * pageSize, at * pageSize + pageSize);
 
   return (
-    <div className="ui-table">
+    <div className={`ui-table ${cards ? "with-cards" : ""}`}>
       {filters && filters.length > 0 && (
         <div className="filter-chips" role="group" aria-label="Show">
           {filters.map((f) => (
@@ -113,6 +115,25 @@ export function Table<T>({ rows, columns, rowKey, filters, pageSize = 25, empty,
             </tbody>
           </table>
         </div>
+      )}
+      {cards && slice.length > 0 && (
+        <ul className="row-cards" aria-label={label}>
+          {slice.map((r) => (
+            <li key={rowKey(r)}>
+              <div className="row-card" role={onOpen ? "button" : undefined} tabIndex={onOpen ? 0 : undefined} onClick={onOpen ? () => onOpen(r) : undefined} onKeyDown={onOpen ? (e) => e.key === "Enter" && onOpen(r) : undefined}>
+                <div className="row-card-title">{columns[0].render(r)}</div>
+                <dl>
+                  {columns.slice(1).map((c) => (
+                    <div key={c.key}>
+                      <dt>{c.label}</dt>
+                      <dd>{c.render(r)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
       {pages > 1 && (
         <nav className="pager" aria-label="Pages">

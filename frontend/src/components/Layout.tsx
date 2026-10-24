@@ -12,7 +12,7 @@ import type { Group } from "../menu";
 import { groupOf, MENU, visibleGroups } from "../menu";
 import { GoLiveBanner, HelpButton, TrainingBanner, useMode } from "../ops/Pages";
 import { Icon, initials, NavItem } from "../ui/components";
-import { GROUP_ICON, NavIcon } from "../ui/navIcons";
+import { GROUP_ICON, NavIcon, PAGE_ICON } from "../ui/navIcons";
 import { prefetch } from "../ui/prefetch";
 import { useTheme } from "../ui/theme";
 import Bell from "./Bell";
@@ -129,7 +129,7 @@ export default function Layout() {
             <NavItem to="/notifications" label="Alerts" icon={<NavIcon name="alerts" />} onHover={() => prefetch("/notifications")} />
           )}
           {myWork.map((i) => (
-            <NavItem key={i.to} to={i.to} label={i.label} count={counts[i.to]} icon={<NavIcon name="work" />} onHover={() => prefetch(i.to)} />
+            <NavItem key={i.to} to={i.to} label={i.label} count={counts[i.to]} icon={<NavIcon name={PAGE_ICON[i.to] ?? "work"} />} onHover={() => prefetch(i.to)} />
           ))}
         </div>
         <div className="nav-group">

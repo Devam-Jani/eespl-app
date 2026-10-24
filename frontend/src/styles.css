@@ -653,7 +653,46 @@ input.full {
 
 .boq-grid table {
   table-layout: fixed;
-  min-width: 900px;
+  min-width: 100%;
+}
+
+/* a spreadsheet's rows: every row 44 px (the grid draws only the rows in view), the
+   description on two lines with the full text on hover */
+.boq-grid tbody tr:not(.boq-spacer),
+.boq-grid tbody tr:not(.boq-spacer) > td {
+  height: 44px;
+  max-height: 44px;
+}
+
+.boq-grid tbody td.boq-cell,
+.boq-grid tbody tr.boq-section > td {
+  padding: 4px 8px;
+  overflow: hidden;
+  vertical-align: middle;
+  line-height: 1.3;
+  font-size: 13px;
+}
+
+.boq-grid .boq-cell .clamp {
+  -webkit-line-clamp: 2;
+}
+
+.boq-grid tbody td.boq-cell:has(textarea) {
+  overflow: visible;
+  position: relative;
+}
+
+.boq-grid tbody td.boq-cell textarea.cell-editor {
+  position: absolute;
+  inset: 2px;
+  z-index: 3;
+  height: 120px;
+  background: var(--surface);
+}
+
+.boq-spacer td {
+  padding: 0;
+  border: 0;
 }
 
 .boq-grid thead th {
@@ -3803,6 +3842,30 @@ td.indent {
 .golive-banner a {
   color: var(--prog-ink);
   font-weight: 600;
+}
+.golive-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  color: var(--prog-ink);
+}
+.golive-count {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.golive-banner .link-button {
+  min-height: 28px;
+  color: var(--prog-ink);
+  text-decoration: underline;
+}
+.golive-hide {
+  margin-left: auto;
+}
+.golive-list {
+  margin: 6px 0 2px;
+  padding-left: 18px;
 }
 .training-banner {
   /* always visible in the training company: the hold-point colour at 18% behind its ink */

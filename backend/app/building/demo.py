@@ -300,6 +300,9 @@ def run(db: Session) -> dict:
             _stages(db, site.id, n.id, "Toilet / wet area (coating)", start, st)
     _stages(db, site.id, terrace_id, "Terrace (APP membrane)", date(2026, 9, 28), "progress")
     _stages(db, site.id, oht_id, "Water tank (UG / OH)", date(2026, 8, 20), "done")
+    from app.sites import progress  # noqa: PLC0415
+
+    progress.refresh(db, site)  # the steps were written here: the floors and the site from them
     db.commit()
     # 5. the client sees it in the portal: the site visible, the DEMO client users on it ---------------
     from app.portal.models import ClientUser, ClientUserSite

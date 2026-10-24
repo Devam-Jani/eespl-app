@@ -26,6 +26,7 @@ from app.masters.models import Vendor
 from app.material.models import PurchaseOrder
 from app.models import Role, User, UserRole
 from app.portal import service as portal
+from app.sites import progress
 from app.sites.models import Site
 from app.tenders.models import Tender
 
@@ -75,13 +76,12 @@ def _dpr_missing(db: Session, cfg: dict, at: datetime) -> Iterator[Hit]:
 def _behind_schedule(db: Session, cfg: dict, at: datetime) -> Iterator[Hit]:
     threshold = settings(db).delay_threshold_points
     for s in db.scalars(select(Site).where(Site.status == "active", Site.is_demo.is_(False))):
-        why = is_delayed(
-            s.status, s.progress_percent, s.start_date, s.target_date, today(), threshold
-        )
+        pct = progress.site_percent(db, s.id)
+        why = is_delayed(s.status, pct, s.start_date, s.target_date, today(), threshold)
         if why:
             yield Hit(
                 f"site:{s.id}",
-                f"{s.code} is behind schedule ({why}, {s.progress_percent:.0f}% done)",
+                f"{s.code} is behind schedule ({why}, {pct:.0f}% done)",
                 f"/sites/{s.id}",
                 s.id,
                 [s.site_incharge_id],

@@ -16,7 +16,6 @@ Progress (stored when a task changes, see refresh_scope):
 """
 
 import re
-from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -221,9 +220,9 @@ def site_weights(db: Session, site_id: int, template: StageTemplate) -> dict[int
 
 
 def _counts(task: Task) -> bool:
-    if task.status == "certified":
-        return True
-    return task.status == "done" and not (task.step and task.step.hold_point)
+    from app.sites.progress import counts  # noqa: PLC0415
+
+    return counts(task)
 
 
 def refresh_scope(db: Session, scope: AreaScope) -> None:
@@ -232,23 +231,9 @@ def refresh_scope(db: Session, scope: AreaScope) -> None:
         select(Task).where(Task.area_scope_id == scope.id, Task.parent_task_id.is_(None))
     ).all()
     before = scope.progress_percent
-    template = db.get(StageTemplate, scope.stage_template_id)
-    weights = site_weights(db, scope.site_id, template) if template else {}
-    from_steps = sum(
-        (
-            weights.get(t.step.id, Decimal(t.step.weight_percent))
-            for t in tasks
-            if t.step and _counts(t)
-        ),
-        Decimal(0),
-    )
-    # approved daily report lines on the place count too (the same places as material)
-    from_reports = (
-        min(Decimal(100), Decimal(scope.dpr_done_qty or 0) * 100 / Decimal(scope.qty))
-        if scope.qty and Decimal(scope.qty) > 0
-        else Decimal(0)
-    )
-    scope.progress_percent = max(from_steps, from_reports).quantize(PCT)
+    from app.sites.progress import scope_percent  # noqa: PLC0415
+
+    scope.progress_percent = scope_percent(db, scope, list(tasks))
     # the day the area was finished (for the schedule: our delay against the target finish)
     if scope.progress_percent >= 100 and scope.completed_at is None:
         scope.completed_at = datetime.now(UTC)
@@ -269,46 +254,22 @@ def refresh_scope(db: Session, scope: AreaScope) -> None:
 
 
 def refresh_nodes(db: Session, site: Site, all_nodes: list[SiteNode], node_ids: list[int]) -> None:
-    """Recompute the given nodes (each over its whole subtree) and the site."""
-    rows = db.execute(
-        select(AreaScope.node_id, AreaScope.qty, AreaScope.progress_percent).where(
-            AreaScope.site_id == site.id
-        )
-    ).all()
-    by_node: dict[int, list[tuple[Decimal, Decimal]]] = defaultdict(list)
-    for node_id, qty, pct in rows:
-        by_node[node_id].append((Decimal(qty), Decimal(pct)))
-    by_id = {n.id: n for n in all_nodes}
-    kids = service.children_map(all_nodes)
+    """Write the cached progress of the given nodes (each over its whole subtree) and the site."""
+    from app.sites.progress import rollup  # noqa: PLC0415
 
-    def weighted(pairs: list[tuple[Decimal, Decimal]]) -> Decimal:
-        total = sum((q for q, _ in pairs), Decimal(0))
-        if total <= 0:
-            return Decimal(0)
-        return (sum((q * p for q, p in pairs), Decimal(0)) / total).quantize(PCT, ROUND_HALF_UP)
-
-    def subtree(node_id: int) -> list[tuple[Decimal, Decimal]]:
-        out = list(by_node.get(node_id, []))
-        for child in kids.get(node_id, []):
-            out.extend(subtree(child.id))
-        return out
-
-    for node_id in node_ids:
-        if node_id in by_id:
-            by_id[node_id].progress_percent = weighted(subtree(node_id))
-    site.progress_percent = weighted([p for pairs in by_node.values() for p in pairs])
+    total, per_node = rollup(db, site.id)
+    wanted = set(node_ids)
+    for n in all_nodes:
+        if n.id in wanted:
+            n.progress_percent = per_node.get(n.id, Decimal(0))
+    site.progress_percent = total
     db.flush()
 
 
 def refresh_site(db: Session, site: Site) -> None:
-    """Everything (after structure or scope changes, not on every task update)."""
-    for scope in db.scalars(select(AreaScope).where(AreaScope.site_id == site.id)):
-        tasks = db.scalars(
-            select(Task).where(Task.area_scope_id == scope.id, Task.parent_task_id.is_(None))
-        ).all()
-        scope.progress_percent = sum(
-            (Decimal(t.step.weight_percent) for t in tasks if t.step and _counts(t)), Decimal(0)
-        ).quantize(PCT)
-    db.flush()
-    all_nodes = service.nodes(db, site.id)
-    refresh_nodes(db, site, all_nodes, [n.id for n in all_nodes])
+    """Everything (after structure or scope changes, not on every task update): every area by the
+    same formula as a task update, then the floors and the site."""
+    from app.sites.progress import refresh  # noqa: PLC0415
+
+    refresh(db, site)
+

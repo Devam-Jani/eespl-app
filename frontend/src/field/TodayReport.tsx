@@ -59,6 +59,7 @@ export default function TodayReport() {
   const [photos, setPhotos] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [kept, setKept] = useState(false);
+  const [fullName, setFullName] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<number[]>(() => {
     try {
@@ -142,10 +143,11 @@ export default function TodayReport() {
       <header className="report-head">
         <BackButton onClick={() => navigate(`/my-site/${id}`)} label="Back to my site" />
         <div className="report-title">
-          <span className="muted small">
+          {/* one line; the full name on tap */}
+          <button type="button" className={`report-site muted small ${fullName ? "full" : ""}`} onClick={() => setFullName(!fullName)} title={site?.name} aria-expanded={fullName}>
             {site?.name ?? ""}
             {place?.floor ? ` · ${place.floor}` : ""}
-          </span>
+          </button>
           <h1>Today's report</h1>
         </div>
         {places.length > 0 && (

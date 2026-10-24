@@ -82,6 +82,57 @@ const P: Record<string, ReactNode> = {
       <path d="M9 12l2 2 4-4" />
     </>
   ),
+  day: (
+    <>
+      <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z" />
+      <circle cx="12" cy="10" r="2.3" />
+    </>
+  ),
+  claims: (
+    <>
+      <path d="M4 16.5h16M5.5 16.5l1.6-5.2a2 2 0 0 1 1.9-1.4h6a2 2 0 0 1 1.9 1.4l1.6 5.2" />
+      <circle cx="7.5" cy="18.5" r="1.6" />
+      <circle cx="16.5" cy="18.5" r="1.6" />
+      <path d="M12 3.5v3M10 5h4" />
+    </>
+  ),
+  gang: (
+    <>
+      <circle cx="9" cy="8" r="3" />
+      <circle cx="17" cy="9" r="2.3" />
+      <path d="M3.5 19.5c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5M14.5 15.2c.8-.5 1.6-.7 2.5-.7 2.2 0 3.7 1.5 4.2 4" />
+    </>
+  ),
+  cash: (
+    <>
+      <rect x="3.5" y="6.5" width="17" height="12" rx="2.5" />
+      <path d="M16 12.5h2M3.5 10h17" />
+    </>
+  ),
+  escalated: (
+    <>
+      <path d="M12 4l9 15.5H3z" />
+      <path d="M12 10v4.5M12 17.2h.01" />
+    </>
+  ),
+  bell: (
+    <>
+      <path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15z" />
+      <path d="M10 20.5a2 2 0 0 0 4 0" />
+    </>
+  ),
+  account: (
+    <>
+      <circle cx="12" cy="8.5" r="3.5" />
+      <path d="M5 20c.8-3.8 3.6-6 7-6s6.2 2.2 7 6" />
+    </>
+  ),
+  reports: (
+    <>
+      <path d="M5 4.5h14v12H9l-4 3.5z" />
+      <path d="M9 9h6M9 12h4" />
+    </>
+  ),
   work: (
     <>
       <path d="M4 11.5L12 4l8 7.5" />
@@ -100,6 +151,19 @@ const P: Record<string, ReactNode> = {
       <path d="M7 11v4.5c1.5 1.5 3 2 5 2s3.5-.5 5-2V11" />
     </>
   ),
+};
+
+/** My work's own pages, each with its own icon. */
+export const PAGE_ICON: Record<string, string> = {
+  "/field": "day",
+  "/field/claims": "claims",
+  "/field/gangs": "gang",
+  "/petty-cash": "cash",
+  "/escalated": "escalated",
+  "/notifications": "bell",
+  "/my-notifications": "bell",
+  "/account": "account",
+  "/my-reports": "reports",
 };
 
 export const GROUP_ICON: Record<string, string> = {

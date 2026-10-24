@@ -20,6 +20,7 @@ from app.analytics.routers import KINDS, _dashboard
 from app.auth.deps import CurrentPrincipal
 from app.db import DbSession
 from app.execution.service import today
+from app.sites import progress as progress_of
 
 router = APIRouter(prefix="/api/home", tags=["dashboard"])
 MONEY_PERMS = ("dashboard.company", "dashboard.finance", "finance.view", "billing.view", "closeout.billing")
@@ -158,6 +159,14 @@ def _needs(db, principal, site_ids: list[int] | None) -> list[dict]:
     return out[:6]
 
 
+class _Blank:
+    """A site not yet in the nightly summary: its own dates, no money, not late."""
+
+    def __init__(self, s) -> None:
+        self.status, self.target_date, self.delayed, self.elapsed, self.forecast_end = s.status, s.target_date, False, None, None
+        self.billed, self.contract_value = Decimal(0), None
+
+
 def _sites(db, principal, demo: bool) -> tuple[list[dict], list[int] | None]:
     from app.building.models import BuildingModel  # noqa: PLC0415
     from app.sites import service as site_svc  # noqa: PLC0415
@@ -168,19 +177,22 @@ def _sites(db, principal, demo: bool) -> tuple[list[dict], list[int] | None]:
         return [], []
     money = any(p in principal.permissions for p in MONEY_PERMS)
     rows = db.execute(
+        # a site made since last night's summary shows too (its money and delay from the next summary)
         select(Site, SiteSummary)
-        .join(SiteSummary, SiteSummary.site_id == Site.id)
-        .where(site_svc.scope_condition(scope, principal), SiteSummary.status.in_(ACTIVE), SiteSummary.is_demo == demo, SiteSummary.historic.is_(False))
-        .order_by(SiteSummary.delayed.desc(), SiteSummary.progress.desc())
+        .outerjoin(SiteSummary, SiteSummary.site_id == Site.id)
+        .where(site_svc.scope_condition(scope, principal), Site.status.in_(ACTIVE), Site.is_demo == demo, Site.source.is_distinct_from("powerplay"))
+        .order_by(SiteSummary.delayed.desc().nulls_last(), Site.progress_percent.desc())
         .limit(12)
     ).all()
     ids = None if scope == "all" else [s.id for s, _ in rows]
     due = set(db.scalars(select(Alert.site_id).where(Alert.rule.in_(("ready_not_billed", "ra_monthly")), Alert.closed_at.is_(None), Alert.site_id.is_not(None))))
     models = set(db.scalars(select(BuildingModel.site_id).where(BuildingModel.site_id.in_([s.id for s, _ in rows] or [0]))))
     day = today()
+    live = progress_of.site_percents(db, [s.id for s, _ in rows])  # live, not last night's copy
     out = []
-    for s, ss in rows:
-        progress = float(ss.progress or 0)
+    for s, ss0 in rows:
+        ss = ss0 or _Blank(s)
+        progress = float(live.get(s.id, 0))
         if ss.delayed:
             late = (day - ss.target_date).days if ss.target_date and ss.target_date < day else ((ss.forecast_end - ss.target_date).days if ss.forecast_end and ss.target_date else 0)
             status, label = "block", f"Late {late} days" if late > 0 else "Behind time"
