@@ -370,6 +370,7 @@ def read_sheet(data: bytes) -> dict:
         raise ValueError("This is not an Excel workbook (.xlsx) that can be read") from exc
     items: dict[str, dict] = {}
     skipped: list[str] = []
+    assumed: list[str] = []  # a line with no item number, counted under the item above it
     for name in values.sheetnames:
         ws, wf = values[name], formulas[name]
         found = _header(ws, ("particulars", "qty"))
@@ -402,6 +403,8 @@ def read_sheet(data: bytes) -> dict:
                 elif item:
                     current = item
                 continue
+            if not item and current:
+                assumed.append(f"Sheet '{name}' row {r}: no item number, counted under item {current} (the line above): {part[:50]}")
             item = item or current
             if not item:
                 skipped.append(f"Sheet '{name}' row {r}: {total} with no work-order item ({part[:60] or 'no particulars'})")
@@ -412,7 +415,7 @@ def read_sheet(data: bytes) -> dict:
             row["qty"] += total
             row["rows"] += 1
             row["unit"] = row["unit"] or unit
-    return {"items": items, "skipped": skipped}
+    return {"items": items, "skipped": skipped, "assumed": assumed}
 
 
 def read_proforma(data: bytes) -> dict:

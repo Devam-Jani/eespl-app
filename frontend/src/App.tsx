@@ -67,6 +67,8 @@ const ProductPrices = lazyPage(() => cp().then((m) => ({ default: m.ProductPrice
 const LabourRates = lazyPage(() => cp().then((m) => ({ default: m.LabourRates })));
 // AutoCAD takeoff: the drawing viewer and the areas (its own chunk)
 const TakeoffPage = lazyPage(() => import("./takeoff/Pages").then((m) => ({ default: m.TakeoffPage })));
+// measuring from the drawing and the RA bill from the sheet (its own chunk)
+const MeasurePage = lazyPage(() => import("./measure/Pages").then((m) => ({ default: m.MeasurePage })));
 // the X-ray 3D building model from the drawing (its own chunk)
 const BuildingBuilder = lazyPage(() => import("./xray/Builder"));
 const sc = () => import("./sitecontrol/Pages");
@@ -423,6 +425,7 @@ export default function App() {
                   ["/quotations/:id/working", ["quotation.view"], <QuotationWorking />],
                   ["/prices/:id", ["tender.margin"], <ProductPrices />],
                   ["/sites/:id/takeoff", ["takeoff.view"], <TakeoffPage />],
+                  ["/sites/:id/measure", ["billing.view"], <MeasurePage />],
                   ["/sites/:id/building", ["building.edit", "site.view"], <BuildingBuilder />],
                   ["/field/days/:id", ["field.track", "field.claims"], <DayMap />],
                   ["/knowledge/templates/:id", ["knowledge.view"], <TemplatePage />],

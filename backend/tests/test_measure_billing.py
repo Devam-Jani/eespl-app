@@ -373,3 +373,21 @@ def test_a_billed_area_is_locked(pool, db):
     assert pool["c"].post(f"/api/measure/areas/{a}/height", json={"section": "Y", "top": "+1900", "bottom": "+600"}, headers=pool["h"]).status_code == 409
     assert pool["c"].delete(f"/api/measure/areas/{a}", headers=pool["h"]).status_code == 409
     assert db.get(MeasureArea, a) is not None and date.today()
+
+
+def test_an_old_row_without_an_item_is_listed_never_silently_added():
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["Sr / WO item", "Particulars", "No", "Length", "Width", "Height / Depth", "Qty", "Total qty", "Unit"])
+    ws.append([None, "A - Pool"])
+    ws.append(["1", "Floor", 1, None, None, None, 10, 107.639, "sqft"])
+    ws.append([None, "Walls (the same item, no number)", 1, 10, None, 1, 10, 107.639, "sqft"])
+    ws.append([None, "Lift pit (extra)"])
+    ws.append([None, "Floor", 1, 2, 2, None, 4, 43.056, "sqft"])
+    ws.append([None, "Total", None, None, None, None, None, 258.334])
+    buf = io.BytesIO()
+    wb.save(buf)
+    read = excel.read_sheet(buf.getvalue())
+    assert read["items"]["1"]["qty"] == D("215.278")
+    assert len(read["assumed"]) == 1 and "counted under item 1" in read["assumed"][0]
+    assert len(read["skipped"]) == 1 and "43.056 with no work-order item" in read["skipped"][0]

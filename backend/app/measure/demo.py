@@ -38,6 +38,9 @@ CLIENT = "DEMO Pool Club (demo client)"
 CLIENT_GSTIN = "24DEMOP0000D1Z0"  # invented; 24 is Gujarat
 CLIENT_USER = ("DEMO Client Pool Billing", "demo-client-pool-billing@example.com")
 SAC = "995454"
+OLD_CODE = "DEMO-POOL-OLD"
+OLD_NAME = "DEMO Club house pool, billed in Excel before the app"
+RATES = {"1": Decimal(85), "2": Decimal(1250), "3": Decimal(42)}
 SHARED = 5.19
 
 
@@ -108,6 +111,50 @@ def dxf(path: Path) -> None:
     doc.saveas(path)
 
 
+def old_files(qty: dict[str, Decimal]) -> list[str]:
+    """The billing team's old workbooks (before the app), with the rows such files have that do
+    not belong to an order item: an extra with no item number, a transport line, the totals."""
+    from openpyxl import Workbook  # noqa: PLC0415
+
+    from app.config import settings  # noqa: PLC0415
+
+    folder = Path(settings.media_dir) / "demo" / "measure"
+    folder.mkdir(parents=True, exist_ok=True)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "RA 1 measurement"
+    ws.append(["DEMO Club house pool: measurement sheet RA 1"])
+    ws.append([])
+    ws.append(["Sr / WO item", "Particulars", "No", "Length", "Width", "Height / Depth", "Qty", "Total qty", "Unit"])
+    ws.append([None, "A - Swimming pool and Q - slope"])
+    for k, q in qty.items():
+        unit = "nos" if k == "2" else "sqft"
+        ws.append([k, f"Item {k} as measured in AutoCAD", 1, None, None, None, float(q), float(q), unit])
+    ws.append([None, "Lift pit (extra, to be agreed)"])
+    ws.append([None, "Floor 2.1 x 1.8", 1, 2.1, 1.8, None, 3.78, 40.688, "sqft"])
+    ws.append([None, "Total", None, None, None, None, None, float(sum(qty.values())), None])
+    sheet = folder / "old-measurement-sheet-RA1.xlsx"
+    wb.save(sheet)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Proforma"
+    ws.append(["PROFORMA INVOICE"])
+    ws.append(["Item", "Description", "Unit", "Qty", "Rate", "Amount"])
+    basic = Decimal(0)
+    for k, q in qty.items():
+        amt = (q * RATES[k]).quantize(Decimal("0.01"), rounding="ROUND_HALF_UP")
+        basic += amt
+        ws.append([k, f"Item {k}", "nos" if k == "2" else "sqft", float(q), float(RATES[k]), float(amt)])
+    ws.append([None, "Transport of material", "LS", 1, 1500, 1500])
+    ws.append([None, "Basic", None, None, None, float(basic)])
+    ws.append([None, "CGST 9%", None, None, None, float((basic * Decimal("0.09")).quantize(Decimal("0.01")))])
+    ws.append([None, "SGST 9%", None, None, None, float((basic * Decimal("0.09")).quantize(Decimal("0.01")))])
+    ws.append([None, "Grand total", None, None, None, float((basic * Decimal("1.18")).quantize(Decimal(1)))])
+    pro = folder / "old-proforma-RA1.xlsx"
+    wb.save(pro)
+    return [str(sheet), str(pro)]
+
+
 def reset(db: Session, site_id: int) -> int:
     n = 0
     for table in ("measure_sheets", "measure_items", "measure_edges", "measure_areas", "measurement_sets", "measurements", "tax_invoices", "ra_bills",
@@ -118,7 +165,7 @@ def reset(db: Session, site_id: int) -> int:
     return n
 
 
-def _masters(db: Session, users: dict) -> tuple:
+def _masters(db: Session, users: dict, code: str = SITE_CODE, name: str = SITE_NAME) -> tuple:
     from app.closeout.models import ClientWorkOrder, ClientWorkOrderLine
     from app.finance.models import ClientContract, ContractLine
     from app.masters.models import Client
@@ -130,10 +177,10 @@ def _masters(db: Session, users: dict) -> tuple:
         db.add(cl)
     cl.is_demo, cl.gstin, cl.address, cl.city, cl.state = True, CLIENT_GSTIN, "DEMO Club house, Plot 0, Sindhu Bhavan Road", "Ahmedabad", "Gujarat"
     db.flush()
-    site = db.scalar(select(Site).where(Site.code == SITE_CODE))
+    site = db.scalar(select(Site).where(Site.code == code))
     removed = 0
     if site is None:
-        site = Site(code=SITE_CODE, name=SITE_NAME, city="Ahmedabad", state="Gujarat", status="active", is_demo=True, start_date=date.today() - timedelta(days=60))
+        site = Site(code=code, name=name, city="Ahmedabad", state="Gujarat", status="active", is_demo=True, start_date=date.today() - timedelta(days=60))
         db.add(site)
         db.flush()
     else:
@@ -142,7 +189,7 @@ def _masters(db: Session, users: dict) -> tuple:
     for uid in users.values():
         if not db.scalar(select(SiteMember.site_id).where(SiteMember.site_id == site.id, SiteMember.user_id == uid)):
             db.add(SiteMember(site_id=site.id, user_id=uid, role_on_site="office"))
-    wo = ClientWorkOrder(code=f"CWO-{SITE_CODE}", client_ref="DEMO/POOL/WO/01", site_id=site.id, client_id=cl.id, lines_from="typed", status="accepted",
+    wo = ClientWorkOrder(code=f"CWO-{code}", client_ref=f"DEMO/{code}/WO/01", site_id=site.id, client_id=cl.id, lines_from="typed", status="accepted",
                          accepted_by=users["billing"], accepted_at=date.today() - timedelta(days=50), payment_basis="invoice", payment_days=30)  # fmt: skip
     items = [("1", "Waterproofing coating, two coats, on floors, side walls, wall tops and slopes", "sqft", "3000", "85", False, 1),
              ("2", "Pipe sleeve with puddle flange, fixed in the wall", "nos", "10", "1250", False, 1),
@@ -282,5 +329,15 @@ def run(db: Session) -> dict:
     out["bills"] = {b["code"]: {"proforma": b["proforma_no"], "basic": b["tax"]["taxable"], "cgst": b["tax"]["cgst"], "sgst": b["tax"]["sgst"], "round_off": b["tax"]["round_off"],
                                 "grand": b["tax"]["total"], "warnings": b["warnings"], "checklist_ok": all(x["ok"] for x in b["checklist"])} for b in (b1, b2)}  # fmt: skip
     out["tax_invoice"] = {"number": inv["number"], "total": inv["total"]}
+    # 6. the next one to measure: the plant room's sump, traced by hand (no closed polyline), its
+    #    depth still to be picked from the section
+    x0 = sh["L"] + 2 * sh["r"] + 1.0
+    sump = [[x0, -3.0, 0], [x0 + 1.8, -3.0, 0], [x0 + 1.8, -1.5, 0], [x0, -1.5, 0]]
+    s = _ok(c.post(f"{base}/areas", json={"cad_file_id": fid, "outline": sump, "code": "S", "name": "Plant room sump (traced)"}, headers=hb), "area S", 201)
+    out["next_area"] = {"code": s["code"], "area_sqm": s["area_sqm"], "height": s["height_source"]}
+    # 7. a site billed before the app: its old Excel sheet and proforma, kept to be read on the
+    #    Import tab (the result lists what could not be read)
+    old, _, _ = _masters(db, users, OLD_CODE, OLD_NAME)
+    out["old_site"] = {"id": old.id, "files": old_files({r["item_no"]: Decimal(r["this"]) for r in s1["cumulative"]})}
     out["drawing"] = fid
     return out

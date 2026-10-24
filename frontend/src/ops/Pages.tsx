@@ -871,7 +871,10 @@ export function GoLiveBanner() {
   return (
     <div className="golive-banner" role="status">
       <div className="golive-line">
-        <b>Not set yet for go-live:</b>
+        <b>
+          <span className="golive-long">Not set yet for go-live:</span>
+          <span className="golive-short">Go-live:</span>
+        </b>
         <span className="golive-count">
           {missing.length} {missing.length === 1 ? "setting" : "settings"}
         </span>
@@ -890,7 +893,8 @@ export function GoLiveBanner() {
             }
           }}
         >
-          Hide for today
+          <span className="golive-long">Hide for today</span>
+          <span className="golive-short">Hide today</span>
         </button>
       </div>
       {open && (

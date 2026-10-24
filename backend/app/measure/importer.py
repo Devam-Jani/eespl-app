@@ -54,7 +54,7 @@ def run(db: Session, site: Site, *, sheet_file: tuple[str, bytes] | None, profor
         raise mb.Refused("Nothing could be read: " + "; ".join(skipped[:5]))
     by_id = {w.id: w for w in wo_lines}
     # the proforma against the sheet: the same quantities, and the work order's rates
-    checks = []
+    checks = [f"{sheet_file[0]}: {a}" for a in sheet_read["assumed"]] if sheet_read else []
     if sheet_read and pro_read:
         pm, _ = excel.match(pro_read["items"], wo_lines)
         for wid, row in matched.items():
@@ -99,6 +99,8 @@ def run(db: Session, site: Site, *, sheet_file: tuple[str, bytes] | None, profor
         m.ra_bill_id = b.id
     sheet.ra_bill_id = b.id
     sheet.import_skipped = skipped + checks
+    if pro_read and pro_read["basic"] is not None and Decimal(pro_read["basic"]) != Decimal(b.certified_gross):
+        checks.append(f"The proforma's basic {pro_read['basic']} is not the quantities × the order's rates ({b.certified_gross})")
     totals = {"basic": b.certified_gross, "read_basic": pro_read["basic"] if pro_read else None, "read_grand": pro_read["grand"] if pro_read else None}
     db.flush()
     return {"sheet_id": sheet.id, "sheet_code": sheet.code, "ra_bill_id": b.id, "ra_code": b.code, "items": out_rows, "skipped": skipped, "checks": checks, "totals": totals}

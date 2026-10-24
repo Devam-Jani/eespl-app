@@ -88,6 +88,7 @@ export default function SiteDetail() {
     ["Material plan", `/sites/${site.id}/material-plan`, can("planning.view", "indent.view")],
     ["Measurement book", `/measurements?site=${site.id}`, can("measurement.view")],
     ["AutoCAD takeoff", `/sites/${site.id}/takeoff`, can("takeoff.view")],
+    ["Measure and bill", `/sites/${site.id}/measure`, can("billing.view")],
     ["Methodology", `/sites/${site.id}/methodology`, can("methodology.site")],
     ["RFI zones", `/sites/${site.id}/zones`, can("closeout.site") || can("closeout.billing")],
     ["Measure", `/sites/${site.id}/measurements`, can("closeout.billing")],
