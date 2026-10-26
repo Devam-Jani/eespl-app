@@ -38,8 +38,10 @@ const masks = (page: Page) => [
 /** The DEMO pool site's Measure and bill page (its id changes with each nightly rebuild). */
 async function measurePath(page: Page): Promise<string> {
   await page.goto("/sites", { waitUntil: "networkidle" });
-  const href = await page.locator("a[href^='/sites/']", { hasText: "DEMO-POOL" }).first().getAttribute("href");
-  return `${(href ?? "/sites/0").split("?")[0]}/measure?ask=no`;
+  await page.getByPlaceholder("Search code, name, client or city").fill("DEMO-POOL");
+  await page.locator("tr.clickable").filter({ has: page.locator("code", { hasText: /^DEMO-POOL$/ }) }).first().click();
+  await page.waitForURL(/\/sites\/\d+/);
+  return `${new URL(page.url()).pathname.match(/^\/sites\/\d+/)![0]}/measure?ask=no`;
 }
 
 const SCREENS: { name: string; who: string; path: string | ((page: Page) => Promise<string>) }[] = [
