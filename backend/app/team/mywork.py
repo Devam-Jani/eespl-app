@@ -412,6 +412,23 @@ def planning(db: Session, p: Principal) -> list[Item]:
                     "/tenders",
                 )
             )
+    from app.estimate.models import MaterialRequest  # noqa: PLC0415
+
+    for r in db.scalars(select(MaterialRequest).where(MaterialRequest.status == "requested").order_by(MaterialRequest.id)):
+        out.append(
+            item(
+                "material_request",
+                str(r.id),
+                f"Material request {r.code}",
+                "Asked from site by area and thickness; approve or change it into an indent"
+                + (" (more than the estimate has left)" if r.over_reason else ""),
+                f"/material-requests?request={r.id}",
+                "Decide",
+                r.created_at,
+                "warn" if r.over_reason else "normal",
+                "/material-requests",
+            )
+        )
     return out
 
 

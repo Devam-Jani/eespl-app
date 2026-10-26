@@ -79,7 +79,8 @@ export function MeasurePage() {
   const [error, setError] = useState("");
   const [tab, setTab] = useState(params.get("tab") ?? "areas");
   const [mode, setMode] = useState<Mode>("look");
-  const [pick, setPick] = useState<Pick>({ areaId: null, edgeId: null });
+  // ?area=id (a link from a material estimate's area): that area picked, the drawing brought to it
+  const [pick, setPick] = useState<Pick>({ areaId: params.get("area") ? Number(params.get("area")) : null, edgeId: null });
   const [naming, setNaming] = useState<{ x?: number; y?: number; outline?: Pt[] } | null>(null);
   const [asking, setAsking] = useState<Edge | null>(null);
   const [levels, setLevels] = useState<string[]>([]);

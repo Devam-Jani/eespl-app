@@ -194,6 +194,12 @@ const Rfqs = lazyPage(() => import("./pages/material/Rfqs"));
 const RfqDetail = lazyPage(() => import("./pages/material/Rfqs").then((m) => ({ default: m.RfqDetail })));
 const Stores = lazyPage(() => import("./pages/material/Stores"));
 const StoreDetail = lazyPage(() => import("./pages/material/Stores").then((m) => ({ default: m.StoreDetail })));
+const est = () => import("./estimate/Estimates");
+const MaterialLibrary = lazyPage(() => import("./estimate/Library"));
+const EstimatesList = lazyPage(() => est().then((m) => ({ default: m.EstimatesList })));
+const EstimatePage = lazyPage(() => est().then((m) => ({ default: m.EstimatePage })));
+const MaterialRequests = lazyPage(() => import("./estimate/Requests"));
+const AskMaterial = lazyPage(() => import("./estimate/Requests").then((m) => ({ default: m.AskMaterial })));
 const Transfers = lazyPage(() => import("./pages/material/Stores").then((m) => ({ default: m.Transfers })));
 
 const PAGES: Record<string, JSX.Element> = {
@@ -290,6 +296,9 @@ const PAGES: Record<string, JSX.Element> = {
   "/grns": <Grns />,
   "/stores": <Stores />,
   "/transfers": <Transfers />,
+  "/material-library": <MaterialLibrary />,
+  "/estimates": <EstimatesList />,
+  "/material-requests": <MaterialRequests />,
   "/freight": <Freight />,
   "/settings/purchase": <PurchaseSettings />,
   "/admin/users": <Users />,
@@ -441,6 +450,8 @@ export default function App() {
                   ["/sites/:id/material-plan", ["planning.view", "indent.view"], <MaterialPlan />],
                   ["/my-site/:id", ["site.view"], <SupervisorDay />],
                   ["/my-site/:id/report", ["dpr.edit"], <TodayReport />],
+                  ["/my-site/:id/material", ["material_request.create"], <AskMaterial />],
+                  ["/estimates/:id", ["estimate.view"], <EstimatePage />],
                   ["/help/how-it-works", STAFF_ANY, <HowItWorks />],
                   ...(UiGallery ? ([["/dev/ui", ["admin.users"], <UiGallery />]] as [string, string[], JSX.Element][]) : []),
                   ["/purchase-orders/new", ["po.edit"], <NewPo />],

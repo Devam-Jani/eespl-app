@@ -1,0 +1,83 @@
+/* Material estimates: the line's formula, the area picks, the phone's request form. */
+
+.est-line + .est-line {
+  margin-top: var(--space-3);
+}
+
+.est-formula {
+  font-size: 1.05rem;
+  line-height: 1.6;
+  margin: 0 0 var(--space-2);
+}
+
+.est-area-picks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 4px var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.input-narrow {
+  width: 6.5rem;
+}
+
+.est-over td {
+  background: color-mix(in srgb, var(--prog) 14%, transparent);
+}
+
+/* the phone's request: the working big and clear */
+.ask-page {
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.ask-formula {
+  font-size: 1.3rem;
+  font-weight: 600;
+  line-height: 1.45;
+  word-break: break-word;
+  margin: 0 0 var(--space-2);
+}
+
+.ask-left {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.ask-requests {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.ask-requests li {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--space-2);
+}
+
+.margin-materials td {
+  background: var(--raised);
+}
+
+.est-missed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.est-missed li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border);
+}
+
+/* a bare field's hidden label (the field is display: contents) stays in its cell, not past the page edge on a phone */
+.est-areas td {
+  position: relative;
+}

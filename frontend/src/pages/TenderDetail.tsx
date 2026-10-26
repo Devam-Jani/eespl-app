@@ -15,8 +15,10 @@ const TenderCustomers = lazy(() => import("../closeout/Pages").then((m) => ({ de
 
 const TenderAward = lazy(() => import("../team/Pages").then((m) => ({ default: m.TenderAward })));
 
-type Tab = "details" | "boq" | "working" | "terms" | "revisions" | "award";
+type Tab = "details" | "boq" | "working" | "margin" | "checks" | "terms" | "revisions" | "award";
 const RateWorkingView = lazy(() => import("../costing/Pages").then((m) => ({ default: m.RateWorkingView })));
+const MarginCheck = lazy(() => import("../estimate/Checks").then((m) => ({ default: m.MarginCheck })));
+const Checks = lazy(() => import("../estimate/Checks").then((m) => ({ default: m.Checks })));
 
 export type Unsent = {
   working_id: number;
@@ -229,6 +231,8 @@ Send anyway? Give the reason:`);
             ["details", "Details"],
             ["boq", "BOQ"],
             ["working", "Rate working"],
+            ...(can("tender.margin") ? [["margin", "Margin check"]] : []),
+            ...(can("estimate.view") ? [["checks", "Checks"]] : []),
             ["terms", "Terms"],
             ["revisions", `Revisions (${revs.length})`],
             ["award", tender.status === "submitted" ? "Awaiting award" : "Award & bidders"],
@@ -252,6 +256,16 @@ Send anyway? Give the reason:`);
         {tab === "working" && (
           <Suspense fallback={<p className="muted">Loading…</p>}>
             <RateWorkingView tenderId={tender.id} />
+          </Suspense>
+        )}
+        {tab === "margin" && can("tender.margin") && (
+          <Suspense fallback={<p className="muted">Loading…</p>}>
+            <MarginCheck tenderId={tender.id} />
+          </Suspense>
+        )}
+        {tab === "checks" && can("estimate.view") && (
+          <Suspense fallback={<p className="muted">Loading…</p>}>
+            <Checks tenderId={tender.id} />
           </Suspense>
         )}
         {tab === "terms" && <TermsTab tender={tender} canEdit={canEdit} onSaved={load} />}

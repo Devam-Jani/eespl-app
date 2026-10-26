@@ -1,7 +1,7 @@
 // Quotations: the list, a new quotation (from a lead, a client or blank) and the editor: the
 // outline on the left, the live preview in the centre, the selected block's fields on the right.
 // On a phone the editor is a read-only preview with "Share PDF".
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile, fetchObjectUrl } from "../api";
@@ -14,6 +14,9 @@ import { errorText, inr } from "../format";
 import { loadLookups, MarkupField, plain, SectionsEditor, STATUS_BADGE, useLookups } from "./common";
 import type { Lookups, QItem, QLine, Quotation, Ref, SpecCopy, Term } from "./common";
 import { Button, buttonClass, Card, Field } from "../ui/components";
+
+const Checks = lazy(() => import("../estimate/Checks").then((m) => ({ default: m.Checks })));
+const MarginCheck = lazy(() => import("../estimate/Checks").then((m) => ({ default: m.MarginCheck })));
 
 type Row = {
   id: number;
@@ -327,6 +330,7 @@ export function QuotationEditor() {
   const [note, setNote] = useState("");
   const [sel, setSel] = useState<Sel>({ kind: "letter" });
   const [dialog, setDialog] = useState<null | "won" | "lost" | "diff" | "survey" | "add">(null);
+  const [margin, setMargin] = useState(false);
   const refreshPreview = useCallback(() => {
     api<{ html: string }>(`/api/quotations/${id}/preview`).then(
       (r) => setHtml(r.html),
@@ -426,7 +430,16 @@ export function QuotationEditor() {
           )
         }
       />
+      <Suspense fallback={null}>
+        {can("estimate.view") && <Checks quotationId={q.id} quiet />}
+        {margin && <MarginCheck quotationId={q.id} />}
+      </Suspense>
       <div className="q-actions">
+        {can("tender.margin") && (
+          <Button size="small" variant="ghost" aria-expanded={margin} onClick={() => setMargin(!margin)}>
+            {margin ? "Hide the margin check" : "Margin check"}
+          </Button>
+        )}
         <Button size="small" onClick={() => void downloadFile(`${base}/docx`).catch((e) => setError(errorText(e)))}>
           ⤓ Word
         </Button>

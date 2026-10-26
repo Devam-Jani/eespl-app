@@ -48,6 +48,9 @@ export const MENU: MenuItem[] = [
   { to: "/enquiries", label: "Enquiries to allocate", perms: ["leads.allocate"], section: "Planning" },
   { to: "/planning/board", label: "Site status board", perms: ["planning.view"], view: ["planning.view", "site.view"], section: "Planning" },
   { to: "/new-areas", label: "New areas (planning)", perms: ["sitearea.approve"], section: "Planning" },
+  { to: "/material-library", label: "Material library", perms: ["coverage.edit"], view: ["estimate.view"], section: "Planning" },
+  { to: "/estimates", label: "Material estimates", perms: ["estimate.edit"], view: ["estimate.view"], section: "Planning" },
+  { to: "/material-requests", label: "Material requests", perms: ["material_request.approve"], section: "Planning" },
   // site
   { to: "/sites", label: "Sites", perms: ["site.update", "closeout.billing", "closeout.site", "planning.view"], view: ["site.view"], all: ["site.view"], section: "Site" },
   { to: "/surveys", label: "Site surveys", perms: ["survey.edit"], view: ["survey.view"], section: "Site" },

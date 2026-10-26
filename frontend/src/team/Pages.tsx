@@ -1107,6 +1107,7 @@ function L({ k }: { k: Key }) {
  * Gujarati and Hindi next to English (the same strings file as the delivery receipt). */
 export function SupervisorDay() {
   const { id } = useParams();
+  const { can } = useAuth();
   const [data] = useMyWork();
   const [site, setSite] = useState<{ code: string; name: string } | null>(null);
   useEffect(() => {
@@ -1145,6 +1146,12 @@ export function SupervisorDay() {
           ))}
         </Link>
       ))}
+      {can("material_request.create") && (
+        <Link to={`/my-site/${id}/material`} className="day-step ask">
+          <L k="askMaterial" />
+          <span className="small day-why">By area and thickness: the app works out the kg and the bags.</span>
+        </Link>
+      )}
     </div>
   );
 }

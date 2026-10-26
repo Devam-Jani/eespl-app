@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, queryString } from "../../api";
 import { useAuth } from "../../auth";
 import { Modal } from "../../ui/Overlay";
@@ -39,6 +39,13 @@ export default function Indents() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // a link from another page (a material request's indent, the schedule) opens it: ?open=id
+  const [params] = useSearchParams();
+  const openId = params.get("open");
+  useEffect(() => {
+    if (openId) void api<Indent>(`/api/material/indents/${openId}`).then(setOpen, (e) => setError(errorText(e)));
+  }, [openId]);
 
   const toggle = (id: number) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 

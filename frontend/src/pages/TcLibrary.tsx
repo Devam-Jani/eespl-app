@@ -7,6 +7,7 @@ import { Modal } from "../ui/Overlay";
 import { errorText } from "../format";
 import type { Clause, HiddenReason, Page, Template, TemplateSummary } from "../types";
 import { Button, Card, Field } from "../ui/components";
+import { TermsLibraryFindings } from "../estimate/Checks";
 
 function move<T>(list: T[], index: number, delta: number): T[] {
   const target = index + delta;
@@ -27,6 +28,7 @@ export default function TcLibrary() {
   const [tab, setTab] = useState<"clauses" | "templates">("clauses");
   const [clauses, setClauses] = useState<Clause[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const { can } = useAuth();
 
   // Hidden clauses come too, so the page can count and toggle them without another request.
   const loadClauses = useCallback(async () => {
@@ -55,6 +57,7 @@ export default function TcLibrary() {
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
+      {can("estimate.view") && <TermsLibraryFindings onFixed={() => void loadClauses()} />}
       {tab === "clauses" ? (
         <Clauses clauses={clauses} reload={loadClauses} onError={setError} />
       ) : (

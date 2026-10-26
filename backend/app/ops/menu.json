@@ -233,6 +233,30 @@
   ]
  },
  {
+  "to": "/material-library",
+  "label": "Material library",
+  "section": "Planning",
+  "perms": [
+   "coverage.edit"
+  ]
+ },
+ {
+  "to": "/estimates",
+  "label": "Material estimates",
+  "section": "Planning",
+  "perms": [
+   "estimate.edit"
+  ]
+ },
+ {
+  "to": "/material-requests",
+  "label": "Material requests",
+  "section": "Planning",
+  "perms": [
+   "material_request.approve"
+  ]
+ },
+ {
   "to": "/sites",
   "label": "Sites",
   "section": "Site",

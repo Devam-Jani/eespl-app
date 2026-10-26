@@ -57,6 +57,8 @@ ALL = [
     "issues.view", "issues.edit", "portal.roles", "closeout.claim_approve", "system.ops",
     "help.edit", "building.edit", "issuelog.view", "issuelog.edit",
     "variation.request", "variation.approve",
+    "estimate.view", "estimate.edit", "coverage.edit", "material_request.create",
+    "material_request.approve", "margin.settings",
 ]  # fmt: skip
 TRACK = {"field.track": "own"}  # every staff user: their own day, map and claim
 
@@ -451,7 +453,18 @@ EXPECTED: dict[str, dict[str, str]] = {
     ),
 }
 # a slip line with no work-order item: billing proposes the variation, the director approves it
-EXPECTED["billing"] |= _all("variation.request")
+EXPECTED["billing"] |= _all("variation.request", "estimate.view")
+# material estimates: planning (and the office) make them and keep the consumption library; the
+# site asks for material on its own sites; planning approves the request into an indent
+EXPECTED["office_admin"] |= _all("estimate.view", "estimate.edit", "coverage.edit")
+EXPECTED["planning"] |= _all(
+    "estimate.view", "estimate.edit", "coverage.edit", "material_request.create",
+    "material_request.approve",
+)  # fmt: skip
+EXPECTED["estimator"] |= _all("estimate.view")
+EXPECTED["store_purchase"] |= _all("estimate.view")
+EXPECTED["site_engineer"] |= {"estimate.view": "assigned", "material_request.create": "assigned"}
+EXPECTED["site_supervisor"] |= {"estimate.view": "assigned", "material_request.create": "assigned"}
 
 REAL_ENDPOINTS = {
     "admin.users", "admin.roles", "audit.view", "clients.view", "library.view",

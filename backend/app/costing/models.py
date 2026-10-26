@@ -31,6 +31,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.masters.models import Tracked
@@ -78,6 +79,9 @@ class CostingSettings(Base):
     # the basis new workings take: "selling": rate = cost ÷ (1 − margin) (the default, Devam
     # 15 Oct); "cost": rate = cost × (1 + margin)
     margin_basis: Mapped[str] = mapped_column(String(8), server_default="selling")
+    # the margin check warns when material alone is over this share of a BOQ line's rate (the
+    # director sets it)
+    material_share_warn_percent: Mapped[Decimal] = mapped_column(Pct, server_default="70")
 
 
 class FreightRate(Tracked, Base):
@@ -124,6 +128,8 @@ class RateWorking(Tracked, Base):
     copied_from_id: Mapped[int | None] = mapped_column(
         ForeignKey("rate_workings.id", ondelete="SET NULL")
     )
+    # products the client supplies free of cost (cement, sand ...): out of our cost, in the T&C
+    free_issue_product_ids: Mapped[list[int]] = mapped_column(JSONB, server_default="[]")
 
     groups: Mapped[list["RateGroup"]] = relationship(
         order_by="RateGroup.sort_order, RateGroup.id",

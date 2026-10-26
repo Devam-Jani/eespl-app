@@ -599,6 +599,9 @@ export function Revisions({ billId, canEdit }: { billId: number; canEdit: boolea
 type Material = {
   bill: string; until: string; store: string | null; note: string | null;
   rows: { product: string; unit: string | null; needed: string; sent: string; returned: string; site_stock: string; used: string; variance: string; variance_percent: string | null; from: string[] }[];
+  /** billed items whose material is not worked out (no system, not by area, no coverage) */
+  uncovered?: { bill: string; item: string; description: string | null; why: string }[];
+  complete?: boolean;
 }; // prettier-ignore
 
 /** Needed (the bills' quantities x coverage) against used (sent, less returned, less still on site). */
@@ -613,6 +616,19 @@ export function MaterialCheck({ billId }: { billId: number }) {
       <h3>Material check</h3>
       {err && <div className="alert alert-error">{err}</div>}
       {m?.note && <p className="muted">{m.note}</p>}
+      {m && m.complete === false && !!m.uncovered?.length && (
+        <div className="alert alert-warn" role="alert">
+          <b>Not complete: {m.uncovered.length} billed item(s) have no coverage</b>, so what they needed is not in the figures below.
+          <ul>
+            {m.uncovered.map((u, i) => (
+              <li key={i}>
+                {u.bill} item {u.item}
+                {u.description ? ` (${u.description.slice(0, 80)})` : ""}: {u.why}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {m && !m.rows.length && <p className="muted">No item on the bills up to this one says what it is made of (its system).</p>}
       {m && m.rows.length > 0 && (
         <table className="table compact">
