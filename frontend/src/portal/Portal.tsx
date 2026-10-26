@@ -9,7 +9,7 @@ import { api, downloadFile, fetchObjectUrl } from "../api";
 import { useAuth } from "../auth";
 import Bell from "../components/Bell";
 import { PageErrorBoundary } from "../helper/Helper";
-import { Button, buttonClass, Card, Field, initials } from "../ui/components";
+import { Button, buttonClass, Card, Field, FilePicker, initials } from "../ui/components";
 import { useTheme } from "../ui/theme";
 import { isClientLogin } from "../components/Guards";
 import { Modal } from "../ui/Overlay";
@@ -736,8 +736,8 @@ function DocumentsTab({ siteId }: { siteId: number }) {
           <Field label="Title">
             <input className="tap-input" value={title} onChange={(e) => setTitle(e.target.value)} required />
           </Field>
-          <Field label="File (PDF, photo, DWG or DXF)">
-            <input type="file" accept=".pdf,image/*,.dwg,.dxf" onChange={(e) => setUpload(e.target.files?.[0] ?? null)} required />
+          <Field as="div" label="File (PDF, photo, DWG or DXF)">
+            <FilePicker label="Choose the drawing" accept=".pdf,image/*,.dwg,.dxf" onFiles={(fs) => setUpload(fs[0] ?? null)} required />
           </Field>
           <Button type="submit" variant="primary" className="tap-wide" disabled={!upload || !title.trim()}>
             Upload
@@ -1200,8 +1200,8 @@ export function SnagForm({ site, onClose, onDone }: { site: Pick<Overview, "id" 
         <Field label="Details">
           <textarea className="tap-input" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </Field>
-        <Field label="Photos">
-          <input type="file" accept="image/*" capture="environment" multiple onChange={(e) => setPhotos([...photos, ...Array.from(e.target.files ?? [])])} />
+        <Field as="div" label="Photos">
+          <FilePicker label="Add photos" accept="image/*" capture="environment" multiple onFiles={(fs) => setPhotos([...photos, ...fs])} />
           {photos.length > 0 && <span className="small muted">{photos.length} photo(s) added</span>}
         </Field>
         <div className="form-actions">

@@ -1124,3 +1124,25 @@ a.kpi:hover {
 .progress-with-value .progress {
   width: 120px;
 }
+
+/* the shared file picker: a button that names the file chosen */
+.file-picker {
+  position: relative;
+  max-width: 100%;
+  cursor: pointer;
+}
+
+.file-picker:focus-within {
+  box-shadow: var(--focus);
+}
+
+.file-picker.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.file-picker-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

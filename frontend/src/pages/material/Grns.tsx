@@ -10,7 +10,7 @@ import type { Page } from "../../types";
 import { Pager } from "../Clients";
 import { shortDate } from "../Tenders";
 import { ProductSelect, StatusBadge, today, UnitSelect, useMaterialLookups } from "./common";
-import { Button, Card, Field } from "../../ui/components";
+import { Button, Card, Field, FilePicker } from "../../ui/components";
 
 export default function Grns() {
   const { can } = useAuth();
@@ -424,12 +424,12 @@ export function GrnView({ grn, onClose, onChange }: { grn: Grn; onClose: () => v
     }
   }
 
-  async function upload(files: FileList | null) {
-    if (!files) return;
+  async function upload(files: File[]) {
+    if (!files.length) return;
     setError(null);
     try {
       let latest = grn;
-      for (const f of Array.from(files)) {
+      for (const f of files) {
         const form = new FormData();
         form.append("file", f);
         form.append("kind", kind);
@@ -508,7 +508,7 @@ export function GrnView({ grn, onClose, onChange }: { grn: Grn; onClose: () => v
               <option value="invoice">Invoice</option>
             </select>
           </Field>
-          <input type="file" accept="image/*,.pdf" capture="environment" multiple onChange={(e) => void upload(e.target.files)} />
+          <FilePicker label="Choose photos" accept="image/*,.pdf" capture="environment" multiple onFiles={(fs) => void upload(fs)} />
         </div>
       )}
       <div className="form-actions">

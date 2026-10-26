@@ -1,7 +1,7 @@
 // The shared components (EESPL UI v1): every page builds from these. Their look is in ui/base.css;
 // /dev/ui shows each one in each state.
 import type { AllHTMLAttributes, ButtonHTMLAttributes, CSSProperties, ReactNode } from "react";
-import { forwardRef } from "react";
+import { forwardRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { STATUS_LABEL, type Status } from "./tokens";
 import alert from "./icons/alert.svg";
@@ -295,6 +295,68 @@ export function Field({
         </small>
       )}
     </As>
+  );
+}
+
+/**
+ * The one file picker: a button that opens the file chooser and then names the file(s) chosen,
+ * in place of the browser's bare "Choose File". In a <Field>, give the Field as="div" (a label
+ * cannot hold this label). `name` and `required` work in a form read with FormData; `inputRef`
+ * reaches the input (to clear it after an upload).
+ */
+export function FilePicker({
+  label = "Choose a file",
+  onFiles,
+  accept,
+  multiple,
+  capture,
+  name,
+  required,
+  disabled,
+  variant = "secondary",
+  size = "normal",
+  block,
+  className = "",
+  inputRef,
+  showChosen = true,
+}: {
+  label?: ReactNode;
+  onFiles?: (files: File[]) => void;
+  accept?: string;
+  multiple?: boolean;
+  capture?: "user" | "environment";
+  name?: string;
+  required?: boolean;
+  disabled?: boolean;
+  variant?: ButtonLook["variant"];
+  size?: ButtonLook["size"];
+  block?: boolean;
+  className?: string;
+  inputRef?: React.Ref<HTMLInputElement>;
+  /** false: the label stays (a picker that uploads at once and says so, "Reading…") */
+  showChosen?: boolean;
+}) {
+  const [chosen, setChosen] = useState<string[]>([]);
+  return (
+    <label className={buttonClass({ variant, size, block, className: `file-picker ${disabled ? "is-disabled" : ""} ${className}`.trim() })}>
+      <input
+        ref={inputRef}
+        type="file"
+        className="sr-only"
+        accept={accept}
+        multiple={multiple}
+        capture={capture}
+        name={name}
+        required={required}
+        disabled={disabled}
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []);
+          setChosen(files.map((x) => x.name));
+          onFiles?.(files);
+        }}
+      />
+      <span className="file-picker-text">{showChosen && chosen.length ? chosen.join(", ") : label}</span>
+    </label>
   );
 }
 

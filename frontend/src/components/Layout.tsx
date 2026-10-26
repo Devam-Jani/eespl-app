@@ -43,6 +43,26 @@ function useWidth(): number {
   return w;
 }
 
+/** A text field has the focus (the phone's keyboard is up): the bottom tabs step aside. */
+function useTyping() {
+  const [typing, setTyping] = useState(false);
+  useEffect(() => {
+    const on = () => {
+      const el = document.activeElement;
+      setTyping(el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && !NOT_TYPED.has(el.type)));
+    };
+    const off = () => setTimeout(on, 0); // the next field's focusin comes after: no flicker between fields
+    document.addEventListener("focusin", on);
+    document.addEventListener("focusout", off);
+    return () => {
+      document.removeEventListener("focusin", on);
+      document.removeEventListener("focusout", off);
+    };
+  }, []);
+  return typing;
+}
+const NOT_TYPED = new Set(["checkbox", "radio", "button", "submit", "reset", "file", "range", "color", "image", "hidden"]);
+
 export default function Layout() {
   const { me, can, logout } = useAuth();
   const groups = visibleGroups(can);
@@ -61,6 +81,7 @@ export default function Layout() {
   const [drawer, setDrawer] = useState(false); // phone: the menu; tablet: the folded sidebar opened
   const [meOpen, setMeOpen] = useState(false);
   const [search, setSearch] = useState(false);
+  const typing = useTyping();
   const [open, setOpen] = useState<Record<string, boolean>>(() => loadOpenGroups(userId));
   useEffect(() => setOpen(loadOpenGroups(userId)), [userId]);
   const here = groupOf(location.pathname);
@@ -182,7 +203,7 @@ export default function Layout() {
   );
 
   return (
-    <div className={`app ${tablet ? "is-tablet" : ""} ${phone ? "is-phone" : ""} ${phone && siteRole ? "has-tabs" : ""}`}>
+    <div className={`app ${tablet ? "is-tablet" : ""} ${phone ? "is-phone" : ""} ${phone && siteRole ? "has-tabs" : ""} ${typing ? "typing" : ""}`}>
       <a className="skip-link" href="#main">
         Skip to the page
       </a>

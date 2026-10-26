@@ -8,7 +8,7 @@ import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent }
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { errorText, inr, num } from "../format";
-import { Button, Card, EmptyState, Field, PageSkeleton, Tabs } from "../ui/components";
+import { Button, Card, EmptyState, Field, FilePicker, PageSkeleton, Tabs } from "../ui/components";
 import { Modal } from "../ui/Overlay";
 import { CHART } from "../ui/tokens";
 import { bbox, flatten, levelOf, outlinePath } from "./geom";
@@ -19,14 +19,14 @@ import type { Pt } from "./geom";
 
 const Measure3D = lazy(() => import("./Measure3D").then((m) => ({ default: m.Measure3D })));
 
-type Area = {
+export type Area = {
   id: number; code: string; name: string; kind: "area" | "slope"; outline: Pt[]; picked: boolean; layer: string | null; cad_file_id: number | null;
   area_sqm: string; periphery_m: string; trim_with: number[]; net_area_sqm: string; net_periphery_m: string;
   height_mm: string | null; height_source: string | null; height2_mm: string | null; height2_source: string | null; wall_top_mm: string;
   rise_mm: string | null; run_mm: string | null; slope_source: string | null; counts: Record<string, number>; billed: boolean;
   slope_mm: string | null; closed_gap_mm: string | null; drawn_length_m: string | null;
 }; // prettier-ignore
-type Edge = {
+export type Edge = {
   id: number; area_a_id: number; area_b_id: number; a: string; b: string; length_m: string; line: number[]; answer: "both" | "open" | "weir" | "none" | null;
   weir_mm: string | null; manual: boolean; source: string | null;
 }; // prettier-ignore
@@ -38,7 +38,7 @@ type Item = {
 type SheetRow = { id: number; code: string; seq: number; title: string | null; measured_on: string; status: string; imported_from: string | null; ra_bill_id: number | null };
 type State = { site: { id: number; code: string; name: string }; drawings: { id: number; title: string; rev: number; unit_m: number }[]; areas: Area[]; edges: Edge[]; items: Item[]; sheets: SheetRow[]; sqft_per_sqm: string };
 type Outline = { handle: string; layer: string; outline: Pt[] };
-type Drawing = { id: number; outlines: Outline[]; texts: [number, number, number, string, string][] };
+export type Drawing = { id: number; outlines: Outline[]; texts: [number, number, number, string, string][] };
 type Line = {
   kind: "area" | "line" | "deduction" | "not_done" | "total"; area_id: number | null; edge_id: number | null; wo_line_id: number | null; item_no: string | null; layer: number;
   part: string | null; particulars: string; no: string | null; length_m: string | null; width_m: string | null; height_m: string | null; qty: string | null;
@@ -383,7 +383,8 @@ function nextCode(areas: Area[]): string {
 
 // --- the drawing -----------------------------------------------------------------------------------
 
-function DrawingView(props: {
+/** The drawing with its measured outlines (pan, zoom, pick); the estimate's read-only view uses it too. */
+export function DrawingView(props: {
   drawing: Drawing; areas: Area[]; edges: Edge[]; mode: Mode; pick: Pick; levels: string[];
   onPoint: (x: number, y: number) => void; onTraced: (o: Pt[]) => void; onLevel: (t: string) => void; onArea: (id: number) => void; onEdge: (e: Edge) => void;
 }) { // prettier-ignore
@@ -838,11 +839,11 @@ function ImportPanel({ siteId, reload }: { siteId: number; reload: () => Promise
   return (
     <div>
       <p className="muted">The old Excel measurement sheet and proforma (before the app): their quantities become the previous of the first bill here.</p>
-      <Field label="Old measurement sheet (.xlsx)">
-        <input type="file" accept=".xlsx,.xlsm" onChange={(e) => setSheet(e.target.files?.[0] ?? null)} />
+      <Field as="div" label="Old measurement sheet (.xlsx)">
+        <FilePicker label="Choose the measurement sheet" accept=".xlsx,.xlsm" onFiles={(fs) => setSheet(fs[0] ?? null)} />
       </Field>
-      <Field label="Old proforma (.xlsx)">
-        <input type="file" accept=".xlsx,.xlsm" onChange={(e) => setProforma(e.target.files?.[0] ?? null)} />
+      <Field as="div" label="Old proforma (.xlsx)">
+        <FilePicker label="Choose the proforma" accept=".xlsx,.xlsm" onFiles={(fs) => setProforma(fs[0] ?? null)} />
       </Field>
       <Field label="Measured on">
         <input type="date" value={on} onChange={(e) => setOn(e.target.value)} />

@@ -5,7 +5,7 @@ import { useAuth } from "../../auth";
 import { errorText } from "../../format";
 import { day, Framed, PortalSite } from "../../portal/Portal";
 import type { Site } from "../../types";
-import { Button, Card, Field } from "../../ui/components";
+import { Button, Card, Field, FilePicker } from "../../ui/components";
 
 type PortalUser = {
   id: string;
@@ -292,7 +292,7 @@ export default function PortalTab({ site }: { site: Site }) {
         <Field label="Title" bare>
           <input name="title" placeholder="Title" required className="grow" />
         </Field>
-        <input name="file" type="file" accept=".pdf,image/*,.dwg,.dxf" required />
+        <FilePicker label="Choose the file" name="file" accept=".pdf,image/*,.dwg,.dxf" required />
         <label className="check small">
           <input name="share_with_client" type="checkbox" value="true" /> Share with client
         </label>

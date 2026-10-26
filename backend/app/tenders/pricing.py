@@ -57,7 +57,8 @@ def line_amount(line: BoqLine) -> Decimal | None:
     """qty × rate; none for QRO / NQ lines or lines without a quantity or rate."""
     if line.qty_note or line.qty is None or line.rate is None:
         return None
-    return money(line.qty * line.rate)
+    # Decimal through str: a line built with plain numbers too, never a float into money
+    return money(Decimal(str(line.qty)) * Decimal(str(line.rate)))
 
 
 def refresh_amount(line: BoqLine) -> None:

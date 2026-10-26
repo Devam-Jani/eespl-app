@@ -11,12 +11,14 @@ import { describe, expect, it } from "vitest";
 //   - an element with the "card" class (use <Card>, as="div" | "article" | "aside" | "form" | "details")
 //   - a raw <table> without the shared table class (use <Table>, or className="table" on a line grid)
 //   - an <input>/<select>/<textarea> outside a <Field>/<Select>/<DateField>
+//   - a bare file input (the browser's "Choose File"): use <FilePicker> (one hidden, or held inside a
+//     page's own <label> button such as the camera tile, is not bare)
 //   - a colour in an inline style={{ ... }} (use a class on the CSS variables)
 // The components themselves (src/ui/**) and tests are not pages and are not scanned.
 
 const SRC = resolve(__dirname, "..");
 
-type Rule = "button" | "field" | "card" | "table" | "input" | "style";
+type Rule = "button" | "field" | "card" | "table" | "input" | "file" | "style";
 
 // The few cases that must stay: a file, a rule, how many, and why. A new one beyond the count fails.
 // Keep it small; never skip a whole file.
@@ -63,6 +65,12 @@ function insideField(node: ts.Node): boolean {
   return false;
 }
 
+/** directly inside a page's own <label> (a styled button around the input), not a <Field> */
+function inOwnLabel(node: ts.Node): boolean {
+  const p = node.parent;
+  return ts.isJsxElement(p) && p.openingElement.tagName.getText() === "label" && !hasClass(classText(p.openingElement), "field");
+}
+
 /** the object of style={{ ... }}, also when cast (style={{ ... } as CSSProperties}) */
 function styleObject(e: ts.Expression | undefined): ts.ObjectLiteralExpression | null {
   while (e && (ts.isAsExpression(e) || ts.isParenthesizedExpression(e) || ts.isSatisfiesExpression(e))) e = e.expression;
@@ -89,6 +97,7 @@ function scan(rel: string, text: string): string[] {
         const type = attr(node, "type")?.initializer;
         const kind = type && ts.isStringLiteral(type) ? type.text : "";
         if (!(tag === "input" && NOT_TEXT.has(kind)) && !insideField(node)) add(node, "input", `<${tag}> outside a <Field>`);
+        if (tag === "input" && kind === "file" && !attr(node, "hidden") && !inOwnLabel(node)) add(node, "file", "a bare file input: use <FilePicker>");
       }
       const style = attr(node, "style")?.initializer;
       const obj = style && ts.isJsxExpression(style) ? styleObject(style.expression) : null;

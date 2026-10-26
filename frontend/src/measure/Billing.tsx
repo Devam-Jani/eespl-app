@@ -7,7 +7,8 @@ import { useCallback, useEffect, useState } from "react";
 import { api, downloadFile, fetchObjectUrl } from "../api";
 import { useAuth } from "../auth";
 import { errorText, inr, num } from "../format";
-import { Button, Card, EmptyState, Field } from "../ui/components";
+import { isPhone } from "../components/menuState";
+import { Button, buttonClass, Card, EmptyState, Field, FilePicker } from "../ui/components";
 import { Modal } from "../ui/Overlay";
 
 type ItemRef = { wo_line_id: number; item_no: string | null; description: string; unit: string | null };
@@ -90,8 +91,8 @@ export function SlipNew({ siteId, onClose, onDone }: { siteId: number; onClose: 
   return (
     <Modal title="Bill from a site slip" onClose={onClose}>
       <p className="muted">The client's slip (notebook page) as a photo or PDF; its lines are entered next, as written.</p>
-      <Field label="The slip (photo or PDF)">
-        <input type="file" accept="image/*,.pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+      <Field as="div" label="The slip (photo or PDF)">
+        <FilePicker label="Choose the slip" accept="image/*,.pdf" onFiles={(fs) => setFile(fs[0] ?? null)} />
       </Field>
       <Field label="What it is for">
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Staff quarters: bituminous belt tape" />
@@ -135,6 +136,7 @@ export function SlipPanel({ sheetId, slip, items, draft, onChanged }: { sheetId:
   const [err, setErr] = useState("");
   const [asking, setAsking] = useState<SlipInfo["unbilled"][number] | null>(null);
   const { can } = useAuth();
+  const phone = isPhone(window.innerWidth);
   useEffect(() => {
     if (!slip.has_file) return;
     let gone = false;
@@ -170,7 +172,13 @@ export function SlipPanel({ sheetId, slip, items, draft, onChanged }: { sheetId:
     <div className="m-slip">
       <div className="m-slip-pic">
         {url && !pdf && <img src={url} alt={`The slip of ${slip.on ?? ""}, as scanned`} />}
-        {url && pdf && <iframe src={url} title="The slip, as scanned" />}
+        {url && pdf && !phone && <iframe src={url} title="The slip, as scanned" />}
+        {url && pdf && phone && (
+          // a phone's browser shows no PDF in a frame: the slip opens in its own viewer
+          <a className={buttonClass({ block: true })} href={url} target="_blank" rel="noopener">
+            Open the slip
+          </a>
+        )}
         {!slip.has_file && <EmptyState title="No slip attached" hint="Attach the slip's photo or PDF: it is the client's signed approval." />}
         <p className="m-why">
           Slip of {slip.on ?? "—"} · signed by {slip.signed_by ?? "—"} on {slip.signed_on ?? "—"}
@@ -405,19 +413,19 @@ export function RegisterView({ siteId, onOpen, onClose }: { siteId: number; onOp
       id="m-register"
       title="The site's bill register"
       actions={
-        <div className="row-actions">
-          <Field label="Find a bill" bare>
-            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="RA 16 (the app's or the old number)" />
-          </Field>
-          <Field label="Read an old register (Excel)" bare>
-            <input type="file" accept=".xlsx" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
-          </Field>
-          <Button size="small" variant="ghost" type="button" onClick={onClose}>
-            Close
-          </Button>
-        </div>
+        <Button size="small" variant="ghost" type="button" onClick={onClose}>
+          Close
+        </Button>
       }
     >
+      <div className="m-register-tools">
+        <Field label="Find a bill" hint="The app's RA number or the old one">
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="RA 16" />
+        </Field>
+        <Field label="Read an old register" hint="The site's Excel bill register (.xlsx)" as="div">
+          <FilePicker label="Choose the Excel file" accept=".xlsx" onFiles={(f) => f[0] && void upload(f[0])} />
+        </Field>
+      </div>
       {err && <div className="alert alert-error">{err}</div>}
       {!r ? (
         <p className="muted">Loading the register…</p>

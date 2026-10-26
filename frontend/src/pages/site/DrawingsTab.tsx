@@ -7,7 +7,7 @@ import { errorText } from "../../format";
 import type { Drawing, DrawingRevision, Site } from "../../types";
 import { useNodes } from "./StructureTab";
 import { ShareTick } from "./TasksTab";
-import { Button, buttonClass, Card, Field } from "../../ui/components";
+import { Button, buttonClass, Card, Field, FilePicker } from "../../ui/components";
 
 const REV_BADGE: Record<string, string> = { draft: "badge-muted", submitted: "badge-info", approved: "badge-ok", rejected: "badge-danger" };
 
@@ -188,8 +188,8 @@ function UploadDrawing({ nodes, onClose, onUpload }: { nodes: { id: number; path
             ))}
           </select>
         </Field>
-        <Field label="File (PDF, PNG, JPG or DWG, up to 50 MB) — saved as R0">
-          <input type="file" required accept=".pdf,.png,.jpg,.jpeg,.dwg" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        <Field as="div" label="File (PDF, PNG, JPG or DWG, up to 50 MB) — saved as R0">
+          <FilePicker label="Choose the drawing" required accept=".pdf,.png,.jpg,.jpeg,.dwg" onFiles={(fs) => setFile(fs[0] ?? null)} />
         </Field>
         <div className="form-actions">
           <Button type="button" onClick={onClose}>

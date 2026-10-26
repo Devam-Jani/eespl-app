@@ -4579,3 +4579,15 @@ label.field-wrong textarea,
   .m-slip-pic img, .m-slip-pic iframe { max-height: 360px; }
 }
 .m-list .row-actions { flex-wrap: wrap; justify-content: flex-start; }
+
+/* the bill register's search and old-register upload, above the list */
+.m-register-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: flex-start;
+}
+
+.m-register-tools > * {
+  flex: 1 1 260px;
+}

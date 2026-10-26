@@ -567,7 +567,7 @@ tr.clickable {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  min-height: 60px;
+  min-height: var(--tabs);
   padding: var(--space-3) 0;
   border: 0;
   background: none;
@@ -584,6 +584,17 @@ tr.clickable {
 
 .app-tab:hover {
   text-decoration: none;
+}
+
+/* every phone page leaves room above the tabs (the iPhone's home bar too); a field the keyboard
+   scrolls to stops above them, and while one is typed in the tabs step aside (Android lifts them
+   above the keyboard, over the field) */
+html:has(.app.has-tabs) {
+  scroll-padding-bottom: var(--tabs-clear);
+}
+
+.app.has-tabs.typing .app-tabs {
+  display: none;
 }
 
 /* --- tablet and phone ------------------------------------------------------------------------------ */
@@ -655,7 +666,7 @@ tr.clickable {
   }
 
   .app.has-tabs .app-content {
-    padding-bottom: 96px;
+    padding-bottom: var(--tabs-clear);
   }
 
   .app-menu {
@@ -1344,7 +1355,7 @@ tr.clickable {
 }
 
 .app.has-tabs .report-send {
-  bottom: 60px;
+  bottom: calc(var(--tabs) + env(safe-area-inset-bottom, 0px));
 }
 
 /* --- how the app works (Figma 04) ------------------------------------------------------------------- */

@@ -64,14 +64,14 @@ def _estimate(t, lines=()):
 
 
 def test_juno_a_method_statement_figure_outside_the_library_warns(terrace, db):
-    """Juno: the method statement says 1.2-1.5 kg/sqm for Ultrathane, the BOQ 1.8-1.9, the library
-    1.8 (1.8 to 2.0). The method statement warns; the BOQ does not."""
+    """Juno: the method statement says 1.2-1.5 kg/sqm for Ultrathane, the BOQ 2-2.2, the library
+    2 (2 to 2.5, its data sheet). The method statement warns; the BOQ does not."""
     c, h = terrace["c"], terrace["h"]
     ms = "Apply two coats of Ultrathane at 1.2–1.5 kg/sqm over the primer. Primer: Epoxy Primer 021 at 0.2 kg/sqm."
-    boq = "PU coating with Ultrathane 1.8-1.9 kg/sqm, Epoxy Primer 021 at 5 sqm per kg."
+    boq = "PU coating with Ultrathane 2-2.2 kg/sqm, Epoxy Primer 021 at 5 sqm per kg."
     out = lib.check_text(db, ms, None, "Method statement")
-    assert [w["product"] for w in out] == ["Ultrathane"] and "1.2–1.5 kg/sqm is outside the library's 1.8–2 kg/sqm" in out[0]["warning"]
-    assert lib.check_text(db, boq) == []  # 1.8-1.9 is inside; 5 sqm per kg = 0.2 kg/sqm, inside 0.15-0.25
+    assert [w["product"] for w in out] == ["Ultrathane"] and "1.2–1.5 kg/sqm is outside the library's 2–2.5 kg/sqm" in out[0]["warning"]
+    assert lib.check_text(db, boq) == []  # 2-2.2 is inside; 5 sqm per kg = 0.2 kg/sqm, inside 0.1-0.25
     assert [w["product"] for w in lib.check_text(db, "Ultrathane Logic Foam at 0.5 kg/sqm")] == ["Ultrathane Logic Foam"]  # the longer name, not Ultrathane
     assert lib.check_text(db, "Ultrathane, 2.5 m wide strips at 1.2 m c/c") == []  # no coverage written
     r = c.post("/api/estimate/check-text", json={"text": ms}, headers=h).json()
@@ -106,18 +106,18 @@ def test_wastage_is_its_own_factor_and_packs_round_up(terrace, db):
     assert lib.packs(D(100), p).count == 5
     e = _estimate(terrace, [{"product_id": p.id, "system_id": terrace["pu"].id}])
     ln = e["lines"][0]
-    assert ln["coverage"].startswith("1.8 kg/sqm") and "%" not in ln["coverage"] and D(ln["wastage_percent"]) == 5
+    assert ln["coverage"].startswith("2 kg/sqm") and "%" not in ln["coverage"] and D(ln["wastage_percent"]) == 5
     base = sum(D(r["base_sqm"]) for r in ln["rows"])
-    assert D(ln["qty"]) == base * D("1.8") * D("1.05") and ln["packs"] == lib.packs(D(ln["qty"]), p).text
+    assert D(ln["qty"]) == base * D("2") * D("1.05") and ln["packs"] == lib.packs(D(ln["qty"]), p).text
     assert all("× (1 + 5%)" in r["formula"] for r in ln["rows"])
     # every change to the library is logged
     cov = db.scalar(select(Coverage).where(Coverage.product_id == p.id, Coverage.system_id.is_(None)))
     c, h = terrace["c"], terrace["h"]
-    r = c.put(f"/api/estimate/coverages/{cov.id}", json={"product_id": p.id, "value": "1.9", "min_value": "1.8", "max_value": "2", "unit": "kg/sqm", "source": "tds"}, headers=h)
+    r = c.put(f"/api/estimate/coverages/{cov.id}", json={"product_id": p.id, "value": "2.2", "min_value": "2", "max_value": "2.5", "unit": "kg/sqm", "source": "tds"}, headers=h)
     assert r.status_code == 200 and r.json()["source_label"] == "data sheet (TDS)"
-    assert c.put(f"/api/estimate/coverages/{cov.id}", json={"product_id": p.id, "value": "2.5", "min_value": "1.8", "max_value": "2", "unit": "kg/sqm"}, headers=h).status_code == 422
+    assert c.put(f"/api/estimate/coverages/{cov.id}", json={"product_id": p.id, "value": "2.6", "min_value": "2", "max_value": "2.5", "unit": "kg/sqm"}, headers=h).status_code == 422
     changes = c.get("/api/estimate/library/changes", headers=h).json()
-    assert changes[0]["action"] == "coverage.update" and changes[0]["before"]["value"] in ("1.8", "1.8000") and changes[0]["after"]["value"] in ("1.9", "1.9000")
+    assert changes[0]["action"] == "coverage.update" and changes[0]["before"]["value"] in ("2", "2.0000") and changes[0]["after"]["value"] in ("2.2", "2.2000")
 
 
 def test_mix_designs_match_the_planning_sheet(terrace, db):
@@ -156,10 +156,10 @@ def test_one_area_set_and_cut_outs_go_to_misc(terrace, db):
     assert floors["Ultrathane"][ut["id"]] == floors["120 gsm geotextile"][ut["id"]] == D("331.2")  # 336 less the two shafts, counted once
     assert by["S1"]["id"] not in floors["120 gsm geotextile"]  # a shaft's floor is not laid
     geo = next(ln for ln in e["lines"] if ln["product"] == "120 gsm geotextile")
-    assert D(geo["qty"]) == (D("331.2") + 200) * D("1.1")
+    assert D(geo["qty"]) == (D("331.2") + 200) * D("1.05") * D("1.05")  # the laps in the coverage, 5% cut-offs
     mesh = next(ln for ln in e["lines"] if ln["product"] == "45 gsm fibre mesh")
     per = 76 + D(7) + D("5.4") + 66  # the terraces' and the shafts' peripheries
-    assert D(mesh["qty"]) == per * D("0.3") * D("1.1") and mesh["packs"] == "2 rolls of 50 sqm"
+    assert D(mesh["qty"]) == per * D("0.3") * D("1.05") * D("1.05") and mesh["packs"] == "2 rolls of 50 sqm"
 
 
 def test_a_measured_area_left_out_warns_until_it_is_in_or_excluded(terrace, db):
@@ -227,7 +227,7 @@ def test_an_old_planning_sheet_is_read_against_the_drawing_and_the_library(terra
     assert r.status_code == 200, r.text
     f = "\n".join(r.json()["findings"])
     assert "Screed B2: Upper terrace is 338 sqm; the drawing measures 336 sqm (+2)" in f
-    assert "PU C3: Ultrathane at 1.5; the library says 1.8 kg/sqm" in f
+    assert "PU C3: Ultrathane at 1.5; the library says 2 kg/sqm" in f
     assert "'300 TO 340' is typed as text" in f
     assert "Upper terrace has 2 figures across the sheets: 336 sqm (PU), 338 sqm (Screed)" in f
     assert "SBR Latex is worked at 140 mm and 165 mm" in f
@@ -262,16 +262,17 @@ def _working(t, db, rate="1072", free=()):
 
 
 def test_margin_warns_above_the_directors_share_and_free_issue_is_out_of_cost(terrace, db, login_as):
-    """Juno item iv: material at the client sheet's figures was about 91% of ₹1,072/sqm."""
+    """Juno item iv: the client sheet's ₹1,072/sqm was all material at the data sheet's 2 kg/sqm of Ultrathane;
+    at ₹1,250/sqm the material is 86.5% of the rate."""
     t = terrace
     c, h = t["c"], t["h"]
-    tender = _working(t, db, free=("Cement",))
+    tender = _working(t, db, rate="1250", free=("Cement",))
     m = c.get("/api/estimate/margin", params={"tender_id": tender.id}, headers=h).json()
     row = m["lines"][0]
-    material = (D("0.2") * D("1.05") * 350 + D("1.8") * D("1.05") * 480).quantize(D("0.01"))
-    assert D(row["material_sqm"]) == material and D(row["material_share_percent"]) == (material / 1072 * 100).quantize(D("0.1"))  # 91.5%
-    assert D(row["margin_percent"]) == ((1072 - material) / 1072 * 100).quantize(D("0.1"))  # on the selling price
-    assert any("Material alone is 91.5% of the rate ₹1,072.00/sqm (over 70%)" in w for w in row["warnings"])
+    material = (D("0.2") * D("1.05") * 350 + D("2") * D("1.05") * 480).quantize(D("0.01"))
+    assert D(row["material_sqm"]) == material and D(row["material_share_percent"]) == (material / 1250 * 100).quantize(D("0.1"))  # 86.5%
+    assert D(row["margin_percent"]) == ((1250 - material) / 1250 * 100).quantize(D("0.1"))  # on the selling price
+    assert any("Material alone is 86.5% of the rate ₹1,250.00/sqm (over 70%)" in w for w in row["warnings"])
     assert row["free_issue"] == ["Cement"] and row["no_price"] == ["Cemkrete"]  # free issue out of the cost; no price: listed, not complete
     # the director raises the share: no warning; another role cannot change it
     pc, ph = login_as("planning", email="planner@example.com")

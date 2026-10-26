@@ -198,6 +198,7 @@ const est = () => import("./estimate/Estimates");
 const MaterialLibrary = lazyPage(() => import("./estimate/Library"));
 const EstimatesList = lazyPage(() => est().then((m) => ({ default: m.EstimatesList })));
 const EstimatePage = lazyPage(() => est().then((m) => ({ default: m.EstimatePage })));
+const EstimateDrawing = lazyPage(() => import("./estimate/Drawing"));
 const MaterialRequests = lazyPage(() => import("./estimate/Requests"));
 const AskMaterial = lazyPage(() => import("./estimate/Requests").then((m) => ({ default: m.AskMaterial })));
 const Transfers = lazyPage(() => import("./pages/material/Stores").then((m) => ({ default: m.Transfers })));
@@ -452,6 +453,7 @@ export default function App() {
                   ["/my-site/:id/report", ["dpr.edit"], <TodayReport />],
                   ["/my-site/:id/material", ["material_request.create"], <AskMaterial />],
                   ["/estimates/:id", ["estimate.view"], <EstimatePage />],
+                  ["/estimates/:id/drawing", ["estimate.view"], <EstimateDrawing />],
                   ["/help/how-it-works", STAFF_ANY, <HowItWorks />],
                   ...(UiGallery ? ([["/dev/ui", ["admin.users"], <UiGallery />]] as [string, string[], JSX.Element][]) : []),
                   ["/purchase-orders/new", ["po.edit"], <NewPo />],

@@ -81,3 +81,19 @@
 .est-areas td {
   position: relative;
 }
+
+/* the estimate's read-only drawing: the measured areas beside it */
+.est-drawing-areas {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.est-drawing-areas li {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.est-drawing-areas .strong {
+  font-weight: 600;
+}

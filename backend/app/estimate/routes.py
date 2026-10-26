@@ -540,6 +540,46 @@ def estimate_pdf(eid: int, db: DbSession, principal: CurrentPrincipal, scope: Vi
     return pdf_response(export.pdf(db, e, f"{site.code} {site.name}" if site else None), e.code)
 
 
+@router.get("/estimates/{eid}/drawing")
+def estimate_drawing(eid: int, db: DbSession, principal: CurrentPrincipal, scope: View) -> dict:
+    """The site's measured drawing, read only, for whoever can see the estimate (planning has no
+    billing permission): the outlines, the measured areas and their shared edges; nothing of the
+    bills, sheets or rates. Each area says whether this estimate has it or left it out; billing gets
+    the link to Measure and bill too."""
+    from app.measure import service as ms  # noqa: PLC0415
+    from app.measure.routes import _area_out as m_area  # noqa: PLC0415
+    from app.measure.routes import _edge_out as m_edge  # noqa: PLC0415
+    from app.sites.models import Drawing, DrawingRevision  # noqa: PLC0415
+    from app.takeoff.models import CadFile  # noqa: PLC0415
+
+    e = _estimate(db, eid, scope, principal)
+    if e.site_id is None:
+        raise _404("This estimate has no site, so no drawing")
+    site = db.get(Site, e.site_id)
+    areas = ms.areas_of(db, site.id)
+    f = db.execute(
+        select(CadFile, Drawing.title, DrawingRevision.rev_no).join(Drawing, Drawing.id == CadFile.drawing_id).join(DrawingRevision, DrawingRevision.id == CadFile.revision_id)
+        .where(CadFile.site_id == site.id, CadFile.status == "ready").order_by(CadFile.id.desc()).limit(1)
+    ).first()  # fmt: skip
+    drawing = None
+    if f is not None:
+        d = _said(ms.drawing, f[0])
+        drawing = {"id": f[0].id, "title": f[1], "rev": f[2], "unit_m": f[0].unit_m, "outlines": d["outlines"], "texts": ms.texts_m(f[0])}
+    mine = {a.measure_area_id: a for a in svc.areas_of(db, e) if a.measure_area_id}
+    codes = {a.id: a.code for a in areas}
+    out = []
+    for a in areas:
+        row = m_area(a, set())
+        row.pop("billed")
+        ea = mine.get(a.id)
+        row["in_estimate"] = "missed" if ea is None else "in" if ea.included else "excluded"
+        row["excluded_reason"] = ea.excluded_reason if ea is not None else None
+        out.append(row)
+    return {"estimate": {"id": e.id, "code": e.code, "title": e.title}, "site": {"id": site.id, "code": site.code, "name": site.name}, "drawing": drawing,
+            "areas": out, "edges": [m_edge(x, codes) for x in ms.edges_of(db, site.id)],
+            "can_measure": msvc.covers_site(db, principal.permissions.get("billing.view"), principal, site.id)}  # fmt: skip
+
+
 @router.post("/estimates/{eid}/import")
 async def import_old(eid: int, db: DbSession, principal: CurrentPrincipal, scope: View, file: Annotated[UploadFile, File()]) -> dict:
     """An old planning sheet read against this estimate's site drawing and the library."""
