@@ -5,7 +5,7 @@ import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
 import { errorText, inr } from "../format";
 import { MENU } from "../menu";
-import { Button, Card, Field } from "../ui/components";
+import { Button, Card, Field, FilePicker } from "../ui/components";
 
 const when = (v: string | null | undefined) =>
   v
@@ -539,7 +539,7 @@ export function UserImport() {
       {error && <div className="alert alert-error">{error}</div>}
       <Card as="div">
         <div className="inline-form">
-          <input type="file" accept=".xlsx" onChange={(e) => (setFile(e.target.files?.[0] ?? null), setCheck(null), setMade(null))} aria-label="The filled template" />
+          <FilePicker label="Choose the filled template" accept=".xlsx" onFiles={(fs) => (setFile(fs[0] ?? null), setCheck(null), setMade(null))} />
           <Button disabled={!file} onClick={() => void send("/api/ops/user-import/check").then((r) => r && setCheck(r as typeof check))}>
             Check the file
           </Button>

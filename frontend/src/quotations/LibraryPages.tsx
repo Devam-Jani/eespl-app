@@ -10,7 +10,7 @@ import { errorText } from "../format";
 import { loadLookups, MarkupField, plain, SectionsEditor, useLookups } from "./common";
 import type { Lookups, Section } from "./common";
 import { ART } from "../ui/tokens";
-import { Button, Card, Field } from "../ui/components";
+import { Button, Card, Field, FilePicker } from "../ui/components";
 
 type Kind = "letterhead" | "letter" | "spec" | "line" | "item" | "reference" | "preset";
 type Row = Record<string, unknown> & { id: number; version: number; needs_check: boolean; is_active: boolean; updated_at: string };
@@ -278,10 +278,10 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
                   <Field as="div" label={{ logo: "Logo", header: "Header band (full width)", footer: "Footer band (full width)", watermark: "Watermark (made faint)" }[slot]} key={slot}>
                     <Logo path={v(key)} />
                     {edit && (
-                      <input
-                        type="file"
+                      <FilePicker
+                        label="Choose the image"
                         accept="image/*"
-                        onChange={(e) => e.target.files?.[0] && void upload(`/api/quotations/library/letterhead/${row.id}/logo?slot=${slot}`, e.target.files[0])}
+                        onFiles={(fs) => fs[0] && void upload(`/api/quotations/library/letterhead/${row.id}/logo?slot=${slot}`, fs[0])}
                       />
                     )}
                   </Field>
@@ -592,7 +592,7 @@ function ImageUpload({ onUpload }: { onUpload: (file: File, caption: string) => 
       <Field label="Caption" bare>
         <input placeholder="Caption" value={caption} onChange={(e) => setCaption(e.target.value)} />
       </Field>
-      <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0], caption)} />
+      <FilePicker label="Choose the image" accept="image/*" onFiles={(fs) => fs[0] && onUpload(fs[0], caption)} />
     </div>
   );
 }
@@ -701,7 +701,7 @@ function SettingsPanel() {
         <Button size="small" onClick={() => void downloadFile("/api/quotations/settings/word-template")}>
           ⤓ Template
         </Button>
-        {edit && <input type="file" accept=".docx" onChange={(e) => e.target.files?.[0] && void uploadTemplate(e.target.files[0])} />}
+        {edit && <FilePicker label="Upload a Word template" size="small" accept=".docx" onFiles={(fs) => fs[0] && void uploadTemplate(fs[0])} />}
         {edit && s.word_template === "uploaded" && (
           <Button variant="ghost" size="small" onClick={() => void api<Settings>("/api/quotations/settings/word-template", { method: "DELETE" }).then(setS)}>
             Back to the built-in one

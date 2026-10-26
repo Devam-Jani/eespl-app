@@ -6,7 +6,7 @@ import { useAuth } from "../auth";
 import { Modal } from "../ui/Overlay";
 import { errorText } from "../format";
 import { day, Thread } from "../portal/Portal";
-import { Button, buttonClass, Field } from "../ui/components";
+import { Button, buttonClass, Field, FilePicker } from "../ui/components";
 
 type Snag = {
   id: number;
@@ -305,8 +305,8 @@ function NewSnag({ sites, onClose, onDone }: { sites: { id: number; code: string
         <Field label="Details">
           <textarea name="description" rows={3} />
         </Field>
-        <Field label="Photos">
-          <input name="photos" type="file" accept="image/*" multiple />
+        <Field as="div" label="Photos">
+          <FilePicker label="Choose photos" name="photos" accept="image/*" multiple />
         </Field>
         <div className="form-actions">
           <Button type="submit" variant="primary">Save</Button>

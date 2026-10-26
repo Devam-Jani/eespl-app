@@ -12,7 +12,7 @@ import { Modal } from "../ui/Overlay";
 import { errorText, inr } from "../format";
 import { S } from "../receipt/strings";
 import type { Key } from "../receipt/strings";
-import { Button, buttonClass, Card, Field } from "../ui/components";
+import { Button, buttonClass, Card, Field, FilePicker } from "../ui/components";
 
 const Dashboard = lazy(() => import("../analytics/Dashboard"));
 
@@ -878,8 +878,8 @@ export function CertifyForm({ bill, onClose, onSaved }: { bill: Tracked; onClose
           <Field label="Certified amount (₹)">
             <input inputMode="decimal" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
           </Field>
-          <Field label="Signed copy or email">
-            <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.eml,.msg" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          <Field as="div" label="Signed copy or email">
+            <FilePicker label="Choose the file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.eml,.msg" onFiles={(fs) => setFile(fs[0] ?? null)} />
           </Field>
         </div>
         <table className="table compact">
@@ -1161,7 +1161,7 @@ export function SupervisorDay() {
 export function SiteVisitForm({ siteId, leadId, onClose, onSaved }: { siteId?: number; leadId?: number; onClose: () => void; onSaved: () => void }) {
   const [notes, setNotes] = useState("");
   const [day, setDay] = useState(new Date().toLocaleDateString("en-CA", { timeZone: TZ }));
-  const [photos, setPhotos] = useState<FileList | null>(null);
+  const [photos, setPhotos] = useState<File[]>([]);
   const [gps, setGps] = useState<GeolocationCoordinates | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -1183,7 +1183,7 @@ export function SiteVisitForm({ siteId, leadId, onClose, onSaved }: { siteId?: n
       form.append("lng", gps.longitude.toFixed(6));
       form.append("accuracy", String(Math.round(gps.accuracy)));
     }
-    Array.from(photos ?? []).forEach((f) => form.append("photos", f));
+    photos.forEach((f) => form.append("photos", f));
     try {
       await api("/api/team/site-visits", { method: "POST", form });
       onSaved();
@@ -1200,8 +1200,8 @@ export function SiteVisitForm({ siteId, leadId, onClose, onSaved }: { siteId?: n
         <Field label="Notes (who you met, what was agreed)">
           <textarea required rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
-        <Field label="Photos">
-          <input type="file" accept="image/*" capture="environment" multiple onChange={(e) => setPhotos(e.target.files)} />
+        <Field as="div" label="Photos">
+          <FilePicker label="Choose photos" accept="image/*" capture="environment" multiple onFiles={setPhotos} />
         </Field>
         <p className="small muted">
           {gps ? `GPS ${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)} (±${Math.round(gps.accuracy)} m)` : "Location is saved when the phone allows it."}

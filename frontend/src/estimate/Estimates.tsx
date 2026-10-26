@@ -1,13 +1,13 @@
 // Material estimates: one area set from the site's measured drawing (every measured area in it or
 // excluded with a reason), and per material line: area × coverage × (1 + wastage) = quantity → packs,
 // per area and in total; then what the site asked for, was sent and used against it.
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
 import { errorText, num, showError } from "../format";
-import { Button, buttonClass, Card, EmptyState, Field, PageSkeleton } from "../ui/components";
+import { Button, Card, EmptyState, Field, FilePicker, PageSkeleton } from "../ui/components";
 import { Modal } from "../ui/Overlay";
 import { Table } from "../ui/Table";
 import { E, PARTS, useLibrary } from "./common";
@@ -244,6 +244,7 @@ export function EstimatePage() {
     const b = { ...a, ...patch };
     return act(`area${a.id}`, `/areas/${a.id}`, { upturn_mm: b.upturn_mm === "" ? null : b.upturn_mm, use_floor: b.use_floor, use_upturn: b.use_upturn, included: b.included, excluded_reason: b.excluded_reason }, "PUT");
   };
+  const sheetInput = useRef<HTMLInputElement>(null);
   const importSheet = async (file: File | undefined) => {
     if (!file) return;
     const form = new FormData();
@@ -266,7 +267,7 @@ export function EstimatePage() {
   const ordered = tops.flatMap((a) => [a, ...est.areas.filter((c) => c.parent_id === a.id)]);
   const measureLink = (measureAreaId: number | null, text: string) =>
     measureAreaId && est.site_id ? (
-      <Link to={`/sites/${est.site_id}/measure?area=${measureAreaId}&ask=no`} title="Show it on the drawing">
+      <Link to={`/estimates/${est.id}/drawing?area=${measureAreaId}`} title="Show it on the drawing">
         {text}
       </Link>
     ) : (
@@ -297,12 +298,17 @@ export function EstimatePage() {
         <div className="page-actions">
           <Button onClick={() => void downloadFile(`${E}/estimates/${est.id}/excel`).catch(showError)}>Excel</Button>
           <Button onClick={() => void downloadFile(`${E}/estimates/${est.id}/pdf`).catch(showError)}>PDF</Button>
-          <Field label="Read an old planning sheet" bare>
-            <span className={buttonClass({ variant: "ghost" })}>
-              {busy === "import" ? "Reading…" : "Read an old planning sheet"}
-              <input type="file" accept=".xlsx,.xlsm" className="sr-only" onChange={(e) => (void importSheet(e.target.files?.[0]), (e.target.value = ""))} />
-            </span>
-          </Field>
+          <FilePicker
+            showChosen={false}
+            label={busy === "import" ? "Reading…" : "Read an old planning sheet"}
+            variant="ghost"
+            accept=".xlsx,.xlsm"
+            inputRef={sheetInput}
+            onFiles={(fs) => {
+              if (fs[0]) void importSheet(fs[0]);
+              if (sheetInput.current) sheetInput.current.value = "";
+            }}
+          />
           {edit && (
             <Button variant="primary" loading={busy === "issue"} onClick={() => void act("issue", "/issue")}>
               Issue

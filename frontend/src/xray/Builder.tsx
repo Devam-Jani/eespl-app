@@ -12,7 +12,7 @@ import { decodeGeometry, useGlPlan } from "../takeoff/glplan";
 import type { Geo as PlanGeo, GeoV2 } from "../takeoff/glplan";
 import { ReadProgress } from "../takeoff/ReadProgress";
 import { ART, THEMES } from "../ui/tokens";
-import { Button, buttonClass, Card, Field } from "../ui/components";
+import { Button, buttonClass, Card, Field, FilePicker } from "../ui/components";
 
 type Pt = [number, number];
 type Core = { kind: "stair" | "lift"; outline: Pt[]; risers: number | null };
@@ -174,8 +174,8 @@ export default function BuildingBuilder() {
     }
   }
   const ifcInput = out?.can_edit ? (
-    <Field label="The client's BIM file (IFC)">
-      <input type="file" accept=".ifc" disabled={busy} onChange={(e) => e.target.files?.[0] && void uploadIfc(e.target.files[0])} />
+    <Field as="div" label="The client's BIM file (IFC)">
+      <FilePicker label="Choose the IFC file" accept=".ifc" disabled={busy} onFiles={(fs) => fs[0] && void uploadIfc(fs[0])} />
     </Field>
   ) : null;
 

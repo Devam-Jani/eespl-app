@@ -101,6 +101,9 @@ export const SIZES = {
   "t-med": "220ms",
   // the sticky top bar's height: what sticks or scrolls to the top of the page stops below it
   header: "68px",
+  // the phone's bottom tabs, and the room a phone page leaves above them (the iPhone's home bar too)
+  tabs: "60px",
+  "tabs-clear": "calc(var(--tabs) + env(safe-area-inset-bottom, 0px) + 36px)",
   // the layers, low to high. Modals and drawers render on <body> (ui/Overlay.tsx), so a page's own
   // stacking never puts them under the top bar.
   "z-header": "50",

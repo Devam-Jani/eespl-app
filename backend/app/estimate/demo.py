@@ -4,8 +4,8 @@ measured drawing.
 
 The library: the Technonicol products of the planning files (SBR Latex, Ultracem GR 60, Epoxy
 Primer 021, Ultrathane, Ultrathane Logic Foam, Ultracem 2C, 45 gsm fibre mesh, 120 gsm geotextile,
-Cemguard Plus, Cemkrete, Cemcrystal) with DEMO coverages, each "to confirm" (no data sheet in the
-app yet), their wastage and pack sizes; the civil materials of the mixes (nodular, cement, sand,
+Cemguard Plus, Cemkrete, Cemcrystal) with coverages checked against the planning sheets and the
+makers' data sheets ("to confirm" where no data sheet states it), their wastage and pack sizes; the civil materials of the mixes (nodular, cement, sand,
 Technomix WL); three mix designs: nodular concrete 1:1:4, cement-sand plaster 1:4, brick bat coba.
 
 The nodular mix is fitted to the planning team's own figures (3.52 kg/sqft of nodular and of
@@ -38,21 +38,23 @@ D = Decimal
 SITE_CODE = "DEMO-TERRACE"
 SITE_NAME = "DEMO Residency terraces"
 CLIENT = "DEMO Residency Developers (demo client)"
-SOURCE_NOTE = "DEMO value: to confirm against the maker's data sheet"
 
-# name, unit, pack size, pack unit, wastage %, coverage, min, max, coverage unit
+# name, unit, pack size, pack unit, wastage %, coverage, min, max, coverage unit, source, note.
+# Checked (Prompt 34 review) against the planning team's sheets and the makers' data sheets: "tds"
+# only where the product's own data sheet states the figure; the rest stay "to confirm".
+TDS = "Maker's data sheet"
 PRODUCTS = [
-    ("SBR Latex", "ltr", "20", "can", "5", "0.38", "0.3", "0.5", "L/sqm"),
-    ("Ultracem GR 60", "kg", "25", "bag", "5", "2", "1.8", "2.2", "kg/sqm"),
-    ("Epoxy Primer 021", "kg", "20", "set", "5", "0.2", "0.15", "0.25", "kg/sqm"),
-    ("Ultrathane", "kg", "20", "drum", "5", "1.8", "1.8", "2", "kg/sqm"),
-    ("Ultrathane Logic Foam", "kg", "1", "can", "10", "0.05", "0.04", "0.06", "kg/sqm"),
-    ("Ultracem 2C", "kg", "30", "set", "5", "2", "1.8", "2.2", "kg/sqm"),
-    ("45 gsm fibre mesh", "sqm", "50", "roll", "10", "1", "1", "1.1", "sqm/sqm"),
-    ("120 gsm geotextile", "sqm", "100", "roll", "10", "1", "1", "1.1", "sqm/sqm"),
-    ("Cemguard Plus", "kg", "20", "bag", "5", "1.75", "1.5", "2", "kg/sqm"),
-    ("Cemkrete", "kg", "25", "bag", "5", "1.5", "1.2", "1.8", "kg/sqm"),
-    ("Cemcrystal", "kg", "25", "bag", "5", "0.8", "0.7", "1", "kg/sqm"),
+    ("SBR Latex", "ltr", "20", "can", "5", "0.25", "0.2", "0.3", "L/sqm", "to_confirm", "Data sheet: bond coat 200-300 g/sqm (in grams; the litres take a density of about 1, to confirm)"),
+    ("Ultracem GR 60", "kg", "25", "bag", "5", "2", "1.8", "2.2", "kg/sqm", "to_confirm", "A grout: the data sheet gives 1,800-2,000 kg per m³ and the sheets price it per sleeve; no per-sqm figure, to confirm"),
+    ("Epoxy Primer 021", "kg", "20", "set", "5", "0.2", "0.1", "0.25", "kg/sqm", "tds", f"{TDS}: 100-250 g/sqm (the Dholera sheet books 0.3)"),
+    ("Ultrathane", "kg", "20", "drum", "5", "2", "2", "2.5", "kg/sqm", "tds", f"{TDS}: 2,000-2,500 g/sqm (the Dholera sheet's 1.2 is below it)"),
+    ("Ultrathane Logic Foam", "kg", "1", "can", "10", "0.65", "0.55", "0.7", "kg/sqm", "to_confirm", "At 10 mm: the Dholera sheet's 0.65; the data sheet gives only the density (55-60 kg/m³)"),
+    ("Ultracem 2C", "kg", "30", "set", "5", "3", "1.6", "3.5", "kg/sqm", "tds", f"{TDS}: 3 kg/sqm, as the Dholera sheets; the method statement's sunken areas 2 coats × 0.8 = 1.6"),
+    ("45 gsm fibre mesh", "sqm", "50", "roll", "5", "1.05", "1", "1.1", "sqm/sqm", "to_confirm", "The sheets' 1.05 for the laps (the 5% wastage is the cut-offs); no data sheet"),
+    ("120 gsm geotextile", "sqm", "100", "roll", "5", "1.05", "1.05", "1.1", "sqm/sqm", "to_confirm", "The sheets' 1.05 (50 mm laps); no data sheet"),
+    ("Cemguard Plus", "kg", "20", "bag", "5", "1.75", "1.5", "2", "kg/sqm", "tds", f"{TDS}: a 12 kg kit covers 6-8 sqm at 1.5 mm in 2 coats"),
+    ("Cemkrete", "kg", "25", "bag", "5", "0.4", "0.35", "0.5", "kg/sqm", "to_confirm", "The sheets' 0.35-0.4 (the liquid, for patching); the data sheet gives no coverage"),
+    ("Cemcrystal", "kg", "25", "bag", "5", "1", "0.5", "1.5", "kg/sqm", "to_confirm", "The Cemcrystal Plus data sheet: 0.5-1.5 by use (the sheets 1.1-1.5); plain Cemcrystal's to confirm"),
 ]
 CIVIL = [("Nodular", "kg", "25", "bag"), ("Cement", "kg", "50", "bag"), ("Sand", "kg", None, None), ("Technomix WL", "ltr", "1", "bottle"),
          ("Brick bats", "kg", None, None)]  # fmt: skip
@@ -68,14 +70,14 @@ def library(db: Session) -> dict:
     from app.estimate.models import Coverage, MixDesign  # noqa: PLC0415
 
     ids: dict[str, int] = {}
-    for name, unit, pack, pack_unit, w, val, lo, hi, cu in PRODUCTS:
+    for name, unit, pack, pack_unit, w, val, lo, hi, cu, src, note in PRODUCTS:
         p = _product(db, name, unit, pack, pack_unit, brand="Technonicol")
         p.wastage_percent = D(w)
         c = db.scalar(select(Coverage).where(Coverage.product_id == p.id, Coverage.system_id.is_(None)))
         if c is None:
             c = Coverage(product_id=p.id, system_id=None, value=D(val))
             db.add(c)
-        c.value, c.min_value, c.max_value, c.unit, c.source, c.note, c.is_demo = D(val), D(lo), D(hi), cu, "to_confirm", SOURCE_NOTE, True
+        c.value, c.min_value, c.max_value, c.unit, c.source, c.note, c.is_demo = D(val), D(lo), D(hi), cu, src, f"DEMO: {note}", True
         ids[name] = p.id
     for name, unit, pack, pack_unit in CIVIL:
         p = _product(db, name, unit, pack, pack_unit, brand=None)

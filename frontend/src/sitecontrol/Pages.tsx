@@ -8,7 +8,7 @@ import { api, downloadFile, fetchObjectUrl } from "../api";
 import { useAuth } from "../auth";
 import { Modal } from "../ui/Overlay";
 import { errorText, inr } from "../format";
-import { Button, buttonClass, Card, Field } from "../ui/components";
+import { Button, buttonClass, Card, Field, FilePicker } from "../ui/components";
 
 const fmt = (d: string | null | undefined, time = true) =>
   d
@@ -392,11 +392,11 @@ function ConfirmForm({ d, onDone }: { d: DnDetail; onDone: (x: DnDetail) => void
           <span className="small muted">{l.unit}</span>
         </div>
       ))}
-      <Field label="Photo: material as unloaded">
-        <input type="file" accept="image/*" capture="environment" onChange={(e) => setGoods(e.target.files?.[0] ?? null)} />
+      <Field as="div" label="Photo: material as unloaded">
+        <FilePicker label="Take the photo" accept="image/*" capture="environment" onFiles={(fs) => setGoods(fs[0] ?? null)} />
       </Field>
-      <Field label="Photo: signed challan">
-        <input type="file" accept="image/*" capture="environment" onChange={(e) => setChallan(e.target.files?.[0] ?? null)} />
+      <Field as="div" label="Photo: signed challan">
+        <FilePicker label="Take the photo" accept="image/*" capture="environment" onFiles={(fs) => setChallan(fs[0] ?? null)} />
       </Field>
       {error && <div className="alert alert-error">{error}</div>}
       <Button type="submit" variant="primary">Confirm delivery</Button>
@@ -640,8 +640,8 @@ function ContractForm({ c, onClose, onSaved }: { c: Contract | null; onClose: ()
         <Field label="Agreed by">
           <input value={f.agreed_by} onChange={(e) => setF({ ...f, agreed_by: e.target.value })} />
         </Field>
-        <Field label="Vendor's quote (attachment)">
-          <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        <Field as="div" label="Vendor's quote (attachment)">
+          <FilePicker label="Choose the quote" onFiles={(fs) => setFile(fs[0] ?? null)} />
         </Field>
       </div>
       <Field label="Notes">
@@ -1025,8 +1025,8 @@ export function NewAreaForm() {
           ))}
         </select>
       </Field>
-      <Field label="Photo">
-        <input type="file" accept="image/*" capture="environment" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
+      <Field as="div" label="Photo">
+        <FilePicker label="Take the photo" accept="image/*" capture="environment" onFiles={(fs) => setPhoto(fs[0] ?? null)} />
       </Field>
       <Field label="Note">
         <input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} />

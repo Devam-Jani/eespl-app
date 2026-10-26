@@ -4,7 +4,7 @@ import { api, fetchObjectUrl } from "../../api";
 import { errorText } from "../../format";
 import { RATE_POLICIES } from "../../types";
 import type { CompanyProfile as Profile } from "../../types";
-import { Button, Card, Field } from "../../ui/components";
+import { Button, Card, Field, FilePicker } from "../../ui/components";
 
 const FIELDS: { key: keyof Profile; label: string; hint?: string; type?: string }[] = [
   { key: "legal_name", label: "Legal name" },
@@ -121,8 +121,8 @@ export default function CompanyProfile() {
         <Card as="div">
           <h2 className="section-title">Logo</h2>
           {logo ? <img src={logo} alt="Company logo" className="logo-preview" /> : <p className="muted">No logo yet.</p>}
-          <Field label="Upload PNG, JPEG or WebP (up to 2 MB)" className="top-gap">
-            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
+          <Field as="div" label="Upload PNG, JPEG or WebP (up to 2 MB)" className="top-gap">
+            <FilePicker label="Choose the logo" accept="image/png,image/jpeg,image/webp" onFiles={(fs) => fs[0] && void upload(fs[0])} />
           </Field>
           {logo && (
             <Button variant="danger" size="small" type="submit" onClick={() => void removeLogo()}>

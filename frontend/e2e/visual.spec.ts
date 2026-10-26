@@ -59,7 +59,33 @@ async function openModal(page: Page) {
   await expect(page.getByRole("dialog", { name: "Bill from a site slip" })).toBeVisible();
 }
 
-const SCREENS: { name: string; who: string; path: string | ((page: Page) => Promise<string>); then?: (page: Page) => Promise<void> }[] = [
+/** The DEMO terrace site's material request (the site's id changes with each nightly rebuild). */
+async function askPath(page: Page): Promise<string> {
+  const id = await page.evaluate(async () => {
+    const t = await (await fetch("/api/auth/refresh", { method: "POST", credentials: "same-origin" })).json();
+    const r = await (await fetch("/api/sites?q=DEMO-TERRACE", { headers: { Authorization: `Bearer ${t.access_token}` } })).json();
+    return (r.items as { id: number; code: string }[]).find((x) => x.code === "DEMO-TERRACE")!.id;
+  });
+  return `/my-site/${id}/material`;
+}
+
+/** Asked for more than the estimate, scrolled to the bottom: the warning, the reason and Send clear the tabs. */
+async function askOver(page: Page) {
+  await page.locator("select").first().selectOption({ label: "Nodular (kg)" });
+  await page.locator("select").nth(1).selectOption({ index: 1 });
+  await page.locator('input[type="number"]').first().fill("5000");
+  await expect(page.locator(".alert-warn .ask-formula")).toBeVisible({ timeout: 15_000 });
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await page.waitForTimeout(300);
+  const tabs = await page.locator(".app-tabs").boundingBox();
+  for (const el of [page.locator("textarea"), page.getByRole("button", { name: "Send to planning" })]) {
+    const box = await el.boundingBox();
+    expect(box && tabs && box.y + box.height <= tabs.y).toBe(true);
+  }
+}
+
+const SCREENS: { name: string; who: string; path: string | ((page: Page) => Promise<string>); then?: (page: Page) => Promise<void>; phoneOnly?: boolean }[] = [
   { name: "dashboard", who: "demo-director@demo.invalid", path: "/dashboard" },
   { name: "site-3d", who: "demo-director@demo.invalid", path: "/sites/13?tab=3d" },
   { name: "phone-report", who: "demo-site-engineer@demo.invalid", path: "/my-site/13/report" },
@@ -74,11 +100,14 @@ const SCREENS: { name: string; who: string; path: string | ((page: Page) => Prom
   { name: "surveys", who: "demo-director@demo.invalid", path: "/surveys" },
   { name: "measurement-book", who: "demo-director@demo.invalid", path: "/measurements" },
   { name: "deliveries", who: "demo-director@demo.invalid", path: "/deliveries" },
+  // the phone's material request over the estimate, scrolled to the bottom: nothing under the tabs
+  { name: "phone-ask-material", who: "demo-site-engineer@demo.invalid", path: askPath, then: askOver, phoneOnly: true },
 ];
 
 for (const s of SCREENS) {
   for (const theme of ["dark", "light"] as const) {
-    test(`${s.name} (${theme})`, async ({ page }) => {
+    test(`${s.name} (${theme})`, async ({ page }, info) => {
+      test.skip(!!s.phoneOnly && info.project.name !== "phone", "a phone page");
       await signIn(page, s.who);
       await settle(page, typeof s.path === "string" ? s.path : await s.path(page), theme);
       await s.then?.(page);

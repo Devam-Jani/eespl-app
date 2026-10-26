@@ -3,7 +3,7 @@ import { api } from "../../api";
 import { Modal } from "../../ui/Overlay";
 import { errorText, inr, num } from "../../format";
 import type { ImportPreview, ImportReport } from "../../types";
-import { Button, Field } from "../../ui/components";
+import { Button, Field, FilePicker } from "../../ui/components";
 
 const FIELDS: [string, string][] = [
   ["item_no", "Item no"],
@@ -104,7 +104,7 @@ export default function ImportWizard({ tenderId, onClose, onImported }: { tender
       {step === "upload" && (
         <div>
           <p>Choose the client's BOQ (.xlsx, .xls, .csv, or a PDF with a text layer up to 60 pages; at most 20 MB). You will see how it reads before anything is saved.</p>
-          <input type="file" accept=".xlsx,.xlsm,.xls,.csv,.pdf" disabled={busy} onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
+          <FilePicker label="Choose the BOQ" accept=".xlsx,.xlsm,.xls,.csv,.pdf" disabled={busy} onFiles={(fs) => fs[0] && void upload(fs[0])} />
           {busy && <p className="muted">Reading the file…</p>}
         </div>
       )}

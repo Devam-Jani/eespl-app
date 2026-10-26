@@ -5,7 +5,7 @@ import { Modal } from "../../ui/Overlay";
 import { errorText, num, showError } from "../../format";
 import type { Site, SiteTask } from "../../types";
 import { shortDate } from "../Tenders";
-import { Button, Card, Field } from "../../ui/components";
+import { Button, Card, Field, FilePicker } from "../../ui/components";
 
 const STATUS: Record<string, [string, string]> = {
   not_started: ["badge-muted", "Not started"],
@@ -320,7 +320,7 @@ export function TaskDialog({
         ))}
         {task.photos.length === 0 && <span className="muted small">No photos yet.</span>}
       </div>
-      {canUpdate && !locked && <input type="file" accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />}
+      {canUpdate && !locked && <FilePicker label="Add a photo" accept="image/*" capture="environment" onFiles={(fs) => fs[0] && void upload(fs[0])} />}
       <div className="form-actions">
         {canEdit && task.hold_point && task.status === "done" && (
           <Button className="push-left" onClick={() => void certify()}>

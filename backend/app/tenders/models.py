@@ -18,11 +18,15 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
     false,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
+from sqlalchemy.orm.attributes import set_committed_value
+from sqlalchemy.orm.util import identity_key
 
 from app.masters.models import Channel, Client, Tracked
 from app.models import Base, User
@@ -272,3 +276,45 @@ class TenderRevision(Base):
     note: Mapped[str | None] = mapped_column(Text)
 
     submitter: Mapped[User | None] = relationship(lazy="joined", foreign_keys=[submitted_by])
+
+
+# --- the amounts and the quoted total, whoever writes the lines -----------------------------------
+# A line's amount is qty × rate (none for QRO / NQ, or without a qty or rate), the tender's quoted
+# total the sum of its lines' amounts. The pricing routes kept both; a line written another way (a
+# demo, an import, a survey's BOQ) left the amount empty and the header said ₹0.00. Kept here, on
+# every flush, so no writer can forget.
+
+
+@event.listens_for(BoqLine, "before_insert")
+@event.listens_for(BoqLine, "before_update")
+def _line_amount(mapper, connection, line: BoqLine) -> None:
+    from app.tenders.pricing import line_amount  # noqa: PLC0415  (pricing imports these models)
+
+    line.amount = line_amount(line)
+
+
+@event.listens_for(Session, "after_flush")
+def _lines_touched(session: Session, ctx) -> None:
+    touched = session.info.setdefault("boq_tenders", set())
+    for obj in (*session.new, *session.dirty, *session.deleted):
+        if isinstance(obj, BoqLine) and obj.tender_id is not None:
+            touched.add(obj.tender_id)
+
+
+@event.listens_for(Session, "after_flush_postexec")
+def _quoted_totals(session: Session, ctx) -> None:
+    touched = session.info.pop("boq_tenders", None)
+    if not touched:
+        return
+    rows = session.connection().execute(
+        text(
+            "UPDATE tenders t SET quoted_total = "
+            "COALESCE((SELECT SUM(amount) FROM boq_lines WHERE tender_id = t.id), 0) "
+            "WHERE t.id = ANY(:ids) RETURNING t.id, t.quoted_total"
+        ),
+        {"ids": sorted(touched)},
+    )
+    for tid, total in rows:
+        t = session.identity_map.get(identity_key(Tender, tid))
+        if t is not None:
+            set_committed_value(t, "quoted_total", total)

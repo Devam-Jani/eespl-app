@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { api, downloadFile } from "../api";
 import { errorText, num, showError } from "../format";
-import { Button, Card, EmptyState, Field, PageSkeleton, Tabs } from "../ui/components";
+import { Button, Card, EmptyState, Field, FilePicker, PageSkeleton, Tabs } from "../ui/components";
 import { Modal } from "../ui/Overlay";
 import { E, MIX_KINDS, useLibrary, when } from "./common";
 import type { Coverage, LibProduct, Library, Mix, MixComponent } from "./common";
@@ -153,8 +153,8 @@ function ProductCard({ p, lib, reload }: { p: LibProduct; lib: Library; reload: 
                     <span className="muted">—</span>
                   )}
                   {lib.can_edit && (
-                    <Field label={c.has_doc ? "Replace the document" : "Attach a document"} className="small">
-                      <input type="file" accept=".docx,.xlsx,.xls" onChange={(e) => void upload(c, e.target.files?.[0])} />
+                    <Field as="div" label={c.has_doc ? "Replace the document" : "Attach a document"} className="small">
+                      <FilePicker label="Choose the document" size="small" accept=".docx,.xlsx,.xls" onFiles={(fs) => void upload(c, fs[0])} />
                     </Field>
                   )}
                 </td>

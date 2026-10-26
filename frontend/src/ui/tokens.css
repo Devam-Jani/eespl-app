@@ -49,6 +49,8 @@
   --t-fast: 150ms;
   --t-med: 220ms;
   --header: 68px;
+  --tabs: 60px;
+  --tabs-clear: calc(var(--tabs) + env(safe-area-inset-bottom, 0px) + 36px);
   --z-header: 50;
   --z-tabs: 80;
   --z-scrim: 90;
