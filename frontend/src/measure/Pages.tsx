@@ -185,7 +185,7 @@ export function MeasurePage() {
               onEdge={(e) => setAsking(e)}
             />
           ) : (
-            st.drawings.length > 0 && <PageSkeleton label="Reading the drawing" />
+            st.drawings.length > 0 && !error && <PageSkeleton label="Reading the drawing" />
           )}
           <p className="muted measure-hint">
             {mode === "pick" && "Click inside an outline: its true area and periphery (arcs as arcs) are taken from the drawing."}

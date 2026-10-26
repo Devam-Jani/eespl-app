@@ -108,7 +108,7 @@ def fix_plan(
         "plan.fix",
         "site",
         site.id,
-        after=jsonable_encoder([x.model_dump() for x in lines]),
+        after={"lines": jsonable_encoder([x.model_dump() for x in lines])},
     )
     db.commit()
     return jsonable_encoder(svc.plan(db, site))

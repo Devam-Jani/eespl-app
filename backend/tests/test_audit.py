@@ -71,3 +71,13 @@ def test_audit_endpoint_filters(login_as, make_user, client):
     assert c.get("/api/audit", params={"entity": "role"}, headers=h).json()["total"] == 0
     future = c.get("/api/audit", params={"date_from": "2999-01-01"}, headers=h).json()
     assert future["total"] == 0
+
+
+def test_audit_lists_rows_whose_after_is_a_list(login_as, db):
+    # plan.fix wrote its lines as a bare list before they went under a key: the log still opens
+    db.add(AuditLog(action="plan.fix", entity="site", entity_id="1", after=[{"product_id": 1}]))
+    db.commit()
+    c, h = login_as("super_admin", email="boss@example.com")
+    r = c.get("/api/audit", params={"action": "plan.fix"}, headers=h)
+    assert r.status_code == 200
+    assert r.json()["items"][0]["after"] == [{"product_id": 1}]
