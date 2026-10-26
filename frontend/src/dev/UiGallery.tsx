@@ -2,6 +2,7 @@
 // of the production build). The place to check a change to the look before it reaches a page.
 import { useState } from "react";
 import { useAuth } from "../auth";
+import { inrCompact } from "../format";
 import { Button, Card, DateField, EmptyState, Field, Icon, KpiCard, Legend, NavItem, ProgressBar, Select, Skeleton, StatusChip, Tabs } from "../ui/components";
 import { FtInInput } from "../ui/FtIn";
 import { MonthBars } from "../ui/MonthBars";
@@ -82,7 +83,7 @@ export default function UiGallery() {
       <Card title="Six months (MonthBars)">
         <MonthBars
           label="Billed per month"
-          format={(v) => `₹${v} L`}
+          format={(v) => inrCompact(v * 1e5)}
           points={[
             { month: "May", value: 41 },
             { month: "Jun", value: 52 },

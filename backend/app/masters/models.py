@@ -153,6 +153,8 @@ class Product(Tracked, Base):
     reorder_level: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
     # other names it goes by in offers ("BRONCO CEMSHIELD HYBRID PU" for "BRONCO HYBRID PU")
     aliases: Mapped[list[str]] = mapped_column(ARRAY(String(200)), server_default="{}")
+    # the estimate's wastage for it, shown on every line beside the coverage (never inside it)
+    wastage_percent: Mapped[Decimal] = mapped_column(Numeric(6, 2), server_default="0")
 
     category: Mapped["Category | None"] = relationship(lazy="joined")
 
@@ -199,6 +201,8 @@ class System(Tracked, Base):
     surface_prep_per_unit: Mapped[Decimal] = mapped_column(Money, server_default="0")
     labour_rate: Mapped[Decimal] = mapped_column(Money, server_default="0")
     labour_unit: Mapped[str] = mapped_column(String(10), server_default="sqm")
+    # the estimate's upturn on the walls round an area (periphery × this)
+    upturn_mm: Mapped[Decimal] = mapped_column(Numeric(8, 2), server_default="300")
     default_margin_percent: Mapped[Decimal] = mapped_column(Numeric(6, 2), server_default="30")
     is_active: Mapped[bool] = mapped_column(server_default=true())
     # products, consumption or coats our data does not give yet: left blank, never guessed

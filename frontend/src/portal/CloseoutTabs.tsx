@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
-import { errorText } from "../format";
+import { errorText, inr } from "../format";
 import { day, usePortal } from "./Portal";
 import { Button, Card, Field } from "../ui/components";
 
@@ -315,7 +315,7 @@ export function OverdueList({ siteId }: { siteId: number }) {
       <h3 className="section-title">Overdue</h3>
       {rows.map((b) => (
         <div key={b.id}>
-          <b>{b.code}</b> {b.invoice ? `(invoice ${b.invoice} of ${day(b.invoice_date)})` : ""}: ₹ {Number(b.outstanding).toLocaleString("en-IN")} was due on {day(b.due_on)},{" "}
+          <b>{b.code}</b> {b.invoice ? `(invoice ${b.invoice} of ${day(b.invoice_date)})` : ""}: {inr(b.outstanding)} was due on {day(b.due_on)},{" "}
           <b>{b.overdue_days} days overdue</b>. <span className="muted small">With you at: {b.at}</span>
         </div>
       ))}

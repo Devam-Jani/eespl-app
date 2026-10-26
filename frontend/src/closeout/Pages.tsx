@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
-import { errorText } from "../format";
+import { errorText, inr } from "../format";
 import { Button, buttonClass, Card, Field } from "../ui/components";
 
 const d = (v: string | null | undefined) =>
@@ -91,7 +91,7 @@ export function TenderCustomers({ tenderId }: { tenderId: number }) {
                 )}{" "}
                 <span className="small muted">{c.quotation?.status}</span>
               </td>
-              <td className="num">₹ {num(c.quotation?.total, 0)}</td>
+              <td className="num">{inr(c.quotation?.total)}</td>
               <td>
                 <span className={`badge ${c.main_status === "won" ? "badge-ok" : c.main_status === "lost" ? "badge-muted" : "badge-info"}`}>{c.main_label}</span>
                 {c.main_status === "lost" && <div className="small muted">not counted as our loss</div>}
@@ -368,7 +368,7 @@ export function WorkOrderPage() {
                   <td className="small">{l.description}</td>
                   <td className="small">{l.unit}</td>
                   <td className="num small">{num(l.qty)}</td>
-                  <td className="num small">{num(l.rate)}</td>
+                  <td className="num small">{inr(l.rate)}</td>
                 </tr>
               ))}
             </tbody>
@@ -664,7 +664,7 @@ export function Payments() {
                   <div className="small muted">{b.invoice}</div>
                 </td>
                 <td className="small">{b.site}</td>
-                <td className="num">₹ {num(b.outstanding)}</td>
+                <td className="num">{inr(b.outstanding)}</td>
                 <td className="small">
                   {d(b.due_on)}
                   <div className="muted">{b.due_how}</div>

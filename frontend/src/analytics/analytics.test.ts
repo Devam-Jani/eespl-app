@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { compact, placeLabels } from "./charts";
-import { inrCompact } from "../format";
+import { placeLabels } from "./charts";
+import { inrChart, inrCompact } from "../format";
 import { drillHref, fmtValue } from "./ui";
 
 describe("compact money labels", () => {
   it("uses lakh and crore", () => {
-    expect(compact(950)).toBe("₹950");
-    expect(compact(12_500)).toBe("₹13 k");
-    expect(compact(345_000)).toBe("₹3.5 L");
-    expect(compact(12_000_000)).toBe("₹1.2 Cr");
-    expect(compact(-450_000)).toBe("-₹4.5 L");
+    expect(inrChart(950)).toBe("₹950");
+    expect(inrChart(12_500)).toBe("₹13 k");
+    expect(inrChart(345_000)).toBe("₹3.5 L");
+    expect(inrChart(12_000_000)).toBe("₹1.2 Cr");
+    expect(inrChart(-450_000)).toBe("-₹4.5 L");
   });
 });
 

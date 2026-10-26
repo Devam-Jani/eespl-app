@@ -15,8 +15,10 @@ const TenderCustomers = lazy(() => import("../closeout/Pages").then((m) => ({ de
 
 const TenderAward = lazy(() => import("../team/Pages").then((m) => ({ default: m.TenderAward })));
 
-type Tab = "details" | "boq" | "working" | "terms" | "revisions" | "award";
+type Tab = "details" | "boq" | "working" | "margin" | "checks" | "terms" | "revisions" | "award";
 const RateWorkingView = lazy(() => import("../costing/Pages").then((m) => ({ default: m.RateWorkingView })));
+const MarginCheck = lazy(() => import("../estimate/Checks").then((m) => ({ default: m.MarginCheck })));
+const Checks = lazy(() => import("../estimate/Checks").then((m) => ({ default: m.Checks })));
 
 export type Unsent = {
   working_id: number;
@@ -32,12 +34,12 @@ export function UnsentRates({ unsent, canSend, onSend }: { unsent: Unsent | null
   const first = unsent.rows[0];
   return (
     <div className="alert alert-warn unsent-rates">
-      <b>Rates not sent to the lines.</b> {unsent.lines} line(s) differ from the rate working, largest difference ₹{unsent.largest_difference}
+      <b>Rates not sent to the lines.</b> {unsent.lines} line(s) differ from the rate working, largest difference {inr(unsent.largest_difference)}
       {first && (
         <>
           {" "}
           (e.g. {first.group}
-          {first.item_no ? ` item ${first.item_no}` : ""}: worked ₹{first.worked_rate}/{first.unit}, on the line {first.line_rate ? `₹${first.line_rate}` : "no rate"})
+          {first.item_no ? ` item ${first.item_no}` : ""}: worked {inr(first.worked_rate)}/{first.unit}, on the line {first.line_rate ? inr(first.line_rate) : "no rate"})
         </>
       )}
       . Submit is held until the rates are sent or you confirm the lines' rates.{" "}
@@ -112,7 +114,7 @@ export default function TenderDetail() {
     // the lines' rates are not the working's: send them first, or confirm the lines' rates
     if (
       unsent &&
-      !confirm(`${unsent.message} (largest difference ₹${unsent.largest_difference}).
+      !confirm(`${unsent.message} (largest difference ${inr(unsent.largest_difference)}).
 
 Submit with the rates the lines have now? Cancel, then "Send the rates to the lines", to use the working's.`)
     )
@@ -229,6 +231,8 @@ Send anyway? Give the reason:`);
             ["details", "Details"],
             ["boq", "BOQ"],
             ["working", "Rate working"],
+            ...(can("tender.margin") ? [["margin", "Margin check"]] : []),
+            ...(can("estimate.view") ? [["checks", "Checks"]] : []),
             ["terms", "Terms"],
             ["revisions", `Revisions (${revs.length})`],
             ["award", tender.status === "submitted" ? "Awaiting award" : "Award & bidders"],
@@ -252,6 +256,16 @@ Send anyway? Give the reason:`);
         {tab === "working" && (
           <Suspense fallback={<p className="muted">Loading…</p>}>
             <RateWorkingView tenderId={tender.id} />
+          </Suspense>
+        )}
+        {tab === "margin" && can("tender.margin") && (
+          <Suspense fallback={<p className="muted">Loading…</p>}>
+            <MarginCheck tenderId={tender.id} />
+          </Suspense>
+        )}
+        {tab === "checks" && can("estimate.view") && (
+          <Suspense fallback={<p className="muted">Loading…</p>}>
+            <Checks tenderId={tender.id} />
           </Suspense>
         )}
         {tab === "terms" && <TermsTab tender={tender} canEdit={canEdit} onSaved={load} />}

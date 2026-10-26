@@ -7,7 +7,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { api, downloadFile, fetchObjectUrl } from "../api";
 import { useAuth } from "../auth";
 import { Modal } from "../ui/Overlay";
-import { errorText } from "../format";
+import { errorText, inr } from "../format";
 import { Button, buttonClass, Card, Field } from "../ui/components";
 
 const fmt = (d: string | null | undefined, time = true) =>
@@ -16,8 +16,6 @@ const fmt = (d: string | null | undefined, time = true) =>
     : "—";
 const n = (v: string | number | null | undefined, digits = 2) =>
   v === null || v === undefined || v === "" ? "—" : Number(v).toLocaleString("en-IN", { maximumFractionDigits: digits });
-const money = (v: string | number | null | undefined) =>
-  v === null || v === undefined ? "—" : `₹ ${Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 type SiteOpt = { id: number; code: string; name: string };
 function useSites(): SiteOpt[] {
@@ -299,11 +297,11 @@ export function DeliveryDetail() {
           )}
           {d.debit_notes.map((dn) => (
             <div key={dn.id} className="debit-note">
-              <b>{dn.code}</b> <span className="badge badge-warn">{dn.status}</span> debit note draft against the vendor: {money(dn.amount)}
+              <b>{dn.code}</b> <span className="badge badge-warn">{dn.status}</span> debit note draft against the vendor: {inr(dn.amount)}
               <ul className="small">
                 {dn.lines.map((l, i) => (
                   <li key={i}>
-                    {l.product}: {l.qty} {l.unit} {l.kind} × ₹{l.rate} = ₹{l.amount}
+                    {l.product}: {l.qty} {l.unit} {l.kind} × {inr(l.rate)} = {inr(l.amount)}
                   </li>
                 ))}
               </ul>
@@ -518,7 +516,7 @@ export function RateContracts() {
                   <td>{c.vendor}</td>
                   <td>{c.product}</td>
                   <td className="num">
-                    {money(c.rate)} <span className="muted small">/ {c.unit}</span>
+                    {inr(c.rate)} <span className="muted small">/ {c.unit}</span>
                   </td>
                   <td className="small">
                     {fmt(c.valid_from, false)} – {fmt(c.valid_till, false)}{" "}
@@ -679,7 +677,7 @@ function ContractVersions({ c, onClose }: { c: Contract; onClose: () => void }) 
           {rows.map((v) => (
             <tr key={v.version}>
               <td>v{v.version}</td>
-              <td>{money(v.data.rate)}</td>
+              <td>{inr(v.data.rate)}</td>
               <td className="small">
                 {v.data.valid_from} – {v.data.valid_till}
               </td>
@@ -756,7 +754,7 @@ export function ReadyToBill() {
             <Card key={sid} className="top-gap">
               <div className="toolbar">
                 <h2 className="section-title">
-                  {list[0].site} <span className="muted small">· {money(total)}</span>
+                  {list[0].site} <span className="muted small">· {inr(total)}</span>
                 </h2>
                 {can("billing.edit") && (
                   <Button variant="primary" size="small" onClick={() => void raise(sid)}>
@@ -791,7 +789,7 @@ export function ReadyToBill() {
                         {n(r.qty, 3)} {r.unit}
                       </td>
                       <td className="num">{r.survey_qty ? `${n(r.survey_qty)} sqm` : "—"}</td>
-                      <td className="num">{money(r.value)}</td>
+                      <td className="num">{inr(r.value)}</td>
                       <td className="num">{r.age_days} d</td>
                     </tr>
                   ))}

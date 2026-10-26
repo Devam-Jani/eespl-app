@@ -355,8 +355,8 @@ export function TemplatePage() {
                 </tbody>
               </table>
               <p className="small muted">
-                Labour {t.products.labour_sqft ? `₹${t.products.labour_sqft} per sq ft` : "—"} · surface preparation{" "}
-                {t.products.surface_prep_sqm ? `₹${t.products.surface_prep_sqm} per sqm` : "—"}
+                Labour {t.products.labour_sqft ? `${inr(t.products.labour_sqft)} per sq ft` : "—"} · surface preparation{" "}
+                {t.products.surface_prep_sqm ? `${inr(t.products.surface_prep_sqm)} per sqm` : "—"}
               </p>
             </>
           )}

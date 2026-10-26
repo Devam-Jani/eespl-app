@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { inrChart } from "../format";
 import { CHART } from "../ui/tokens";
 // Small SVG charts for the analytics pages (no chart library: this chunk is lazy-loaded).
 // Okabe–Ito colours (safe for colour-blind readers); every bar / point carries its value as a
@@ -9,15 +10,6 @@ export const PALETTE = CHART;
 export type Row = Record<string, unknown>;
 export type Series = { key: string; label: string; color?: string; kind?: "bar" | "line" };
 type Fmt = (v: number) => string;
-
-export function compact(v: number): string {
-  const a = Math.abs(v);
-  const sign = v < 0 ? "-" : "";
-  if (a >= 1e7) return `${sign}₹${(a / 1e7).toFixed(a >= 1e8 ? 0 : 1)} Cr`;
-  if (a >= 1e5) return `${sign}₹${(a / 1e5).toFixed(a >= 1e6 ? 0 : 1)} L`;
-  if (a >= 1e3) return `${sign}₹${(a / 1e3).toFixed(0)} k`;
-  return `${sign}₹${a.toFixed(0)}`;
-}
 
 export const num = (v: unknown): number | null => (v === null || v === undefined || v === "" ? null : Number(v));
 
@@ -45,7 +37,7 @@ export function BarChart({
   rows,
   x,
   series,
-  fmt = compact,
+  fmt = inrChart,
   height = 260,
   onClick,
 }: {
@@ -150,7 +142,7 @@ export function HBarChart({
   rows,
   label,
   value,
-  fmt = compact,
+  fmt = inrChart,
   color = PALETTE[0],
   onClick,
   note,
@@ -324,7 +316,7 @@ export function FunnelChart({
             <b>{s.count}</b>
           </div>
           <div className="funnel-text">
-            <b>{s.label}</b> · {compact(Number(s.value))}
+            <b>{s.label}</b> · {inrChart(Number(s.value))}
             {s.conversion !== null && <span className="muted"> · {s.conversion}% of the step before</span>}
           </div>
         </div>

@@ -513,6 +513,10 @@ def main(argv: list[str] | None = None) -> None:
         help="DEMO: a swimming pool measured from its drawing, two RA bills (DEMO-POOL)",
     )
     sub.add_parser(
+        "demo-estimate",
+        help="DEMO: the consumption library and a terrace estimated from its drawing",
+    )
+    sub.add_parser(
         "demo-closeout",
         help="DEMO: work order, approved measurements, bill tracking, WCC, issues (DEMO Shela)",
     )
@@ -700,6 +704,16 @@ def main(argv: list[str] | None = None) -> None:
 
         with SessionLocal() as db:
             out = measure_demo.run(db)
+            db.commit()
+        print(json.dumps(out, indent=1, default=str))
+    elif args.command == "demo-estimate":
+        import json  # noqa: PLC0415
+
+        import app.main  # noqa: F401, PLC0415  (every model registered)
+        from app.estimate import demo as estimate_demo  # noqa: PLC0415
+
+        with SessionLocal() as db:
+            out = estimate_demo.run(db)
             db.commit()
         print(json.dumps(out, indent=1, default=str))
     elif args.command == "demo-closeout":

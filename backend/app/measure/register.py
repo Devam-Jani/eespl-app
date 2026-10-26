@@ -298,13 +298,23 @@ def import_folder(db: Session, site, folder: Path, register_file: Path | None, u
 # --- the app's register ---------------------------------------------------------------------------
 
 
-def site_register(db: Session, site_id: int) -> dict:
+def old_number(text: str | None) -> int | None:
+    """The RA number in an old file's name or a slip's key ("RA 16", "R A - 16", "RA-16")."""
+    m = re.search(r"\bR\s*\.?\s*A\s*[-.]?\s*(\d+)\b", text or "", re.I)
+    return int(m.group(1)) if m else None
+
+
+def site_register(db: Session, site_id: int, q: str | None = None) -> dict:
     """Each RA bill of the site in order, with its proforma or tax invoice, date, totals, what was
-    received, its revisions; the old register beside it."""
+    received, its revisions, its number in the old files when the app numbered it otherwise; the
+    old register beside it. q: only the bills whose number (the app's or the old one) has it."""
     out = []
     old = db.scalar(select(RegisterImport).where(RegisterImport.site_id == site_id).order_by(RegisterImport.id.desc()).limit(1))
     old_by_ra = {r.get("ra"): r for r in (old.rows if old else []) if r.get("ra") is not None}
+    want = old_number(q) if q else None
     for b in db.scalars(select(RaBill).where(RaBill.site_id == site_id).order_by(RaBill.seq)):
+        if q and not (q.lower() in b.code.lower() or (b.old_no and q.lower() in b.old_no.lower()) or (want is not None and (b.seq == want or old_number(b.old_no) == want))):
+            continue
         inv = db.scalar(select(TaxInvoice).where(TaxInvoice.ra_bill_id == b.id))
         basic = D(inv.taxable) if inv else D(b.certified_gross if b.certified_gross is not None else b.gross)
         gst = (D(inv.cgst) + D(inv.sgst) + D(inv.igst)) if inv else svc.money(basic * D("0.18"))
@@ -314,7 +324,8 @@ def site_register(db: Session, site_id: int) -> dict:
         revs = list(db.scalars(select(BillRevision).where(BillRevision.ra_bill_id == b.id).order_by(BillRevision.rev_no)))
         out.append({"id": b.id, "ra": b.seq, "code": b.code, "status": b.status, "imported": b.imported, "kind": "tax invoice" if inv else ("proforma" if b.proforma_no else (reg or {}).get("status") or "bill"),
                     "number": inv.number if inv else b.proforma_no or (reg or {}).get("invoice_no"), "date": (inv.invoice_date if inv else b.proforma_on or b.period_to),
-                    "basic": basic, "gst": gst, "total": total, "paid": paid, "in_old_register": reg is not None, "revisions": len(revs), "sent_revision": next((f"R{r.rev_no}" for r in revs if r.sent), None)})  # fmt: skip
+                    "basic": basic, "gst": gst, "total": total, "paid": paid, "in_old_register": reg is not None, "revisions": len(revs), "sent_revision": next((f"R{r.rev_no}" for r in revs if r.sent), None),
+                    "old_no": b.old_no, "was": f"was {b.old_no} in the old files" if b.old_no else None})  # fmt: skip
     return {"bills": out, "old": old.rows if old else [], "findings": old.findings if old else [], "source": old.source if old else None}
 
 
@@ -322,35 +333,53 @@ def site_register(db: Session, site_id: int) -> dict:
 
 
 def material_check(db: Session, b: RaBill) -> dict:
-    """What the bills up to this one need of each product (their sqm x the item's system coverage)
-    against what the site used by the bill's date (sent to its store, less returned, less still
-    there): the variance, as the billing team's reconciliation sheet."""
+    """What the bills up to this one need of each product (their sqm x the coverage of each product
+    of the item's system: the library's, else the system's own figure) against what the site used
+    by the bill's date (sent to its store, less returned, less still there): the variance, as the
+    billing team's reconciliation sheet. Every billed item with no coverage is listed, so the check
+    never looks complete when it is not."""
     from app.closeout.models import ClientWorkOrderLine  # noqa: PLC0415
+    from app.estimate import library as lib  # noqa: PLC0415
     from app.finance.models import ContractLine, RaBillLine  # noqa: PLC0415
     from app.masters.models import Product, SystemComponent  # noqa: PLC0415
     from app.material.models import StockLedger, Store  # noqa: PLC0415
 
     bills = list(db.scalars(select(RaBill).where(RaBill.site_id == b.site_id, RaBill.seq <= b.seq, RaBill.status != "cancelled")))
     need: dict[int, dict] = {}
+    uncovered: list[dict] = []
     for bb in bills:
         for ln in db.scalars(select(RaBillLine).where(RaBillLine.ra_bill_id == bb.id)):
             cl = db.get(ContractLine, ln.contract_line_id)
             w = db.get(ClientWorkOrderLine, cl.wo_line_id) if cl and cl.wo_line_id else None
-            if w is None or w.system_id is None:
-                continue
             q = D(ln.certified_qty if ln.certified_qty is not None else ln.qty)
             if not q:
+                continue
+            item = {"bill": bb.code, "item": (w.item_no if w else None) or (cl.item_no if cl else None), "description": ((w.description if w else cl.description if cl else "") or "")[:120]}
+            if w is None or w.system_id is None:
+                uncovered.append(item | {"why": "no system on the work-order item"})
                 continue
             u = (w.unit or "").lower()
             sqm = q / geom.SQFT_PER_SQM if u == "sqft" else q if u == "sqm" else None
             if sqm is None:
+                uncovered.append(item | {"why": f"measured in {w.unit or 'no unit'}, not by area"})
                 continue
+            found = False
+            missing = []
             for comp in db.scalars(select(SystemComponent).where(SystemComponent.system_id == w.system_id)):
-                if comp.consumption_per_unit is None:
+                c = lib.coverage_for(db, comp.product_id, w.system_id)
+                if c is not None:
+                    per, how = lib.per_sqm(c.value, c.unit), f"{lib.n(c.value, 4)} {c.unit} (library)"
+                elif comp.consumption_per_unit is not None:
+                    per, how = D(comp.consumption_per_unit), f"{D(comp.consumption_per_unit).normalize():f} (system)"
+                else:
+                    missing.append(comp.product.name if comp.product else str(comp.product_id))
                     continue
+                found = True
                 row = need.setdefault(comp.product_id, {"needed": D(0), "from": []})
-                row["needed"] += sqm * D(comp.consumption_per_unit)
-                row["from"].append(f"{bb.code} item {w.item_no}: {svc.money(sqm)} sqm × {D(comp.consumption_per_unit).normalize():f}")
+                row["needed"] += sqm * per
+                row["from"].append(f"{bb.code} item {w.item_no}: {svc.money(sqm)} sqm × {how}")
+            if not found:
+                uncovered.append(item | {"why": f"no coverage for {', '.join(missing)}" if missing else "its system has no products"})
     store = db.scalar(select(Store).where(Store.site_id == b.site_id))
     until = datetime.combine(b.proforma_on or b.period_to, time.max).astimezone()
     rows = []
@@ -368,4 +397,4 @@ def material_check(db: Session, b: RaBill) -> dict:
         rows.append({"product": p.name if p else str(pid), "unit": p.unit if p else None, "needed": needed, "sent": sent, "returned": back, "site_stock": stock, "used": used,
                      "variance": used - needed, "variance_percent": ((used - needed) / needed * 100).quantize(D("0.1")) if needed else None, "from": row["from"]})  # fmt: skip
     return {"bill": b.code, "until": (b.proforma_on or b.period_to), "rows": rows, "store": store.name if store else None,
-            "note": None if store else "The site has no store: what was used is not known"}
+            "note": None if store else "The site has no store: what was used is not known", "uncovered": uncovered, "complete": not uncovered}

@@ -51,18 +51,17 @@ def profit_table(db: DbSession, principal: CurrentPrincipal, scope: BillingView)
     """Every open site in scope with billing or cost."""
     _cost_ok(principal)
     salary = principal.permissions.get("payroll.view") is not None
-    out = []
-    for site in db.scalars(
-        select(Site)
-        .where(
-            Site.status != "closed", material.by_site(scope, principal, Site.id, Site.created_by)
+    sites = list(
+        db.scalars(
+            select(Site)
+            .where(
+                Site.status != "closed",
+                material.by_site(scope, principal, Site.id, Site.created_by),
+            )
+            .order_by(Site.code)
         )
-        .order_by(Site.code)
-    ):
-        p = svc.site_profit(db, site, salary)
-        if p["billed"] or p["cost_total"]:
-            out.append(p)
-    return out
+    )
+    return [p for p in svc.site_profits(db, sites, salary) if p["billed"] or p["cost_total"]]
 
 
 _MARGINS: dict[tuple[int, bool], tuple[float, dict | None]] = {}
@@ -86,18 +85,21 @@ def site_margins(db: DbSession, principal: CurrentPrincipal, ids: str | None = N
         except ValueError as exc:
             raise svc.unprocessable("ids: site numbers separated by commas") from exc
         q = q.where(Site.id.in_(wanted or [0]))
-    out = {}
     now = time.monotonic()
-    for site in db.scalars(q):
-        hit = _MARGINS.get((site.id, salary))
-        if hit and now - hit[0] < MARGIN_TTL_S:
-            row = hit[1]
-        else:
-            p = svc.site_profit(db, site, salary)
-            row = None
-            if p["billed"] or p["cost_total"]:
-                row = {"margin_percent": p["margin_percent"], "over_cost": p["over_cost"]}
-            _MARGINS[(site.id, salary)] = (now, row)
+    sites = list(db.scalars(q))
+    stale = [
+        s
+        for s in sites
+        if not (hit := _MARGINS.get((s.id, salary))) or now - hit[0] >= MARGIN_TTL_S
+    ]
+    for p in svc.site_profits(db, stale, salary):
+        row = None
+        if p["billed"] or p["cost_total"]:
+            row = {"margin_percent": p["margin_percent"], "over_cost": p["over_cost"]}
+        _MARGINS[(p["site_id"], salary)] = (now, row)
+    out = {}
+    for site in sites:
+        row = _MARGINS[(site.id, salary)][1]
         if row:
             out[str(site.id)] = row
     return out

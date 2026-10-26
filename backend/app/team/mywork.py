@@ -235,6 +235,22 @@ def director(db: Session, p: Principal) -> list[Item]:
                 "/my-work",
             )
         )
+    from app.measure.models import VariationRequest  # noqa: PLC0415
+
+    for v in db.scalars(select(VariationRequest).where(VariationRequest.status == "proposed").order_by(VariationRequest.id)):
+        out.append(
+            item(
+                "variation",
+                str(v.id),
+                f"Variation asked: {v.description}",
+                f"A slip line with no work-order item ({v.particulars}); approve before it goes to the client",
+                f"/variations?variation={v.id}",
+                "Decide",
+                v.created_at,
+                "normal",
+                "/variations",
+            )
+        )
     return out
 
 
@@ -396,6 +412,23 @@ def planning(db: Session, p: Principal) -> list[Item]:
                     "/tenders",
                 )
             )
+    from app.estimate.models import MaterialRequest  # noqa: PLC0415
+
+    for r in db.scalars(select(MaterialRequest).where(MaterialRequest.status == "requested").order_by(MaterialRequest.id)):
+        out.append(
+            item(
+                "material_request",
+                str(r.id),
+                f"Material request {r.code}",
+                "Asked from site by area and thickness; approve or change it into an indent"
+                + (" (more than the estimate has left)" if r.over_reason else ""),
+                f"/material-requests?request={r.id}",
+                "Decide",
+                r.created_at,
+                "warn" if r.over_reason else "normal",
+                "/material-requests",
+            )
+        )
     return out
 
 

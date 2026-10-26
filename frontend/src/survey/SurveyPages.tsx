@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { api, downloadFile, fetchObjectUrl } from "../api";
 import { useAuth } from "../auth";
 import { Modal } from "../ui/Overlay";
-import { errorText, showError } from "../format";
+import { errorText, inr, showError } from "../format";
 import type { SiteNode } from "../types";
 import { formatArea, formatLength, parseLength, parseSize } from "./units";
 import type { Unit } from "./units";
@@ -1228,7 +1228,7 @@ export function SurveySettings() {
             <input type="number" min="0" value={s.ai_monthly_cap_inr} onChange={(e) => setS({ ...s, ai_monthly_cap_inr: e.target.value })} />
           </Field>
         </div>
-        <p className="small muted">Spent this month: ₹{Number(s.ai_month_spend_inr).toFixed(2)}</p>
+        <p className="small muted">Spent this month: {inr(s.ai_month_spend_inr)}</p>
         <Button type="submit" variant="primary">Save settings</Button>
       </Card>
       <h2 className="section-title top-gap">Area types</h2>

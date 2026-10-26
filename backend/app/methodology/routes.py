@@ -1003,6 +1003,8 @@ def versions(mid: int, db: DbSession, principal: CurrentPrincipal, _: Compliance
 
 class ExportIn(BaseModel):
     audience: Literal["client", "internal"] = "client"
+    # a coverage written outside the library's min and max is a warning: sent only once seen
+    coverage_seen: bool = False
 
 
 @router.post("/methodologies/{mid}/export")
@@ -1017,6 +1019,12 @@ def export_files(
     m = _visible(db, mid, scope, principal)
     if body.audience == "internal" and not internals(principal):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Missing permission: methodology.compliance")
+    if body.audience == "client" and not body.coverage_seen:
+        from app.estimate.routes import methodology_checks  # noqa: PLC0415
+
+        warns = methodology_checks(db, m)["coverage"]
+        if warns:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Coverage outside the library: " + "; ".join(w["warning"] for w in warns))
     made = export.issue(db, m, body.audience, principal.user.id)
     record(
         db,

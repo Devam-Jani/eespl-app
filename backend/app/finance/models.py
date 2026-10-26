@@ -214,6 +214,8 @@ class RaBill(Tracked, Base):
     verbal_on: Mapped[date | None] = mapped_column(Date)
     # an old bill read from Excel (its quantities are the first app bill's previous)
     imported: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    # its number in the old files when the app numbered it otherwise ("RA 16"): shown, searched
+    old_no: Mapped[str | None] = mapped_column(String(20), index=True)
 
     lines: Mapped[list["RaBillLine"]] = relationship(
         lazy="selectin",

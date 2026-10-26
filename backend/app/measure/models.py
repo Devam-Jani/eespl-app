@@ -265,3 +265,31 @@ class MeasureBilled(Base):
     wo_line_id: Mapped[int] = mapped_column(ForeignKey("client_work_order_lines.id", ondelete="CASCADE"))
     layer: Mapped[int] = mapped_column(Integer)
     sheet_id: Mapped[int] = mapped_column(ForeignKey("measure_sheets.id", ondelete="CASCADE"), index=True)
+
+
+VARIATION_STATUSES = ("proposed", "approved", "rejected")
+
+
+class VariationRequest(Tracked, Base):
+    """A slip line with no work-order item (gabda, frame fitting): billing proposes a new item or
+    variation (description, unit, rate); the director approves it; it is added to the work order
+    as a variation item, the line is mapped to it and can be billed, and it goes to the client with
+    the bill. Until then the line stays listed as unbilled."""
+
+    __tablename__ = "variation_requests"
+    __table_args__ = (CheckConstraint(_in("status", VARIATION_STATUSES), name="status_valid"),)
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    site_id: Mapped[int] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"), index=True)
+    sheet_id: Mapped[int] = mapped_column(ForeignKey("measure_sheets.id", ondelete="CASCADE"), index=True)
+    line_id: Mapped[int | None] = mapped_column(ForeignKey("measure_lines.id", ondelete="SET NULL"))
+    particulars: Mapped[str] = mapped_column(Text)  # the slip line as written
+    description: Mapped[str] = mapped_column(Text)
+    unit: Mapped[str] = mapped_column(String(20))
+    rate: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    status: Mapped[str] = mapped_column(String(10), server_default="proposed")
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decision_note: Mapped[str | None] = mapped_column(Text)
+    wo_line_id: Mapped[int | None] = mapped_column(ForeignKey("client_work_order_lines.id", ondelete="SET NULL"))
+    ra_bill_id: Mapped[int | None] = mapped_column(ForeignKey("ra_bills.id", ondelete="SET NULL"))

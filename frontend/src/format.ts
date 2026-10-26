@@ -7,14 +7,14 @@ const rupees = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
 
-/** ₹1,23,456.00 (Indian digit grouping). Blank values show as an em dash. */
+/** ₹1,23,456.00 (Indian digit grouping, always two decimals). Blank values show as an em dash.
+ * The one way a page shows an amount of money: src/moneyformat.test.ts fails on any other. */
 export function inr(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";
   const n = typeof value === "number" ? value : Number(value);
   return Number.isFinite(n) ? rupees.format(n) : "—";
 }
 
-/** A plain number with Indian grouping and up to `digits` decimals (trailing zeros dropped). */
 /** Compact Indian money for tiles: ₹29.49 Cr, ₹7.89 L, ₹72,228 (exact figures elsewhere). */
 export function inrCompact(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";
@@ -26,6 +26,17 @@ export function inrCompact(value: string | number | null | undefined): string {
   return `${sign}₹${Math.round(a).toLocaleString("en-IN")}`;
 }
 
+/** Shorter still for the labels on a chart: ₹1.2 Cr, ₹3.5 L, ₹13 k, ₹950. */
+export function inrChart(v: number): string {
+  const a = Math.abs(v);
+  const sign = v < 0 ? "-" : "";
+  if (a >= 1e7) return `${sign}₹${(a / 1e7).toFixed(a >= 1e8 ? 0 : 1)} Cr`;
+  if (a >= 1e5) return `${sign}₹${(a / 1e5).toFixed(a >= 1e6 ? 0 : 1)} L`;
+  if (a >= 1e3) return `${sign}₹${(a / 1e3).toFixed(0)} k`;
+  return `${sign}₹${a.toFixed(0)}`;
+}
+
+/** A plain number with Indian grouping and up to `digits` decimals (trailing zeros dropped). */
 export function num(value: string | number | null | undefined, digits = 4): string {
   if (value === null || value === undefined || value === "") return "—";
   const n = typeof value === "number" ? value : Number(value);

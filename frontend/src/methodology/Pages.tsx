@@ -1,9 +1,10 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { api, downloadFile } from "../api";
+import { api, ApiError, downloadFile } from "../api";
 import { useAuth } from "../auth";
-import { errorText } from "../format";
+import { errorText, inr } from "../format";
 import { Button, Card, Field } from "../ui/components";
+import { Checks } from "../estimate/Checks";
 
 type Step = {
   text: string;
@@ -541,7 +542,7 @@ export function SystemPage() {
               Rates:{" "}
               {s.templates.map((t) => (
                 <Link key={t.id} to={`/knowledge/templates/${t.id}`}>
-                  {t.name} ({t.lines} lines{t.median_rate ? `, median ₹${t.median_rate}` : ""}){" "}
+                  {t.name} ({t.lines} lines{t.median_rate ? `, median ${inr(t.median_rate)}` : ""}){" "}
                 </Link>
               ))}
             </p>
@@ -825,6 +826,22 @@ export function MethodologyPage() {
     if (!reason) return;
     act(() => api(`/api/methodology/items/${item.id}/perimeter`, { method: "PUT", json: { perimeter_m: Number(v), reason } }));
   };
+  // the client's copy waits while a coverage is outside the library, until it is seen and sent anyway
+  const [coverageHold, setCoverageHold] = useState<string | null>(null);
+  const exportClient = async (coverageSeen: boolean) => {
+    setBusy(true);
+    try {
+      await api(`/api/methodology/methodologies/${id}/export`, { method: "POST", json: { audience: "client", coverage_seen: coverageSeen } });
+      setCoverageHold(null);
+      setError(null);
+      await load();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409 && e.message.startsWith("Coverage outside the library")) setCoverageHold(e.message);
+      else setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
   const choose = (item: Item, choice: "approved" | "keep") => {
     const reason = choice === "keep" ? "Keep our make and ask the client to approve it before the bid (TPT)" : "Use a make on the client's approved list";
     act(() => api(`/api/methodology/items/${item.id}/make`, { method: "PUT", json: { choice, reason } }));
@@ -853,7 +870,7 @@ export function MethodologyPage() {
           )}
         </div>
         <div className="page-actions">
-          <Button disabled={busy} onClick={() => act(() => api(`/api/methodology/methodologies/${m.id}/export`, { method: "POST", json: { audience: "client" } }))}>
+          <Button disabled={busy} onClick={() => void exportClient(false)}>
             Export for the client (Word + PDF)
           </Button>
           {can("methodology.compliance") && (
@@ -872,6 +889,19 @@ export function MethodologyPage() {
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
+      {coverageHold && (
+        <div className="alert alert-warn" role="alert">
+          <p>{coverageHold}</p>
+          <p className="small">The client's copy is not made yet. Correct the figure in the method statement, or send it as it is.</p>
+          <Button variant="primary" size="small" loading={busy} onClick={() => void exportClient(true)}>
+            Send anyway — I have seen it
+          </Button>{" "}
+          <Button size="small" variant="ghost" onClick={() => setCoverageHold(null)}>
+            Not now
+          </Button>
+        </div>
+      )}
+      {can("estimate.view") && !only && <Checks methodologyId={m.id} quiet />}
       {m.files.length > 0 && !only && (
         <Card as="div">
           <h2 className="section-title">Files</h2>

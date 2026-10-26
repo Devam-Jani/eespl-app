@@ -695,10 +695,17 @@ def labour_cost(site_id: int, db: DbSession, principal: CurrentPrincipal) -> dic
 
 def bill_lines_cost(db: Session, site_id: int) -> Decimal:
     """Approved labour bills' lines on the site (for the site's labour head)."""
-    return Decimal(
-        db.scalar(
-            select(func.coalesce(func.sum(LabourBillLine.amount), 0))
+    return bill_lines_cost_by_site(db, [site_id]).get(site_id, Decimal(0))
+
+
+def bill_lines_cost_by_site(db: Session, site_ids) -> dict[int, Decimal]:
+    """bill_lines_cost for several sites in one query (sites without approved lines left out)."""
+    return {
+        site_id: Decimal(amount)
+        for site_id, amount in db.execute(
+            select(LabourBillLine.site_id, func.coalesce(func.sum(LabourBillLine.amount), 0))
             .join(LabourBill, LabourBill.id == LabourBillLine.bill_id)
-            .where(LabourBillLine.site_id == site_id, LabourBill.status == "approved")
+            .where(LabourBillLine.site_id.in_(list(site_ids)), LabourBill.status == "approved")
+            .group_by(LabourBillLine.site_id)
         )
-    )
+    }

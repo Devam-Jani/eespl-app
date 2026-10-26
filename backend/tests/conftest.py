@@ -36,6 +36,8 @@ from app.models import Role, User  # noqa: E402
 PER_TEST_TABLES = [
     "refresh_tokens", "audit_log", "user_roles", "password_links", "system_status", "help_texts",
     "building_models", "helper_answers", "issue_events", "issues",
+    "material_requests", "estimate_lines", "estimate_areas", "estimates", "coverages",
+    "mix_designs", "variation_requests",
     "measure_billed", "measure_lines", "measure_sheets", "measure_items", "measure_edges",
     "measure_areas",
     "security_settings",

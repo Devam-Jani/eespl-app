@@ -200,7 +200,7 @@ export function NewBill({ cards, onDone, onError }: { cards: RateCardLite[]; onD
                           <option value="">— not in this bill —</option>
                           {myCards.map((c) => (
                             <option key={c.id} value={c.id}>
-                              {c.job} ₹{c.rate}/{c.unit}
+                              {c.job} {inr(c.rate)}/{c.unit}
                             </option>
                           ))}
                         </select>

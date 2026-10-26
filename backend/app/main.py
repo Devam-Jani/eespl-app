@@ -24,6 +24,7 @@ from app.costing import prices as price_list
 from app.costing import working_routes as rate_working
 from app.crm import routers as crm
 from app.db import get_engine
+from app.estimate import routes as estimate
 from app.execution import assets as ex_assets
 from app.execution import budget as ex_budget
 from app.execution import dpr as ex_dpr
@@ -158,6 +159,7 @@ for _r in (
     schedule.router,
     takeoff.router,
     measure.router,
+    estimate.router,
     building.router,
     building.tiles,
     issues.me,

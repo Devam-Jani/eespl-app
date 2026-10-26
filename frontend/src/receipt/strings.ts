@@ -32,6 +32,7 @@ export const S = {
   stepIssue: ["3. Issue material to areas", "3. વિસ્તારોમાં માલ આપો", "3. क्षेत्रों को माल दें"],
   stepWork: ["4. Work done, with photos", "4. કરેલું કામ, ફોટા સાથે", "4. किया गया काम, फ़ोटो के साथ"],
   stepSnags: ["5. Snags", "5. ખામીઓ", "5. कमियाँ"],
+  askMaterial: ["Ask for material", "માલ મંગાવો", "माल मंगवाएं"],
   stepDone: ["Done", "થઈ ગયું", "हो गया"],
   pending: ["To do", "બાકી", "बाकी"],
   open: ["Open", "ખોલો", "खोलें"],

@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
-import { errorText } from "../format";
+import { errorText, inr } from "../format";
 import type { Tracked } from "../team/Pages";
 import { CertifyForm } from "../team/Pages";
 import { Button, buttonClass, Card, Field } from "../ui/components";
@@ -12,8 +12,6 @@ const d = (v: string | null | undefined) =>
   v ? new Date(v.length === 10 ? `${v}T00:00:00` : v).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 const num = (v: string | number | null | undefined, digits = 2) =>
   v === null || v === undefined || v === "" ? "—" : Number(v).toLocaleString("en-IN", { maximumFractionDigits: digits });
-const inr = (v: string | number | null | undefined) =>
-  v === null || v === undefined ? "—" : `₹ ${Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`;
 
 function useLoad<T>(path: string | null) {
   const [data, setData] = useState<T | null>(null);

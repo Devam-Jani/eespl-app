@@ -183,6 +183,9 @@ def run(db: Session, folder: Path) -> dict:
         if sp["do"] == "bill":
             mb.send(db, s, user)
             b, warns = mb.bill_from_sheet(db, s, user, proforma_on=date.fromisoformat(sp["proforma_on"]), basis="verbal", verbal_by=sp["signed_by"], verbal_on=date.fromisoformat(sp["signed_on"]))
+            old = register.old_number(sp["key"])
+            if old is not None and old != b.seq:  # the folder's RA 16 is the app's RA 8: the old number stays with it
+                b.old_no = f"RA {old}"
             register.mark_sent(db, b, register.add_revision(db, b, label="made from the slip", source="the app", made_on=b.proforma_on, user_id=user.id))
             checks = mb.checklist(db, b)
             if all(x["ok"] for x in checks):
