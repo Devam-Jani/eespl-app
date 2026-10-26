@@ -863,6 +863,61 @@ def test_site_profit_from_fixed_inputs(boss, world):
     assert margins[str(world["site"])]["over_cost"]
 
 
+def test_site_profit_table_queries_do_not_grow_with_the_sites(boss, world):
+    """The Site profit page and the Sites list's margins read every site at once: as many queries
+    for six sites as for one (each site on its own took some 28 queries and seconds)."""
+    from sqlalchemy import event
+
+    from app.db import engine
+    from app.finance import reports
+
+    client, h = boss
+    invoiced(client, h, world)
+    client.post(
+        f"/api/execution/sites/{world['site']}/costs",
+        json={"head": "material", "amount": "12000", "description": "Invented cost"},
+        headers=h,
+    )
+    count = [0]
+
+    def counted(*_):
+        count[0] += 1
+
+    def queries(path):
+        reports._MARGINS.clear()
+        count[0] = 0
+        event.listen(engine, "before_cursor_execute", counted)
+        try:
+            r = client.get(path, headers=h)
+        finally:
+            event.remove(engine, "before_cursor_execute", counted)
+        assert r.status_code == 200, r.text
+        return count[0], r.json()
+
+    one, rows = queries("/api/finance/profit")
+    one_margins, _ = queries("/api/finance/site-margins")
+    assert [r["site_id"] for r in rows] == [world["site"]]
+    for i in range(5):
+        s = client.post(
+            "/api/sites",
+            json={"name": f"Invented Site {i}", "client_id": world["client"], "state": "Gujarat"},
+            headers=h,
+        ).json()
+        client.post(
+            f"/api/execution/sites/{s['id']}/costs",
+            json={"head": "other", "amount": str(100 * (i + 1)), "description": "Invented cost"},
+            headers=h,
+        )
+    six, rows = queries("/api/finance/profit")
+    six_margins, margins = queries("/api/finance/site-margins")
+    assert len(rows) == 6 and len(margins) == 6
+    assert six == one and six_margins == one_margins
+    # each row is what the site's own profit says
+    for row in rows:
+        assert row == client.get(f"/api/finance/sites/{row['site_id']}/profit", headers=h).json()
+    assert sorted(D(r["cost_total"]) for r in rows) == [100, 200, 300, 400, 500, 12000]
+
+
 # --- Tally ---------------------------------------------------------------------------------------
 
 

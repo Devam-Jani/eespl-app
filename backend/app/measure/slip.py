@@ -137,11 +137,23 @@ def lines_of(db: Session, sheet: MeasureSheet) -> list[MeasureLine]:
 
 
 def unmapped(db: Session, sheet: MeasureSheet) -> list[dict]:
-    """The slip's lines not billed: not mapped to a work-order item, or left out (with why)."""
+    """The slip's lines not billed: not mapped to a work-order item (with its variation request, if
+    one is asked), or left out (with why)."""
+    from app.measure.models import VariationRequest  # noqa: PLC0415
+    from app.tenders.export import inr  # noqa: PLC0415
+
+    asked = {v.line_id: v for v in db.scalars(select(VariationRequest).where(VariationRequest.sheet_id == sheet.id).order_by(VariationRequest.id))}
     out = []
     for ln in lines_of(db, sheet):
         if ln.wo_line_id is None:
-            out.append({"line_id": ln.id, "particulars": ln.particulars, "typed": ln.typed, "why": "not mapped to a work-order item"})
+            v = asked.get(ln.id)
+            why = "not mapped to a work-order item"
+            if v is not None and v.status == "proposed":
+                why += f": variation asked ({v.description}, {v.unit} at {inr(v.rate)}), waiting for the director"
+            elif v is not None and v.status == "rejected":
+                why += f": variation not approved ({v.decision_note})"
+            out.append({"line_id": ln.id, "particulars": ln.particulars, "typed": ln.typed, "why": why,
+                        "variation": {"id": v.id, "status": v.status} if v is not None else None})
         elif not ln.billed:
             out.append({"line_id": ln.id, "particulars": ln.particulars, "typed": ln.typed, "why": ln.reason or "left out of the bill"})
     return out

@@ -80,6 +80,9 @@ export default function Site3DTab({
   const [selected, setSelected] = useState<number | null>(null);
   const [xFloor, setXFloor] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // the camera's view from a button (pressed until the view is dragged), and why there is no 3D at all
+  const [preset, setPreset] = useState<"top" | "front" | null>(null);
+  const [noGl, setNoGl] = useState<string | null>(null);
   // a building model from the AutoCAD drawing: the X-ray view; otherwise the schematic boxes
   const schematic = model !== null && !model.building;
   const canBuild = !portal && can("building.edit");
@@ -171,7 +174,13 @@ export default function Site3DTab({
   useEffect(() => {
     const el = mount.current;
     if (!el || !schematic) return; // the box model only for a site without a building model
-    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    } catch {
+      setNoGl("This browser cannot draw 3D here (WebGL is off or not supported), so the camera buttons are hidden");
+      return;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(el.clientWidth, el.clientHeight);
     el.appendChild(renderer.domElement);
@@ -202,6 +211,7 @@ export default function Site3DTab({
       }
     };
     controls.addEventListener("change", render);
+    controls.addEventListener("start", () => setPreset(null));
     three.current = { renderer, scene, camera, controls, content, ground, pickables: [], labels: [], render };
     const resize = new ResizeObserver(() => {
       renderer.setSize(el.clientWidth, el.clientHeight);
@@ -236,6 +246,8 @@ export default function Site3DTab({
     },
     [below, maxLevel, cutaway, boxes],
   );
+  // the camera buttons fit what is shown: with nothing shown they have nothing to fit
+  const anyShown = boxes.some(visible);
 
   // survey state per node: its own areas, else rolled up from the places inside it
   const surveyState = useMemo(() => {
@@ -450,6 +462,7 @@ export default function Site3DTab({
     t.controls.target.copy(c);
     t.controls.update();
     t.render();
+    setPreset(kind === "top" || kind === "front" ? kind : null);
   }
 
   // opening a floor fits the camera to its rooms
@@ -666,15 +679,21 @@ export default function Site3DTab({
                 </button>
               )}
             </div>
-            <Button size="small" onClick={() => view("reset")}>
-              Reset view
-            </Button>
-            <Button size="small" onClick={() => view("top")}>
-              Top
-            </Button>
-            <Button size="small" onClick={() => view("front")}>
-              Front
-            </Button>
+            {noGl ? (
+              <span className="muted small">{noGl}.</span>
+            ) : (
+              <>
+                <Button size="small" onClick={() => view("reset")} disabled={!anyShown} title={anyShown ? undefined : "Nothing is shown to look at"}>
+                  Reset view
+                </Button>
+                <Button size="small" onClick={() => view("top")} aria-pressed={preset === "top"} disabled={!anyShown} title={anyShown ? "Look down from above" : "Nothing is shown to look at"}>
+                  Top
+                </Button>
+                <Button size="small" onClick={() => view("front")} aria-pressed={preset === "front"} disabled={!anyShown} title={anyShown ? "Look from the front" : "Nothing is shown to look at"}>
+                  Front
+                </Button>
+              </>
+            )}
             {hasBelow && (
               <label className="check">
                 <input type="checkbox" checked={below} onChange={(e) => setBelow(e.target.checked)} /> Below ground

@@ -407,7 +407,3 @@ export function SectionsEditor({ sections, onChange, stages, disabled }: { secti
   );
 }
 
-export function money(v: string | number | null | undefined): string {
-  if (v === null || v === undefined || v === "") return "—";
-  return Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}

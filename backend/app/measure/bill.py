@@ -193,6 +193,11 @@ def bill_from_sheet(db: Session, sheet: MeasureSheet, user, *, proforma_on: date
     db.flush()
     measure.stamp_billed(db, b)
     sheet.ra_bill_id, sheet.status = b.id, "billed"
+    from app.measure import variation  # noqa: PLC0415
+
+    for v in variation.for_sheet(db, sheet.id):  # the director's variations go to the client with this bill
+        if v.status == "approved":
+            v.ra_bill_id = b.id
     return b, warnings(db, b, sheet)
 
 
@@ -253,8 +258,22 @@ def proforma(db: Session, b: RaBill) -> dict:
         "order": order, "buyer": {"name": client.name if client else None, "address": client.address if client else None, "city": client.city if client else None,
                                     "state": client.state if client else None, "gstin": (c.client_gstin or (client.gstin if client else None))},
         "site": {"id": site.id, "code": site.code, "name": site.name}, "lines": lines, "tax": tax(db, b, c, lines), "warnings": warnings(db, b, sheet),
-        "invoice_id": db.scalar(select(TaxInvoice.id).where(TaxInvoice.ra_bill_id == b.id)),
+        "invoice_id": db.scalar(select(TaxInvoice.id).where(TaxInvoice.ra_bill_id == b.id)), "old_no": b.old_no,
+        "variations": _variations(db, b),
     }  # fmt: skip
+
+
+def _variations(db: Session, b: RaBill) -> list[dict]:
+    """The variation items in this bill: new items the director approved, for the client to agree."""
+    from app.measure.models import VariationRequest  # noqa: PLC0415
+    from app.tenders.export import inr  # noqa: PLC0415
+
+    out = []
+    for v in db.scalars(select(VariationRequest).where(VariationRequest.ra_bill_id == b.id).order_by(VariationRequest.id)):
+        w = db.get(ClientWorkOrderLine, v.wo_line_id) if v.wo_line_id else None
+        out.append({"item_no": w.item_no if w else None, "description": v.description, "unit": v.unit, "rate": v.rate, "particulars": v.particulars,
+                    "approved_on": v.decided_at, "text": f"Variation {w.item_no if w else ''}: {v.description} ({v.unit} at {inr(v.rate)}), approved by the director, for the client's agreement"})  # fmt: skip
+    return out
 
 
 def checklist(db: Session, b: RaBill) -> list[dict]:

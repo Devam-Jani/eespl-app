@@ -44,7 +44,22 @@ async function measurePath(page: Page): Promise<string> {
   return `${new URL(page.url()).pathname.match(/^\/sites\/\d+/)![0]}/measure?ask=no`;
 }
 
-const SCREENS: { name: string; who: string; path: string | ((page: Page) => Promise<string>) }[] = [
+/** The first measurement sheet opened from the Sheets tab: the page brings it up below the top bar. */
+async function openSheet(page: Page) {
+  await page.getByRole("tab", { name: /Sheets/ }).click();
+  await page.getByRole("button", { name: /^MS-DEMO-POOL-01/ }).click();
+  await expect(page.locator("#m-sheet")).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(800); // the smooth scroll to the sheet
+}
+
+/** A modal (the slip bill's) over the page: it covers the top bar, never the other way round. */
+async function openModal(page: Page) {
+  await page.getByRole("tab", { name: /Sheets/ }).click();
+  await page.getByRole("button", { name: "Bill from a slip" }).click();
+  await expect(page.getByRole("dialog", { name: "Bill from a site slip" })).toBeVisible();
+}
+
+const SCREENS: { name: string; who: string; path: string | ((page: Page) => Promise<string>); then?: (page: Page) => Promise<void> }[] = [
   { name: "dashboard", who: "demo-director@demo.invalid", path: "/dashboard" },
   { name: "site-3d", who: "demo-director@demo.invalid", path: "/sites/13?tab=3d" },
   { name: "phone-report", who: "demo-site-engineer@demo.invalid", path: "/my-site/13/report" },
@@ -52,6 +67,9 @@ const SCREENS: { name: string; who: string; path: string | ((page: Page) => Prom
   { name: "portal", who: "demo-client-pm@example.com", path: "/portal" },
   // the Measure and bill page and the five heaviest pages moved to the shared components
   { name: "measure", who: "demo-billing@demo.invalid", path: measurePath },
+  // a sheet and a modal on that page: the top bar never draws over them
+  { name: "measure-sheet", who: "demo-billing@demo.invalid", path: measurePath, then: openSheet },
+  { name: "measure-modal", who: "demo-billing@demo.invalid", path: measurePath, then: openModal },
   { name: "quotations", who: "demo-director@demo.invalid", path: "/quotations" },
   { name: "surveys", who: "demo-director@demo.invalid", path: "/surveys" },
   { name: "measurement-book", who: "demo-director@demo.invalid", path: "/measurements" },
@@ -63,6 +81,7 @@ for (const s of SCREENS) {
     test(`${s.name} (${theme})`, async ({ page }) => {
       await signIn(page, s.who);
       await settle(page, typeof s.path === "string" ? s.path : await s.path(page), theme);
+      await s.then?.(page);
       await expect(page).toHaveScreenshot(`${s.name}-${theme}.png`, { mask: masks(page), fullPage: false });
     });
   }

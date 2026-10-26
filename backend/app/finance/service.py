@@ -523,116 +523,177 @@ def month_days(month: str) -> int:
 
 def staff_cost(db: Session, site_id: int) -> Decimal:
     """Salary cost (gross + employer PF / ESI) allocated by each person's check-in days."""
-    total = ZERO
-    for p in db.scalars(select(Payslip).join(PayrollRun, PayrollRun.id == Payslip.run_id)):
-        days = sum(int(v) for v in (p.site_days or {}).values())
-        here = int((p.site_days or {}).get(str(site_id), 0))
-        if days and here:
-            total += (
-                (Decimal(p.gross) + Decimal(p.pf_employer) + Decimal(p.esi_employer)) * here / days
-            )
-    return money(total)
+    return staff_cost_by_site(db, [site_id])[site_id]
+
+
+def staff_cost_by_site(db: Session, site_ids) -> dict[int, Decimal]:
+    """staff_cost for several sites, the payslips read once."""
+    totals = {i: ZERO for i in site_ids}
+    for site_days, gross, pf, esi in db.execute(
+        select(Payslip.site_days, Payslip.gross, Payslip.pf_employer, Payslip.esi_employer).join(
+            PayrollRun, PayrollRun.id == Payslip.run_id
+        )
+    ):
+        days = sum(int(v) for v in (site_days or {}).values())
+        if not days:
+            continue
+        for site_id in totals:
+            here = int((site_days or {}).get(str(site_id), 0))
+            if here:
+                totals[site_id] += (Decimal(gross) + Decimal(pf) + Decimal(esi)) * here / days
+    return {i: money(t) for i, t in totals.items()}
 
 
 # --- site profit ---------------------------------------------------------------------------------
 
 
 def expenses_by_head(db: Session, site_id: int) -> dict[str, Decimal]:
+    return expenses_by_site(db, [site_id]).get(site_id, defaultdict(Decimal))
+
+
+def expenses_by_site(db: Session, site_ids) -> dict[int, dict[str, Decimal]]:
+    """Approved petty cash expenses by budget head, for several sites in one query."""
     from app.finance.models import ExpenseCategory
 
-    out: dict[str, Decimal] = defaultdict(Decimal)
-    for amount, head in db.execute(
-        select(PettyCashEntry.amount, ExpenseCategory.budget_head)
+    out: dict[int, dict[str, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
+    for site_id, amount, head in db.execute(
+        select(PettyCashEntry.site_id, PettyCashEntry.amount, ExpenseCategory.budget_head)
         .join(ExpenseCategory, ExpenseCategory.id == PettyCashEntry.category_id, isouter=True)
         .where(
-            PettyCashEntry.site_id == site_id,
+            PettyCashEntry.site_id.in_(list(site_ids)),
             PettyCashEntry.kind == "expense",
             PettyCashEntry.status == "approved",
         )
     ):
-        out[head or "other"] += Decimal(amount)
+        out[site_id][head or "other"] += Decimal(amount)
     return out
 
 
 def site_profit(db: Session, site: Site, with_salary: bool) -> dict:
-    invoices = list(
-        db.scalars(
-            select(TaxInvoice).where(TaxInvoice.site_id == site.id, TaxInvoice.status == "issued")
+    return site_profits(db, [site], with_salary)[0]
+
+
+def _sums(db: Session, q) -> dict:
+    """{key columns: sum} from a grouped query whose last column is the sum."""
+    return {tuple(row[:-1]): Decimal(row[-1] or 0) for row in db.execute(q)}
+
+
+def site_profits(db: Session, sites: list[Site], with_salary: bool) -> list[dict]:
+    """site_profit for several sites with one query per source, whatever the number of sites (the
+    Site profit page read each site on its own: some 28 queries a site)."""
+    ids = [s.id for s in sites]
+    if not ids:
+        return []
+    invoiced = _sums(
+        db,
+        select(TaxInvoice.site_id, TaxInvoice.kind, func.sum(TaxInvoice.taxable))
+        .where(TaxInvoice.site_id.in_(ids), TaxInvoice.status == "issued")
+        .group_by(TaxInvoice.site_id, TaxInvoice.kind),
+    )
+    retained = _sums(
+        db,
+        select(TaxInvoice.site_id, func.sum(TaxInvoice.retention))
+        .where(
+            TaxInvoice.site_id.in_(ids),
+            TaxInvoice.kind == "invoice",
+            TaxInvoice.status == "issued",
         )
+        .group_by(TaxInvoice.site_id),
     )
-    billed = sum((Decimal(i.taxable) for i in invoices if i.kind == "invoice"), ZERO) - sum(
-        (Decimal(i.taxable) for i in invoices if i.kind == "credit_note"), ZERO
+    released = _sums(
+        db,
+        select(RetentionRelease.site_id, func.sum(RetentionRelease.amount))
+        .where(RetentionRelease.site_id.in_(ids))
+        .group_by(RetentionRelease.site_id),
     )
-    certified = sum(
-        (
-            Decimal(b.certified_gross or 0)
-            for b in db.scalars(
-                select(RaBill).where(
-                    RaBill.site_id == site.id, RaBill.status.in_(("certified", "invoiced"))
+    certified = _sums(
+        db,
+        select(RaBill.site_id, func.sum(func.coalesce(RaBill.certified_gross, 0)))
+        .where(RaBill.site_id.in_(ids), RaBill.status.in_(("certified", "invoiced")))
+        .group_by(RaBill.site_id),
+    )
+    received = _sums(
+        db,
+        select(TaxInvoice.site_id, func.sum(ReceiptAllocation.amount))
+        .join(TaxInvoice, TaxInvoice.id == ReceiptAllocation.invoice_id)
+        .where(TaxInvoice.site_id.in_(ids))
+        .group_by(TaxInvoice.site_id),
+    )
+    advances = _sums(
+        db,
+        select(Receipt.site_id, func.sum(Receipt.amount))
+        .where(Receipt.site_id.in_(ids), Receipt.is_advance)
+        .group_by(Receipt.site_id),
+    )
+    contracts = {
+        site_id: Decimal(value)
+        for site_id, value in db.execute(
+            select(ClientContract.site_id, ClientContract.contract_value).where(
+                ClientContract.site_id.in_(ids)
+            )
+        )
+    }
+    budgets: dict[int, dict[str, Decimal]] = defaultdict(dict)
+    for site_id, head, amount in db.execute(
+        select(SiteBudget.site_id, SiteBudget.head, SiteBudget.amount).where(
+            SiteBudget.site_id.in_(ids)
+        )
+    ):
+        budgets[site_id][head] = Decimal(amount)
+    tender = ex.tender_budgets(db, sites)
+    expenses = expenses_by_site(db, ids)
+    actuals = ex.actuals_by_site(db, ids, expenses)  # approved expenses are in their heads
+    salaries = staff_cost_by_site(db, ids) if with_salary else {}
+    out = []
+    for site in sites:
+        i = site.id
+        billed = invoiced.get((i, "invoice"), ZERO) - invoiced.get((i, "credit_note"), ZERO)
+        spent = expenses.get(i, {})
+        heads = {h: v - spent.get(h, ZERO) for h, v in actuals[i].items()}
+        heads["petty_cash"] = sum(spent.values(), ZERO)
+        if with_salary:
+            heads["staff_salary"] = salaries[i]
+        cost = sum(heads.values(), ZERO)
+        profit = billed - cost
+        contract_value = contracts.get(i)
+        budget = dict(budgets.get(i, {}))
+        for head, amount in tender.get(i, {}).items():
+            budget.setdefault(head, amount)
+        budget_total = sum(budget.values(), ZERO) if budget else None
+        projected = (
+            contract_value - budget_total
+            if contract_value is not None and budget_total is not None
+            else None
+        )
+        out.append(
+            {
+                "site_id": i,
+                "site_code": site.code,
+                "site_name": site.name,
+                "billed": money(billed),
+                "certified": money(certified.get((i,), ZERO)),
+                "received": money(received.get((i,), ZERO)),
+                "advance_received": money(advances.get((i,), ZERO)),
+                "retention_held": max(ZERO, retained.get((i,), ZERO) - released.get((i,), ZERO)),
+                "cost": {k: money(v) for k, v in heads.items()},
+                "cost_total": money(cost),
+                "salary_hidden": not with_salary,
+                "gross_profit": money(profit),
+                "margin_percent": (profit / billed * 100).quantize(Decimal("0.1"))
+                if billed
+                else None,
+                "over_cost": cost > billed,
+                "contract_value": contract_value,
+                "budget_at_completion": budget_total,
+                "projected_profit": projected,
+                "projected_margin_percent": (projected / contract_value * 100).quantize(
+                    Decimal("0.1")
                 )
-            )
-        ),
-        ZERO,
-    )
-    received = Decimal(
-        db.scalar(
-            select(func.coalesce(func.sum(ReceiptAllocation.amount), 0))
-            .join(TaxInvoice, TaxInvoice.id == ReceiptAllocation.invoice_id)
-            .where(TaxInvoice.site_id == site.id)
+                if projected is not None and contract_value
+                else None,
+            }
         )
-    )
-    advance_received = Decimal(
-        db.scalar(
-            select(func.coalesce(func.sum(Receipt.amount), 0)).where(
-                Receipt.site_id == site.id, Receipt.is_advance
-            )
-        )
-    )
-    actual = ex.actuals(db, site.id)  # approved expenses are in their heads
-    expenses = expenses_by_head(db, site.id)
-    heads = {h: actual[h] - expenses.get(h, ZERO) for h in actual}
-    heads["petty_cash"] = sum(expenses.values(), ZERO)
-    salary = staff_cost(db, site.id) if with_salary else None
-    if salary is not None:
-        heads["staff_salary"] = salary
-    cost = sum(heads.values(), ZERO)
-    profit = billed - cost
-    contract = db.scalar(select(ClientContract).where(ClientContract.site_id == site.id))
-    contract_value = Decimal(contract.contract_value) if contract else None
-    budget = {
-        b.head: Decimal(b.amount)
-        for b in db.scalars(select(SiteBudget).where(SiteBudget.site_id == site.id))
-    }
-    for head, amount in ex.tender_budget(db, site).items():
-        budget.setdefault(head, amount)
-    budget_total = sum(budget.values(), ZERO) if budget else None
-    projected = (
-        contract_value - budget_total
-        if contract_value is not None and budget_total is not None
-        else None
-    )
-    return {
-        "site_id": site.id,
-        "site_code": site.code,
-        "site_name": site.name,
-        "billed": money(billed),
-        "certified": money(certified),
-        "received": money(received),
-        "advance_received": money(advance_received),
-        "retention_held": retention_held(db, site.id)[2],
-        "cost": {k: money(v) for k, v in heads.items()},
-        "cost_total": money(cost),
-        "salary_hidden": not with_salary,
-        "gross_profit": money(profit),
-        "margin_percent": (profit / billed * 100).quantize(Decimal("0.1")) if billed else None,
-        "over_cost": cost > billed,
-        "contract_value": contract_value,
-        "budget_at_completion": budget_total,
-        "projected_profit": projected,
-        "projected_margin_percent": (projected / contract_value * 100).quantize(Decimal("0.1"))
-        if projected is not None and contract_value
-        else None,
-    }
+    return out
 
 
 def due_by(days: int) -> date:

@@ -1,7 +1,9 @@
 // The nightly check: signs in to the training company as each role's DEMO user and opens every
 // page of its menu (and the first record of each list), recording console errors, failed requests,
 // blank screens, buttons that do nothing and pages slower than 2 s. Findings go to the issue log
-// book ("found by the nightly check") when REPORT_URL and CRAWLER_TOKEN are set, and to OUT.
+// book ("found by the nightly check") when REPORT_URL and CRAWLER_TOKEN are set, and to OUT. A page
+// open the PC's sleep made slow or broke is opened again instead of reported (the summary's
+// rerun_for_sleep counts them, sleeps lists them).
 //
 //   BASE=https://training.localhost ENV_FILE=../../.env.prod.local node crawl.cjs
 //
@@ -13,7 +15,7 @@
 const { chromium } = require("playwright");
 const fs = require("fs");
 
-const { extraPages, followsTabs } = require("./pages.cjs");
+const { extraPages, followsTabs, longestGap, sleptDuring } = require("./pages.cjs");
 const BASE = (process.env.BASE || "https://training.localhost").replace(/\/$/, "");
 const SLOW_MS = Number(process.env.SLOW_MS || 2000);
 const CLICKS = process.env.CLICKS !== "0";
@@ -42,6 +44,12 @@ const pathOf = (u) => {
   }
 };
 
+// the heartbeat: a tick a second while a page opens; a long gap between ticks means the PC slept
+let ticks = [];
+let lastWake = -Infinity; // when the last sleep was seen to end
+setInterval(() => ticks.push(Date.now()), 1000).unref();
+const RERUNS = 2; // a page opened again at most this often for a sleep, then reported as it is
+
 // what a client must never be sent: our costs and margins, places (GPS), another client's records
 const STAFF_ONLY = /(^|_)(costs?|margins?|markup|profit|purchase_rate|lat|lng|latitude|longitude|gps|accuracy_m)(_|$)/i;
 function staffOnly(value, path = "", out = [], clients = new Set()) {
@@ -56,7 +64,7 @@ function staffOnly(value, path = "", out = [], clients = new Set()) {
   return { out, clients };
 }
 
-async function crawlRole(browser, role, pw, findings, timings) {
+async function crawlRole(browser, role, pw, findings, timings, sleeps) {
   const ctx = await browser.newContext({ viewport: { width: WIDTH, height: 1000 }, ignoreHTTPSErrors: true });
   const page = await ctx.newPage();
   let here = "/login";
@@ -115,15 +123,40 @@ async function crawlRole(browser, role, pw, findings, timings) {
   }, portal);
   const queue = [...new Set([portal ? "/portal" : "/my-work", ...links])];
   const seen = new Set();
+  const reruns = new Map();
   while (queue.length) {
     const path = queue.shift();
     if (seen.has(path) || seen.size > 200) continue;
     seen.add(path);
     here = path;
     const t0 = Date.now();
+    const m0 = performance.now();
+    const mark = findings.length;
+    ticks = [t0];
     await page.goto(`${BASE}${path}`, { waitUntil: "networkidle", timeout: 60000 }).catch((e) => add("page did not load", e.message));
     await page.waitForFunction(() => !document.body.innerText.includes("Loading…") && !document.querySelector(".page-skeleton"), null, { timeout: 30000 }).catch(() => add("still loading", "The page still said Loading… after 30 s"));
     const ms = Date.now() - t0;
+    ticks.push(Date.now());
+    // the PC slept (or was still waking up): what this open found is the sleep's, not the page's
+    const asleep = sleptDuring({
+      ms,
+      monoMs: performance.now() - m0,
+      maxGapMs: longestGap(ticks),
+      errors: findings.slice(mark).map((f) => f.error),
+      sinceWakeMs: Date.now() - lastWake,
+      slowMs: SLOW_MS,
+    });
+    if (asleep && (reruns.get(path) || 0) < RERUNS) {
+      if (!asleep.startsWith("slow just after")) lastWake = Date.now();
+      reruns.set(path, (reruns.get(path) || 0) + 1);
+      findings.splice(mark);
+      sleeps.push({ role, page: path, ms, reason: asleep });
+      console.error(`${role} ${path}: opened again, ${asleep}`);
+      await page.waitForTimeout(5000); // the network and Docker wake up
+      seen.delete(path);
+      queue.unshift(path);
+      continue;
+    }
     timings.push({ role, page: path, ms });
     if (ms > SLOW_MS) add("slow page", `The page took ${(ms / 1000).toFixed(1)} s to open (over ${SLOW_MS / 1000} s)`, { ms });
     const state = await page.evaluate(() => {
@@ -213,10 +246,11 @@ async function crawlRole(browser, role, pw, findings, timings) {
   const browser = await chromium.launch(launch);
   const findings = [];
   const timings = [];
+  const sleeps = []; // pages opened again because the PC slept
   const started = Date.now();
   for (const role of ROLES) {
     try {
-      await crawlRole(browser, role, pw, findings, timings);
+      await crawlRole(browser, role, pw, findings, timings, sleeps);
     } catch (e) {
       findings.push({ role, kind: "crawler error", page: "?", error: String(e).slice(0, 500) });
     }
@@ -237,12 +271,14 @@ async function crawlRole(browser, role, pw, findings, timings) {
     minutes: +((Date.now() - started) / 60000).toFixed(1),
     roles: ROLES.length,
     pages_opened: timings.length,
+    rerun_for_sleep: sleeps.length,
+    sleeps,
     slowest: [...timings].sort((a, b) => b.ms - a.ms).slice(0, 10),
     by_kind: [...grouped.values()].reduce((m, f) => ((m[f.kind] = (m[f.kind] || 0) + 1), m), {}),
     findings: [...grouped.values()],
   };
   if (process.env.OUT) fs.writeFileSync(process.env.OUT, JSON.stringify(summary, null, 1));
-  console.log(JSON.stringify({ ...summary, findings: summary.findings.length, slowest: summary.slowest.slice(0, 5) }, null, 1));
+  console.log(JSON.stringify({ ...summary, findings: summary.findings.length, slowest: summary.slowest.slice(0, 5), sleeps: undefined }, null, 1));
   if (process.env.REPORT_URL && process.env.CRAWLER_TOKEN && summary.findings.length) {
     const body = {
       findings: summary.findings.slice(0, 500).map((f) => ({

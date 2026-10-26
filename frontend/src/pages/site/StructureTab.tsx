@@ -84,6 +84,8 @@ export default function StructureTab({ site, onChange }: { site: Site; onChange:
     await act(api<SiteNode[]>(`/api/sites/${site.id}/nodes/${n.id}`, { method: "DELETE" }));
   }
 
+  const foldable = nodes.filter((n) => hasKids.has(n.id)).map((n) => n.id);
+  const allFolded = foldable.length > 0 && foldable.every((id) => collapsed.has(id));
   const counts = nodes.reduce<Record<string, number>>((acc, n) => ({ ...acc, [n.kind]: (acc[n.kind] ?? 0) + 1 }), {});
 
   return (
@@ -98,10 +100,11 @@ export default function StructureTab({ site, onChange }: { site: Site; onChange:
           </span>
         </div>
         <div className="page-actions">
-          <Button variant="ghost" onClick={() => setCollapsed(new Set(nodes.filter((n) => hasKids.has(n.id)).map((n) => n.id)))}>
+          {/* only what can fold: off when nothing has places under it, or all is folded / open already */}
+          <Button variant="ghost" disabled={!foldable.length || allFolded} title={!foldable.length ? "No place has places under it" : allFolded ? "All folded already" : undefined} onClick={() => setCollapsed(new Set(foldable))}>
             Collapse all
           </Button>
-          <Button variant="ghost" onClick={() => setCollapsed(new Set())}>
+          <Button variant="ghost" disabled={!foldable.length || !collapsed.size} title={!foldable.length ? "No place has places under it" : !collapsed.size ? "All open already" : undefined} onClick={() => setCollapsed(new Set())}>
             Expand all
           </Button>
           {canEdit && (

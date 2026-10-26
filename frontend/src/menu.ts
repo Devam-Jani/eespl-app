@@ -70,6 +70,7 @@ export const MENU: MenuItem[] = [
   { to: "/billing", label: "Client billing", perms: ["billing.edit"], view: ["billing.view"], section: "Billing" },
   { to: "/ready-to-bill", label: "Ready to bill", perms: ["billing.edit"], view: ["billing.view"], all: ["closeout.billing"], section: "Billing" },
   { to: "/billing/checklist", label: "Billing checklist", perms: ["closeout.billing"], section: "Billing" },
+  { to: "/variations", label: "Variations (new items)", perms: ["variation.approve"], view: ["variation.request"], section: "Billing" },
   { to: "/work-orders", label: "Client work orders", perms: ["wo.view"], all: ["closeout.billing"], section: "Billing" },
   { to: "/guarantees", label: "Guarantee register", perms: ["closeout.billing"], view: ["closeout.billing", "closeout.payments"], section: "Billing" },
   { to: "/labour-check", label: "Labour bill check", perms: ["labourcheck.check"], section: "Billing" },

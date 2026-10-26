@@ -56,6 +56,7 @@ ALL = [
     "wo.view", "wo.edit", "closeout.billing", "closeout.site", "closeout.payments",
     "issues.view", "issues.edit", "portal.roles", "closeout.claim_approve", "system.ops",
     "help.edit", "building.edit", "issuelog.view", "issuelog.edit",
+    "variation.request", "variation.approve",
 ]  # fmt: skip
 TRACK = {"field.track": "own"}  # every staff user: their own day, map and claim
 
@@ -449,6 +450,8 @@ EXPECTED: dict[str, dict[str, str]] = {
         ["portal.view", "portal.comment", "portal.snag", "portal.approve"], "own"
     ),
 }
+# a slip line with no work-order item: billing proposes the variation, the director approves it
+EXPECTED["billing"] |= _all("variation.request")
 
 REAL_ENDPOINTS = {
     "admin.users", "admin.roles", "audit.view", "clients.view", "library.view",

@@ -7,13 +7,13 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
-import { errorText, num } from "../format";
+import { errorText, inr, num } from "../format";
 import { Button, Card, EmptyState, Field, PageSkeleton, Tabs } from "../ui/components";
 import { Modal } from "../ui/Overlay";
 import { CHART } from "../ui/tokens";
 import { bbox, flatten, levelOf, outlinePath } from "./geom";
 import { DrawnWallStart, ItemAreas, LineChoice, OutlineChooser, StudyForm, SumHeight } from "./Picking";
-import { MaterialCheck, RegisterView, Revisions, SlipNew, SlipPanel } from "./Billing";
+import { MaterialCheck, RegisterView, Revisions, SlipNew, SlipPanel, useShown } from "./Billing";
 import type { SlipInfo } from "./Billing";
 import type { Pt } from "./geom";
 
@@ -60,7 +60,8 @@ type Bill = {
   order: { basis: string; text: string }; buyer: { name: string | null; address: string | null; city: string | null; state: string | null; gstin: string | null };
   lines: { item_no: string | null; description: string; sac: string; unit: string; previous: string; this: string; cumulative: string; rate: string; amount: string }[];
   tax: { interstate: boolean; cgst_percent: string; sgst_percent: string; igst_percent: string; taxable: string; cgst: string; sgst: string; igst: string; round_off: string; total: string };
-  warnings: string[]; checklist: Check[]; invoice_id: number | null;
+  warnings: string[]; checklist: Check[]; invoice_id: number | null; old_no: string | null;
+  variations: { item_no: string | null; description: string; unit: string; rate: string; text: string }[];
 }; // prettier-ignore
 
 const PART_LABEL: Record<string, string> = { floor: "Floor", walls: "Side walls", tops: "Wall tops", slope: "Slope face", count: "Count" };
@@ -710,7 +711,7 @@ function ItemsPanel({ st, reload }: { st: State; reload: () => Promise<void> }) 
           <div>
             <b>{it.item_no}</b> {it.description.slice(0, 90)}{" "}
             <span className="muted">
-              ₹{num(it.rate, 2)} per {it.unit}
+              {inr(it.rate)} per {it.unit}
               {it.per_layer ? " per layer" : ""} · order {num(it.qty, 3)} {it.unit} · SAC {it.sac ?? "—"}
             </span>
           </div>
@@ -1040,6 +1041,7 @@ function SheetView({ sheetId, st, pick, onPick, onBill, reload, onClose }: { she
   const [s, setS] = useState<Sheet | null>(null);
   const [err, setErr] = useState("");
   const [billing, setBilling] = useState(false);
+  useShown("m-sheet", s !== null);
   const load = useCallback(() => api<Sheet>(`/api/measure/sheets/${sheetId}`).then(setS, (e) => setErr(errorText(e))), [sheetId]);
   useEffect(() => void load(), [load, st]);
   if (!s) return err ? <div className="alert alert-error">{err}</div> : <PageSkeleton label="Building the sheet" />;
@@ -1072,6 +1074,7 @@ function SheetView({ sheetId, st, pick, onPick, onBill, reload, onClose }: { she
 
   return (
     <Card
+      id="m-sheet"
       title={`${s.code} · measurement sheet · measured ${s.measured_on}`}
       actions={
         <div className="row-actions">
@@ -1218,9 +1221,9 @@ function SheetView({ sheetId, st, pick, onPick, onBill, reload, onClose }: { she
                     {[ln.no && `No ${num(ln.no, 0)}`, ln.length_m && `L ${num(ln.length_m, 3)}`, ln.width_m && `W ${num(ln.width_m, 3)}`, ln.height_m && `H ${num(ln.height_m, 3)}`].filter(Boolean).join(" × ")}
                     {ln.qty && ` = ${num(ln.qty, 4)}`}
                   </div>
-                  <div className="m-card-qty">
-                    {num(ln.total, 3)} {ln.unit}
-                  </div>
+                  {/* a line converted once per item (a slip, "a total line") has no total of its own:
+                      its quantity is what it adds, as in the table's Qty column */}
+                  <div className="m-card-qty">{ln.total !== null ? `${num(ln.total, 3)} ${ln.unit ?? ""}` : ln.qty !== null ? `Qty ${num(ln.qty, 4)}${s.slip && ln.unit ? ` ${ln.unit}` : ""}` : "—"}</div>
                 </>
               )}
             </li>
@@ -1263,6 +1266,33 @@ function SheetView({ sheetId, st, pick, onPick, onBill, reload, onClose }: { she
           ))}
         </tbody>
       </table>
+      {/* a phone: each item as a card, every column a row (the table's right-hand columns do not fit) */}
+      <ul className="m-cards m-abstract-cards" aria-label="The sheet's abstract">
+        {s.cumulative.map((r) => (
+          <li key={r.wo_line_id} className="m-card">
+            <div>
+              <b>{r.item_no}</b> {r.description.slice(0, 80)} <span className="muted">({r.unit})</span>
+              {r.note && <div className="m-why m-corrected">{r.note}</div>}
+            </div>
+            <dl className="m-card-rows">
+              <dt>Previous</dt>
+              <dd>{num(r.previous, 3)}</dd>
+              <dt>On the drawing</dt>
+              <dd>{num(r.drawing, 3)}</dd>
+              <dt>Approved by the client</dt>
+              <dd>{r.approved === null ? "—" : num(r.approved, 3)}</dd>
+              <dt>This bill</dt>
+              <dd>
+                <b>{num(r.this, 3)}</b>
+              </dd>
+              <dt>Up to date</dt>
+              <dd>{num(r.upto, 3)}</dd>
+              <dt>WO qty</dt>
+              <dd>{num(r.wo_qty, 3)}</dd>
+            </dl>
+          </li>
+        ))}
+      </ul>
       {s.corrections.length > 0 && (
         <>
           <h3>The client's corrections</h3>
@@ -1356,6 +1386,7 @@ function BillView({ billId, onClose }: { billId: number; onClose: () => void }) 
   const [b, setB] = useState<Bill | null>(null);
   const [err, setErr] = useState("");
   const [done, setDone] = useState("");
+  useShown("m-bill", b !== null);
   const load = useCallback(() => api<Bill>(`/api/measure/bills/${billId}`).then(setB, (e) => setErr(errorText(e))), [billId]);
   useEffect(() => void load(), [load]);
   if (!b) return err ? <div className="alert alert-error">{err}</div> : <PageSkeleton label="Loading the bill" />;
@@ -1380,7 +1411,8 @@ function BillView({ billId, onClose }: { billId: number; onClose: () => void }) 
   const t = b.tax;
   return (
     <Card
-      title={`${b.title} ${b.proforma_no} · ${b.code}`}
+      id="m-bill"
+      title={`${b.title} ${b.proforma_no} · ${b.code}${b.old_no ? ` (was ${b.old_no} in the old files)` : ""}`}
       actions={
         <div className="row-actions">
           <span className={`chip chip-${b.status === "draft" ? "idle" : b.status === "invoiced" ? "done" : "prog"}`}>{b.status}</span>
@@ -1410,6 +1442,16 @@ function BillView({ billId, onClose }: { billId: number; onClose: () => void }) 
           {w}
         </div>
       ))}
+      {b.variations.length > 0 && (
+        <div className="alert alert-info">
+          <b>Variations in this bill, for the client to agree:</b>
+          <ul>
+            {b.variations.map((v) => (
+              <li key={v.text}>{v.text}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="m-bill-head">
         <div>
           <h3>Proforma</h3>
@@ -1458,43 +1500,43 @@ function BillView({ billId, onClose }: { billId: number; onClose: () => void }) 
                 <td className="num">{num(ln.previous, 3)}</td>
                 <td className="num">{num(ln.this, 3)}</td>
                 <td className="num">{num(ln.cumulative, 3)}</td>
-                <td className="num">₹{num(ln.rate, 2)}</td>
-                <td className="num">₹{num(ln.amount, 2)}</td>
+                <td className="num">{inr(ln.rate)}</td>
+                <td className="num">{inr(ln.amount)}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
               <td colSpan={8}>Basic (taxable)</td>
-              <td className="num">₹{num(t.taxable, 2)}</td>
+              <td className="num">{inr(t.taxable)}</td>
             </tr>
             {t.interstate ? (
               <tr>
                 <td colSpan={8}>IGST {num(t.igst_percent, 0)}% (outside the state)</td>
-                <td className="num">₹{num(t.igst, 2)}</td>
+                <td className="num">{inr(t.igst)}</td>
               </tr>
             ) : (
               <>
                 <tr>
                   <td colSpan={8}>CGST {num(t.cgst_percent, 1)}%</td>
-                  <td className="num">₹{num(t.cgst, 2)}</td>
+                  <td className="num">{inr(t.cgst)}</td>
                 </tr>
                 <tr>
                   <td colSpan={8}>SGST {num(t.sgst_percent, 1)}%</td>
-                  <td className="num">₹{num(t.sgst, 2)}</td>
+                  <td className="num">{inr(t.sgst)}</td>
                 </tr>
               </>
             )}
             <tr>
               <td colSpan={8}>Round off</td>
-              <td className="num">₹{num(t.round_off, 2)}</td>
+              <td className="num">{inr(t.round_off)}</td>
             </tr>
             <tr>
               <td colSpan={8}>
                 <b>Grand total</b>
               </td>
               <td className="num">
-                <b>₹{num(t.total, 2)}</b>
+                <b>{inr(t.total)}</b>
               </td>
             </tr>
           </tfoot>

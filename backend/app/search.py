@@ -43,14 +43,15 @@ def search(db: DbSession, principal: CurrentPrincipal, q: Annotated[str, Query(m
         query = (
             select(RaBill, Site)
             .join(Site, Site.id == RaBill.site_id)
-            .where(RaBill.status != "cancelled", or_(RaBill.code.ilike(p), Site.name.ilike(p), Site.code.ilike(p)))
+            .where(RaBill.status != "cancelled", or_(RaBill.code.ilike(p), RaBill.old_no.ilike(p), Site.name.ilike(p), Site.code.ilike(p)))
             .order_by(RaBill.id.desc())
         )
         allowed = allowed_sites(db, bills_scope, principal)
         if allowed is not None:
             query = query.where(RaBill.site_id.in_(allowed or [0]))
         for b, s in db.execute(query.limit(LIMIT)):
-            out["bills"].append({"id": b.id, "title": f"{b.code}", "note": f"{s.code} {s.name} · {b.status}", "to": f"/bills/{b.id}"})
+            was = f" · was {b.old_no} in the old files" if b.old_no else ""
+            out["bills"].append({"id": b.id, "title": f"{b.code}", "note": f"{s.code} {s.name} · {b.status}{was}", "to": f"/bills/{b.id}"})
 
     if perms.get("quotation.view"):
         from app.quotations import service as qsvc  # noqa: PLC0415

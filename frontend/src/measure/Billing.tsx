@@ -5,15 +5,62 @@
 // Excel register; revisions keep each version of a bill, one sent to the client.
 import { useCallback, useEffect, useState } from "react";
 import { api, downloadFile, fetchObjectUrl } from "../api";
-import { errorText, num } from "../format";
+import { useAuth } from "../auth";
+import { errorText, inr, num } from "../format";
 import { Button, Card, EmptyState, Field } from "../ui/components";
 import { Modal } from "../ui/Overlay";
 
 type ItemRef = { wo_line_id: number; item_no: string | null; description: string; unit: string | null };
 export type SlipInfo = {
   name: string | null; on: string | null; signed_by: string | null; signed_on: string | null; has_file: boolean;
-  unbilled: { line_id: number; particulars: string; typed: Record<string, string | null> | null; why: string }[];
+  unbilled: { line_id: number; particulars: string; typed: Record<string, string | null> | null; why: string; variation: { id: number; status: string } | null }[];
+  variations?: Variation[];
 }; // prettier-ignore
+export type Variation = {
+  id: number; sheet_id: number; line_id: number | null; particulars: string; description: string; unit: string; rate: string; status: string;
+  decided_at: string | null; decision_note: string | null; wo_line_id: number | null; ra_bill_id: number | null; site?: string; site_id?: number; sheet_code?: string | null;
+}; // prettier-ignore
+
+/** Billing proposes a new item or variation for a slip line no work-order item covers. */
+function AskVariation({ sheetId, line, onClose, onDone }: { sheetId: number; line: SlipInfo["unbilled"][number]; onClose: () => void; onDone: (s: unknown) => void }) {
+  const [description, setDescription] = useState(line.particulars);
+  const [unit, setUnit] = useState("nos");
+  const [rate, setRate] = useState("");
+  const [err, setErr] = useState("");
+  async function save() {
+    try {
+      onDone(await api(`/api/measure/sheets/${sheetId}/slip-lines/${line.line_id}/variation`, { method: "POST", json: { description, unit, rate } }));
+    } catch (e) {
+      setErr(errorText(e));
+    }
+  }
+  return (
+    <Modal title="Ask for a new item / variation" onClose={onClose}>
+      <p className="muted">
+        &ldquo;{line.particulars}&rdquo; has no work-order item. The director approves the new item; it then joins the work order as a variation, the line is billed
+        with this sheet and goes to the client with the bill. Until then it stays listed as unbilled.
+      </p>
+      <Field label="Description of the new item">
+        <input value={description} onChange={(e) => setDescription(e.target.value)} />
+      </Field>
+      <Field label="Unit" hint="nos, rft, rmt, sqft or sqm: the slip line is worked out in it">
+        <input value={unit} onChange={(e) => setUnit(e.target.value)} />
+      </Field>
+      <Field label="Rate (₹ per unit)">
+        <input inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} />
+      </Field>
+      {err && <div className="alert alert-error">{err}</div>}
+      <div className="row-actions">
+        <Button variant="primary" type="button" onClick={save} disabled={!description.trim() || !unit.trim() || !(Number(rate) > 0)}>
+          Send to the director
+        </Button>
+        <Button variant="ghost" type="button" onClick={onClose}>
+          Cancel
+        </Button>
+      </div>
+    </Modal>
+  );
+}
 
 /** A new bill from a slip: its file, its date, who signed it (their role) and when. */
 export function SlipNew({ siteId, onClose, onDone }: { siteId: number; onClose: () => void; onDone: (id: number) => Promise<void> }) {
@@ -86,6 +133,8 @@ export function SlipPanel({ sheetId, slip, items, draft, onChanged }: { sheetId:
   const [billed, setBilled] = useState(true);
   const [reason, setReason] = useState("");
   const [err, setErr] = useState("");
+  const [asking, setAsking] = useState<SlipInfo["unbilled"][number] | null>(null);
+  const { can } = useAuth();
   useEffect(() => {
     if (!slip.has_file) return;
     let gone = false;
@@ -184,13 +233,132 @@ export function SlipPanel({ sheetId, slip, items, draft, onChanged }: { sheetId:
               <li key={u.line_id}>
                 {u.particulars}
                 {u.typed?.no ? ` (${u.typed.no}${u.typed.length ? ` × ${u.typed.length}` : ""}${u.typed.width ? ` × ${u.typed.width}` : ""})` : ""}: {u.why}
+                {u.why.startsWith("not mapped") && (!u.variation || u.variation.status === "rejected") && can("variation.request") && (
+                  <>
+                    {" "}
+                    <Button size="small" variant="secondary" type="button" onClick={() => setAsking(u)}>
+                      Ask for a new item / variation
+                    </Button>
+                  </>
+                )}
               </li>
             ))}
           </ul>
         ) : (
           <p className="muted">Every line of the slip is billed.</p>
         )}
+        {(slip.variations ?? []).length > 0 && (
+          <>
+            <h3>Variations asked</h3>
+            <ul className="m-skipped">
+              {(slip.variations ?? []).map((v) => (
+                <li key={v.id}>
+                  <span className={`chip chip-${v.status === "approved" ? "done" : v.status === "rejected" ? "block" : "hold"}`}>{v.status}</span> {v.description}, {v.unit} at{" "}
+                  {inr(v.rate)}
+                  {v.decision_note ? `: ${v.decision_note}` : ""}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </div>
+      {asking && (
+        <AskVariation
+          sheetId={sheetId}
+          line={asking}
+          onClose={() => setAsking(null)}
+          onDone={(s) => {
+            setAsking(null);
+            onChanged(s);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** The director's list of variations asked from slips: approve (it joins the work order) or not, with why. */
+export function VariationsPage() {
+  const [rows, setRows] = useState<Variation[] | null>(null);
+  const [notes, setNotes] = useState<Record<number, string>>({});
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+  const { can } = useAuth();
+  const load = useCallback(() => api<Variation[]>("/api/measure/variations").then(setRows, (e) => setErr(errorText(e))), []);
+  useEffect(() => void load(), [load]);
+  async function decide(v: Variation, approve: boolean) {
+    try {
+      const out = await api<{ done: string[] }>(`/api/measure/variations/${v.id}/decide`, { method: "POST", json: { approve, note: notes[v.id] || null } });
+      setMsg(out.done.join(". "));
+      setErr("");
+      await load();
+    } catch (e) {
+      setErr(errorText(e));
+    }
+  }
+  return (
+    <div className="page">
+      <div className="page-head">
+        <h1>Variations</h1>
+      </div>
+      <p className="muted">Slip lines no work-order item covers, proposed by billing as a new item. Approved, they join the work order and are billed with their sheet.</p>
+      {msg && <div className="alert alert-success">{msg}</div>}
+      {err && <div className="alert alert-error">{err}</div>}
+      {!rows ? (
+        <p className="muted">Loading…</p>
+      ) : rows.length === 0 ? (
+        <EmptyState title="No variations asked" hint="Billing asks for one from a slip line that has no work-order item." />
+      ) : (
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Site / sheet</th>
+                <th>On the slip</th>
+                <th>Proposed item</th>
+                <th className="num">Rate</th>
+                <th>Status</th>
+                <th>Decision</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((v) => (
+                <tr key={v.id}>
+                  <td>
+                    {v.site}
+                    <div className="muted small">{v.sheet_code}</div>
+                  </td>
+                  <td>{v.particulars}</td>
+                  <td>
+                    {v.description} ({v.unit})
+                  </td>
+                  <td className="num">{inr(v.rate)}</td>
+                  <td>
+                    <span className={`chip chip-${v.status === "approved" ? "done" : v.status === "rejected" ? "block" : "hold"}`}>{v.status}</span>
+                  </td>
+                  <td>
+                    {v.status === "proposed" && can("variation.approve") ? (
+                      <div className="row-actions">
+                        <Field label="Note" bare>
+                          <input value={notes[v.id] ?? ""} onChange={(e) => setNotes({ ...notes, [v.id]: e.target.value })} placeholder="Why not, if not" />
+                        </Field>
+                        <Button size="small" variant="primary" type="button" onClick={() => decide(v, true)}>
+                          Approve
+                        </Button>
+                        <Button size="small" variant="danger" type="button" onClick={() => decide(v, false)}>
+                          Not approved
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="muted">{v.decision_note ?? (v.decided_at ? `decided ${v.decided_at.slice(0, 10)}` : "waiting for the director")}</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -198,16 +366,30 @@ export function SlipPanel({ sheetId, slip, items, draft, onChanged }: { sheetId:
 type RegBill = {
   id: number; ra: number; code: string; status: string; imported: boolean; kind: string; number: string | null; date: string | null;
   basic: string; gst: string; total: string; paid: string; in_old_register: boolean; revisions: number; sent_revision: string | null;
+  old_no: string | null; was: string | null;
 }; // prettier-ignore
 type Register = { bills: RegBill[]; old: { ra: number | null; description: string; status: string; date: string | null; invoice_no: string | null; basic: string; total: string | null }[]; findings: { kind: string; text: string }[]; source: string | null };
+
+/** A sheet, a bill or the register opens below the drawing: the page brings it up once it is there,
+ * its head below the sticky top bar (the page's scroll-padding-top), so it is never read under the bar. */
+export function useShown(id: string, ready: boolean) {
+  useEffect(() => {
+    if (ready) document.getElementById(id)?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+  }, [id, ready]);
+}
 
 const FINDING: Record<string, string> = { missing: "Number missing", clash: "Number clash", order: "Out of order", year: "Wrong year", date: "Date differs", register: "Old register" };
 
 /** The site's bills in order beside the old register, and what was found. */
 export function RegisterView({ siteId, onOpen, onClose }: { siteId: number; onOpen: (billId: number) => void; onClose: () => void }) {
   const [r, setR] = useState<Register | null>(null);
+  useShown("m-register", true);
   const [err, setErr] = useState("");
-  const load = useCallback(() => api<Register>(`/api/measure/sites/${siteId}/register`).then(setR, (e) => setErr(errorText(e))), [siteId]);
+  const [q, setQ] = useState("");
+  const load = useCallback(
+    () => api<Register>(`/api/measure/sites/${siteId}/register${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ""}`).then(setR, (e) => setErr(errorText(e))),
+    [siteId, q],
+  );
   useEffect(() => void load(), [load]);
   async function upload(f: File) {
     const form = new FormData();
@@ -220,9 +402,13 @@ export function RegisterView({ siteId, onOpen, onClose }: { siteId: number; onOp
   }
   return (
     <Card
+      id="m-register"
       title="The site's bill register"
       actions={
         <div className="row-actions">
+          <Field label="Find a bill" bare>
+            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="RA 16 (the app's or the old number)" />
+          </Field>
           <Field label="Read an old register (Excel)" bare>
             <input type="file" accept=".xlsx" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
           </Field>
@@ -258,6 +444,7 @@ export function RegisterView({ siteId, onOpen, onClose }: { siteId: number; onOp
                   <tr key={b.id}>
                     <td>
                       <b>RA {b.ra}</b>
+                      {b.was && <div className="muted small">{b.was}</div>}
                     </td>
                     <td>
                       <button type="button" className="link-button" onClick={() => onOpen(b.id)}>
@@ -269,10 +456,10 @@ export function RegisterView({ siteId, onOpen, onClose }: { siteId: number; onOp
                       {b.kind} {b.number ?? "—"}
                     </td>
                     <td>{b.date ?? "—"}</td>
-                    <td className="num">₹{num(b.basic, 2)}</td>
-                    <td className="num">₹{num(b.gst, 2)}</td>
-                    <td className="num">₹{num(b.total, 2)}</td>
-                    <td className="num">₹{num(b.paid, 2)}</td>
+                    <td className="num">{inr(b.basic)}</td>
+                    <td className="num">{inr(b.gst)}</td>
+                    <td className="num">{inr(b.total)}</td>
+                    <td className="num">{inr(b.paid)}</td>
                     <td>{b.in_old_register ? <span className="chip chip-done">listed</span> : <span className="chip chip-hold">missing</span>}</td>
                     <td>
                       {b.revisions} {b.sent_revision && <span className="muted">({b.sent_revision} sent)</span>}
@@ -317,8 +504,8 @@ export function RegisterView({ siteId, onOpen, onClose }: { siteId: number; onOp
                       <td>{o.status}</td>
                       <td>{o.date ?? "—"}</td>
                       <td>{o.invoice_no ?? "—"}</td>
-                      <td className="num">₹{num(o.basic, 2)}</td>
-                      <td className="num">{o.total ? `₹${num(o.total, 2)}` : "—"}</td>
+                      <td className="num">{inr(o.basic)}</td>
+                      <td className="num">{o.total ? inr(o.total) : "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -379,15 +566,15 @@ export function Revisions({ billId, canEdit }: { billId: number; canEdit: boolea
                     <div className="m-why">
                       {r.changes
                         .slice(0, 4)
-                        .map((c) => `item ${c.item}: ${num(c.qty_before, 3)} → ${num(c.qty_now, 3)} (₹${num(c.amount_change, 2)})`)
+                        .map((c) => `item ${c.item}: ${num(c.qty_before, 3)} → ${num(c.qty_now, 3)} (${inr(c.amount_change)})`)
                         .join("; ")}
                     </div>
                   )}
                 </td>
                 <td>{r.made_on ?? "—"}</td>
-                <td className="num">₹{num(r.basic, 2)}</td>
-                <td className="num">{r.basic_change === null ? "—" : `₹${num(r.basic_change, 2)}`}</td>
-                <td className="num">₹{num(r.total, 2)}</td>
+                <td className="num">{inr(r.basic)}</td>
+                <td className="num">{r.basic_change === null ? "—" : inr(r.basic_change)}</td>
+                <td className="num">{inr(r.total)}</td>
                 <td>
                   {canEdit && !r.sent && (
                     <Button size="small" variant="ghost" type="button" onClick={() => act(`/api/measure/bills/${billId}/revisions/${r.id}/sent`)}>

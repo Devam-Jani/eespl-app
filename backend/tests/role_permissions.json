@@ -63,6 +63,7 @@
   "takeoff.edit",
   "takeoff.view",
   "tender.view",
+  "variation.request",
   "wo.view"
  ],
  "client": [
@@ -188,6 +189,8 @@
   "tender.edit",
   "tender.margin",
   "tender.view",
+  "variation.approve",
+  "variation.request",
   "vendors.edit",
   "vendors.view",
   "wo.edit",
@@ -622,6 +625,8 @@
   "tender.edit",
   "tender.margin",
   "tender.view",
+  "variation.approve",
+  "variation.request",
   "vendors.edit",
   "vendors.view",
   "wo.edit",

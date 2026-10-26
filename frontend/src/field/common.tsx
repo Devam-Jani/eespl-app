@@ -88,6 +88,32 @@ export function locate(): Promise<Fix> {
   });
 }
 
+/** Why "Use my location" cannot work here, or null when it may: no location in this browser, a
+ * page not on https (browsers give no location there), or location blocked for this site. */
+export function useGeoBlocked(): string | null {
+  const [denied, setDenied] = useState(false);
+  const missing = !navigator.geolocation ? "This browser cannot give your location" : !window.isSecureContext ? "The browser gives a location only on the secure (https) address" : null;
+  useEffect(() => {
+    if (missing || !navigator.permissions?.query) return;
+    let gone = false;
+    let status: PermissionStatus | null = null;
+    const read = () => !gone && setDenied(status?.state === "denied");
+    navigator.permissions.query({ name: "geolocation" }).then(
+      (s) => {
+        status = s;
+        read();
+        s.addEventListener("change", read);
+      },
+      () => {},
+    );
+    return () => {
+      gone = true;
+      status?.removeEventListener("change", read);
+    };
+  }, [missing]);
+  return missing ?? (denied ? "Location is blocked: allow location for this site in the browser" : null);
+}
+
 export function time(at: string | null | undefined): string {
   if (!at) return "—";
   return new Date(at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" });

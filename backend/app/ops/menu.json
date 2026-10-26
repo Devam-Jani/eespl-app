@@ -369,6 +369,14 @@
   ]
  },
  {
+  "to": "/variations",
+  "label": "Variations (new items)",
+  "section": "Billing",
+  "perms": [
+   "variation.approve"
+  ]
+ },
+ {
   "to": "/work-orders",
   "label": "Client work orders",
   "section": "Billing",

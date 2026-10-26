@@ -99,6 +99,20 @@ export const SIZES = {
   ease: "cubic-bezier(0.2, 0.8, 0.2, 1)",
   "t-fast": "150ms",
   "t-med": "220ms",
+  // the sticky top bar's height: what sticks or scrolls to the top of the page stops below it
+  header: "68px",
+  // the layers, low to high. Modals and drawers render on <body> (ui/Overlay.tsx), so a page's own
+  // stacking never puts them under the top bar.
+  "z-header": "50",
+  "z-tabs": "80",
+  "z-scrim": "90",
+  "z-sidebar": "100",
+  "z-menu": "300",
+  "z-modal": "1000",
+  "z-drawer": "1001",
+  "z-helper": "1200",
+  "z-toast": "1300",
+  "z-skip": "2000",
 };
 
 /** A token as a number for three.js (0xRRGGBB). */

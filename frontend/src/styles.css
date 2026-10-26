@@ -223,7 +223,7 @@
 
 .calculator {
   position: sticky;
-  top: 1rem;
+  top: calc(var(--header) + 1rem);
 }
 
 .totals {
@@ -735,8 +735,8 @@ input.full {
 
 .boq-panel {
   position: sticky;
-  top: 1rem;
-  max-height: calc(100vh - 2rem);
+  top: calc(var(--header) + 1rem);
+  max-height: calc(100vh - var(--header) - 2rem);
   overflow: auto;
 }
 
@@ -2353,7 +2353,7 @@ li.late a {
   gap: 2px;
   padding: 0.6rem;
   position: sticky;
-  top: 0.5rem;
+  top: calc(var(--header) + 0.5rem);
 }
 .outline-row {
   text-align: left;
@@ -4385,7 +4385,7 @@ label.check {
   position: fixed;
   right: 16px;
   bottom: 16px;
-  z-index: 1200;
+  z-index: var(--z-helper);
   width: min(380px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
   overflow: auto;
@@ -4550,9 +4550,12 @@ label.field-wrong textarea,
   .m-card { border: 1px solid var(--border); border-radius: var(--r-card-sm); padding: var(--space-2) var(--space-3); background: var(--surface); }
   .m-card-area { font-weight: 700; padding: var(--space-2) 0 0; }
   .m-card-qty { text-align: right; font-weight: 700; }
-  .m-abstract th:nth-child(5), .m-abstract td:nth-child(5), .m-abstract th:nth-child(9), .m-abstract td:nth-child(9) { display: none; }
+  .m-abstract { display: none; }
+  .m-card-rows { display: grid; grid-template-columns: 1fr auto; gap: 2px var(--space-3); margin: 0; }
+  .m-card-rows dt { color: var(--muted); }
+  .m-card-rows dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
   .mb-page .card-head { flex-wrap: wrap; }
-  .mb-page .card-actions { flex-wrap: wrap; }
+  .mb-page .card-actions, .mb-page .card-actions .row-actions { flex-wrap: wrap; justify-content: flex-start; }
 }
 .m-corrected { color: var(--hold-ink); }
 .m-choose { border: 1px solid var(--border); border-radius: var(--r-card-sm); padding: var(--space-2) var(--space-3); margin: 0 0 var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); }

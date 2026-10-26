@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { Link, matchPath, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
-import { errorText } from "../format";
+import { errorText, inr } from "../format";
 import { MENU } from "../menu";
 import { Button, Card, Field } from "../ui/components";
 
@@ -584,7 +584,7 @@ export function UserImport() {
                   <td className="small">{r.manager}</td>
                   <td className="small">{r.sites.join(", ")}</td>
                   <td className="small">
-                    {r.tracked ? "tracked" : "—"} / {r.travel ? (r.rate != null ? `travel ₹${r.rate}/km` : "travel") : "—"}
+                    {r.tracked ? "tracked" : "—"} / {r.travel ? (r.rate != null ? `travel ${inr(r.rate)}/km` : "travel") : "—"}
                   </td>
                   <td className="small">
                     {r.errors.length ? (

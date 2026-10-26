@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
-import { errorText, showError } from "../format";
+import { errorText, inrCompact, showError } from "../format";
 import { BarChart, FunnelChart, HBarChart, LineChart, PALETTE, ScatterChart } from "./charts";
 import type { Row } from "./charts";
 import type { Column, Drill, Table } from "./ui";
@@ -245,7 +245,7 @@ export function PurchaseAnalytics() {
                 rows={data.tables.prices.columns.slice(3).map((c: Column) => ({ label: c.label, rate: data.tables.prices.rows[product][c.key] }))}
                 x="label"
                 series={[{ key: "rate", label: `₹ per ${String(data.tables.prices.rows[product].unit)}`, color: PALETTE[0] }]}
-                fmt={(v) => `₹${v.toFixed(0)}`}
+                fmt={inrCompact}
               />
             ) : (
               <p className="muted">No POs in this range.</p>
@@ -281,7 +281,7 @@ export function LabourAnalytics() {
               <HBarChart rows={data.tables.attendance.rows as Row[]} label="code" value="rate" fmt={(v) => `${v.toFixed(1)}%`} scale={100} color={PALETTE[2]} />
             </ChartCard>
             <ChartCard title={data.tables.per_sqm.title}>
-              <HBarChart rows={(data.tables.per_sqm.rows as Row[]).slice(0, 15)} label="code" value="per_sqm" fmt={(v) => `₹${v.toFixed(0)}`} color={PALETTE[1]} />
+              <HBarChart rows={(data.tables.per_sqm.rows as Row[]).slice(0, 15)} label="code" value="per_sqm" fmt={inrCompact} color={PALETTE[1]} />
               <p className="muted small">{data.tables.per_sqm.note}</p>
             </ChartCard>
           </div>

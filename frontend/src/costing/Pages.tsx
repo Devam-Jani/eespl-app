@@ -526,7 +526,7 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
                   : []
               ).map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.job ? `${c.contractor}: ${c.job} ₹${c.rate}/${c.unit}` : c.contractor}
+                  {c.job ? `${c.contractor}: ${c.job} ${inr(c.rate)}/${c.unit}` : c.contractor}
                 </option>
               ))}
             </select>

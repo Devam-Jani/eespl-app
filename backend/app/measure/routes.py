@@ -15,6 +15,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     Request,
     Response,
     UploadFile,
@@ -29,7 +30,7 @@ from app.execution.common import pdf_response, record
 from app.finance import service as svc
 from app.finance.models import RaBill
 from app.measure import bill as mb
-from app.measure import excel, geom, importer
+from app.measure import excel, geom, importer, variation
 from app.measure import pdf as mpdf
 from app.measure import service as ms
 from app.measure.models import (
@@ -40,6 +41,7 @@ from app.measure.models import (
     MeasureItem,
     MeasureLine,
     MeasureSheet,
+    VariationRequest,
 )
 from app.sites.models import Drawing, DrawingRevision, Site
 from app.takeoff.models import CadFile
@@ -481,7 +483,8 @@ def sheet_out(db, s: MeasureSheet) -> dict:
             "lines": lines, "questions": questions, "cumulative": [{k: (_s(v) if isinstance(v, Decimal) else v) for k, v in r.items()} for r in cum],
             "corrections": mb.corrections(db, s), "sqft_per_sqm": str(ms.Way.of(s).sqft), "way": ms.Way.of(s).label(), "options": s.options,
             "slip": {"name": s.slip_name, "on": s.slip_on, "signed_by": s.signed_by, "signed_on": s.signed_on, "has_file": bool(s.slip_path),
-                     "unbilled": slip.unmapped(db, s), "typed": {ln.id: ln.typed for ln in ms.lines_of(db, s.id) if ln.typed}} if slip.is_slip(s) else None}  # fmt: skip
+                     "unbilled": slip.unmapped(db, s), "typed": {ln.id: ln.typed for ln in ms.lines_of(db, s.id) if ln.typed},
+                     "variations": [_plain(variation.out(v)) for v in variation.for_sheet(db, s.id)]} if slip.is_slip(s) else None}  # fmt: skip
 
 
 @router.post("/sites/{site_id}/sheets", status_code=status.HTTP_201_CREATED)
@@ -665,6 +668,61 @@ def delete_slip_line(sheet_id: int, line_id: int, request: Request, db: DbSessio
     return sheet_out(db, s)
 
 
+class VariationIn(BaseModel):
+    description: str = Field(min_length=3, max_length=500)
+    unit: str = Field(min_length=1, max_length=20)
+    rate: Decimal = Field(gt=0)
+
+
+@router.post("/sheets/{sheet_id}/slip-lines/{line_id}/variation", status_code=status.HTTP_201_CREATED)
+def ask_variation(sheet_id: int, line_id: int, body: VariationIn, request: Request, db: DbSession, principal: CurrentPrincipal,
+                  _: Annotated[str, Depends(require_permission("variation.request"))], scope: View) -> dict:  # fmt: skip
+    """Billing asks for a new item or variation for a slip line no work-order item covers."""
+    s = _sheet(db, sheet_id, principal, scope)
+    ln = db.get(MeasureLine, line_id)
+    if ln is None or ln.sheet_id != s.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Line not found")
+    v = _said(variation.propose, db, s, ln, description=body.description, unit=body.unit, rate=body.rate, user_id=principal.user.id)
+    record(db, request, principal, "variation.request", "variation_request", v.id, after=_plain(variation.out(v)))
+    db.commit()
+    return sheet_out(db, s)
+
+
+@router.get("/variations")
+def list_variations(db: DbSession, principal: CurrentPrincipal, scope: View, status_: Annotated[str | None, Query(alias="status")] = None, site_id: int | None = None) -> list[dict]:
+    q = select(VariationRequest).order_by(VariationRequest.id.desc())
+    if status_:
+        q = q.where(VariationRequest.status == status_)
+    if site_id is not None:
+        q = q.where(VariationRequest.site_id == site_id)
+    out = []
+    for v in db.scalars(q.limit(200)):
+        site = db.get(Site, v.site_id)
+        if site is None or not svc.site_ok(db, scope, principal, site.id):
+            continue
+        sheet = db.get(MeasureSheet, v.sheet_id)
+        out.append(_plain(variation.out(v)) | {"site": f"{site.code} {site.name}", "site_id": site.id, "sheet_code": sheet.code if sheet else None})
+    return out
+
+
+class DecisionIn(BaseModel):
+    approve: bool
+    note: str | None = Field(default=None, max_length=500)
+
+
+@router.post("/variations/{vid}/decide")
+def decide_variation(vid: int, body: DecisionIn, request: Request, db: DbSession, principal: CurrentPrincipal,
+                     _: Annotated[str, Depends(require_permission("variation.approve"))], scope: View) -> dict:  # fmt: skip
+    """The director approves the variation (it joins the work order, the line can be billed) or not."""
+    v = db.get(VariationRequest, vid)
+    if v is None or not svc.site_ok(db, scope, principal, v.site_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Variation not found")
+    done = _said(variation.decide, db, v, approve=body.approve, note=body.note, user_id=principal.user.id)
+    record(db, request, principal, "variation.approve" if body.approve else "variation.reject", "variation_request", v.id, after=_plain(variation.out(v)) | {"done": done})
+    db.commit()
+    return _plain(variation.out(v)) | {"done": done}
+
+
 @router.get("/sheets/{sheet_id}/slip")
 def slip_file(sheet_id: int, db: DbSession, principal: CurrentPrincipal, scope: View):
     """The slip as scanned (photo or PDF)."""
@@ -756,13 +814,14 @@ def _plain(v):
 
 
 @router.get("/sites/{site_id}/register")
-def site_register(site_id: int, db: DbSession, principal: CurrentPrincipal, scope: View) -> dict:
+def site_register(site_id: int, db: DbSession, principal: CurrentPrincipal, scope: View, q: str | None = None) -> dict:
     """The site's RA bills in order (proforma or tax invoice, date, basic, GST, total, received,
-    revisions), the old register beside them and what was found."""
+    revisions, the old number of a renumbered bill), the old register beside them and what was
+    found. q: find a bill by its number, the app's or the old files' ("RA 16")."""
     from app.measure import register  # noqa: PLC0415
 
     site = _site(db, site_id, principal, scope)
-    return _plain(register.site_register(db, site.id))
+    return _plain(register.site_register(db, site.id, (q or "").strip() or None))
 
 
 @router.post("/sites/{site_id}/register", status_code=status.HTTP_201_CREATED)

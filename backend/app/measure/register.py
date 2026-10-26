@@ -298,13 +298,23 @@ def import_folder(db: Session, site, folder: Path, register_file: Path | None, u
 # --- the app's register ---------------------------------------------------------------------------
 
 
-def site_register(db: Session, site_id: int) -> dict:
+def old_number(text: str | None) -> int | None:
+    """The RA number in an old file's name or a slip's key ("RA 16", "R A - 16", "RA-16")."""
+    m = re.search(r"\bR\s*\.?\s*A\s*[-.]?\s*(\d+)\b", text or "", re.I)
+    return int(m.group(1)) if m else None
+
+
+def site_register(db: Session, site_id: int, q: str | None = None) -> dict:
     """Each RA bill of the site in order, with its proforma or tax invoice, date, totals, what was
-    received, its revisions; the old register beside it."""
+    received, its revisions, its number in the old files when the app numbered it otherwise; the
+    old register beside it. q: only the bills whose number (the app's or the old one) has it."""
     out = []
     old = db.scalar(select(RegisterImport).where(RegisterImport.site_id == site_id).order_by(RegisterImport.id.desc()).limit(1))
     old_by_ra = {r.get("ra"): r for r in (old.rows if old else []) if r.get("ra") is not None}
+    want = old_number(q) if q else None
     for b in db.scalars(select(RaBill).where(RaBill.site_id == site_id).order_by(RaBill.seq)):
+        if q and not (q.lower() in b.code.lower() or (b.old_no and q.lower() in b.old_no.lower()) or (want is not None and (b.seq == want or old_number(b.old_no) == want))):
+            continue
         inv = db.scalar(select(TaxInvoice).where(TaxInvoice.ra_bill_id == b.id))
         basic = D(inv.taxable) if inv else D(b.certified_gross if b.certified_gross is not None else b.gross)
         gst = (D(inv.cgst) + D(inv.sgst) + D(inv.igst)) if inv else svc.money(basic * D("0.18"))
@@ -314,7 +324,8 @@ def site_register(db: Session, site_id: int) -> dict:
         revs = list(db.scalars(select(BillRevision).where(BillRevision.ra_bill_id == b.id).order_by(BillRevision.rev_no)))
         out.append({"id": b.id, "ra": b.seq, "code": b.code, "status": b.status, "imported": b.imported, "kind": "tax invoice" if inv else ("proforma" if b.proforma_no else (reg or {}).get("status") or "bill"),
                     "number": inv.number if inv else b.proforma_no or (reg or {}).get("invoice_no"), "date": (inv.invoice_date if inv else b.proforma_on or b.period_to),
-                    "basic": basic, "gst": gst, "total": total, "paid": paid, "in_old_register": reg is not None, "revisions": len(revs), "sent_revision": next((f"R{r.rev_no}" for r in revs if r.sent), None)})  # fmt: skip
+                    "basic": basic, "gst": gst, "total": total, "paid": paid, "in_old_register": reg is not None, "revisions": len(revs), "sent_revision": next((f"R{r.rev_no}" for r in revs if r.sent), None),
+                    "old_no": b.old_no, "was": f"was {b.old_no} in the old files" if b.old_no else None})  # fmt: skip
     return {"bills": out, "old": old.rows if old else [], "findings": old.findings if old else [], "source": old.source if old else None}
 
 

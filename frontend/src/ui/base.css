@@ -13,6 +13,8 @@ html {
   color: var(--text);
   background: var(--bg);
   -webkit-text-size-adjust: 100%;
+  /* a jump to a part of the page (a sheet opened below the drawing) stops below the sticky top bar */
+  scroll-padding-top: calc(var(--header) + var(--space-3));
   --shadow: 0 1px 2px color-mix(in srgb, var(--shade) 20%, transparent), 0 8px 24px color-mix(in srgb, var(--shade) 18%, transparent);
   --focus: 0 0 0 3px color-mix(in srgb, var(--accent) 55%, transparent);
 }
@@ -687,7 +689,7 @@ button.chip[aria-pressed="true"] {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  z-index: 1300;
+  z-index: var(--z-toast);
   width: min(460px, calc(100vw - 32px));
 }
 
@@ -877,7 +879,7 @@ button.chip[aria-pressed="true"] {
   align-items: center;
   justify-content: center;
   padding: var(--space-4);
-  z-index: 1000;
+  z-index: var(--z-modal);
   animation: ui-fade var(--t-fast) var(--ease);
 }
 
@@ -918,7 +920,7 @@ button.chip[aria-pressed="true"] {
   background: var(--panel);
   border-left: 1px solid var(--border);
   box-shadow: var(--shadow);
-  z-index: 1001;
+  z-index: var(--z-drawer);
   padding: var(--space-5);
   overflow: auto;
   animation: ui-slide var(--t-med) var(--ease);

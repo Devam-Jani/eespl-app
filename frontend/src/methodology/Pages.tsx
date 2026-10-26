@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
-import { errorText } from "../format";
+import { errorText, inr } from "../format";
 import { Button, Card, Field } from "../ui/components";
 
 type Step = {
@@ -541,7 +541,7 @@ export function SystemPage() {
               Rates:{" "}
               {s.templates.map((t) => (
                 <Link key={t.id} to={`/knowledge/templates/${t.id}`}>
-                  {t.name} ({t.lines} lines{t.median_rate ? `, median ₹${t.median_rate}` : ""}){" "}
+                  {t.name} ({t.lines} lines{t.median_rate ? `, median ${inr(t.median_rate)}` : ""}){" "}
                 </Link>
               ))}
             </p>

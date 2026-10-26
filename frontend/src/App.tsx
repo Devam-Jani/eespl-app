@@ -76,6 +76,7 @@ const Deliveries = lazyPage(() => sc().then((m) => ({ default: m.Deliveries })))
 const DeliveryDetail = lazyPage(() => sc().then((m) => ({ default: m.DeliveryDetail })));
 const RateContracts = lazyPage(() => sc().then((m) => ({ default: m.RateContracts })));
 const ReadyToBill = lazyPage(() => sc().then((m) => ({ default: m.ReadyToBill })));
+const Variations = lazyPage(() => import("./measure/Billing").then((m) => ({ default: m.VariationsPage })));
 const NewAreas = lazyPage(() => sc().then((m) => ({ default: m.NewAreas })));
 const NewAreaForm = lazyPage(() => sc().then((m) => ({ default: m.NewAreaForm })));
 const Productivity = lazyPage(() => sc().then((m) => ({ default: m.Productivity })));
@@ -248,6 +249,7 @@ const PAGES: Record<string, JSX.Element> = {
   "/rate-contracts": <RateContracts />,
   "/ready-to-bill": <ReadyToBill />,
   "/new-areas": <NewAreas />,
+  "/variations": <Variations />,
   "/reports/productivity": <Productivity />,
   "/consumption": <Consumption />,
   "/settings/site-control": <SiteControlSettings />,

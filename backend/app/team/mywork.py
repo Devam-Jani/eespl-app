@@ -235,6 +235,22 @@ def director(db: Session, p: Principal) -> list[Item]:
                 "/my-work",
             )
         )
+    from app.measure.models import VariationRequest  # noqa: PLC0415
+
+    for v in db.scalars(select(VariationRequest).where(VariationRequest.status == "proposed").order_by(VariationRequest.id)):
+        out.append(
+            item(
+                "variation",
+                str(v.id),
+                f"Variation asked: {v.description}",
+                f"A slip line with no work-order item ({v.particulars}); approve before it goes to the client",
+                f"/variations?variation={v.id}",
+                "Decide",
+                v.created_at,
+                "normal",
+                "/variations",
+            )
+        )
     return out
 
 

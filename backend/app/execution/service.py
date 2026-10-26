@@ -370,85 +370,112 @@ def wo_money(wo: WorkOrder) -> dict:
 def tender_budget(db: Session, site: Site) -> dict[str, Decimal]:
     """Material and labour from the won tender's costed BOQ lines: labour = qty x the system's
     labour rate (lines priced from a system), material = the rest of the cost."""
-    if not site.tender_id:
+    return tender_budgets(db, [site]).get(site.id, {})
+
+
+def tender_budgets(db: Session, sites) -> dict[int, dict[str, Decimal]]:
+    """tender_budget for several sites in one query (site id: budget; sites without one left
+    out)."""
+    by_tender: dict[int, list[int]] = defaultdict(list)
+    for site in sites:
+        if site.tender_id:
+            by_tender[site.tender_id].append(site.id)
+    if not by_tender:
         return {}
-    material_cost = labour = ZERO
-    for ln in db.scalars(
-        select(BoqLine).where(
-            BoqLine.tender_id == site.tender_id,
+    totals: dict[int, list[Decimal]] = defaultdict(lambda: [ZERO, ZERO])  # material, labour
+    for tender_id, cost_rate, qty, labour_rate in db.execute(
+        select(BoqLine.tender_id, BoqLine.cost_rate, BoqLine.qty, System.labour_rate)
+        .join(System, System.id == BoqLine.system_id, isouter=True)
+        .where(
+            BoqLine.tender_id.in_(list(by_tender)),
             BoqLine.cost_rate.is_not(None),
             BoqLine.qty.is_not(None),
         )
     ):
-        total = Decimal(ln.cost_rate) * Decimal(ln.qty)
-        lab = ZERO
-        if ln.system_id:
-            system = db.get(System, ln.system_id)
-            lab = min(total, Decimal(system.labour_rate) * Decimal(ln.qty)) if system else ZERO
-        labour += lab
-        material_cost += total - lab
-    if material_cost == 0 and labour == 0:
-        return {}
-    return {"material": money(material_cost), "labour": money(labour)}
+        total = Decimal(cost_rate) * Decimal(qty)
+        lab = min(total, Decimal(labour_rate) * Decimal(qty)) if labour_rate is not None else ZERO
+        t = totals[tender_id]
+        t[0] += total - lab
+        t[1] += lab
+    out = {}
+    for tender_id, (material_cost, labour) in totals.items():
+        if material_cost == 0 and labour == 0:
+            continue
+        for site_id in by_tender[tender_id]:
+            out[site_id] = {"material": money(material_cost), "labour": money(labour)}
+    return out
 
 
 def actuals(db: Session, site_id: int) -> dict[str, Decimal]:
-    out = dict.fromkeys(BUDGET_HEADS, ZERO)
-    issued = db.execute(
-        select(SiteIssue.kind, func.coalesce(func.sum(SiteIssueLine.value), 0))
+    return actuals_by_site(db, [site_id])[site_id]
+
+
+def actuals_by_site(
+    db: Session, site_ids, expenses: dict[int, dict[str, Decimal]] | None = None
+) -> dict[int, dict[str, Decimal]]:
+    """actuals for several sites with one query per source (not one per site). expenses: the
+    sites' approved petty cash by head when the caller has them already."""
+    ids = list(site_ids)
+    out = {i: dict.fromkeys(BUDGET_HEADS, ZERO) for i in ids}
+    if not ids:
+        return out
+    for site_id, kind, value in db.execute(
+        select(SiteIssue.site_id, SiteIssue.kind, func.coalesce(func.sum(SiteIssueLine.value), 0))
         .join(SiteIssueLine, SiteIssueLine.issue_id == SiteIssue.id)
-        .where(SiteIssue.site_id == site_id)
-        .group_by(SiteIssue.kind)
-    ).all()
-    for kind, value in issued:
-        out["material"] += Decimal(value) if kind == "issue" else -Decimal(value)
-    shortage = db.scalar(
-        select(func.coalesce(func.sum(StockLedger.value), 0))
+        .where(SiteIssue.site_id.in_(ids))
+        .group_by(SiteIssue.site_id, SiteIssue.kind)
+    ):
+        out[site_id]["material"] += Decimal(value) if kind == "issue" else -Decimal(value)
+    for site_id, shortage in db.execute(
+        select(Store.site_id, func.coalesce(func.sum(StockLedger.value), 0))
         .join(Store, Store.id == StockLedger.store_id)
-        .where(Store.site_id == site_id, StockLedger.ref_type == "shortage")
-    )
-    out["material"] += -Decimal(shortage)  # shortage rows are negative
+        .where(Store.site_id.in_(ids), StockLedger.ref_type == "shortage")
+        .group_by(Store.site_id)
+    ):
+        out[site_id]["material"] += -Decimal(shortage)  # shortage rows are negative
     for a in db.scalars(
         select(Attendance)
         .join(Labour, Labour.id == Attendance.labour_id)
-        .where(Attendance.site_id == site_id, Labour.type == "own")
+        .where(Attendance.site_id.in_(ids), Labour.type == "own")
     ):
-        out["labour"] += wage_due(a)
-    for m, rate in db.execute(
-        select(WoMeasurement, WoLine.rate)
+        out[a.site_id]["labour"] += wage_due(a)
+    for site_id, qty, rate in db.execute(
+        select(WorkOrder.site_id, WoMeasurement.qty, WoLine.rate)
         .join(WoLine, WoLine.id == WoMeasurement.line_id)
         .join(WorkOrder, WorkOrder.id == WoLine.wo_id)
-        .where(WorkOrder.site_id == site_id, WoMeasurement.status == "verified")
+        .where(WorkOrder.site_id.in_(ids), WoMeasurement.status == "verified")
     ):
-        out["subcontract"] += Decimal(m.qty) * Decimal(rate)
-    from app.costing.labour import bill_lines_cost  # noqa: PLC0415  (piece-rate and gang bills)
+        out[site_id]["subcontract"] += Decimal(qty) * Decimal(rate)
+    from app.costing.labour import bill_lines_cost_by_site  # noqa: PLC0415  (piece-rate, gang)
 
-    out["labour"] += bill_lines_cost(db, site_id)
-    out["equipment"] += Decimal(
-        db.scalar(
-            select(func.coalesce(func.sum(EquipmentUsage.amount), 0)).where(
-                EquipmentUsage.site_id == site_id
-            )
-        )
-    )
-    out["freight"] += Decimal(
-        db.scalar(
-            select(func.coalesce(func.sum(FreightEntry.amount), 0)).where(
-                FreightEntry.site_id == site_id
-            )
-        )
-    )
-    from app.finance.service import expenses_by_head  # approved petty cash expenses
-
-    for head, amount in expenses_by_head(db, site_id).items():
-        out[head] += amount
-    for head, amount in db.execute(
-        select(SiteCost.head, func.sum(SiteCost.amount))
-        .where(SiteCost.site_id == site_id)
-        .group_by(SiteCost.head)
+    for site_id, amount in bill_lines_cost_by_site(db, ids).items():
+        out[site_id]["labour"] += amount
+    for site_id, amount in db.execute(
+        select(EquipmentUsage.site_id, func.coalesce(func.sum(EquipmentUsage.amount), 0))
+        .where(EquipmentUsage.site_id.in_(ids))
+        .group_by(EquipmentUsage.site_id)
     ):
-        out[head] += Decimal(amount)
-    return {k: money(v) for k, v in out.items()}
+        out[site_id]["equipment"] += Decimal(amount)
+    for site_id, amount in db.execute(
+        select(FreightEntry.site_id, func.coalesce(func.sum(FreightEntry.amount), 0))
+        .where(FreightEntry.site_id.in_(ids))
+        .group_by(FreightEntry.site_id)
+    ):
+        out[site_id]["freight"] += Decimal(amount)
+    if expenses is None:
+        from app.finance.service import expenses_by_site  # approved petty cash expenses
+
+        expenses = expenses_by_site(db, ids)
+    for site_id in ids:
+        for head, amount in expenses.get(site_id, {}).items():
+            out[site_id][head] += amount
+    for site_id, head, amount in db.execute(
+        select(SiteCost.site_id, SiteCost.head, func.sum(SiteCost.amount))
+        .where(SiteCost.site_id.in_(ids))
+        .group_by(SiteCost.site_id, SiteCost.head)
+    ):
+        out[site_id][head] += Decimal(amount)
+    return {i: {k: money(v) for k, v in heads.items()} for i, heads in out.items()}
 
 
 def missing_dprs(db: Session, day: date, site_ids=None) -> list[Site]:

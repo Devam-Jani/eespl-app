@@ -32,12 +32,12 @@ export function UnsentRates({ unsent, canSend, onSend }: { unsent: Unsent | null
   const first = unsent.rows[0];
   return (
     <div className="alert alert-warn unsent-rates">
-      <b>Rates not sent to the lines.</b> {unsent.lines} line(s) differ from the rate working, largest difference ₹{unsent.largest_difference}
+      <b>Rates not sent to the lines.</b> {unsent.lines} line(s) differ from the rate working, largest difference {inr(unsent.largest_difference)}
       {first && (
         <>
           {" "}
           (e.g. {first.group}
-          {first.item_no ? ` item ${first.item_no}` : ""}: worked ₹{first.worked_rate}/{first.unit}, on the line {first.line_rate ? `₹${first.line_rate}` : "no rate"})
+          {first.item_no ? ` item ${first.item_no}` : ""}: worked {inr(first.worked_rate)}/{first.unit}, on the line {first.line_rate ? inr(first.line_rate) : "no rate"})
         </>
       )}
       . Submit is held until the rates are sent or you confirm the lines' rates.{" "}
@@ -112,7 +112,7 @@ export default function TenderDetail() {
     // the lines' rates are not the working's: send them first, or confirm the lines' rates
     if (
       unsent &&
-      !confirm(`${unsent.message} (largest difference ₹${unsent.largest_difference}).
+      !confirm(`${unsent.message} (largest difference ${inr(unsent.largest_difference)}).
 
 Submit with the rates the lines have now? Cancel, then "Send the rates to the lines", to use the working's.`)
     )

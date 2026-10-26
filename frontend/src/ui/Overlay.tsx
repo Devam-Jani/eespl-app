@@ -1,6 +1,9 @@
 // Modal, side drawer and the toast with Undo. Escape closes, focus goes into the dialog and back.
+// A modal or drawer renders on <body> (a portal), not where the page puts it: a page part that makes
+// its own stacking (a card, a modal opening another) can then never hold it under the top bar.
 import type { ReactNode } from "react";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "./components";
 
 function useDialog(onClose: () => void) {
@@ -23,7 +26,7 @@ function useDialog(onClose: () => void) {
 
 export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   const ref = useDialog(onClose);
-  return (
+  return createPortal(
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={ref} tabIndex={-1} className={`modal ${wide ? "modal-wide" : ""}`} role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-header">
@@ -34,13 +37,14 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
 export function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const ref = useDialog(onClose);
-  return (
+  return createPortal(
     <>
       <div className="modal-backdrop" style={{ background: "transparent" }} onMouseDown={onClose} />
       <aside ref={ref} tabIndex={-1} className="drawer" role="dialog" aria-modal="true" aria-label={title}>
@@ -52,7 +56,8 @@ export function Drawer({ title, onClose, children }: { title: string; onClose: (
         </div>
         {children}
       </aside>
-    </>
+    </>,
+    document.body,
   );
 }
 

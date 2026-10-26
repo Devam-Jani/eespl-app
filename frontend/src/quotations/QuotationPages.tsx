@@ -10,8 +10,8 @@ import { NegotiationLog } from "../team/Pages";
 import { UnsentRates } from "../pages/TenderDetail";
 import type { Unsent } from "../pages/TenderDetail";
 import { Modal } from "../ui/Overlay";
-import { errorText } from "../format";
-import { loadLookups, MarkupField, money, plain, SectionsEditor, STATUS_BADGE, useLookups } from "./common";
+import { errorText, inr } from "../format";
+import { loadLookups, MarkupField, plain, SectionsEditor, STATUS_BADGE, useLookups } from "./common";
 import type { Lookups, QItem, QLine, Quotation, Ref, SpecCopy, Term } from "./common";
 import { Button, buttonClass, Card, Field } from "../ui/components";
 
@@ -134,7 +134,7 @@ export function QuotationsList() {
                   <td>{fmtDate(r.valid_until)}</td>
                   <td>{r.salesperson ?? "—"}</td>
                   <td className="num">{r.items}</td>
-                  <td className="num">{r.total ? `₹ ${money(r.total)}` : "rates only"}</td>
+                  <td className="num">{r.total ? inr(r.total) : "rates only"}</td>
                 </tr>
               ))}
             </tbody>
@@ -454,7 +454,7 @@ export function QuotationEditor() {
             onClick={() => {
               const warn = q.items.flatMap((i) => i.checks.map((c) => `${i.name}: ${c}`));
               if (warn.length && !window.confirm(`Check before sending (warnings, not blocks):\n\n${warn.join("\n")}\n\nSend anyway?`)) return;
-              if (unsent && !window.confirm(`${unsent.message} (largest difference ₹${unsent.largest_difference}).\n\nSend with the rates the lines have now?`)) return;
+              if (unsent && !window.confirm(`${unsent.message} (largest difference ${inr(unsent.largest_difference)}).\n\nSend with the rates the lines have now?`)) return;
               const confirmed = !!unsent;
               void (async () => {
                 try {
@@ -568,7 +568,7 @@ Send anyway? Give the reason:`)
           </button>
           {q.show_amounts && (
             <div className="outline-total">
-              Total <b>₹ {money(q.total)}</b>
+              Total <b>{inr(q.total)}</b>
               {q.total_option_note && <span className="muted small"> (first option)</span>}
             </div>
           )}
@@ -884,7 +884,7 @@ function ItemPanel({ q, item, lookups, apply, onRemoved }: { q: Quotation; item:
             + Line
           </Button>
         ))}
-      {item.total && q.show_amounts && <p className="small top-gap">Item total ₹ {money(item.total)}</p>}
+      {item.total && q.show_amounts && <p className="small top-gap">Item total {inr(item.total)}</p>}
     </div>
   );
 }
@@ -908,14 +908,14 @@ function LineEditor({ q, line, lookups, apply }: { q: Quotation; line: QLine; lo
       <div className="line-head" onClick={() => setOpen(!open)}>
         <span className="line-opt">{line.option ? `Opt.${line.option}` : line.if_required ? "if req." : ""}</span>
         <span className="line-text">{plain(line.description).slice(0, 90)}</span>
-        <span className="line-rate">{line.client_scope ? "Client's scope" : `${money(line.rate)} / ${lookups.uoms.find((u) => u.code === line.uom)?.label ?? line.uom}`}</span>
+        <span className="line-rate">{line.client_scope ? "Client's scope" : `${inr(line.rate)} / ${lookups.uoms.find((u) => u.code === line.uom)?.label ?? line.uom}`}</span>
       </div>
       {line.rate_note && (
         <div className="muted small">
           {line.overridden ? "Typed here" : line.rate_note}
           {q.can_margin &&
             line.cost_rate &&
-            ` · cost ${money(line.cost_rate)}${line.margin_percent ? ` · margin ${Number(line.margin_percent).toFixed(1)} %` : ""}${line.margin_amount ? ` (₹ ${money(line.margin_amount)})` : ""}`}
+            ` · cost ${inr(line.cost_rate)}${line.margin_percent ? ` · margin ${Number(line.margin_percent).toFixed(1)} %` : ""}${line.margin_amount ? ` (${inr(line.margin_amount)})` : ""}`}
         </div>
       )}
       {open && (
@@ -939,7 +939,7 @@ function LineEditor({ q, line, lookups, apply }: { q: Quotation; line: QLine; lo
               <input inputMode="decimal" value={f.qty} placeholder="rate only" onChange={(e) => setF({ ...f, qty: e.target.value })} disabled={ro} />
             </Field>
             <Field as="div" label="Amount">
-              <span className="num">{line.amount ? `₹ ${money(line.amount)}` : "—"}</span>
+              <span className="num">{line.amount ? inr(line.amount) : "—"}</span>
             </Field>
           </div>
           <label className="check inline">
@@ -1427,8 +1427,8 @@ function DiffDialog({ q, onClose }: { q: Quotation; onClose: () => void }) {
                         </span>
                       )}
                     </td>
-                    <td className="num">{c.old_rate !== undefined ? money(c.old_rate) : ""}</td>
-                    <td className="num">{c.new_rate !== undefined ? money(c.new_rate) : ""}</td>
+                    <td className="num">{c.old_rate !== undefined ? inr(c.old_rate) : ""}</td>
+                    <td className="num">{c.new_rate !== undefined ? inr(c.new_rate) : ""}</td>
                     <td className={`num ${Number(c.rate_change_percent ?? 0) < 0 ? "text-danger" : ""}`}>
                       {c.rate_change_percent !== undefined ? `${Number(c.rate_change_percent).toFixed(1)} %` : ""}
                     </td>
@@ -1439,7 +1439,7 @@ function DiffDialog({ q, onClose }: { q: Quotation; onClose: () => void }) {
           )}
           {[...d.added.map((a) => ({ ...a, kind: "added" })), ...d.removed.map((a) => ({ ...a, kind: "removed" }))].map((a, i) => (
             <p key={i} className="small">
-              <span className={`badge ${a.kind === "added" ? "badge-ok" : "badge-danger"}`}>{a.kind}</span> {a.item}: {a.line} {a.rate ? `· ${money(a.rate)}` : ""}
+              <span className={`badge ${a.kind === "added" ? "badge-ok" : "badge-danger"}`}>{a.kind}</span> {a.item}: {a.line} {a.rate ? `· ${inr(a.rate)}` : ""}
             </p>
           ))}
           {(d.items_added.length > 0 || d.items_removed.length > 0) && (
@@ -1450,7 +1450,7 @@ function DiffDialog({ q, onClose }: { q: Quotation; onClose: () => void }) {
           )}
           {(Number(d.total_from) > 0 || Number(d.total_to) > 0) && (
             <p className="small">
-              Total {d.from} ₹ {money(d.total_from)} → {d.to} ₹ {money(d.total_to)}
+              Total {d.from} {inr(d.total_from)} → {d.to} {inr(d.total_to)}
             </p>
           )}
         </>

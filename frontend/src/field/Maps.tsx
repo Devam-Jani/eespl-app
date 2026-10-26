@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { errorText } from "../format";
-import { AuthImage, dist, Flags, km, locate, time } from "./common";
+import { AuthImage, dist, Flags, km, locate, time, useGeoBlocked } from "./common";
 import type { Day, MapSettings } from "./common";
 import MapView from "./MapView";
 import type { MapCircle, MapLine, MapPin } from "./MapView";
@@ -271,6 +271,8 @@ export function SiteLocationTab({ siteId }: { siteId: number }) {
   const [picked, setPicked] = useState<[number, number] | null>(null);
   const [radius, setRadius] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
+  const geoBlocked = useGeoBlocked();
   const load = useCallback(() => {
     api<Visits>(`/api/field/sites/${siteId}/visits`).then(setV, (e) => setMsg(errorText(e)));
     api<MapSettings>("/api/field/map-settings").then(setSettings, (e) => setMsg(errorText(e)));
@@ -297,16 +299,26 @@ export function SiteLocationTab({ siteId }: { siteId: number }) {
         />
         {canPin && (
           <div className="form-row top-gap-small">
+            {/* it says at once that it is looking (a fix can take seconds), and why it cannot when it cannot */}
             <Button
               size="small"
-              onClick={() =>
-                void locate().then(
-                  (f) => setPicked([f.lat, f.lng]),
-                  (e) => setMsg(errorText(e)),
-                )
-              }
+              disabled={!!geoBlocked || locating}
+              title={geoBlocked ?? undefined}
+              onClick={() => {
+                setLocating(true);
+                setMsg("Finding your location…");
+                void locate()
+                  .then(
+                    (f) => {
+                      setPicked([f.lat, f.lng]);
+                      setMsg(`Your location (within ${f.accuracy} m) is picked: save the pin to keep it.`);
+                    },
+                    (e) => setMsg(errorText(e)),
+                  )
+                  .finally(() => setLocating(false));
+              }}
             >
-              Use my location
+              {locating ? "Finding…" : "Use my location"}
             </Button>
             <Field label="Radius in metres" bare>
               <input className="input-small" value={radius} onChange={(e) => setRadius(e.target.value)} placeholder={`radius ${v.site.radius_m} m`} aria-label="Radius in metres" />
@@ -331,6 +343,7 @@ export function SiteLocationTab({ siteId }: { siteId: number }) {
             </Button>
           </div>
         )}
+        {canPin && geoBlocked && <p className="small muted">Use my location: {geoBlocked}.</p>}
         {msg && <p className="small">{msg}</p>}
         {pin && (
           <a className={buttonClass({ variant: "primary", className: "top-gap-small" })} href={mapsLink(pin[0], pin[1])} target="_blank" rel="noreferrer">

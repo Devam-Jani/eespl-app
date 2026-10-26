@@ -9,7 +9,7 @@ import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
 import { DoneButton } from "../components/DoneButton";
 import { Modal } from "../ui/Overlay";
-import { errorText } from "../format";
+import { errorText, inr } from "../format";
 import { S } from "../receipt/strings";
 import type { Key } from "../receipt/strings";
 import { Button, buttonClass, Card, Field } from "../ui/components";
@@ -21,7 +21,6 @@ const fmt = (d: string | null | undefined, time = false) =>
   d ? new Date(d).toLocaleString("en-IN", { timeZone: TZ, day: "2-digit", month: "short", year: "numeric", ...(time ? { hour: "2-digit", minute: "2-digit" } : {}) }) : "—";
 const n = (v: string | number | null | undefined, digits = 2) =>
   v === null || v === undefined || v === "" ? "—" : Number(v).toLocaleString("en-IN", { maximumFractionDigits: digits });
-const money = (v: string | number | null | undefined) => (v === null || v === undefined ? "—" : `₹ ${Number(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`);
 
 type Person = { id: string; name: string; job_title: string | null };
 function usePeople(role?: string): Person[] {
@@ -973,7 +972,7 @@ export function LabourCheck() {
                   {b.site}
                   <div className="muted">{b.contractor}</div>
                 </td>
-                <td className="num">{money(b.gross)}</td>
+                <td className="num">{inr(b.gross)}</td>
                 <td className="small">
                   {b.productivity_status === "low" ? (
                     <span className={`badge ${b.overridden ? "badge-muted" : "badge-danger"}`}>
@@ -1408,7 +1407,7 @@ export function TenderAward({ tenderId }: { tenderId: number }) {
                 <td>
                   {x.name} {x.is_us && <span className="badge badge-ok">us</span>} {x.is_winner && <span className="badge badge-danger">won</span>}
                 </td>
-                <td className="num">{money(x.rate)}</td>
+                <td className="num">{inr(x.rate)}</td>
                 <td>
                   {edit && !x.is_us && !x.is_winner && (
                     <Button variant="ghost" size="small" onClick={() => setWin({ id: x.id, on: "" })}>
