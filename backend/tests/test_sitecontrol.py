@@ -850,3 +850,10 @@ def test_delivery_note_quantities_keep_their_zeros():
         "0.25",
         "18",
     ]
+
+
+def test_new_areas_open_for_a_role_that_sees_its_own_sites(login_as):
+    c, h = login_as("site_engineer", email="engineer@example.com")
+    r = c.get("/api/sitecontrol/new-areas", headers=h)
+    assert r.status_code == 200
+    assert r.json() == []

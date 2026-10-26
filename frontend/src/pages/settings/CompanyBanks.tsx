@@ -6,6 +6,7 @@ import ExportButton from "../../components/ExportButton";
 import { Modal } from "../../ui/Overlay";
 import { errorText } from "../../format";
 import type { CompanyBank } from "../../types";
+import { Button, Card, Field } from "../../ui/components";
 
 export default function CompanyBanks() {
   const { can } = useAuth();
@@ -33,14 +34,14 @@ export default function CompanyBanks() {
         <div className="page-actions">
           <ExportButton path="/api/settings/bank-accounts/export" />
           {canEdit && (
-            <button className="btn btn-primary" onClick={() => setEditing("new")}>
+            <Button variant="primary" onClick={() => setEditing("new")}>
               Add account
-            </button>
+            </Button>
           )}
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -66,9 +67,9 @@ export default function CompanyBanks() {
                 <td>{[b.bank, b.branch].filter(Boolean).join(", ") || "—"}</td>
                 <td className="row-actions">
                   {canEdit && (
-                    <button className="btn btn-small" onClick={() => setEditing(b)}>
+                    <Button size="small" onClick={() => setEditing(b)}>
                       Edit
-                    </button>
+                    </Button>
                   )}
                 </td>
               </tr>
@@ -82,7 +83,7 @@ export default function CompanyBanks() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       {editing && (
         <BankForm
           account={editing === "new" ? null : editing}
@@ -140,27 +141,22 @@ function BankForm({ account, onClose, onSaved }: { account: CompanyBank | null; 
     <Modal title={account ? "Edit bank account" : "Add bank account"} onClose={onClose}>
       <form className="form" onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
-        <label className="field">
-          <span>Account name</span>
+        <Field label="Account name">
           <input value={form.account_name} onChange={(e) => setForm({ ...form, account_name: e.target.value })} required />
-        </label>
+        </Field>
         <div className="grid-2">
-          <label className="field">
-            <span>Account number</span>
+          <Field label="Account number">
             <input value={form.account_number} disabled={!!account} onChange={(e) => setForm({ ...form, account_number: e.target.value })} required />
-          </label>
-          <label className="field">
-            <span>IFSC</span>
+          </Field>
+          <Field label="IFSC">
             <input value={form.ifsc} maxLength={11} disabled={!!account} onChange={(e) => setForm({ ...form, ifsc: e.target.value })} required />
-          </label>
-          <label className="field">
-            <span>Bank</span>
+          </Field>
+          <Field label="Bank">
             <input value={form.bank} onChange={(e) => setForm({ ...form, bank: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Branch</span>
+          </Field>
+          <Field label="Branch">
             <input value={form.branch} onChange={(e) => setForm({ ...form, branch: e.target.value })} />
-          </label>
+          </Field>
         </div>
         <label className="check">
           <input type="checkbox" checked={form.is_default} onChange={(e) => setForm({ ...form, is_default: e.target.checked })} />
@@ -168,14 +164,14 @@ function BankForm({ account, onClose, onSaved }: { account: CompanyBank | null; 
         </label>
         <div className="form-actions">
           {account && (
-            <button type="button" className="btn btn-danger push-left" onClick={() => void remove()}>
+            <Button type="button" variant="danger" className="push-left" onClick={() => void remove()}>
               Delete
-            </button>
+            </Button>
           )}
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Save</button>
+          </Button>
+          <Button type="submit" variant="primary">Save</Button>
         </div>
       </form>
     </Modal>

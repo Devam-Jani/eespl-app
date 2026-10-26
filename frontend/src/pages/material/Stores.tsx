@@ -9,6 +9,7 @@ import type { Issue, LedgerRow, MaterialLookups, StockRow, StoreRow, Transfer } 
 import type { Page } from "../../types";
 import { shortDate } from "../Tenders";
 import { dateTime, ProductSelect, StatusBadge, today, UnitSelect, useMaterialLookups } from "./common";
+import { Button, buttonClass, Card, Field } from "../../ui/components";
 
 export default function Stores() {
   const navigate = useNavigate();
@@ -40,18 +41,18 @@ export default function Stores() {
       <div className="page-header">
         <h1>Stores &amp; stock</h1>
         <div className="page-actions">
-          <Link className="btn" to="/transfers">
+          <Link className={buttonClass()} to="/transfers">
             Transfers
           </Link>
           {can("store.edit") && (
-            <button className="btn" onClick={() => setAdding(true)}>
+            <Button onClick={() => setAdding(true)}>
               Add godown
-            </button>
+            </Button>
           )}
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -79,16 +80,15 @@ export default function Stores() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       {adding && (
         <Modal title="Add a godown" onClose={() => setAdding(false)}>
           <form onSubmit={add}>
-            <label className="field">
-              <span>Name</span>
+            <Field label="Name">
               <input required autoFocus value={name} onChange={(e) => setName(e.target.value)} />
-            </label>
+            </Field>
             <div className="form-actions">
-              <button className="btn btn-primary">Add</button>
+              <Button type="submit" variant="primary">Add</Button>
             </div>
           </form>
         </Modal>
@@ -99,7 +99,7 @@ export default function Stores() {
 
 export function StockTable({ rows }: { rows: StockRow[] }) {
   return (
-    <div className="card table-wrap">
+    <Card as="div" className="table-wrap">
       <table className="table compact">
         <thead>
           <tr>
@@ -131,7 +131,7 @@ export function StockTable({ rows }: { rows: StockRow[] }) {
           )}
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 }
 
@@ -202,22 +202,22 @@ export function StoreDetail() {
         </div>
         {edit && lookups && (
           <div className="page-actions">
-            <button className="btn" onClick={() => setDialog("transfer")}>
+            <Button onClick={() => setDialog("transfer")}>
               Transfer out
-            </button>
+            </Button>
             {store.site_id && (
               <>
-                <button className="btn" onClick={() => setDialog("issue")}>
+                <Button onClick={() => setDialog("issue")}>
                   Issue to work
-                </button>
-                <button className="btn" onClick={() => setDialog("return")}>
+                </Button>
+                <Button onClick={() => setDialog("return")}>
                   Return to store
-                </button>
+                </Button>
               </>
             )}
-            <button className="btn" onClick={() => setDialog("adjust")}>
+            <Button onClick={() => setDialog("adjust")}>
               Adjust / opening
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -238,7 +238,7 @@ export function StoreDetail() {
                 <ProductSelect products={lookups.products} value={productId} onChange={(p) => setProductId(p?.id ?? "")} />
               </div>
             )}
-            <div className="card table-wrap">
+            <Card as="div" className="table-wrap">
               <table className="table compact">
                 <thead>
                   <tr>
@@ -278,7 +278,7 @@ export function StoreDetail() {
                   )}
                 </tbody>
               </table>
-            </div>
+            </Card>
           </>
         )}
         {tab === "transfers" && <TransferTable transfers={transfers} onReceive={setReceiving} onChanged={load} />}
@@ -315,7 +315,7 @@ export function TransferTable({ transfers, onReceive, onChanged }: { transfers: 
     }
   }
   return (
-    <div className="card table-wrap">
+    <Card as="div" className="table-wrap">
       {error && <div className="alert alert-error">{error}</div>}
       <table className="table compact">
         <thead>
@@ -357,14 +357,14 @@ export function TransferTable({ transfers, onReceive, onChanged }: { transfers: 
               </td>
               <td>
                 {t.can_dispatch && onChanged && (
-                  <button className="btn btn-small" onClick={() => void dispatch(t)}>
+                  <Button size="small" onClick={() => void dispatch(t)}>
                     Dispatch
-                  </button>
+                  </Button>
                 )}
                 {t.can_receive && (
-                  <button className="btn btn-small btn-primary" onClick={() => onReceive(t)}>
+                  <Button variant="primary" size="small" onClick={() => onReceive(t)}>
                     Receive
-                  </button>
+                  </Button>
                 )}
               </td>
             </tr>
@@ -378,13 +378,13 @@ export function TransferTable({ transfers, onReceive, onChanged }: { transfers: 
           )}
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 }
 
 export function IssueTable({ issues }: { issues: Issue[] }) {
   return (
-    <div className="card table-wrap">
+    <Card as="div" className="table-wrap">
       <table className="table compact">
         <thead>
           <tr>
@@ -418,7 +418,7 @@ export function IssueTable({ issues }: { issues: Issue[] }) {
           )}
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 }
 
@@ -431,29 +431,22 @@ function QtyLines({ lookups, lines, setLines }: { lookups: MaterialLookups; line
       <div className="line-cards">
         {lines.map((l, i) => (
           <div key={i} className="line-card">
-            <label className="field">
-              <span>Product</span>
-              <ProductSelect products={lookups.products} value={l.product_id} onChange={(p) => set(i, { product_id: p?.id ?? "", unit: p?.unit ?? "" })} />
-            </label>
+            <ProductSelect label="Product" products={lookups.products} value={l.product_id} onChange={(p) => set(i, { product_id: p?.id ?? "", unit: p?.unit ?? "" })} />
             <div className="line-row">
-              <label className="field">
-                <span>Qty</span>
+              <Field label="Qty">
                 <input inputMode="decimal" value={l.qty} onChange={(e) => set(i, { qty: e.target.value })} />
-              </label>
-              <label className="field">
-                <span>Unit</span>
-                <UnitSelect units={lookups.units} value={l.unit || lookups.units[0]} onChange={(u) => set(i, { unit: u })} />
-              </label>
-              <button type="button" className="btn btn-ghost btn-icon" aria-label="Remove line" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>
+              </Field>
+              <UnitSelect label="Unit" units={lookups.units} value={l.unit || lookups.units[0]} onChange={(u) => set(i, { unit: u })} />
+              <Button type="button" variant="ghost" icon aria-label="Remove line" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>
                 ×
-              </button>
+              </Button>
             </div>
           </div>
         ))}
       </div>
-      <button type="button" className="btn btn-small top-gap" onClick={() => setLines((ls) => [...ls, { product_id: "", qty: "", unit: "" }])}>
+      <Button type="button" size="small" className="top-gap" onClick={() => setLines((ls) => [...ls, { product_id: "", qty: "", unit: "" }])}>
         + Item
-      </button>
+      </Button>
     </>
   );
 }
@@ -510,8 +503,7 @@ export function TransferForm({
   }
 
   const store = (k: "from_store_id" | "to_store_id", label: string) => (
-    <label className="field">
-      <span>{label} *</span>
+    <Field label={<>{label} *</>}>
       <select required value={form[k]} onChange={(e) => setForm({ ...form, [k]: Number(e.target.value) })}>
         <option value="">—</option>
         {lookups.stores.map((s) => (
@@ -520,7 +512,7 @@ export function TransferForm({
           </option>
         ))}
       </select>
-    </label>
+    </Field>
   );
 
   return (
@@ -530,32 +522,28 @@ export function TransferForm({
         <div className="grid-2">
           {store("from_store_id", "From")}
           {store("to_store_id", "To")}
-          <label className="field">
-            <span>Transporter</span>
+          <Field label="Transporter">
             <input value={form.transporter} onChange={(e) => setForm({ ...form, transporter: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Vehicle no</span>
+          </Field>
+          <Field label="Vehicle no">
             <input value={form.vehicle_no} onChange={(e) => setForm({ ...form, vehicle_no: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Freight (₹, charged to the receiving site)</span>
+          </Field>
+          <Field label="Freight (₹, charged to the receiving site)">
             <input inputMode="decimal" value={form.freight_amount} onChange={(e) => setForm({ ...form, freight_amount: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Remark</span>
+          </Field>
+          <Field label="Remark">
             <input value={form.remark} onChange={(e) => setForm({ ...form, remark: e.target.value })} />
-          </label>
+          </Field>
         </div>
         <QtyLines lookups={lookups} lines={lines} setLines={setLines} />
         <label className="check top-gap">
           <input type="checkbox" checked={dispatchNow} onChange={(e) => setDispatchNow(e.target.checked)} /> Dispatch now (stock leaves the sending store)
         </label>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">{dispatchNow ? "Dispatch" : "Save request"}</button>
+          </Button>
+          <Button type="submit" variant="primary">{dispatchNow ? "Dispatch" : "Save request"}</Button>
         </div>
       </form>
     </Modal>
@@ -592,33 +580,31 @@ export function ReceiveForm({ transfer, onClose, onSaved }: { transfer: Transfer
                     sent {num(l.qty_sent, 3)} {l.unit}
                   </span>
                 </strong>
-                <label className="field">
-                  <span>Received</span>
+                <Field label="Received">
                   <input
                     inputMode="decimal"
                     value={rows[i].qty_received}
                     onChange={(e) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, qty_received: e.target.value } : r)))}
                   />
-                </label>
+                </Field>
                 {short > 0 && (
-                  <label className="field">
-                    <span>Short by {num(short, 3)}: reason *</span>
+                  <Field label={<>Short by {num(short, 3)}: reason *</>}>
                     <input
                       required
                       value={rows[i].shortage_reason}
                       onChange={(e) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, shortage_reason: e.target.value } : r)))}
                     />
-                  </label>
+                  </Field>
                 )}
               </div>
             );
           })}
         </div>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Receive</button>
+          </Button>
+          <Button type="submit" variant="primary">Receive</Button>
         </div>
       </form>
     </Modal>
@@ -669,8 +655,7 @@ export function IssueForm({
       <form onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
         {kind === "issue" && (
-          <label className="field">
-            <span>For task</span>
+          <Field label="For task">
             <select value={form.task_id} onChange={(e) => setForm({ ...form, task_id: Number(e.target.value) || "" })}>
               <option value="">— general site use —</option>
               {tasks.map((t) => (
@@ -680,24 +665,22 @@ export function IssueForm({
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
         )}
         <div className="grid-2">
-          <label className="field">
-            <span>Date</span>
+          <Field label="Date">
             <input type="date" value={form.issued_on} onChange={(e) => setForm({ ...form, issued_on: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Remark</span>
+          </Field>
+          <Field label="Remark">
             <input value={form.remark} onChange={(e) => setForm({ ...form, remark: e.target.value })} />
-          </label>
+          </Field>
         </div>
         <QtyLines lookups={lookups} lines={lines} setLines={setLines} />
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">{kind === "issue" ? "Issue" : "Return"}</button>
+          </Button>
+          <Button type="submit" variant="primary">{kind === "issue" ? "Issue" : "Return"}</Button>
         </div>
       </form>
     </Modal>
@@ -720,33 +703,26 @@ function AdjustForm({ lookups, storeId, onClose, onSaved }: { lookups: MaterialL
     <Modal title="Opening stock or count correction" onClose={onClose}>
       <form onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
-        <label className="field">
-          <span>Product</span>
-          <ProductSelect required products={lookups.products} value={form.product_id} onChange={(p) => setForm({ ...form, product_id: p?.id ?? "" })} />
-        </label>
+        <ProductSelect label="Product" required products={lookups.products} value={form.product_id} onChange={(p) => setForm({ ...form, product_id: p?.id ?? "" })} />
         <div className="grid-2">
-          <label className="field">
-            <span>Kind</span>
+          <Field label="Kind">
             <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
               <option value="opening">Opening stock</option>
               <option value="adjust">Count correction</option>
             </select>
-          </label>
-          <label className="field">
-            <span>Qty (+ in / − out, in the product's unit)</span>
+          </Field>
+          <Field label="Qty (+ in / − out, in the product's unit)">
             <input required inputMode="decimal" value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Rate (for stock added)</span>
+          </Field>
+          <Field label="Rate (for stock added)">
             <input inputMode="decimal" value={form.rate} onChange={(e) => setForm({ ...form, rate: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Note *</span>
+          </Field>
+          <Field label="Note *">
             <input required value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
-          </label>
+          </Field>
         </div>
         <div className="form-actions">
-          <button className="btn btn-primary">Save</button>
+          <Button type="submit" variant="primary">Save</Button>
         </div>
       </form>
     </Modal>
@@ -769,9 +745,9 @@ export function Transfers() {
       <div className="page-header">
         <h1>Transfers</h1>
         {can("store.edit") && (
-          <button className="btn btn-primary" onClick={() => setCreating(true)}>
+          <Button variant="primary" onClick={() => setCreating(true)}>
             New transfer
-          </button>
+          </Button>
         )}
       </div>
       {error && <div className="alert alert-error">{error}</div>}

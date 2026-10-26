@@ -130,9 +130,8 @@ def old_files(qty: dict[str, Decimal]) -> list[str]:
     for k, q in qty.items():
         unit = "nos" if k == "2" else "sqft"
         ws.append([k, f"Item {k} as measured in AutoCAD", 1, None, None, None, float(q), float(q), unit])
-    ws.append([None, "Lift pit (extra, to be agreed)"])
+    ws.append([None, "Lift pit (extra, to be agreed: no work-order item)"])
     ws.append([None, "Floor 2.1 x 1.8", 1, 2.1, 1.8, None, 3.78, 40.688, "sqft"])
-    ws.append([None, "Total", None, None, None, None, None, float(sum(qty.values())), None])
     sheet = folder / "old-measurement-sheet-RA1.xlsx"
     wb.save(sheet)
     wb = Workbook()
@@ -257,8 +256,12 @@ def run(db: Session) -> dict:
         areas[code] = _ok(c.post(f"{base}/areas", json={"cad_file_id": fid, "x": x, "y": y, "code": code, "name": name, "kind": kind}, headers=hb), f"area {code}", 201)
     st = _ok(c.get(base, headers=hb), "state")
     out["areas"] = {a["code"]: {"area_sqm": a["area_sqm"], "periphery_m": a["periphery_m"], "net_area_sqm": a["net_area_sqm"], "net_periphery_m": a["net_periphery_m"], "counts": a["counts"]} for a in st["areas"]}
-    edge = st["edges"][0]
-    out["shared_edge"] = {"between": f"{edge['a']}|{edge['b']}", "length_m": edge["length_m"]}
+    edge = next(e for e in st["edges"] if {e["a"], e["b"]} == {"A", "R"})
+    out["shared_edges"] = {f"{e['a']}|{e['b']}": e["length_m"] for e in st["edges"]}
+    # the slope's cut edge along the pool: the pool's wall stays on it (both faces)
+    for e in st["edges"]:
+        if {e["a"], e["b"]} == {"A", "Q"}:
+            _ok(c.post(f"/api/measure/edges/{e['id']}/answer", json={"answer": "both"}, headers=hb), "edge A|Q")
 
     # 2. heights and the slope from Section Y-Y; the shared edge's answer ------------------------------
     sec = "Section Y-Y"

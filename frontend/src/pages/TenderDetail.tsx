@@ -9,6 +9,7 @@ import type { Clause, Page, Revision, Tender, TenderLookups, TenderStatus, Tende
 import BoqTab from "./tender/BoqTab";
 import RevisionsTab from "./tender/RevisionsTab";
 import { shortDate, StatusBadge, TenderForm } from "./Tenders";
+import { Button, buttonClass, Card, Field } from "../ui/components";
 
 const TenderCustomers = lazy(() => import("../closeout/Pages").then((m) => ({ default: m.TenderCustomers })));
 
@@ -41,9 +42,9 @@ export function UnsentRates({ unsent, canSend, onSend }: { unsent: Unsent | null
       )}
       . Submit is held until the rates are sent or you confirm the lines' rates.{" "}
       {canSend && (
-        <button className="btn btn-small btn-primary" onClick={onSend}>
+        <Button variant="primary" size="small" onClick={onSend}>
           Send the rates to the lines
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -185,28 +186,30 @@ Send anyway? Give the reason:`);
         </div>
         <div className="page-actions">
           <span className="inline-form">
-            <select value={exportRev} onChange={(e) => setExportRev(e.target.value)} aria-label="Revision to export">
-              <option value="">Current ({tender.revision_label})</option>
-              {revs.map((r) => (
-                <option key={r.rev_no} value={r.rev_no}>
-                  {r.label} as submitted
-                </option>
-              ))}
-            </select>
-            <button className="btn" onClick={() => void download("xlsx")}>
+            <Field label="Revision to export" bare>
+              <select value={exportRev} onChange={(e) => setExportRev(e.target.value)} aria-label="Revision to export">
+                <option value="">Current ({tender.revision_label})</option>
+                {revs.map((r) => (
+                  <option key={r.rev_no} value={r.rev_no}>
+                    {r.label} as submitted
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Button onClick={() => void download("xlsx")}>
               ⤓ Excel
-            </button>
-            <button className="btn" onClick={() => void download("pdf")}>
+            </Button>
+            <Button onClick={() => void download("pdf")}>
               ⤓ PDF
-            </button>
-            <button className="btn" title="Our rates written into the client's own file" onClick={() => void download("client")}>
+            </Button>
+            <Button title="Our rates written into the client's own file" onClick={() => void download("client")}>
               ⤓ Client format
-            </button>
+            </Button>
           </span>
           {canEdit && draft && (
-            <button className="btn btn-primary" onClick={() => void submit()}>
+            <Button variant="primary" onClick={() => void submit()}>
               Submit {current}
-            </button>
+            </Button>
           )}
           <div className="rate-badge">
             <span className="muted small">Quoted total (excl. GST)</span>
@@ -348,15 +351,15 @@ Send anyway? Give the reason:`)
   rows.push(["Notes", tender.notes ?? "—"]);
 
   return (
-    <div className="card">
+    <Card as="div">
       {error && <div className="alert alert-error">{error}</div>}
       {tender.kylas_won_lead && (
         <div className="alert alert-warn">
           Won in Kylas (lead {tender.kylas_won_lead}): confirm and mark won.{" "}
           {canEdit && (
-            <button className="btn btn-small btn-primary" onClick={() => setClosing("won")}>
+            <Button variant="primary" size="small" onClick={() => setClosing("won")}>
               Mark won
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -364,8 +367,7 @@ Send anyway? Give the reason:`)
         <h2 className="section-title">Tender details</h2>
         {canEdit && (
           <div className="page-actions">
-            <button
-              className="btn"
+            <Button
               onClick={() => {
                 const v = prompt("Guarantee (years)", String(tender.guarantee_years ?? ""));
                 if (v !== null)
@@ -373,37 +375,37 @@ Send anyway? Give the reason:`)
               }}
             >
               Guarantee years
-            </button>
+            </Button>
             {tender.status === "draft" && (
-              <button className="btn" onClick={() => void setStatus("submitted")}>
+              <Button onClick={() => void setStatus("submitted")}>
                 Mark submitted
-              </button>
+              </Button>
             )}
             {(["won", "lost", "dropped"] as TenderStatus[]).map((s) => (
-              <button key={s} className="btn" disabled={tender.status === s} onClick={() => setClosing(s)}>
+              <Button key={s} disabled={tender.status === s} onClick={() => setClosing(s)}>
                 {s === "won" ? "Won" : s === "lost" ? "Lost" : "Dropped"}
-              </button>
+              </Button>
             ))}
             {tender.status !== "draft" && (
-              <button className="btn btn-ghost" onClick={() => void setStatus("draft")}>
+              <Button variant="ghost" onClick={() => void setStatus("draft")}>
                 Back to draft
-              </button>
+              </Button>
             )}
             {lookups && (
-              <button className="btn btn-primary" onClick={() => setEditing(true)}>
+              <Button variant="primary" onClick={() => setEditing(true)}>
                 Edit
-              </button>
+              </Button>
             )}
             {tender.site_id ? (
-              <Link className="btn" to={`/sites/${tender.site_id}`}>
+              <Link className={buttonClass()} to={`/sites/${tender.site_id}`}>
                 Open site
               </Link>
             ) : (
               tender.status === "won" &&
               can("site.edit") && (
-                <button className="btn btn-primary" onClick={() => void createSite()}>
+                <Button variant="primary" onClick={() => void createSite()}>
                   Create site
-                </button>
+                </Button>
               )
             )}
           </div>
@@ -437,7 +439,7 @@ Send anyway? Give the reason:`)
           onSave={(reason, competitor, note) => setStatus(closing, { lost_reason: reason, lost_to: competitor, lost_note: note })}
         />
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -467,8 +469,7 @@ function CloseTenderModal({
     <Modal title={`Mark ${tender.code} as ${label.toLowerCase()}`} onClose={onClose}>
       <form onSubmit={submit}>
         {needsReason && (
-          <label className="field">
-            <span>Reason *</span>
+          <Field label="Reason *">
             <select required value={reason} onChange={(e) => setReason(e.target.value)} autoFocus>
               <option value="">Choose…</option>
               {Object.entries(LOST_REASONS).map(([k, l]) => (
@@ -477,21 +478,19 @@ function CloseTenderModal({
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
         )}
-        <label className="field">
-          <span>{status === "won" ? "Why we won" : "Details"}</span>
+        <Field label={status === "won" ? "Why we won" : "Details"}>
           <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder={status === "won" ? "Price, relationship, spec…" : "What happened"} />
-        </label>
-        <label className="field">
-          <span>{status === "won" ? "Main competitor" : status === "lost" ? "Lost to (competitor)" : "Competitor (if known)"}</span>
+        </Field>
+        <Field label={status === "won" ? "Main competitor" : status === "lost" ? "Lost to (competitor)" : "Competitor (if known)"}>
           <input value={competitor} onChange={(e) => setCompetitor(e.target.value)} />
-        </label>
+        </Field>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Mark {label.toLowerCase()}</button>
+          </Button>
+          <Button type="submit" variant="primary">Mark {label.toLowerCase()}</Button>
         </div>
       </form>
     </Modal>
@@ -585,13 +584,12 @@ function TermsTab({ tender, canEdit, onSaved }: { tender: Tender; canEdit: boole
 
   return (
     <div className="split">
-      <div className="card">
+      <Card as="div">
         <div className="toolbar">
           <h2 className="section-title">Terms & conditions ({rows.length})</h2>
           {canEdit && (
             <div className="page-actions">
-              <button
-                className="btn"
+              <Button
                 onClick={() => {
                   const key = `n${Date.now()}`;
                   setRows((rs) => [...rs, { key, clause_id: null, library_text: null, text: "", category: null }]);
@@ -599,10 +597,10 @@ function TermsTab({ tender, canEdit, onSaved }: { tender: Tender; canEdit: boole
                 }}
               >
                 Add own clause
-              </button>
-              <button className="btn btn-primary" disabled={!dirty} onClick={() => void save()}>
+              </Button>
+              <Button variant="primary" disabled={!dirty} onClick={() => void save()}>
                 Save terms
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -629,13 +627,15 @@ function TermsTab({ tender, canEdit, onSaved }: { tender: Tender; canEdit: boole
                   </span>
                 )}
                 {editing === r.key ? (
-                  <textarea
-                    rows={3}
-                    autoFocus
-                    value={r.text}
-                    onChange={(e) => setRows((rs) => rs.map((x) => (x.key === r.key ? { ...x, text: e.target.value } : x)))}
-                    onBlur={() => setEditing(null)}
-                  />
+                  <Field label="Clause text" bare>
+                    <textarea
+                      rows={3}
+                      autoFocus
+                      value={r.text}
+                      onChange={(e) => setRows((rs) => rs.map((x) => (x.key === r.key ? { ...x, text: e.target.value } : x)))}
+                      onBlur={() => setEditing(null)}
+                    />
+                  </Field>
                 ) : (
                   <span className="pre-line">{r.text || <em className="muted">(empty)</em>}</span>
                 )}
@@ -645,46 +645,48 @@ function TermsTab({ tender, canEdit, onSaved }: { tender: Tender; canEdit: boole
               </div>
               {canEdit && (
                 <div className="clause-actions">
-                  <button className="btn btn-small btn-ghost" onClick={() => setEditing(r.key)}>
+                  <Button variant="ghost" size="small" onClick={() => setEditing(r.key)}>
                     Edit
-                  </button>
-                  <button className="btn btn-small btn-ghost" disabled={i === 0} onClick={() => move(i, i - 1)} aria-label="Move up">
+                  </Button>
+                  <Button variant="ghost" size="small" disabled={i === 0} onClick={() => move(i, i - 1)} aria-label="Move up">
                     ↑
-                  </button>
-                  <button className="btn btn-small btn-ghost" disabled={i === rows.length - 1} onClick={() => move(i, i + 1)} aria-label="Move down">
+                  </Button>
+                  <Button variant="ghost" size="small" disabled={i === rows.length - 1} onClick={() => move(i, i + 1)} aria-label="Move down">
                     ↓
-                  </button>
-                  <button className="btn btn-small btn-ghost" onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>
+                  </Button>
+                  <Button variant="ghost" size="small" onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>
                     Remove
-                  </button>
+                  </Button>
                 </div>
               )}
             </li>
           ))}
         </ol>
-      </div>
+      </Card>
       {canEdit && (
-        <div className="card">
+        <Card as="div">
           <h2 className="section-title">Add from the library</h2>
           <form onSubmit={find} className="inline-form">
-            <input className="search grow" placeholder="Search clauses" value={search} onChange={(e) => setSearch(e.target.value)} />
-            <button className="btn">Search</button>
+            <Field label="Search clauses" bare>
+              <input className="search grow" placeholder="Search clauses" value={search} onChange={(e) => setSearch(e.target.value)} />
+            </Field>
+            <Button type="submit">Search</Button>
           </form>
           <ul className="plain-list top-gap">
             {results.map((c) => (
               <li key={c.id} className="pick">
                 <span className="pre-line">{c.text}</span>
-                <button
-                  className="btn btn-small"
+                <Button
+                  size="small"
                   disabled={used.has(c.id)}
                   onClick={() => setRows((rs) => [...rs, { key: `c${c.id}`, clause_id: c.id, library_text: c.text, text: c.text, category: c.category }])}
                 >
                   {used.has(c.id) ? "Added" : "Add"}
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
-        </div>
+        </Card>
       )}
     </div>
   );

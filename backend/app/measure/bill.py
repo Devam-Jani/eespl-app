@@ -69,10 +69,16 @@ def status_of(db: Session, sheet: MeasureSheet) -> str:
 def send(db: Session, sheet: MeasureSheet, user) -> MeasureSheet:
     if sheet.status != "draft":
         raise Clash(f"{sheet.code} is {sheet.status}")
-    built = ms.build(db, sheet)
-    if built.questions:
-        raise Refused("Answer first: " + "; ".join(q["text"] for q in built.questions[:5]))
-    lines = ms.store(db, sheet, built)
+    from app.measure import slip  # noqa: PLC0415
+
+    from_slip = slip.is_slip(sheet)
+    if from_slip:
+        lines = ms.lines_of(db, sheet.id)  # the slip's lines as entered
+    else:
+        built = ms.build(db, sheet)
+        if built.questions:
+            raise Refused("Answer first: " + "; ".join(q["text"] for q in built.questions[:5]))
+        lines = ms.store(db, sheet, built)
     if not any(ln.total for ln in lines):
         raise Refused("Nothing measured on this sheet")
     site = db.get(Site, sheet.site_id)
@@ -101,14 +107,19 @@ def send(db: Session, sheet: MeasureSheet, user) -> MeasureSheet:
         if cl is None:
             raise Refused(f"The contract has no line for work-order item {wo.item_no or wo.id}")
         codes = sorted({db.get(MeasureArea, ln.area_id).code for ln in lines if ln.wo_line_id == wo_id and ln.area_id})
+        where = f"from the slip of {sheet.slip_on:%d-%m-%Y}" if from_slip and sheet.slip_on else "from the slip" if from_slip else f"from the drawing, areas {', '.join(codes)}"
         m = Measurement(site_id=site.id, contract_line_id=cl.id, description=f"{sheet.code}: {wo.item_no + ' ' if wo.item_no else ''}{(wo.description or '')[:200]}",
-                        qty=total, unit=cl.unit, source="autocad", measured_on=sheet.measured_on, measured_by=user.id,
-                        note=f"{sheet.code}: from the drawing, areas {', '.join(codes)}", status="draft" if site.measurements_need_approval else "approved",
+                        qty=total, unit=cl.unit, source="manual" if from_slip else "autocad", measured_on=sheet.measured_on, measured_by=user.id,
+                        note=f"{sheet.code}: {where}", status="draft" if site.measurements_need_approval and not from_slip else "approved",
                         created_by=user.id)  # fmt: skip
+        if from_slip:
+            # the slip is signed and dated by the client's person on site: their approval, recorded by us
+            m.approved_name, m.recorded_by_staff, m.signed_copy_path = sheet.signed_by, True, sheet.slip_path
+            m.approved_at = svc.now() if sheet.signed_on is None else svc.now().replace(year=sheet.signed_on.year, month=sheet.signed_on.month, day=sheet.signed_on.day)
         db.add(m)
         book.append(m)
     db.flush()
-    if site.measurements_need_approval:
+    if site.measurements_need_approval and not from_slip:
         from app.closeout import measure  # noqa: PLC0415
 
         s = measure.send(db, site, [m.id for m in book], sheet.code + (f": {sheet.title}" if sheet.title else ""), user)
@@ -289,8 +300,16 @@ def checklist(db: Session, b: RaBill) -> list[dict]:
     else:
         unlinked.append("The bill is not made from a measurement sheet")
     out.append({"key": "layers", "label": "No item billed for a layer the work order doesn't have", "ok": not layers, "detail": layers})
-    out.append({"key": "edges", "label": "Shared edges answered", "ok": not edges, "detail": edges})
-    out.append({"key": "drawing", "label": "Every area linked to the drawing", "ok": not unlinked, "detail": unlinked})
+    from app.measure import slip  # noqa: PLC0415
+
+    if sheet and slip.is_slip(sheet):
+        missing = [w for w, ok in (("the slip's file", sheet.slip_path), ("who signed it", sheet.signed_by), ("when", sheet.signed_on)) if not ok]
+        out.append({"key": "slip", "label": "The client's signed slip is attached (who signed it, when)", "ok": not missing, "detail": missing})
+        left = [f"{u['particulars']}: {u['why']}" for u in slip.unmapped(db, sheet)]
+        out.append({"key": "slip_lines", "label": "Every slip line billed, or listed with why", "ok": True, "detail": left})
+    else:
+        out.append({"key": "edges", "label": "Shared edges answered", "ok": not edges, "detail": edges})
+        out.append({"key": "drawing", "label": "Every area linked to the drawing", "ok": not unlinked, "detail": unlinked})
     return out
 
 

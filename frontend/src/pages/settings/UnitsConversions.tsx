@@ -5,6 +5,7 @@ import ExportButton from "../../components/ExportButton";
 import { Modal } from "../../ui/Overlay";
 import { errorText, num } from "../../format";
 import type { Conversion, Page, Product, Unit } from "../../types";
+import { Button, Card, Field } from "../../ui/components";
 
 export default function UnitsConversions() {
   const [units, setUnits] = useState<Unit[]>([]);
@@ -73,7 +74,7 @@ export default function UnitsConversions() {
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       <div className="split">
-        <div className="card">
+        <Card as="div">
           <h2 className="section-title">Conversions</h2>
           <p className="muted small">
             1 <em>from</em> = factor × <em>to</em>. They work both ways and chain. A product-specific conversion (e.g. 1 bag of a
@@ -97,12 +98,12 @@ export default function UnitsConversions() {
                   <td className="num">{num(c.factor, 8)}</td>
                   <td>{c.product_name ?? <span className="muted">all products</span>}</td>
                   <td className="row-actions">
-                    <button className="btn btn-small" onClick={() => void edit(c)}>
+                    <Button size="small" onClick={() => void edit(c)}>
                       Edit
-                    </button>
-                    <button className="btn btn-small btn-danger" onClick={() => void remove(c)}>
+                    </Button>
+                    <Button variant="danger" size="small" onClick={() => void remove(c)}>
                       ×
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -111,8 +112,7 @@ export default function UnitsConversions() {
           <form className="inline-form" onSubmit={add}>
             <h3 className="section-title">Add conversion</h3>
             <div className="grid-4">
-              <label className="field">
-                <span>1 of</span>
+              <Field label="1 of">
                 <select value={form.from_unit} onChange={(e) => setForm({ ...form, from_unit: e.target.value })} required>
                   <option value="">unit…</option>
                   {units.map((u) => (
@@ -121,13 +121,11 @@ export default function UnitsConversions() {
                     </option>
                   ))}
                 </select>
-              </label>
-              <label className="field">
-                <span>equals</span>
+              </Field>
+              <Field label="equals">
                 <input type="number" step="any" min="0" value={form.factor} onChange={(e) => setForm({ ...form, factor: e.target.value })} required />
-              </label>
-              <label className="field">
-                <span>of</span>
+              </Field>
+              <Field label="of">
                 <select value={form.to_unit} onChange={(e) => setForm({ ...form, to_unit: e.target.value })} required>
                   <option value="">unit…</option>
                   {units.map((u) => (
@@ -136,9 +134,8 @@ export default function UnitsConversions() {
                     </option>
                   ))}
                 </select>
-              </label>
-              <label className="field">
-                <span>For product (optional)</span>
+              </Field>
+              <Field label="For product (optional)">
                 <select value={form.product_id} onChange={(e) => setForm({ ...form, product_id: e.target.value })}>
                   <option value="">all products</option>
                   {products.map((p) => (
@@ -147,15 +144,15 @@ export default function UnitsConversions() {
                     </option>
                   ))}
                 </select>
-              </label>
+              </Field>
             </div>
             <div className="form-actions">
-              <button className="btn btn-primary">Add</button>
+              <Button type="submit" variant="primary">Add</Button>
             </div>
           </form>
           <Converter units={units} products={products} />
-        </div>
-        <div className="card">
+        </Card>
+        <Card as="div">
           <h2 className="section-title">Units</h2>
           <table className="table compact">
             <thead>
@@ -175,9 +172,9 @@ export default function UnitsConversions() {
                   <td>{u.name}</td>
                   <td className="small muted">{u.aliases.join(", ")}</td>
                   <td>
-                    <button className="btn btn-small" onClick={() => setAliasUnit(u)}>
+                    <Button size="small" onClick={() => setAliasUnit(u)}>
                       Edit
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -186,7 +183,7 @@ export default function UnitsConversions() {
           <p className="muted small">
             “RO” in a BOQ unit column means rate only: imports store no unit and mark the quantity “QRO”.
           </p>
-        </div>
+        </Card>
       </div>
       {aliasUnit && (
         <AliasForm
@@ -220,27 +217,35 @@ function Converter({ units, products }: { units: Unit[]; products: Product[] }) 
     <form className="inline-form" onSubmit={run}>
       <h3 className="section-title">Try a conversion</h3>
       <div className="toolbar">
-        <input className="input-num" type="number" step="any" value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} />
-        <select value={form.from_unit} onChange={(e) => setForm({ ...form, from_unit: e.target.value })}>
-          {units.map((u) => (
-            <option key={u.code}>{u.code}</option>
-          ))}
-        </select>
+        <Field label="Quantity" bare>
+          <input className="input-num" type="number" step="any" value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} />
+        </Field>
+        <Field label="From unit" bare>
+          <select value={form.from_unit} onChange={(e) => setForm({ ...form, from_unit: e.target.value })}>
+            {units.map((u) => (
+              <option key={u.code}>{u.code}</option>
+            ))}
+          </select>
+        </Field>
         →
-        <select value={form.to_unit} onChange={(e) => setForm({ ...form, to_unit: e.target.value })}>
-          {units.map((u) => (
-            <option key={u.code}>{u.code}</option>
-          ))}
-        </select>
-        <select value={form.product_id} onChange={(e) => setForm({ ...form, product_id: e.target.value })}>
-          <option value="">any product</option>
-          {products.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-        <button className="btn btn-small">Convert</button>
+        <Field label="To unit" bare>
+          <select value={form.to_unit} onChange={(e) => setForm({ ...form, to_unit: e.target.value })}>
+            {units.map((u) => (
+              <option key={u.code}>{u.code}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Product" bare>
+          <select value={form.product_id} onChange={(e) => setForm({ ...form, product_id: e.target.value })}>
+            <option value="">any product</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Button type="submit" size="small">Convert</Button>
       </div>
       {result && <p className="convert-result">{result}</p>}
     </form>
@@ -269,19 +274,17 @@ function AliasForm({ unit, onClose, onSaved }: { unit: Unit; onClose: () => void
     <Modal title={`Unit ${unit.code}`} onClose={onClose}>
       <form className="form" onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
-        <label className="field">
-          <span>Name</span>
+        <Field label="Name">
           <input value={name} onChange={(e) => setName(e.target.value)} required />
-        </label>
-        <label className="field">
-          <span>Also written as (one per line; used by every import)</span>
+        </Field>
+        <Field label="Also written as (one per line; used by every import)">
           <textarea rows={8} value={aliases} onChange={(e) => setAliases(e.target.value)} />
-        </label>
+        </Field>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Save</button>
+          </Button>
+          <Button type="submit" variant="primary">Save</Button>
         </div>
       </form>
     </Modal>

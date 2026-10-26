@@ -88,11 +88,10 @@ export default function CompanyProfile() {
       {error && <div className="alert alert-error">{error}</div>}
       {notice && <div className="alert alert-ok">{notice}</div>}
       <div className="split">
-        <form className="card form" onSubmit={save}>
+        <Card as="form" className="form" onSubmit={save}>
           <div className="grid-2">
             {FIELDS.map((f) => (
-              <label key={f.key} className="field">
-                <span>{f.label}</span>
+              <Field label={f.label} key={f.key}>
                 <input
                   type={f.type ?? "text"}
                   step={f.type === "number" ? "0.01" : undefined}
@@ -100,7 +99,7 @@ export default function CompanyProfile() {
                   value={form[f.key] ?? ""}
                   onChange={(e) => setForm((s) => ({ ...s, [f.key]: e.target.value }))}
                 />
-              </label>
+              </Field>
             ))}
             <Field label="Suggested rate from the library">
               <select value={form.rate_policy ?? ""} onChange={(e) => setForm((s) => ({ ...s, rate_policy: e.target.value }))}>
@@ -118,14 +117,13 @@ export default function CompanyProfile() {
               Save
             </Button>
           </div>
-        </form>
+        </Card>
         <Card as="div">
           <h2 className="section-title">Logo</h2>
           {logo ? <img src={logo} alt="Company logo" className="logo-preview" /> : <p className="muted">No logo yet.</p>}
-          <label className="field top-gap">
-            <span>Upload PNG, JPEG or WebP (up to 2 MB)</span>
+          <Field label="Upload PNG, JPEG or WebP (up to 2 MB)" className="top-gap">
             <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
-          </label>
+          </Field>
           {logo && (
             <Button variant="danger" size="small" type="submit" onClick={() => void removeLogo()}>
               Remove logo

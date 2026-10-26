@@ -4,6 +4,7 @@ import { errorText, inr } from "../format";
 import { dist, locate, time } from "./common";
 import type { MapSettings, MySite } from "./common";
 import MapView from "./MapView";
+import { Button, buttonClass, Card, Field } from "../ui/components";
 
 type Gang = {
   id: number;
@@ -93,9 +94,8 @@ export function GangCheckIn() {
     <div className="field-phone">
       <h1>Gang check-in</h1>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card">
-        <label className="field">
-          <span>Site</span>
+      <Card as="div">
+        <Field label="Site">
           <select className="tap-input" value={siteId} onChange={(e) => setSiteId(e.target.value)}>
             <option value="">— the site —</option>
             {data.sites.map((s) => (
@@ -104,9 +104,8 @@ export function GangCheckIn() {
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Labour contractor</span>
+        </Field>
+        <Field label="Labour contractor">
           <select
             className="tap-input"
             value={contractorId}
@@ -122,7 +121,7 @@ export function GangCheckIn() {
               </option>
             ))}
           </select>
-        </label>
+        </Field>
         {contractor && (
           <>
             <div className="small muted">Tick who is here, or give the headcount:</div>
@@ -135,31 +134,35 @@ export function GangCheckIn() {
               ))}
             </div>
             {!picked.length && (
-              <input className="tap-input" inputMode="numeric" value={headcount} onChange={(e) => setHeadcount(e.target.value)} placeholder="Headcount" aria-label="Headcount" />
+              <Field label="Headcount" bare>
+                <input className="tap-input" inputMode="numeric" value={headcount} onChange={(e) => setHeadcount(e.target.value)} placeholder="Headcount" aria-label="Headcount" />
+              </Field>
             )}
           </>
         )}
-        <label className="btn btn-block tap">
+        <label className={buttonClass({ block: true, className: "tap" })}>
           {photo ? "Group photo taken: retake" : "Group photo"}
           <input type="file" accept="image/*" capture="environment" hidden onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
         </label>
         {needReason && (
           <div className="alert alert-warn">
             {needReason}
-            <textarea className="tap-input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why outside the site circle?" />
+            <Field label="Why outside the site circle?" bare>
+              <textarea className="tap-input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why outside the site circle?" />
+            </Field>
           </div>
         )}
-        <button
-          className="btn btn-primary btn-block tap"
+        <Button
+          variant="primary" block className="tap"
           disabled={busy || !siteId || !contractorId || !photo || (!picked.length && !headcount) || (!!needReason && !reason.trim())}
           onClick={() => void checkIn()}
         >
           {busy ? "Getting your location…" : `Check in ${picked.length || headcount || ""} at the site`}
-        </button>
-      </div>
+        </Button>
+      </Card>
       <h3>Today</h3>
       {data.visits.map((g) => (
-        <div key={g.id} className="card">
+        <Card key={g.id} as="div">
           <b>{g.contractor}</b> at {g.site}: {g.headcount} people {g.workers.length ? `(${g.workers.join(", ")})` : ""}
           <div className="small">
             in {time(g.in_at)} {g.out_at ? `· out ${time(g.out_at)} · ${g.hours} h each` : ""}
@@ -171,11 +174,11 @@ export function GangCheckIn() {
             )}
           </div>
           {!g.out_at && (
-            <button className="btn btn-small tap" onClick={() => void checkOut(g)}>
+            <Button size="small" className="tap" onClick={() => void checkOut(g)}>
               Check the gang out
-            </button>
+            </Button>
           )}
-        </div>
+        </Card>
       ))}
     </div>
   );
@@ -256,7 +259,7 @@ export function FieldSettings() {
             <Fragment key={p.user_id}>
               <tr className={open === p.user_id ? "row-selected" : ""}>
                 <td>
-                  <button className="btn-link" onClick={() => setOpen(open === p.user_id ? null : p.user_id)}>
+                  <button className="link-button" onClick={() => setOpen(open === p.user_id ? null : p.user_id)}>
                     {p.name}
                   </button>
                   <div className="small muted">{p.job_title}</div>
@@ -268,33 +271,39 @@ export function FieldSettings() {
                   <input type="checkbox" checked={p.reimbursable} onChange={(e) => put(p, { reimbursable: e.target.checked })} aria-label="Eligible for travel reimbursement" />
                 </td>
                 <td>
-                  <select value={p.vehicle} onChange={(e) => put(p, { vehicle: e.target.value })} aria-label="Vehicle">
-                    <option value="bike">Bike</option>
-                    <option value="car">Car</option>
-                    <option value="other">Other</option>
-                  </select>
+                  <Field label="Vehicle" bare>
+                    <select value={p.vehicle} onChange={(e) => put(p, { vehicle: e.target.value })} aria-label="Vehicle">
+                      <option value="bike">Bike</option>
+                      <option value="car">Car</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </Field>
                 </td>
                 <td>
-                  <select value={p.manager_id ?? ""} onChange={(e) => put(p, { manager_id: e.target.value || null })} aria-label="Manager">
-                    <option value="">—</option>
-                    {people
-                      .filter((m) => m.user_id !== p.user_id)
-                      .map((m) => (
-                        <option key={m.user_id} value={m.user_id}>
-                          {m.name}
+                  <Field label="Manager" bare>
+                    <select value={p.manager_id ?? ""} onChange={(e) => put(p, { manager_id: e.target.value || null })} aria-label="Manager">
+                      <option value="">—</option>
+                      {people
+                        .filter((m) => m.user_id !== p.user_id)
+                        .map((m) => (
+                          <option key={m.user_id} value={m.user_id}>
+                            {m.name}
+                          </option>
+                        ))}
+                    </select>
+                  </Field>
+                </td>
+                <td>
+                  <Field label="Weekly off" bare>
+                    <select value={p.weekly_off ?? ""} onChange={(e) => put(p, { weekly_off: e.target.value === "" ? null : Number(e.target.value) })} aria-label="Weekly off">
+                      <option value="">none</option>
+                      {DAYS.map((d, i) => (
+                        <option key={d} value={i}>
+                          {d}
                         </option>
                       ))}
-                  </select>
-                </td>
-                <td>
-                  <select value={p.weekly_off ?? ""} onChange={(e) => put(p, { weekly_off: e.target.value === "" ? null : Number(e.target.value) })} aria-label="Weekly off">
-                    <option value="">none</option>
-                    {DAYS.map((d, i) => (
-                      <option key={d} value={i}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
+                    </select>
+                  </Field>
                 </td>
                 <td className="num">{p.rate_today !== null ? `${inr(p.rate_today)}/km` : "—"}</td>
                 <td className={p.home_status === "pending" || p.pending ? "text-warn" : ""}>
@@ -322,21 +331,27 @@ export function FieldSettings() {
                           </tbody>
                         </table>
                         <div className="form-row">
-                          <select value={rate.vehicle} onChange={(e) => setRate({ ...rate, vehicle: e.target.value })} aria-label="Vehicle">
-                            <option value="bike">Bike</option>
-                            <option value="car">Car</option>
-                            <option value="other">Other</option>
-                          </select>
-                          <input
-                            className="input-small"
-                            value={rate.rate_per_km}
-                            onChange={(e) => setRate({ ...rate, rate_per_km: e.target.value })}
-                            placeholder="₹ per km"
-                            aria-label="Rate per km"
-                          />
-                          <input type="date" value={rate.valid_from} onChange={(e) => setRate({ ...rate, valid_from: e.target.value })} aria-label="Valid from" />
-                          <button
-                            className="btn btn-small btn-primary"
+                          <Field label="Vehicle" bare>
+                            <select value={rate.vehicle} onChange={(e) => setRate({ ...rate, vehicle: e.target.value })} aria-label="Vehicle">
+                              <option value="bike">Bike</option>
+                              <option value="car">Car</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </Field>
+                          <Field label="Rate per km" bare>
+                            <input
+                              className="input-small"
+                              value={rate.rate_per_km}
+                              onChange={(e) => setRate({ ...rate, rate_per_km: e.target.value })}
+                              placeholder="₹ per km"
+                              aria-label="Rate per km"
+                            />
+                          </Field>
+                          <Field label="Valid from" bare>
+                            <input type="date" value={rate.valid_from} onChange={(e) => setRate({ ...rate, valid_from: e.target.value })} aria-label="Valid from" />
+                          </Field>
+                          <Button
+                            variant="primary" size="small"
                             disabled={!rate.rate_per_km || !rate.valid_from}
                             onClick={() =>
                               void run(api(`/api/field/admin/people/${p.user_id}/rates`, { method: "POST", json: rate })).then(() =>
@@ -345,7 +360,7 @@ export function FieldSettings() {
                             }
                           >
                             Add the rate
-                          </button>
+                          </Button>
                         </div>
                       </div>
                       <div>
@@ -364,18 +379,18 @@ export function FieldSettings() {
                         {p.pending && (
                           <div className="form-row">
                             <span className="small">Asked for {p.home ? "a change of home" : "a home"}.</span>
-                            <button
-                              className="btn btn-small btn-primary"
+                            <Button
+                              variant="primary" size="small"
                               onClick={() => void run(api(`/api/field/admin/people/${p.user_id}/home`, { method: "POST", json: { approve: true } }))}
                             >
                               Approve
-                            </button>
-                            <button
-                              className="btn btn-small"
+                            </Button>
+                            <Button
+                              size="small"
                               onClick={() => void run(api(`/api/field/admin/people/${p.user_id}/home`, { method: "POST", json: { approve: false } }))}
                             >
                               Not approved
-                            </button>
+                            </Button>
                           </div>
                         )}
                       </div>
@@ -389,7 +404,7 @@ export function FieldSettings() {
       </table>
       <Holidays />
       {s && (
-        <div className="card top-gap">
+        <Card as="div" className="top-gap">
           <h3>General</h3>
           <div className="form-grid">
             {(
@@ -405,14 +420,13 @@ export function FieldSettings() {
                 ["tile_attribution", "Map credit"],
               ] as [string, string][]
             ).map(([k, label]) => (
-              <label key={k} className="field">
-                <span>{label}</span>
+              <Field label={label} key={k}>
                 <input value={String(s[k] ?? "").slice(0, k === "auto_end_at" ? 5 : 300)} onChange={(e) => setS({ ...s, [k]: e.target.value })} />
-              </label>
+              </Field>
             ))}
           </div>
-          <button
-            className="btn btn-primary"
+          <Button
+            variant="primary"
             onClick={() => {
               const json: Record<string, unknown> = {};
               for (const k of ["consent_version", "tile_url", "tile_attribution"]) json[k] = s[k];
@@ -422,8 +436,8 @@ export function FieldSettings() {
             }}
           >
             Save
-          </button>
-        </div>
+          </Button>
+        </Card>
       )}
     </>
   );
@@ -440,7 +454,7 @@ function Holidays() {
     api<typeof rows>("/api/field/admin/holidays").then(setRows, (e) => setError(errorText(e)));
   }, []);
   return (
-    <div className="card top-gap">
+    <Card as="div" className="top-gap">
       <h3>Company holidays</h3>
       <p className="small muted">A day started on a holiday or on the person&apos;s weekly off is flagged for the manager (never blocked).</p>
       {error && <div className="alert alert-error">{error}</div>}
@@ -451,22 +465,26 @@ function Holidays() {
               <td>{new Date(h.on_date).toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short", year: "numeric" })}</td>
               <td>{h.name}</td>
               <td>
-                <button
-                  className="btn btn-small btn-ghost"
+                <Button
+                  variant="ghost" size="small"
                   onClick={() => api<typeof rows>(`/api/field/admin/holidays/${h.id}`, { method: "DELETE" }).then(setRows, (e) => setError(errorText(e)))}
                 >
                   Remove
-                </button>
+                </Button>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
       <div className="form-row">
-        <input type="date" value={form.on_date} onChange={(e) => setForm({ ...form, on_date: e.target.value })} aria-label="Date" />
-        <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Diwali" aria-label="Holiday" />
-        <button
-          className="btn btn-small btn-primary"
+        <Field label="Date" bare>
+          <input type="date" value={form.on_date} onChange={(e) => setForm({ ...form, on_date: e.target.value })} aria-label="Date" />
+        </Field>
+        <Field label="Holiday" bare>
+          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Diwali" aria-label="Holiday" />
+        </Field>
+        <Button
+          variant="primary" size="small"
           disabled={!form.on_date || !form.name.trim()}
           onClick={() =>
             api<typeof rows>("/api/field/admin/holidays", { method: "POST", json: form }).then(
@@ -479,8 +497,8 @@ function Holidays() {
           }
         >
           Add
-        </button>
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }

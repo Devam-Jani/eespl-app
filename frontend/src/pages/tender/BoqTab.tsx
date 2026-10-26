@@ -7,7 +7,7 @@ import { RATE_POLICIES } from "../../types";
 import type { Boq, BoqLine, LineDetail, RateHistory, SuggestResult, Tender } from "../../types";
 import ImportWizard from "./ImportWizard";
 import { useLearned } from "../../sitecontrol/learned";
-import { Button } from "../../ui/components";
+import { Button, Card, Field } from "../../ui/components";
 
 type Col = {
   key: string;
@@ -452,7 +452,9 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
                 <Button type="submit" disabled={busy || suggestedCount === 0} onClick={() => void acceptAll()}>
                   Accept all ≥
                 </Button>
-                <input className="input-num" value={acceptAbove} onChange={(e) => setAcceptAbove(e.target.value)} aria-label="Minimum score %" />
+                <Field label="Minimum score %" bare>
+                  <input className="input-num" value={acceptAbove} onChange={(e) => setAcceptAbove(e.target.value)} aria-label="Minimum score %" />
+                </Field>
                 <span className="muted">%</span>
               </span>
               <Button type="submit" disabled={busy} onClick={() => void addLine()}>
@@ -466,7 +468,9 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
                   <Button type="submit" disabled={busy} onClick={() => void applyMargin()}>
                     Apply margin
                   </Button>
-                  <input className="input-num" value={margin} onChange={(e) => setMargin(e.target.value)} aria-label="Margin %" />
+                  <Field label="Margin %" bare>
+                    <input className="input-num" value={margin} onChange={(e) => setMargin(e.target.value)} aria-label="Margin %" />
+                  </Field>
                   <span className="muted">%</span>
                 </span>
               )}
@@ -482,7 +486,7 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
       {notice && <div className="alert alert-ok">{notice}</div>}
 
       <div className={selected !== null ? "boq-layout with-panel" : "boq-layout"}>
-        <div className="card boq-card">
+        <Card as="div" className="boq-card">
           {boq.lines.length === 0 && boq.sections.length === 0 ? (
             <p className="empty">No BOQ yet. Import the client's BOQ or add lines by hand.</p>
           ) : (
@@ -551,7 +555,7 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
               </>
             )}
           </dl>
-        </div>
+        </Card>
 
         {selected !== null && <LinePanel tenderId={tender.id} detail={detail} canEdit={canEdit} onClose={() => setSelected(null)} onChange={applyBoq} run={run} />}
       </div>
@@ -596,9 +600,13 @@ const LineRow = memo(function LineRow({ line, ri, columns, activeCol, editing, c
           >
             {isEditing ? (
               c.key === "description" || c.key === "our_remarks" ? (
-                <textarea className="cell-editor" autoFocus rows={3} value={editing!} onChange={(e) => on.change(e.target.value)} onKeyDown={on.key} onBlur={on.blur} />
+                <Field label={c.label} bare>
+                  <textarea className="cell-editor" autoFocus rows={3} value={editing!} onChange={(e) => on.change(e.target.value)} onKeyDown={on.key} onBlur={on.blur} />
+                </Field>
               ) : (
-                <input className="cell-editor" autoFocus value={editing!} onChange={(e) => on.change(e.target.value)} onKeyDown={on.key} onBlur={on.blur} />
+                <Field label={c.label} bare>
+                  <input className="cell-editor" autoFocus value={editing!} onChange={(e) => on.change(e.target.value)} onKeyDown={on.key} onBlur={on.blur} />
+                </Field>
               )
             ) : (
               <CellView line={line} col={c.key} />
@@ -756,22 +764,22 @@ function LinePanel({
   const learned = useLearned(detail?.system_breakdown?.system_id ?? null);
   if (!detail) {
     return (
-      <aside className="card boq-panel">
+      <Card as="aside" className="boq-panel">
         <p className="muted">Loading…</p>
-      </aside>
+      </Card>
     );
   }
   const { line, candidates, library_stats: stats, system_breakdown: build } = detail;
   const base = `/api/tenders/${tenderId}/lines`;
 
   return (
-    <aside className="card boq-panel">
+    <Card as="aside" className="boq-panel">
       <div className="toolbar">
         <h2 className="section-title">
           {line.client_item_no ? `${line.client_item_no} · ` : ""}
           {STATUS_LABEL[line.status]}
         </h2>
-        <Button variant="ghost" className="btn-icon" type="submit" onClick={onClose} aria-label="Close">
+        <Button variant="ghost" icon type="submit" onClick={onClose} aria-label="Close">
           ×
         </Button>
       </div>
@@ -953,7 +961,7 @@ function LinePanel({
           </Button>
         </div>
       )}
-    </aside>
+    </Card>
   );
 }
 

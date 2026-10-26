@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 import { errorText } from "../format";
 import { day, usePortal } from "./Portal";
+import { Button, Card, Field } from "../ui/components";
 
 type Change = {
   id: number;
@@ -80,7 +81,7 @@ export function MeasurementsTab({ siteId }: { siteId: number }) {
       {rows.map((m) => {
         const pending = m.changes.some((c) => c.status === "pending");
         return (
-          <div key={m.id} className="card m-card">
+          <Card key={m.id} as="div" className="m-card">
             <div className="m-head">
               <b>{m.place ?? "—"}</b>
               <span className={`badge ${m.status === "approved" ? "badge-ok" : pending ? "badge-warn" : "badge-info"}`}>
@@ -122,15 +123,15 @@ export function MeasurementsTab({ siteId }: { siteId: number }) {
             )}
             {m.status === "sent" && !readOnly && !pending && editing?.id !== m.id && (
               <div className="m-actions">
-                <button className="btn btn-primary tap" onClick={() => void act(api(`/api/portal/sites/${siteId}/measurements/${m.id}/approve`, { method: "POST" }))}>
+                <Button variant="primary" className="tap" onClick={() => void act(api(`/api/portal/sites/${siteId}/measurements/${m.id}/approve`, { method: "POST" }))}>
                   Approve
-                </button>
-                <button
-                  className="btn tap"
+                </Button>
+                <Button
+                  className="tap"
                   onClick={() => setEditing({ id: m.id, field: m.length_m !== null ? "length_m" : "qty", value: "", ft: "", inch: "", mode: "m", remark: "" })}
                 >
                   Correct
-                </button>
+                </Button>
               </div>
             )}
             {editing?.id === m.id && (
@@ -150,15 +151,17 @@ export function MeasurementsTab({ siteId }: { siteId: number }) {
                   );
                 }}
               >
-                <select className="tap-input" value={editing.field} onChange={(e) => setEditing({ ...editing, field: e.target.value })} aria-label="Value to correct">
-                  {Object.keys(FIELD)
-                    .filter((k) => k === "qty" || m[k as keyof Line] !== null)
-                    .map((k) => (
-                      <option key={k} value={k}>
-                        {FIELD[k]}
-                      </option>
-                    ))}
-                </select>
+                <Field label="Value to correct" bare>
+                  <select className="tap-input" value={editing.field} onChange={(e) => setEditing({ ...editing, field: e.target.value })} aria-label="Value to correct">
+                    {Object.keys(FIELD)
+                      .filter((k) => k === "qty" || m[k as keyof Line] !== null)
+                      .map((k) => (
+                        <option key={k} value={k}>
+                          {FIELD[k]}
+                        </option>
+                      ))}
+                  </select>
+                </Field>
                 {LENGTHS.includes(editing.field) && (
                   <div className="seg" role="group" aria-label="Unit">
                     <button type="button" className={editing.mode === "m" ? "on" : ""} onClick={() => setEditing({ ...editing, mode: "m" })}>
@@ -171,44 +174,52 @@ export function MeasurementsTab({ siteId }: { siteId: number }) {
                 )}
                 {LENGTHS.includes(editing.field) && editing.mode === "ft" ? (
                   <div className="ft-in">
-                    <input
-                      className="tap-input"
-                      inputMode="numeric"
-                      placeholder="ft"
-                      value={editing.ft}
-                      onChange={(e) => setEditing({ ...editing, ft: e.target.value })}
-                      aria-label="Feet"
-                      required
-                    />
+                    <Field label="Feet" bare>
+                      <input
+                        className="tap-input"
+                        inputMode="numeric"
+                        placeholder="ft"
+                        value={editing.ft}
+                        onChange={(e) => setEditing({ ...editing, ft: e.target.value })}
+                        aria-label="Feet"
+                        required
+                      />
+                    </Field>
+                    <Field label="Inches" bare>
+                      <input
+                        className="tap-input"
+                        inputMode="decimal"
+                        placeholder="in"
+                        value={editing.inch}
+                        onChange={(e) => setEditing({ ...editing, inch: e.target.value })}
+                        aria-label="Inches"
+                      />
+                    </Field>
+                  </div>
+                ) : (
+                  <Field label="Correct value" bare>
                     <input
                       className="tap-input"
                       inputMode="decimal"
-                      placeholder="in"
-                      value={editing.inch}
-                      onChange={(e) => setEditing({ ...editing, inch: e.target.value })}
-                      aria-label="Inches"
+                      placeholder="Correct value"
+                      value={editing.value}
+                      onChange={(e) => setEditing({ ...editing, value: e.target.value })}
+                      required
                     />
-                  </div>
-                ) : (
-                  <input
-                    className="tap-input"
-                    inputMode="decimal"
-                    placeholder="Correct value"
-                    value={editing.value}
-                    onChange={(e) => setEditing({ ...editing, value: e.target.value })}
-                    required
-                  />
+                  </Field>
                 )}
-                <input className="tap-input" placeholder="Remark (what you measured)" value={editing.remark} onChange={(e) => setEditing({ ...editing, remark: e.target.value })} />
+                <Field label="Remark (what you measured)" bare>
+                  <input className="tap-input" placeholder="Remark (what you measured)" value={editing.remark} onChange={(e) => setEditing({ ...editing, remark: e.target.value })} />
+                </Field>
                 <div className="m-actions">
-                  <button className="btn btn-primary tap">Send the correction</button>
-                  <button type="button" className="btn tap" onClick={() => setEditing(null)}>
+                  <Button type="submit" variant="primary" className="tap">Send the correction</Button>
+                  <Button type="button" className="tap" onClick={() => setEditing(null)}>
                     Cancel
-                  </button>
+                  </Button>
                 </div>
               </form>
             )}
-          </div>
+          </Card>
         );
       })}
     </div>
@@ -265,7 +276,9 @@ export function HandoverTab({ siteId, canEdit }: { siteId: number; canEdit: bool
               <td>{p.name}</td>
               <td>
                 {canEdit && !readOnly && p.status !== "received" ? (
-                  <input type="date" defaultValue={p.promised_on ?? ""} onBlur={(e) => e.target.value && e.target.value !== p.promised_on && void promise(p, e.target.value)} />
+                  <Field label="Handover promised" bare>
+                    <input type="date" defaultValue={p.promised_on ?? ""} onBlur={(e) => e.target.value && e.target.value !== p.promised_on && void promise(p, e.target.value)} />
+                  </Field>
                 ) : (
                   day(p.promised_on)
                 )}
@@ -298,7 +311,7 @@ export function OverdueList({ siteId }: { siteId: number }) {
   }, [get, siteId]);
   if (!rows.length) return null;
   return (
-    <div className="card alert-warn top-gap">
+    <Card as="div" className="alert-warn top-gap">
       <h3 className="section-title">Overdue</h3>
       {rows.map((b) => (
         <div key={b.id}>
@@ -306,6 +319,6 @@ export function OverdueList({ siteId }: { siteId: number }) {
           <b>{b.overdue_days} days overdue</b>. <span className="muted small">With you at: {b.at}</span>
         </div>
       ))}
-    </div>
+    </Card>
   );
 }

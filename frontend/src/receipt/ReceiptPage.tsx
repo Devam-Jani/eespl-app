@@ -6,6 +6,7 @@ import { useParams } from "react-router-dom";
 import { S } from "./strings";
 import type { Key } from "./strings";
 import { errorText } from "../format";
+import { Field } from "../ui/components";
 
 type Item = { line_id: number; product: string; qty: string; unit: string; packs: string | null; pack_unit: string | null };
 type View = {
@@ -53,7 +54,9 @@ function Counter({ value, onChange, label }: { value: string; onChange: (v: stri
       <button type="button" onClick={() => step(-1)} aria-label={`${label} minus`}>
         −
       </button>
-      <input inputMode="decimal" value={value} placeholder="?" onChange={(e) => onChange(e.target.value.replace(/[^0-9.]/g, ""))} aria-label={label} />
+      <Field label={label} bare>
+        <input inputMode="decimal" value={value} placeholder="?" onChange={(e) => onChange(e.target.value.replace(/[^0-9.]/g, ""))} aria-label={label} />
+      </Field>
       <button type="button" onClick={() => step(1)} aria-label={`${label} plus`}>
         +
       </button>
@@ -207,14 +210,12 @@ export default function ReceiptPage() {
             <h2>
               <L k="step3" strong />
             </h2>
-            <label className="receipt-field">
-              <L k="name" />
+            <Field label={<L k="name" />} inline className="receipt-field">
               <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
-            </label>
-            <label className="receipt-field">
-              <L k="phone" />
+            </Field>
+            <Field label={<L k="phone" />} inline className="receipt-field">
               <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" autoComplete="tel" />
-            </label>
+            </Field>
             <p className="small muted">{S.location[0]}</p>
           </section>
           {missing && !complete && <p className="receipt-warn">{S.missing[0]}</p>}

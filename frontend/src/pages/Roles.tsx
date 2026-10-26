@@ -6,6 +6,7 @@ import { Modal } from "../ui/Overlay";
 import { SCOPES } from "../scopes";
 import type { Permission, Role } from "../types";
 import { errorText } from "../format";
+import { Button, Card, Field } from "../ui/components";
 
 type Grid = Record<number, Record<string, Scope>>;
 
@@ -89,9 +90,9 @@ export default function Roles() {
       <div className="page-header">
         <h1>Roles &amp; permissions</h1>
         <div className="page-actions">
-          <button className="btn btn-primary" onClick={() => setCreating(true)}>
+          <Button variant="primary" onClick={() => setCreating(true)}>
             New role
-          </button>
+          </Button>
         </div>
       </div>
       <p className="muted">
@@ -101,7 +102,7 @@ export default function Roles() {
       {error && <div className="alert alert-error">{error}</div>}
       {notice && <div className="alert alert-ok">{notice}</div>}
 
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table grid">
           <thead>
             <tr>
@@ -145,22 +146,24 @@ export default function Roles() {
                       const rank = { own: 1, assigned: 2, all: 3 } as Record<string, number>;
                       return (
                         <td key={r.id} className="cell">
-                          <select
-                            className={`scope scope-${value || "none"}`}
-                            value={value}
-                            disabled={r.permissions_locked}
-                            onChange={(e) => setCell(r.id, p.code, e.target.value as Scope | "")}
-                            aria-label={`${r.name}: ${p.code}`}
-                          >
-                            <option value="" disabled={!!floor}>
-                              —
-                            </option>
-                            {SCOPES.map((s) => (
-                              <option key={s} value={s} disabled={!!floor && rank[s] < rank[floor]}>
-                                {s}
+                          <Field label={`${r.name}: ${p.code}`} bare>
+                            <select
+                              className={`scope scope-${value || "none"}`}
+                              value={value}
+                              disabled={r.permissions_locked}
+                              onChange={(e) => setCell(r.id, p.code, e.target.value as Scope | "")}
+                              aria-label={`${r.name}: ${p.code}`}
+                            >
+                              <option value="" disabled={!!floor}>
+                                —
                               </option>
-                            ))}
-                          </select>
+                              {SCOPES.map((s) => (
+                                <option key={s} value={s} disabled={!!floor && rank[s] < rank[floor]}>
+                                  {s}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
                         </td>
                       );
                     })}
@@ -182,18 +185,18 @@ export default function Roles() {
                       <span className="muted small">Can be added to, never reduced</span>
                     ) : (
                       <div className="col-actions">
-                        <button className="btn btn-small btn-primary" disabled={!dirty || saving === r.id} onClick={() => void save(r)}>
+                        <Button variant="primary" size="small" disabled={!dirty || saving === r.id} onClick={() => void save(r)}>
                           {saving === r.id ? "Saving…" : "Save"}
-                        </button>
+                        </Button>
                         {dirty && (
-                          <button className="btn btn-small" onClick={() => setDraft((d) => ({ ...d, [r.id]: { ...r.permissions } }))}>
+                          <Button size="small" onClick={() => setDraft((d) => ({ ...d, [r.id]: { ...r.permissions } }))}>
                             Undo
-                          </button>
+                          </Button>
                         )}
                         {!r.is_system && (
-                          <button className="btn btn-small btn-danger" onClick={() => void remove(r)}>
+                          <Button variant="danger" size="small" onClick={() => void remove(r)}>
                             Delete
-                          </button>
+                          </Button>
                         )}
                       </div>
                     )}
@@ -203,7 +206,7 @@ export default function Roles() {
             </tr>
           </tfoot>
         </table>
-      </div>
+      </Card>
 
       {creating && (
         <NewRole
@@ -243,8 +246,7 @@ function NewRole({ onClose, onCreated }: { onClose: () => void; onCreated: (role
     <Modal title="New role" onClose={onClose}>
       <form className="form" onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
-        <label className="field">
-          <span>Name</span>
+        <Field label="Name">
           <input
             value={name}
             onChange={(e) => {
@@ -259,20 +261,18 @@ function NewRole({ onClose, onCreated }: { onClose: () => void; onCreated: (role
             required
             autoFocus
           />
-        </label>
-        <label className="field">
-          <span>Code (lowercase letters, digits and _)</span>
+        </Field>
+        <Field label="Code (lowercase letters, digits and _)">
           <input value={code} onChange={(e) => setCode(e.target.value)} pattern="[a-z][a-z0-9_]{1,49}" required />
-        </label>
-        <label className="field">
-          <span>Description</span>
+        </Field>
+        <Field label="Description">
           <input value={description} onChange={(e) => setDescription(e.target.value)} />
-        </label>
+        </Field>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Create role</button>
+          </Button>
+          <Button type="submit" variant="primary">Create role</Button>
         </div>
       </form>
     </Modal>

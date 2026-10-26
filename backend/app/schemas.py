@@ -164,8 +164,9 @@ class AuditOut(BaseModel):
     action: str
     entity: str
     entity_id: str | None
-    before: dict[str, Any] | None
-    after: dict[str, Any] | None
+    # rows written before plan.fix kept its lines under a key hold a bare list
+    before: dict[str, Any] | list[Any] | None
+    after: dict[str, Any] | list[Any] | None
     ip: str | None
 
 

@@ -5,7 +5,7 @@ import { useAuth } from "../../auth";
 import { Modal } from "../../ui/Overlay";
 import { errorText } from "../../format";
 import type { Site, SiteNode } from "../../types";
-import { ProgressBar } from "../../ui/components";
+import { Button, Card, Field, ProgressBar } from "../../ui/components";
 
 export const NODE_KINDS = [
   "tower", "wing", "basement", "floor", "flat", "toilet", "kitchen", "balcony", "terrace", "podium",
@@ -87,7 +87,7 @@ export default function StructureTab({ site, onChange }: { site: Site; onChange:
   const counts = nodes.reduce<Record<string, number>>((acc, n) => ({ ...acc, [n.kind]: (acc[n.kind] ?? 0) + 1 }), {});
 
   return (
-    <div className="card">
+    <Card as="div">
       <div className="toolbar">
         <div>
           <h2 className="section-title">Structure ({nodes.length} places)</h2>
@@ -98,20 +98,20 @@ export default function StructureTab({ site, onChange }: { site: Site; onChange:
           </span>
         </div>
         <div className="page-actions">
-          <button className="btn btn-ghost" onClick={() => setCollapsed(new Set(nodes.filter((n) => hasKids.has(n.id)).map((n) => n.id)))}>
+          <Button variant="ghost" onClick={() => setCollapsed(new Set(nodes.filter((n) => hasKids.has(n.id)).map((n) => n.id)))}>
             Collapse all
-          </button>
-          <button className="btn btn-ghost" onClick={() => setCollapsed(new Set())}>
+          </Button>
+          <Button variant="ghost" onClick={() => setCollapsed(new Set())}>
             Expand all
-          </button>
+          </Button>
           {canEdit && (
             <>
-              <button className="btn" onClick={() => setAdding({ parent: null })}>
+              <Button onClick={() => setAdding({ parent: null })}>
                 Add place
-              </button>
-              <button className="btn btn-primary" onClick={() => setTower(true)}>
+              </Button>
+              <Button variant="primary" onClick={() => setTower(true)}>
                 Add tower…
-              </button>
+              </Button>
             </>
           )}
         </div>
@@ -126,8 +126,8 @@ export default function StructureTab({ site, onChange }: { site: Site; onChange:
               <tr key={n.id}>
                 <td style={{ paddingLeft: `${0.5 + (depth.get(n.id) ?? 0) * 1.25}rem` }}>
                   {hasKids.has(n.id) ? (
-                    <button
-                      className="btn btn-small btn-ghost tree-toggle"
+                    <Button
+                      variant="ghost" size="small" className="tree-toggle"
                       onClick={() =>
                         setCollapsed((c) => {
                           const next = new Set(c);
@@ -138,7 +138,7 @@ export default function StructureTab({ site, onChange }: { site: Site; onChange:
                       }
                     >
                       {collapsed.has(n.id) ? "▸" : "▾"}
-                    </button>
+                    </Button>
                   ) : (
                     <span className="tree-toggle" />
                   )}
@@ -150,15 +150,15 @@ export default function StructureTab({ site, onChange }: { site: Site; onChange:
                 </td>
                 {canEdit && (
                   <td className="row-actions nowrap">
-                    <button className="btn btn-small btn-ghost" onClick={() => setAdding({ parent: n })}>
+                    <Button variant="ghost" size="small" onClick={() => setAdding({ parent: n })}>
                       + Child
-                    </button>
-                    <button className="btn btn-small btn-ghost" onClick={() => void edit(n)}>
+                    </Button>
+                    <Button variant="ghost" size="small" onClick={() => void edit(n)}>
                       Edit
-                    </button>
-                    <button className="btn btn-small btn-ghost" onClick={() => void remove(n)}>
+                    </Button>
+                    <Button variant="ghost" size="small" onClick={() => void remove(n)}>
                       Delete
-                    </button>
+                    </Button>
                   </td>
                 )}
               </tr>
@@ -187,7 +187,7 @@ export default function StructureTab({ site, onChange }: { site: Site; onChange:
           }}
         />
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -201,8 +201,7 @@ function AddNode({ parent, onClose, onSave }: { parent: SiteNode | null; onClose
     <Modal title={parent ? `Add under ${parent.path}` : "Add a place"} onClose={onClose}>
       <form onSubmit={submit}>
         <div className="grid-2">
-          <label className="field">
-            <span>Kind</span>
+          <Field label="Kind">
             <select value={form.kind} onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value }))}>
               {NODE_KINDS.map((k) => (
                 <option key={k} value={k}>
@@ -210,25 +209,22 @@ function AddNode({ parent, onClose, onSave }: { parent: SiteNode | null; onClose
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Name *</span>
+          </Field>
+          <Field label="Name *">
             <input required autoFocus value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-          </label>
-          <label className="field">
-            <span>Area (sqm)</span>
+          </Field>
+          <Field label="Area (sqm)">
             <input value={form.area_sqm} onChange={(e) => setForm((f) => ({ ...f, area_sqm: e.target.value }))} />
-          </label>
-          <label className="field">
-            <span>Level (B2 = -2, G = 0)</span>
+          </Field>
+          <Field label="Level (B2 = -2, G = 0)">
             <input type="number" value={form.level_no} onChange={(e) => setForm((f) => ({ ...f, level_no: e.target.value }))} />
-          </label>
+          </Field>
         </div>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Add</button>
+          </Button>
+          <Button type="submit" variant="primary">Add</Button>
         </div>
       </form>
     </Modal>
@@ -295,20 +291,20 @@ function TowerDialog({ siteId, nodes, onClose, onCreated }: { siteId: number; no
     }
   }
 
-  const num = (key: keyof typeof form) => (
-    <input type="number" min={0} value={form[key] as number} onChange={(e) => setForm((f) => ({ ...f, [key]: Number(e.target.value) || 0 }))} />
+  const num = (label: string, key: keyof typeof form) => (
+    <Field label={label}>
+      <input type="number" min={0} value={form[key] as number} onChange={(e) => setForm((f) => ({ ...f, [key]: Number(e.target.value) || 0 }))} />
+    </Field>
   );
 
   return (
     <Modal title="Add a tower" onClose={onClose} wide>
       {error && <div className="alert alert-error">{error}</div>}
       <div className="grid-4">
-        <label className="field">
-          <span>Tower name</span>
+        <Field label="Tower name">
           <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-        </label>
-        <label className="field">
-          <span>Under</span>
+        </Field>
+        <Field label="Under">
           <select value={form.parent_id} onChange={(e) => setForm((f) => ({ ...f, parent_id: e.target.value }))}>
             <option value="">The site</option>
             {nodes
@@ -319,56 +315,28 @@ function TowerDialog({ siteId, nodes, onClose, onCreated }: { siteId: number; no
                 </option>
               ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Basements (B1…)</span>
-          {num("basements")}
-        </label>
-        <label className="field">
-          <span>Floors above G</span>
-          {num("upper_floors")}
-        </label>
+        </Field>
+        {num("Basements (B1…)", "basements")}
+        {num("Floors above G", "upper_floors")}
         <label className="check">
           <input type="checkbox" checked={form.ground} onChange={(e) => setForm((f) => ({ ...f, ground: e.target.checked }))} /> Ground floor (G)
         </label>
-        <label className="field">
-          <span>Flats per floor</span>
-          {num("flats_per_floor")}
-        </label>
-        <label className="field">
-          <span>Flats from</span>
+        {num("Flats per floor", "flats_per_floor")}
+        <Field label="Flats from">
           <select value={form.flats_from} onChange={(e) => setForm((f) => ({ ...f, flats_from: e.target.value }))}>
             <option value="G">G and above</option>
             <option value="1">Floor 1 and above</option>
           </select>
-        </label>
+        </Field>
         <label className="check">
           <input type="checkbox" checked={form.terrace} onChange={(e) => setForm((f) => ({ ...f, terrace: e.target.checked }))} /> Terrace on top
         </label>
-        <label className="field">
-          <span>Toilets per flat</span>
-          {num("toilet")}
-        </label>
-        <label className="field">
-          <span>Kitchens per flat</span>
-          {num("kitchen")}
-        </label>
-        <label className="field">
-          <span>Balconies per flat</span>
-          {num("balcony")}
-        </label>
-        <label className="field">
-          <span>OH tanks (on terrace)</span>
-          {num("oh_tanks")}
-        </label>
-        <label className="field">
-          <span>Lift pits</span>
-          {num("lift_pits")}
-        </label>
-        <label className="field">
-          <span>UG tanks</span>
-          {num("ug_tanks")}
-        </label>
+        {num("Toilets per flat", "toilet")}
+        {num("Kitchens per flat", "kitchen")}
+        {num("Balconies per flat", "balcony")}
+        {num("OH tanks (on terrace)", "oh_tanks")}
+        {num("Lift pits", "lift_pits")}
+        {num("UG tanks", "ug_tanks")}
       </div>
       {preview && (
         <div className="alert alert-ok">
@@ -380,12 +348,12 @@ function TowerDialog({ siteId, nodes, onClose, onCreated }: { siteId: number; no
         </div>
       )}
       <div className="form-actions">
-        <button className="btn" onClick={onClose}>
+        <Button onClick={onClose}>
           Cancel
-        </button>
-        <button className="btn btn-primary" disabled={!preview} onClick={() => void create()}>
+        </Button>
+        <Button variant="primary" disabled={!preview} onClick={() => void create()}>
           Create {preview?.total ?? ""} places
-        </button>
+        </Button>
       </div>
     </Modal>
   );

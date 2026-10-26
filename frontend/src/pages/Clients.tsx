@@ -6,6 +6,7 @@ import ExportButton from "../components/ExportButton";
 import { Modal } from "../ui/Overlay";
 import { errorText } from "../format";
 import type { Client, Contact, Page } from "../types";
+import { Button, Card, Field } from "../ui/components";
 
 const TYPES = ["builder", "developer", "pmc", "contractor", "government", "other"];
 const PAGE_SIZE = 25;
@@ -59,20 +60,22 @@ export default function Clients() {
               setSearch(q);
             }}
           >
-            <input className="search" placeholder="Search name, city or GSTIN" value={q} onChange={(e) => setQ(e.target.value)} />
+            <Field label="Search name, city or GSTIN" bare>
+              <input className="search" placeholder="Search name, city or GSTIN" value={q} onChange={(e) => setQ(e.target.value)} />
+            </Field>
           </form>
           <ExportButton path={`/api/clients/export${queryString({ q: search })}`} />
           {editScope && (
-            <button className="btn btn-primary" onClick={() => setEditing("new")}>
+            <Button variant="primary" onClick={() => setEditing("new")}>
               Add client
-            </button>
+            </Button>
           )}
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {notice && <div className="alert alert-ok">{notice}</div>}
 
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -114,17 +117,17 @@ export default function Clients() {
                   <td className="row-actions">
                     {canEdit(c) ? (
                       <>
-                        <button className="btn btn-small" onClick={() => setEditing(c)}>
+                        <Button size="small" onClick={() => setEditing(c)}>
                           Edit
-                        </button>
-                        <button className="btn btn-small btn-danger" onClick={() => void remove(c)}>
+                        </Button>
+                        <Button variant="danger" size="small" onClick={() => void remove(c)}>
                           Delete
-                        </button>
+                        </Button>
                       </>
                     ) : (
-                      <button className="btn btn-small" onClick={() => setEditing(c)}>
+                      <Button size="small" onClick={() => setEditing(c)}>
                         View
-                      </button>
+                      </Button>
                     )}
                   </td>
                 </tr>
@@ -139,7 +142,7 @@ export default function Clients() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       {page && <Pager page={page} onOffset={setOffset} />}
 
       {editing && (
@@ -165,12 +168,12 @@ export function Pager<T>({ page, onOffset }: { page: Page<T>; onOffset: (o: numb
       <span className="muted">
         {total === 0 ? "0" : `${offset + 1}–${Math.min(offset + limit, total)}`} of {total}
       </span>
-      <button className="btn btn-small" disabled={offset === 0} onClick={() => onOffset(Math.max(0, offset - limit))}>
+      <Button size="small" disabled={offset === 0} onClick={() => onOffset(Math.max(0, offset - limit))}>
         Previous
-      </button>
-      <button className="btn btn-small" disabled={offset + limit >= total} onClick={() => onOffset(offset + limit)}>
+      </Button>
+      <Button size="small" disabled={offset + limit >= total} onClick={() => onOffset(offset + limit)}>
         Next
-      </button>
+      </Button>
     </div>
   );
 }
@@ -252,12 +255,10 @@ function ClientForm({
         {error && <div className="alert alert-error">{error}</div>}
         <fieldset disabled={readOnly} className="plain">
           <div className="grid-2">
-            <label className="field">
-              <span>Name</span>
+            <Field label="Name">
               <input value={form.name} onChange={set("name")} required autoFocus />
-            </label>
-            <label className="field">
-              <span>Type</span>
+            </Field>
+            <Field label="Type">
               <select value={form.type} onChange={set("type")}>
                 {TYPES.map((t) => (
                   <option key={t} value={t}>
@@ -265,32 +266,26 @@ function ClientForm({
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="field">
-              <span>GSTIN</span>
+            </Field>
+            <Field label="GSTIN">
               <input value={form.gstin} onChange={set("gstin")} maxLength={15} placeholder="27AAPFU0939F1ZV" />
-            </label>
-            <label className="field">
-              <span>PAN</span>
+            </Field>
+            <Field label="PAN">
               <input value={form.pan} onChange={set("pan")} maxLength={10} />
-            </label>
-            <label className="field">
-              <span>City</span>
+            </Field>
+            <Field label="City">
               <input value={form.city} onChange={set("city")} />
-            </label>
-            <label className="field">
-              <span>State</span>
+            </Field>
+            <Field label="State">
               <input value={form.state} onChange={set("state")} />
-            </label>
+            </Field>
           </div>
-          <label className="field">
-            <span>Address</span>
+          <Field label="Address">
             <textarea rows={2} value={form.address} onChange={set("address")} />
-          </label>
-          <label className="field">
-            <span>Notes</span>
+          </Field>
+          <Field label="Notes">
             <textarea rows={2} value={form.notes} onChange={set("notes")} />
-          </label>
+          </Field>
           <label className="check">
             <input
               type="checkbox"
@@ -317,16 +312,24 @@ function ClientForm({
                 {contacts.map((c, i) => (
                   <tr key={i}>
                     <td>
-                      <input value={c.name} onChange={(e) => setContact(i, { name: e.target.value })} />
+                      <Field label="Name" bare>
+                        <input value={c.name} onChange={(e) => setContact(i, { name: e.target.value })} />
+                      </Field>
                     </td>
                     <td>
-                      <input value={c.designation ?? ""} onChange={(e) => setContact(i, { designation: e.target.value })} />
+                      <Field label="Designation" bare>
+                        <input value={c.designation ?? ""} onChange={(e) => setContact(i, { designation: e.target.value })} />
+                      </Field>
                     </td>
                     <td>
-                      <input value={c.phone ?? ""} onChange={(e) => setContact(i, { phone: e.target.value })} />
+                      <Field label="Phone" bare>
+                        <input value={c.phone ?? ""} onChange={(e) => setContact(i, { phone: e.target.value })} />
+                      </Field>
                     </td>
                     <td>
-                      <input type="email" value={c.email ?? ""} onChange={(e) => setContact(i, { email: e.target.value })} />
+                      <Field label="Email" bare>
+                        <input type="email" value={c.email ?? ""} onChange={(e) => setContact(i, { email: e.target.value })} />
+                      </Field>
                     </td>
                     <td className="center-cell">
                       <input
@@ -337,32 +340,32 @@ function ClientForm({
                       />
                     </td>
                     <td>
-                      <button
+                      <Button
                         type="button"
-                        className="btn btn-small"
+                        size="small"
                         onClick={() => setContacts((cs) => cs.filter((_, j) => j !== i))}
                         aria-label="Remove contact"
                       >
                         ×
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <button type="button" className="btn btn-small" onClick={() => setContacts((cs) => [...cs, { ...EMPTY_CONTACT }])}>
+          <Button type="button" size="small" onClick={() => setContacts((cs) => [...cs, { ...EMPTY_CONTACT }])}>
             + Add contact
-          </button>
+          </Button>
         </fieldset>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             {readOnly ? "Close" : "Cancel"}
-          </button>
+          </Button>
           {!readOnly && (
-            <button className="btn btn-primary" disabled={busy}>
+            <Button type="submit" variant="primary" disabled={busy}>
               {busy ? "Saving…" : "Save"}
-            </button>
+            </Button>
           )}
         </div>
       </form>

@@ -10,6 +10,7 @@ import type { Page } from "../../types";
 import { Pager } from "../Clients";
 import { shortDate } from "../Tenders";
 import { ProductSelect, StatusBadge, UnitSelect, useMaterialLookups } from "./common";
+import { Button, Card, Field } from "../../ui/components";
 
 const STATUSES = ["draft", "submitted", "approved", "partly_ordered", "ordered", "closed", "rejected", "cancelled"];
 const ORDERABLE = ["approved", "partly_ordered"];
@@ -46,38 +47,42 @@ export default function Indents() {
       <div className="page-header">
         <h1>Material indents</h1>
         <div className="page-actions">
-          <select value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
-            <option value="">All statuses</option>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s.replace(/_/g, " ")}
-              </option>
-            ))}
-          </select>
-          {lookups && (
-            <select value={filters.site_id} onChange={(e) => setFilters((f) => ({ ...f, site_id: e.target.value }))}>
-              <option value="">All sites</option>
-              {lookups.sites.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.code} {s.name}
+          <Field label="Status" bare>
+            <select value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
+              <option value="">All statuses</option>
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s.replace(/_/g, " ")}
                 </option>
               ))}
             </select>
+          </Field>
+          {lookups && (
+            <Field label="Site" bare>
+              <select value={filters.site_id} onChange={(e) => setFilters((f) => ({ ...f, site_id: e.target.value }))}>
+                <option value="">All sites</option>
+                {lookups.sites.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.code} {s.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
           )}
           {can("po.edit") && picked.length > 0 && (
             <>
-              <button className="btn" onClick={() => setRfqFor(picked)}>
+              <Button onClick={() => setRfqFor(picked)}>
                 Create RFQ ({picked.length})
-              </button>
-              <button className="btn" onClick={() => navigate(`/purchase-orders/new?indents=${picked.join(",")}`)}>
+              </Button>
+              <Button onClick={() => navigate(`/purchase-orders/new?indents=${picked.join(",")}`)}>
                 Create PO
-              </button>
+              </Button>
             </>
           )}
           {can("indent.create") && (
-            <button className="btn btn-primary" onClick={() => setCreating(true)}>
+            <Button variant="primary" onClick={() => setCreating(true)}>
               New indent
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -115,7 +120,7 @@ export function IndentTable({
   hideSite?: boolean;
 }) {
   return (
-    <div className="card table-wrap">
+    <Card as="div" className="table-wrap">
       <table className="table">
         <thead>
           <tr>
@@ -161,7 +166,7 @@ export function IndentTable({
           )}
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 }
 
@@ -239,8 +244,7 @@ export function IndentForm({
       <form onSubmit={(e) => void save(e, true)}>
         {error && <div className="alert alert-error">{error}</div>}
         <div className="grid-2">
-          <label className="field">
-            <span>Site *</span>
+          <Field label="Site *">
             <select required disabled={!!indent || !!siteId} value={form.site_id} onChange={(e) => setForm({ ...form, site_id: Number(e.target.value) })}>
               {lookups.sites.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -248,54 +252,44 @@ export function IndentForm({
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Required by</span>
+          </Field>
+          <Field label="Required by">
             <input type="date" value={form.required_by} onChange={(e) => setForm({ ...form, required_by: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Priority</span>
+          </Field>
+          <Field label="Priority">
             <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value as "normal" | "urgent" })}>
               <option value="normal">Normal</option>
               <option value="urgent">Urgent</option>
             </select>
-          </label>
-          <label className="field">
-            <span>Remark</span>
+          </Field>
+          <Field label="Remark">
             <input value={form.remark} onChange={(e) => setForm({ ...form, remark: e.target.value })} />
-          </label>
+          </Field>
         </div>
         <h2 className="section-title">Material</h2>
         <div className="line-cards">
           {lines.map((l, i) => (
             <div key={i} className="line-card">
               {l.manual ? (
-                <label className="field">
-                  <span>Material (not in the product list)</span>
+                <Field label="Material (not in the product list)">
                   <input value={l.free_text} onChange={(e) => setLine(i, { free_text: e.target.value })} placeholder="Describe it" />
-                </label>
+                </Field>
               ) : (
-                <label className="field">
-                  <span>Product</span>
-                  <ProductSelect products={lookups.products} value={l.product_id} onChange={(p) => setLine(i, { product_id: p?.id ?? "", unit: p?.unit ?? "" })} />
-                </label>
+                <ProductSelect label="Product" products={lookups.products} value={l.product_id} onChange={(p) => setLine(i, { product_id: p?.id ?? "", unit: p?.unit ?? "" })} />
               )}
               <div className="line-row">
-                <label className="field">
-                  <span>Qty</span>
+                <Field label="Qty">
                   <input inputMode="decimal" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} />
-                </label>
-                <label className="field">
-                  <span>Unit</span>
-                  <UnitSelect
-                    units={lookups.units}
-                    value={l.unit || lookups.products.find((p) => p.id === l.product_id)?.unit || lookups.units[0]}
-                    onChange={(u) => setLine(i, { unit: u })}
-                  />
-                </label>
-                <button type="button" className="btn btn-ghost btn-icon" aria-label="Remove line" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>
+                </Field>
+                <UnitSelect
+                  label="Unit"
+                  units={lookups.units}
+                  value={l.unit || lookups.products.find((p) => p.id === l.product_id)?.unit || lookups.units[0]}
+                  onChange={(u) => setLine(i, { unit: u })}
+                />
+                <Button type="button" variant="ghost" icon aria-label="Remove line" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>
                   ×
-                </button>
+                </Button>
               </div>
               <label className="check small">
                 <input type="checkbox" checked={l.manual} onChange={(e) => setLine(i, { manual: e.target.checked, product_id: "" })} /> Not in the product list (flagged for the
@@ -304,19 +298,19 @@ export function IndentForm({
             </div>
           ))}
         </div>
-        <button type="button" className="btn btn-small top-gap" onClick={() => setLines((ls) => [...ls, blankLine()])}>
+        <Button type="button" size="small" className="top-gap" onClick={() => setLines((ls) => [...ls, blankLine()])}>
           + Add material
-        </button>
+        </Button>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button type="button" className="btn" disabled={busy} onClick={(e) => void save(e, false)}>
+          </Button>
+          <Button type="button" disabled={busy} onClick={(e) => void save(e, false)}>
             Save draft
-          </button>
-          <button className="btn btn-primary" disabled={busy}>
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy}>
             Submit for approval
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>
@@ -397,40 +391,40 @@ export function IndentView({
       </div>
       <div className="form-actions">
         {indent.can_edit && (
-          <button className="btn" onClick={() => setEditing(true)}>
+          <Button onClick={() => setEditing(true)}>
             Edit
-          </button>
+          </Button>
         )}
         {indent.status === "draft" && indent.can_edit && (
-          <button className="btn" onClick={() => void act("submit")}>
+          <Button onClick={() => void act("submit")}>
             Submit
-          </button>
+          </Button>
         )}
         {["draft", "submitted", "approved"].includes(indent.status) && (indent.can_edit || indent.can_approve) && (
-          <button className="btn btn-danger" onClick={() => confirm(`Cancel ${indent.code}?`) && void act("cancel")}>
+          <Button variant="danger" onClick={() => confirm(`Cancel ${indent.code}?`) && void act("cancel")}>
             Cancel indent
-          </button>
+          </Button>
         )}
         {indent.can_approve && (
           <>
-            <button
-              className="btn btn-danger"
+            <Button
+              variant="danger"
               onClick={() => {
                 const reason = prompt("Why is it rejected?");
                 if (reason) void act("reject", { reason });
               }}
             >
               Reject
-            </button>
-            <button className="btn btn-primary" onClick={() => void act("approve")}>
+            </Button>
+            <Button variant="primary" onClick={() => void act("approve")}>
               Approve
-            </button>
+            </Button>
           </>
         )}
         {ORDERABLE.includes(indent.status) && can("po.edit") && (
-          <button className="btn btn-primary" onClick={() => navigate(`/purchase-orders/new?indents=${indent.id}`)}>
+          <Button variant="primary" onClick={() => navigate(`/purchase-orders/new?indents=${indent.id}`)}>
             Create PO
-          </button>
+          </Button>
         )}
       </div>
     </Modal>
@@ -468,17 +462,16 @@ export function RfqDialog({ indentIds, lookups, onClose, onDone }: { indentIds: 
             </label>
           ))}
         </div>
-        <label className="field">
-          <span>Quotes due by</span>
+        <Field label="Quotes due by">
           <input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
-        </label>
+        </Field>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary" disabled={vendorIds.length === 0}>
+          </Button>
+          <Button type="submit" variant="primary" disabled={vendorIds.length === 0}>
             Create RFQ
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

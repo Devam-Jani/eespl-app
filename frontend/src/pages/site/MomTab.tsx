@@ -8,6 +8,7 @@ import type { MomOut, MomPoint } from "../../execution/types";
 import type { Site, SiteLookups } from "../../types";
 import { shortDate } from "../Tenders";
 import { localToday } from "./DprTab";
+import { Button, Card, Field } from "../../ui/components";
 
 export default function MomTab({ site }: { site: Site }) {
   const { can } = useAuth();
@@ -34,12 +35,12 @@ export default function MomTab({ site }: { site: Site }) {
     <>
       {error && <div className="alert alert-error">{error}</div>}
       {canEdit && (
-        <button className="btn btn-primary" onClick={() => setEditing("new")}>
+        <Button variant="primary" onClick={() => setEditing("new")}>
           New minutes of meeting
-        </button>
+        </Button>
       )}
       {moms.map((m) => (
-        <div key={m.id} className="card top-gap">
+        <Card key={m.id} as="div" className="top-gap">
           <div className="toolbar">
             <div>
               <b>{m.title}</b> <code className="small">{m.code}</code>
@@ -48,13 +49,13 @@ export default function MomTab({ site }: { site: Site }) {
               </div>
             </div>
             <div className="page-actions">
-              <button className="btn btn-small" onClick={() => void downloadFile(`/api/execution/moms/${m.id}/pdf`).catch((err) => setError(errorText(err)))}>
+              <Button size="small" onClick={() => void downloadFile(`/api/execution/moms/${m.id}/pdf`).catch((err) => setError(errorText(err)))}>
                 PDF
-              </button>
+              </Button>
               {canEdit && (
-                <button className="btn btn-small" onClick={() => setEditing(m)}>
+                <Button size="small" onClick={() => setEditing(m)}>
                   Edit
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -67,14 +68,14 @@ export default function MomTab({ site }: { site: Site }) {
                   {p.owner ?? ""} {p.due_date ? `· due ${shortDate(p.due_date)}` : ""}
                 </span>
                 {canEdit && p.status === "open" && (
-                  <button className="btn btn-small push-right" onClick={() => void setStatus(p, "done")}>
+                  <Button size="small" className="push-right" onClick={() => void setStatus(p, "done")}>
                     Done
-                  </button>
+                  </Button>
                 )}
               </li>
             ))}
           </ul>
-        </div>
+        </Card>
       ))}
       {moms.length === 0 && <p className="muted top-gap">No meetings recorded.</p>}
       {editing && <MomForm site={site} mom={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} onSaved={async () => (setEditing(null), await load())} />}
@@ -137,25 +138,20 @@ function MomForm({ site, mom, onClose, onSaved }: { site: Site; mom?: MomOut; on
       <form onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
         <div className="grid-2">
-          <label className="field">
-            <span>Subject *</span>
+          <Field label="Subject *">
             <input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Date</span>
+          </Field>
+          <Field label="Date">
             <input type="date" value={form.on_date} onChange={(e) => setForm({ ...form, on_date: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Venue</span>
+          </Field>
+          <Field label="Venue">
             <input value={form.venue} onChange={(e) => setForm({ ...form, venue: e.target.value })} placeholder="Site office" />
-          </label>
-          <label className="field">
-            <span>Client / others present (comma separated)</span>
+          </Field>
+          <Field label="Client / others present (comma separated)">
             <input value={form.others} onChange={(e) => setForm({ ...form, others: e.target.value })} />
-          </label>
+          </Field>
         </div>
-        <div className="field">
-          <span>EESPL attendees</span>
+        <Field as="div" label="EESPL attendees">
           <div className="pick-list">
             {users.map((u) => (
               <label key={u.id} className="check">
@@ -164,22 +160,19 @@ function MomForm({ site, mom, onClose, onSaved }: { site: Site; mom?: MomOut; on
               </label>
             ))}
           </div>
-        </div>
-        <label className="field">
-          <span>Discussion</span>
+        </Field>
+        <Field label="Discussion">
           <textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-        </label>
+        </Field>
         <h2 className="section-title">Action points</h2>
         <div className="line-cards">
           {points.map((p, i) => (
             <div key={i} className="line-card">
-              <label className="field">
-                <span>Point</span>
+              <Field label="Point">
                 <input value={p.text} onChange={(e) => setPoint(i, { text: e.target.value })} />
-              </label>
+              </Field>
               <div className="line-row">
-                <label className="field">
-                  <span>Owner (EESPL)</span>
+                <Field label="Owner (EESPL)">
                   <select value={p.owner_user_id} onChange={(e) => setPoint(i, { owner_user_id: e.target.value })}>
                     <option value="">—</option>
                     {users.map((u) => (
@@ -188,31 +181,29 @@ function MomForm({ site, mom, onClose, onSaved }: { site: Site; mom?: MomOut; on
                       </option>
                     ))}
                   </select>
-                </label>
-                <label className="field">
-                  <span>or outside</span>
+                </Field>
+                <Field label="or outside">
                   <input value={p.owner_name} onChange={(e) => setPoint(i, { owner_name: e.target.value })} placeholder="Client" />
-                </label>
-                <label className="field">
-                  <span>Due</span>
+                </Field>
+                <Field label="Due">
                   <input type="date" value={p.due_date} onChange={(e) => setPoint(i, { due_date: e.target.value })} />
-                </label>
+                </Field>
               </div>
             </div>
           ))}
         </div>
-        <button
+        <Button
           type="button"
-          className="btn btn-small top-gap"
+          size="small" className="top-gap"
           onClick={() => setPoints((ps) => [...ps, { text: "", owner_user_id: "", owner_name: "", due_date: "", status: "open" }])}
         >
           + Point
-        </button>
+        </Button>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Save</button>
+          </Button>
+          <Button type="submit" variant="primary">Save</Button>
         </div>
       </form>
     </Modal>

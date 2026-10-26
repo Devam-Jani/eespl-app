@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
 import { errorText, inr, inrCompact, showError } from "../format";
+import { Button, Field } from "../ui/components";
 
 export type Drill = Record<string, string | number> & { kind: string };
 export type Tile = {
@@ -70,8 +71,8 @@ export function ExportButton({ path, label = "Excel" }: { path: string; label?: 
   const [busy, setBusy] = useState(false);
   if (!can("reports.export")) return null;
   return (
-    <button
-      className="btn btn-small btn-ghost"
+    <Button
+      variant="ghost" size="small"
       disabled={busy}
       onClick={() => {
         setBusy(true);
@@ -81,7 +82,7 @@ export function ExportButton({ path, label = "Excel" }: { path: string; label?: 
       }}
     >
       {busy ? "…" : `⤓ ${label}`}
-    </button>
+    </Button>
   );
 }
 
@@ -171,9 +172,9 @@ export function DataTable({ table, demo, limit }: { table: Table; demo: boolean;
         </tbody>
       </table>
       {limit && table.rows.length > limit && (
-        <button className="btn btn-small btn-ghost" onClick={() => setAll(!all)}>
+        <Button variant="ghost" size="small" onClick={() => setAll(!all)}>
           {all ? "Show fewer" : `Show all ${table.rows.length}`}
-        </button>
+        </Button>
       )}
       {table.note && <p className="muted small">{table.note}</p>}
     </div>
@@ -200,49 +201,57 @@ export function FilterBar({ show = ["dates", "region", "salesperson", "client_ty
     <div className="filters analytics-filters">
       {show.includes("dates") && (
         <>
-          <label className="small">
-            From <input type="date" value={values.date_from} onChange={(e) => set("date_from", e.target.value)} />
-          </label>
-          <label className="small">
-            To <input type="date" value={values.date_to} onChange={(e) => set("date_to", e.target.value)} />
-          </label>
+          <Field label="From" inline className="small">
+            <input type="date" value={values.date_from} onChange={(e) => set("date_from", e.target.value)} />
+          </Field>
+          <Field label="To" inline className="small">
+            <input type="date" value={values.date_to} onChange={(e) => set("date_to", e.target.value)} />
+          </Field>
         </>
       )}
       {show.includes("region") && opts && opts.regions.length > 0 && (
-        <select aria-label="Region" value={values.region} onChange={(e) => set("region", e.target.value)}>
-          <option value="">All regions</option>
-          {opts.regions.map((r) => (
-            <option key={r}>{r}</option>
-          ))}
-        </select>
+        <Field label="Region" bare>
+          <select aria-label="Region" value={values.region} onChange={(e) => set("region", e.target.value)}>
+            <option value="">All regions</option>
+            {opts.regions.map((r) => (
+              <option key={r}>{r}</option>
+            ))}
+          </select>
+        </Field>
       )}
       {show.includes("salesperson") && opts && opts.salespeople.length > 0 && (
-        <select aria-label="Salesperson" value={values.salesperson} onChange={(e) => set("salesperson", e.target.value)}>
-          <option value="">All salespeople</option>
-          {opts.salespeople.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+        <Field label="Salesperson" bare>
+          <select aria-label="Salesperson" value={values.salesperson} onChange={(e) => set("salesperson", e.target.value)}>
+            <option value="">All salespeople</option>
+            {opts.salespeople.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </Field>
       )}
       {show.includes("client_type") && opts && (
-        <select aria-label="Client type" value={values.client_type} onChange={(e) => set("client_type", e.target.value)}>
-          <option value="">All client types</option>
-          {opts.client_types.map((t) => (
-            <option key={t}>{t}</option>
-          ))}
-        </select>
+        <Field label="Client type" bare>
+          <select aria-label="Client type" value={values.client_type} onChange={(e) => set("client_type", e.target.value)}>
+            <option value="">All client types</option>
+            {opts.client_types.map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+          </select>
+        </Field>
       )}
       {show.includes("site_status") && opts && (
-        <select aria-label="Site status" value={values.site_status} onChange={(e) => set("site_status", e.target.value)}>
-          <option value="">Open sites</option>
-          {opts.site_statuses.map((t) => (
-            <option key={t} value={t}>
-              {t.replace("_", " ")}
-            </option>
-          ))}
-        </select>
+        <Field label="Site status" bare>
+          <select aria-label="Site status" value={values.site_status} onChange={(e) => set("site_status", e.target.value)}>
+            <option value="">Open sites</option>
+            {opts.site_statuses.map((t) => (
+              <option key={t} value={t}>
+                {t.replace("_", " ")}
+              </option>
+            ))}
+          </select>
+        </Field>
       )}
       {demoToggle && can("dashboard.company") && (demoAvailable || demo) && (
         <label className={`check demo-switch ${demo ? "on" : ""}`}>

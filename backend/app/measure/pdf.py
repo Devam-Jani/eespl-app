@@ -39,7 +39,9 @@ def sheet(db: Session, out: dict) -> bytes:
                     f"<td class='num'>{_n(ln.get('height_m'), 3)}</td><td class='num'>{_n(ln.get('qty'))}</td><td class='num'>{_n(ln.get('total'), 3)}</td><td>{e(ln.get('unit') or '')}</td></tr>")  # fmt: skip
     ab = "".join(
         f"<tr><td>{e(r['item_no'] or '')}</td><td class='desc'>{e((r['description'] or '')[:160])}</td><td>{e(r['unit'] or '')}</td><td class='num'>{_n(r['previous'], 3)}</td>"
-        f"<td class='num'>{_n(r['this'], 3)}</td><td class='num'>{_n(r['upto'], 3)}</td><td class='num'>{_n(r['wo_qty'], 3)}</td></tr>"
+        f"<td class='num'>{_n(r['drawing'], 3)}</td><td class='num'>{_n(r['approved'], 3) if r.get('approved') is not None else '—'}</td>"
+        f"<td class='num'><b>{_n(r['this'], 3)}</b></td><td class='num'>{_n(r['upto'], 3)}</td><td class='num'>{_n(r['wo_qty'], 3)}</td></tr>"
+        + (f"<tr><td></td><td colspan='8' class='why'>{e(r['note'])}</td></tr>" if r.get("note") else "")
         for r in out["cumulative"]
     )
     body = f"""{CSS}<div class="meta"><div class="box"><h3>Sheet</h3><b>{e(out["code"])}</b><br>Measured on {out["measured_on"]:%d-%m-%Y}<br>Status: {e(out["status"])}</div>
@@ -47,7 +49,7 @@ def sheet(db: Session, out: dict) -> bytes:
 <div class="box"><h3>Units</h3>1 sqm = {geom.SQFT_PER_SQM} sqft · sizes in metres · each total rounded to 3 decimals</div></div>
 <table><thead><tr><th>Sr / WO item</th><th>Particulars</th><th class="num">No</th><th class="num">Length</th><th class="num">Width</th><th class="num">Height / Depth</th>
 <th class="num">Qty</th><th class="num">Total qty</th><th>Unit</th></tr></thead><tbody>{"".join(rows)}</tbody></table>
-<h3>Abstract</h3><table><thead><tr><th>WO item</th><th>Description</th><th>Unit</th><th class="num">Previous</th><th class="num">This bill</th><th class="num">Up to date</th><th class="num">WO qty</th></tr></thead>
+<h3>Abstract</h3><table><thead><tr><th>WO item</th><th>Description</th><th>Unit</th><th class="num">Previous</th><th class="num">On the drawing</th><th class="num">Approved by the client</th><th class="num">This bill</th><th class="num">Up to date</th><th class="num">WO qty</th></tr></thead>
 <tbody>{ab}</tbody></table>
 <div class="sign"><div><b>Measured by</b><div class="line">Billing</div></div><div><b>Checked by the client</b><div class="line"></div></div></div>"""
     return _doc(db, "MEASUREMENT SHEET", body)

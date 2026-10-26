@@ -1,6 +1,6 @@
 // The shared components (EESPL UI v1): every page builds from these. Their look is in ui/base.css;
 // /dev/ui shows each one in each state.
-import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from "react";
+import type { AllHTMLAttributes, ButtonHTMLAttributes, CSSProperties, ReactNode } from "react";
 import { forwardRef } from "react";
 import { NavLink } from "react-router-dom";
 import { STATUS_LABEL, type Status } from "./tokens";
@@ -35,19 +35,31 @@ export function Icon({ name, size = 18, label }: { name: IconName; size?: number
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+type ButtonLook = {
   variant?: ButtonVariant;
   size?: "normal" | "small";
-  loading?: boolean;
   block?: boolean;
+  /** a square button holding only an icon or a sign (×) */
+  icon?: boolean;
+  className?: string;
 };
+
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & ButtonLook & { loading?: boolean };
+
+/**
+ * The classes of a button, for what must look like one but is not a <button>: a link to another page
+ * (<Link className={buttonClass({ size: "small" })}>), the label of a file input, a <summary>.
+ */
+export function buttonClass({ variant = "secondary", size = "normal", block = false, icon = false, className = "" }: ButtonLook = {}): string {
+  return ["btn", `btn-${variant}`, size === "small" ? "btn-small" : "", block ? "btn-block" : "", icon ? "btn-icon" : "", className].filter(Boolean).join(" ");
+}
 
 /** Primary = the one main action on a card; secondary = everything else. 44 px high for touch. */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = "secondary", size = "normal", loading = false, block = false, className = "", disabled, children, type = "button", ...rest },
+  { variant = "secondary", size = "normal", loading = false, block = false, icon = false, className = "", disabled, children, type = "button", ...rest },
   ref,
 ) {
-  const cls = ["btn", `btn-${variant}`, size === "small" ? "btn-small" : "", block ? "btn-block" : "", className].filter(Boolean).join(" ");
+  const cls = buttonClass({ variant, size, block, icon, className });
   return (
     <button ref={ref} type={type} className={cls} disabled={disabled || loading} data-loading={loading || undefined} aria-busy={loading || undefined} {...rest}>
       {children}
@@ -132,9 +144,19 @@ export function NavItem({ to, label, count, icon, onHover }: { to: string; label
 
 // --- card, empty state, skeleton -------------------------------------------------------------------
 
-export function Card({ title, actions, children, size = "main", className = "", as: As = "section" }: { title?: ReactNode; actions?: ReactNode; children?: ReactNode; size?: "main" | "small"; className?: string; as?: "section" | "div" }) {
+type CardProps = {
+  title?: ReactNode;
+  actions?: ReactNode;
+  children?: ReactNode;
+  size?: "main" | "small";
+  className?: string;
+  as?: "section" | "div" | "article" | "aside" | "nav" | "form" | "details";
+} & Omit<AllHTMLAttributes<HTMLElement>, "title" | "children" | "className" | "size" | "as">;
+
+/** A card. Other attributes (id, style, open, aria-*, data-*, handlers) go on its element. */
+export function Card({ title, actions, children, size = "main", className = "", as: As = "section", ...rest }: CardProps) {
   return (
-    <As className={`card ${size === "small" ? "card-sm" : ""} ${className}`.trim()}>
+    <As className={`card ${size === "small" ? "card-sm" : ""} ${className}`.trim()} {...rest}>
       {(title || actions) && (
         <header className="card-head">
           {title && <h2 className="card-title">{title}</h2>}
@@ -224,10 +246,47 @@ export function Tabs({ tabs, value, onChange, label = "Sections" }: { tabs: TabD
 
 // --- form fields --------------------------------------------------------------------------------
 
-export function Field({ label, children, hint, error }: { label: string; children: ReactNode; hint?: ReactNode; error?: string | null }) {
+/**
+ * A labelled input. `label` is usually text (it may hold a unit or a note as JSX). `bare` keeps the
+ * label for screen readers only and adds no box: an input in a grid cell, a toolbar search. `inline`
+ * reads as a sentence, the label then the input on one line ("Due [date]"), styled by `className`.
+ */
+export function Field({
+  label,
+  children,
+  hint,
+  error,
+  className = "",
+  bare = false,
+  inline = false,
+  as: As = "label",
+}: {
+  label: ReactNode;
+  children: ReactNode;
+  hint?: ReactNode;
+  error?: string | null;
+  className?: string;
+  bare?: boolean;
+  inline?: boolean;
+  /** "div" or "fieldset" for a group (radio chips, a file button, several controls) that a label cannot hold */
+  as?: "label" | "div" | "fieldset";
+}) {
+  if (bare)
+    return (
+      <label className={`field-bare ${className}`.trim()}>
+        <span className="sr-only">{label}</span>
+        {children}
+      </label>
+    );
+  if (inline)
+    return (
+      <label className={`field-inline ${className}`.trim()}>
+        <span>{label}</span> {children}
+      </label>
+    );
   return (
-    <label className={`field ${error ? "field-wrong" : ""}`}>
-      <span>{label}</span>
+    <As className={`field ${error ? "field-wrong" : ""} ${className}`.trim()}>
+      {label !== "" && <span>{label}</span>}
       {children}
       {hint && !error && <small className="muted">{hint}</small>}
       {error && (
@@ -235,7 +294,7 @@ export function Field({ label, children, hint, error }: { label: string; childre
           {error}
         </small>
       )}
-    </label>
+    </As>
   );
 }
 
@@ -263,9 +322,9 @@ export function DateField({ label, value, onChange, min, max }: { label: string;
 
 export function BackButton({ onClick, label = "Back" }: { onClick: () => void; label?: string }) {
   return (
-    <button type="button" className="btn btn-secondary btn-icon" onClick={onClick} aria-label={label}>
+    <Button icon onClick={onClick} aria-label={label}>
       <Icon name="back" />
-    </button>
+    </Button>
   );
 }
 

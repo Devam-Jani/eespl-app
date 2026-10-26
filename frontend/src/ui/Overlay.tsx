@@ -28,9 +28,9 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
       <div ref={ref} tabIndex={-1} className={`modal ${wide ? "modal-wide" : ""}`} role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-header">
           <h2>{title}</h2>
-          <button className="btn btn-ghost btn-icon" onClick={onClose} aria-label="Close">
+          <Button variant="ghost" icon onClick={onClose} aria-label="Close">
             ×
-          </button>
+          </Button>
         </div>
         {children}
       </div>
@@ -46,9 +46,9 @@ export function Drawer({ title, onClose, children }: { title: string; onClose: (
       <aside ref={ref} tabIndex={-1} className="drawer" role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-header">
           <h2>{title}</h2>
-          <button className="btn btn-ghost btn-icon" onClick={onClose} aria-label="Close">
+          <Button variant="ghost" icon onClick={onClose} aria-label="Close">
             ×
-          </button>
+          </Button>
         </div>
         {children}
       </aside>
@@ -130,9 +130,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 Undo
               </Button>
             )}
-            <button className="btn btn-ghost btn-small" onClick={() => dismiss(t.id)} aria-label="Dismiss">
+            <Button variant="ghost" size="small" onClick={() => dismiss(t.id)} aria-label="Dismiss">
               ×
-            </button>
+            </Button>
           </div>
         ))}
       </div>

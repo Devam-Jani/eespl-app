@@ -9,6 +9,7 @@ import { errorText, inr } from "../format";
 import type { Page, System } from "../types";
 import { Pager } from "./Clients";
 import { useUnits } from "./Products";
+import { Button, Card, Field } from "../ui/components";
 
 const PAGE_SIZE = 25;
 
@@ -46,20 +47,22 @@ export default function Systems() {
               setSearch(q);
             }}
           >
-            <input className="search" placeholder="Search code or name" value={q} onChange={(e) => setQ(e.target.value)} />
+            <Field label="Search code or name" bare>
+              <input className="search" placeholder="Search code or name" value={q} onChange={(e) => setQ(e.target.value)} />
+            </Field>
           </form>
           <ExportButton path={`/api/systems/export${queryString({ q: search })}`} />
           {canEdit && (
-            <button className="btn btn-primary" onClick={() => setCreating(true)}>
+            <Button variant="primary" onClick={() => setCreating(true)}>
               New system
-            </button>
+            </Button>
           )}
         </div>
       </div>
       <p className="muted">Rate build-up recipes, one per waterproofing system. Rates use today's product prices.</p>
       {error && <div className="alert alert-error">{error}</div>}
 
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -101,7 +104,7 @@ export default function Systems() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       {page && <Pager page={page} onOffset={setOffset} />}
       {creating && <NewSystem onClose={() => setCreating(false)} />}
     </>
@@ -140,12 +143,10 @@ function NewSystem({ onClose }: { onClose: () => void }) {
       <form className="form" onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
         <div className="grid-2">
-          <label className="field">
-            <span>Code</span>
+          <Field label="Code">
             <input value={form.code} onChange={set("code")} required autoFocus />
-          </label>
-          <label className="field">
-            <span>Unit</span>
+          </Field>
+          <Field label="Unit">
             <select value={form.unit} onChange={set("unit")}>
               {units.map((u) => (
                 <option key={u.code} value={u.code}>
@@ -153,43 +154,37 @@ function NewSystem({ onClose }: { onClose: () => void }) {
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
         </div>
-        <label className="field">
-          <span>Name</span>
+        <Field label="Name">
           <input value={form.name} onChange={set("name")} required />
-        </label>
-        <label className="field">
-          <span>Description</span>
+        </Field>
+        <Field label="Description">
           <textarea rows={2} value={form.description} onChange={set("description")} />
-        </label>
+        </Field>
         <div className="grid-2">
-          <label className="field">
-            <span>Surface prep (₹ / unit)</span>
+          <Field label="Surface prep (₹ / unit)">
             <input type="number" step="0.01" min="0" value={form.surface_prep_per_unit} onChange={set("surface_prep_per_unit")} />
-          </label>
-          <label className="field">
-            <span>Default margin %</span>
+          </Field>
+          <Field label="Default margin %">
             <input type="number" step="0.01" min="0" value={form.default_margin_percent} onChange={set("default_margin_percent")} />
-          </label>
-          <label className="field">
-            <span>Labour rate (₹)</span>
+          </Field>
+          <Field label="Labour rate (₹)">
             <input type="number" step="0.01" min="0" value={form.labour_rate} onChange={set("labour_rate")} />
-          </label>
-          <label className="field">
-            <span>Labour per</span>
+          </Field>
+          <Field label="Labour per">
             <select value={form.labour_unit} onChange={set("labour_unit")}>
               <option value="sqm">sqm</option>
               <option value="sqft">sqft</option>
             </select>
-          </label>
+          </Field>
         </div>
         <p className="muted small">Add products and consumption on the next screen.</p>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Create</button>
+          </Button>
+          <Button type="submit" variant="primary">Create</Button>
         </div>
       </form>
     </Modal>

@@ -8,6 +8,7 @@ import { errorText, inr, num } from "../format";
 import ExportButton from "../components/ExportButton";
 import type { Category, Page, Price, Product, Unit } from "../types";
 import { Pager } from "./Clients";
+import { Button, Card, Field } from "../ui/components";
 
 /** Categories of one kind (work or material), active first. */
 export function useCategories(kind: "work" | "material"): Category[] {
@@ -67,33 +68,37 @@ export default function Products() {
               setFilters((f) => ({ ...f, q }));
             }}
           >
-            <input className="search" placeholder="Search code, name or brand" value={q} onChange={(e) => setQ(e.target.value)} />
+            <Field label="Search code, name or brand" bare>
+              <input className="search" placeholder="Search code, name or brand" value={q} onChange={(e) => setQ(e.target.value)} />
+            </Field>
           </form>
-          <select
-            value={filters.category_id}
-            onChange={(e) => {
-              setOffset(0);
-              setFilters((f) => ({ ...f, category_id: e.target.value }));
-            }}
-          >
-            <option value="">All categories</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <Field label="Category" bare>
+            <select
+              value={filters.category_id}
+              onChange={(e) => {
+                setOffset(0);
+                setFilters((f) => ({ ...f, category_id: e.target.value }));
+              }}
+            >
+              <option value="">All categories</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </Field>
           <ExportButton path={`/api/products/export${queryString(filters)}`} />
           {canEdit && (
-            <button className="btn btn-primary" onClick={() => setEditing("new")}>
+            <Button variant="primary" onClick={() => setEditing("new")}>
               Add product
-            </button>
+            </Button>
           )}
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
 
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -133,14 +138,14 @@ export default function Products() {
                   {seesCost && <td className="num">{price ? inr(price.freight_per_unit) : "—"}</td>}
                   <td className="row-actions">
                     {seesCost && (
-                      <button className="btn btn-small" onClick={() => setPricing(p)}>
+                      <Button size="small" onClick={() => setPricing(p)}>
                         Prices
-                      </button>
+                      </Button>
                     )}
                     {canEdit && (
-                      <button className="btn btn-small" onClick={() => setEditing(p)}>
+                      <Button size="small" onClick={() => setEditing(p)}>
                         Edit
-                      </button>
+                      </Button>
                     )}
                   </td>
                 </tr>
@@ -155,7 +160,7 @@ export default function Products() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       {page && <Pager page={page} onOffset={setOffset} />}
 
       {editing && (
@@ -242,22 +247,18 @@ function ProductForm({ product, onClose, onSaved }: { product: Product | null; o
       <form className="form" onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
         <div className="grid-2">
-          <label className="field">
-            <span>Code</span>
+          <Field label="Code">
             <input value={form.code} onChange={set("code")} required autoFocus />
-          </label>
-          <label className="field">
-            <span>Brand</span>
+          </Field>
+          <Field label="Brand">
             <input value={form.brand} onChange={set("brand")} />
-          </label>
+          </Field>
         </div>
-        <label className="field">
-          <span>Name</span>
+        <Field label="Name">
           <input value={form.name} onChange={set("name")} required />
-        </label>
+        </Field>
         <div className="grid-2">
-          <label className="field">
-            <span>Category</span>
+          <Field label="Category">
             <select value={form.category_id} onChange={set("category_id")}>
               <option value="">—</option>
               {categories
@@ -268,9 +269,8 @@ function ProductForm({ product, onClose, onSaved }: { product: Product | null; o
                   </option>
                 ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Unit</span>
+          </Field>
+          <Field label="Unit">
             <select value={form.unit} onChange={set("unit")}>
               {units.map((u) => (
                 <option key={u.code} value={u.code}>
@@ -278,46 +278,40 @@ function ProductForm({ product, onClose, onSaved }: { product: Product | null; o
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Pack size</span>
+          </Field>
+          <Field label="Pack size">
             <input type="number" step="0.001" min="0" value={form.pack_size} onChange={set("pack_size")} />
-          </label>
-          <label className="field">
-            <span>Pack (bag, can, drum)</span>
+          </Field>
+          <Field label="Pack (bag, can, drum)">
             <input value={form.pack_unit} onChange={set("pack_unit")} maxLength={20} placeholder="empty: no pack rounding" />
-          </label>
-          <label className="field">
-            <span>GST %</span>
+          </Field>
+          <Field label="GST %">
             <input type="number" step="0.01" min="0" value={form.gst_percent} onChange={set("gst_percent")} required />
-          </label>
-          <label className="field">
-            <span>HSN / SAC code</span>
+          </Field>
+          <Field label="HSN / SAC code">
             <input inputMode="numeric" pattern="[0-9]{4,8}" value={form.hsn_code} onChange={set("hsn_code")} placeholder="e.g. 3824" />
-          </label>
-          <label className="field">
-            <span>Reorder level ({form.unit || "unit"})</span>
+          </Field>
+          <Field label={<>Reorder level ({form.unit || "unit"})</>}>
             <input type="number" step="0.001" min="0" value={form.reorder_level} onChange={set("reorder_level")} placeholder="Alert below this stock" />
-          </label>
+          </Field>
         </div>
-        <label className="field">
-          <span>Also known as (other names in offers and specifications, separated by ;)</span>
+        <Field label="Also known as (other names in offers and specifications, separated by ;)">
           <input value={form.aliases} onChange={set("aliases")} placeholder="e.g. BRONCO CEMSHIELD HYBRID PU" />
-        </label>
+        </Field>
         <label className="check">
           <input type="checkbox" checked={form.is_active} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))} />
           Active
         </label>
         <div className="form-actions">
           {product && (
-            <button type="button" className="btn btn-danger push-left" onClick={() => void remove()}>
+            <Button type="button" variant="danger" className="push-left" onClick={() => void remove()}>
               Delete
-            </button>
+            </Button>
           )}
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Save</button>
+          </Button>
+          <Button type="submit" variant="primary">Save</Button>
         </div>
       </form>
     </Modal>
@@ -408,25 +402,21 @@ function PriceHistory({ product, canAdd, onClose }: { product: Product; canAdd: 
         <form className="inline-form" onSubmit={add}>
           <h3 className="section-title">Add new price</h3>
           <div className="grid-4">
-            <label className="field">
-              <span>Purchase rate (₹)</span>
+            <Field label="Purchase rate (₹)">
               <input type="number" step="0.01" min="0" value={form.purchase_rate} onChange={(e) => setForm((f) => ({ ...f, purchase_rate: e.target.value }))} required />
-            </label>
-            <label className="field">
-              <span>Freight / unit (₹)</span>
+            </Field>
+            <Field label="Freight / unit (₹)">
               <input type="number" step="0.01" min="0" value={form.freight_per_unit} onChange={(e) => setForm((f) => ({ ...f, freight_per_unit: e.target.value }))} />
-            </label>
-            <label className="field">
-              <span>Effective from</span>
+            </Field>
+            <Field label="Effective from">
               <input type="date" value={form.effective_from} onChange={(e) => setForm((f) => ({ ...f, effective_from: e.target.value }))} required />
-            </label>
-            <label className="field">
-              <span>Note</span>
+            </Field>
+            <Field label="Note">
               <input value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
-            </label>
+            </Field>
           </div>
           <div className="form-actions">
-            <button className="btn btn-primary">Add price</button>
+            <Button type="submit" variant="primary">Add price</Button>
           </div>
         </form>
       )}

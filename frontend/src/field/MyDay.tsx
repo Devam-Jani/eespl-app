@@ -8,6 +8,7 @@ import MapView from "./MapView";
 import type { MapPin } from "./MapView";
 import { browserStore, mapsLink, PointQueue, shouldKeep } from "./tracker";
 import type { QueuedPoint } from "./tracker";
+import { Button, buttonClass, Card, Field } from "../ui/components";
 
 type Me = {
   consent: {
@@ -88,7 +89,7 @@ function ConsentScreen({ me, onDone }: { me: Me; onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const t = me.consent.text;
   return (
-    <div className="card consent-card">
+    <Card as="div" className="consent-card">
       <h2>Location tracking: your consent</h2>
       {me.consent.asked_again && (
         <p className="alert alert-warn">
@@ -110,8 +111,8 @@ function ConsentScreen({ me, onDone }: { me: Me; onDone: () => void }) {
       </dl>
       <p className="small">Without consent you can still use the app; nothing is tracked and no travel claim is made. You can withdraw it at any time from this page.</p>
       {error && <div className="alert alert-error">{error}</div>}
-      <button
-        className="btn btn-primary btn-block tap"
+      <Button
+        variant="primary" block className="tap"
         disabled={busy}
         onClick={async () => {
           setBusy(true);
@@ -126,8 +127,8 @@ function ConsentScreen({ me, onDone }: { me: Me; onDone: () => void }) {
         }}
       >
         I agree (version {me.consent.version})
-      </button>
-    </div>
+      </Button>
+    </Card>
   );
 }
 
@@ -170,7 +171,7 @@ function CheckIn({ me, fix, onDone, onError }: { me: Me; fix: Fix | null; onDone
     }
   }
   return (
-    <div className="card">
+    <Card as="div">
       <h3>Check in</h3>
       <div className="chip-list">
         {STOP_KINDS.map(([k, label]) => (
@@ -180,8 +181,7 @@ function CheckIn({ me, fix, onDone, onError }: { me: Me; fix: Fix | null; onDone
         ))}
       </div>
       {kind === "site" ? (
-        <label className="field">
-          <span>Site</span>
+        <Field label="Site">
           <select className="tap-input" value={siteId} onChange={(e) => setSiteId(e.target.value)}>
             <option value="">— choose the site —</option>
             {sites.map((s) => (
@@ -191,15 +191,14 @@ function CheckIn({ me, fix, onDone, onError }: { me: Me; fix: Fix | null; onDone
               </option>
             ))}
           </select>
-        </label>
+        </Field>
       ) : (
-        <label className="field">
-          <span>Where{kind === "other" ? " (required)" : ""}</span>
+        <Field label={<>Where{kind === "other" ? " (required)" : ""}</>}>
           <input className="tap-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Vendor, godown or office name" />
-        </label>
+        </Field>
       )}
       {kind === "site" && (
-        <label className="btn btn-block tap selfie-btn">
+        <label className={buttonClass({ block: true, className: "tap selfie-btn" })}>
           {selfie ? "Selfie taken: retake" : "Take the selfie (front camera)"}
           <input type="file" accept="image/*" capture="user" hidden onChange={(e) => setSelfie(e.target.files?.[0] ?? null)} />
         </label>
@@ -207,17 +206,19 @@ function CheckIn({ me, fix, onDone, onError }: { me: Me; fix: Fix | null; onDone
       {needReason && (
         <div className="alert alert-warn">
           {needReason}
-          <textarea className="tap-input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why are you outside the site circle?" />
+          <Field label="Why are you outside the site circle?" bare>
+            <textarea className="tap-input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why are you outside the site circle?" />
+          </Field>
         </div>
       )}
-      <button
-        className="btn btn-primary btn-block tap"
+      <Button
+        variant="primary" block className="tap"
         disabled={busy || (kind === "site" && (!siteId || !selfie)) || (kind === "other" && !note.trim()) || (!!needReason && !reason.trim())}
         onClick={() => void go()}
       >
         {busy ? "Getting your location…" : "Check in here"}
-      </button>
-    </div>
+      </Button>
+    </Card>
   );
 }
 
@@ -267,7 +268,7 @@ export function TodaysRoute({ me }: { me: Me }) {
       ]
     : [];
   return (
-    <div className="card">
+    <Card as="div">
       <h3>Today&apos;s route</h3>
       <p className="small muted">Pick today&apos;s sites: the order is suggested by the shortest road route from home through them; move them to change it.</p>
       <div className="chip-list">
@@ -277,9 +278,9 @@ export function TodaysRoute({ me }: { me: Me }) {
           </label>
         ))}
       </div>
-      <button className="btn btn-small tap" disabled={!chosen.length} onClick={() => void make(chosen, false)}>
+      <Button size="small" className="tap" disabled={!chosen.length} onClick={() => void make(chosen, false)}>
         Suggest the order
-      </button>
+      </Button>
       {error && <div className="alert alert-error">{error}</div>}
       {plan && (
         <>
@@ -288,13 +289,13 @@ export function TodaysRoute({ me }: { me: Me }) {
               <li key={s.id}>
                 <b>{s.name}</b> <span className="small muted">{plan.legs[i] ? `${km(plan.legs[i].km)} · ${plan.legs[i].minutes ?? "?"} min` : ""}</span>
                 <span className="route-actions">
-                  <button className="btn btn-small btn-ghost" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Earlier">
+                  <Button variant="ghost" size="small" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Earlier">
                     ↑
-                  </button>
-                  <button className="btn btn-small btn-ghost" disabled={i === plan.sites.length - 1} onClick={() => move(i, 1)} aria-label="Later">
+                  </Button>
+                  <Button variant="ghost" size="small" disabled={i === plan.sites.length - 1} onClick={() => move(i, 1)} aria-label="Later">
                     ↓
-                  </button>
-                  <a className="btn btn-small btn-primary" href={mapsLink(s.lat!, s.lng!)} target="_blank" rel="noreferrer">
+                  </Button>
+                  <a className={buttonClass({ variant: "primary", size: "small" })} href={mapsLink(s.lat!, s.lng!)} target="_blank" rel="noreferrer">
                     Go to site
                   </a>
                 </span>
@@ -307,7 +308,7 @@ export function TodaysRoute({ me }: { me: Me }) {
           <MapView tileUrl={me.settings.tile_url} attribution={me.settings.tile_attribution} pins={pins} lines={plan.road ? [{ points: plan.road }] : []} height={300} />
         </>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -316,7 +317,7 @@ function HomeSetter({ me, onDone }: { me: Me; onDone: () => void }) {
   const [msg, setMsg] = useState<string | null>(null);
   const p = me.profile;
   return (
-    <details className="card">
+    <Card as="details">
       <summary>
         Home location:{" "}
         <b>
@@ -340,8 +341,8 @@ function HomeSetter({ me, onDone }: { me: Me; onDone: () => void }) {
         height={240}
       />
       <div className="form-row">
-        <button
-          className="btn btn-small tap"
+        <Button
+          size="small" className="tap"
           onClick={() =>
             void locate().then(
               (f) => setPicked([f.lat, f.lng]),
@@ -350,9 +351,9 @@ function HomeSetter({ me, onDone }: { me: Me; onDone: () => void }) {
           }
         >
           Use my location
-        </button>
-        <button
-          className="btn btn-small btn-primary tap"
+        </Button>
+        <Button
+          variant="primary" size="small" className="tap"
           disabled={!picked}
           onClick={async () => {
             try {
@@ -365,10 +366,10 @@ function HomeSetter({ me, onDone }: { me: Me; onDone: () => void }) {
           }}
         >
           Ask for approval
-        </button>
+        </Button>
       </div>
       {msg && <p className="small">{msg}</p>}
-    </details>
+    </Card>
   );
 }
 
@@ -448,15 +449,15 @@ export function MyDay() {
       <h1>My day</h1>
       {error && <div className="alert alert-error">{error}</div>}
       {!day && (
-        <div className="card">
+        <Card as="div">
           <p>Start your day when you leave home. Your location is recorded from Start day to End day only (the day ends by itself at {me.settings.auto_end_at}).</p>
-          <button className="btn btn-primary btn-block tap btn-big" disabled={busy} onClick={() => void act("/api/field/day/start")}>
+          <Button variant="primary" block className="tap btn-big" disabled={busy} onClick={() => void act("/api/field/day/start")}>
             {busy ? "Getting your location…" : "Start day"}
-          </button>
-        </div>
+          </Button>
+        </Card>
       )}
       {day && (
-        <div className="card">
+        <Card as="div">
           <div className="field-status">
             <b>{day.ended_at ? "Day ended" : "Day started"}</b> {time(day.started_at)}
             {day.ended_at && <> – {time(day.ended_at)}</>}
@@ -473,13 +474,13 @@ export function MyDay() {
             <div className="field-current">
               At <b>{current.name}</b> since {time(current.in_at)}
               {current.in_outside && <span className="text-danger small"> · {dist(current.in_distance_m)} from the pin</span>}
-              <label className="btn btn-block tap">
+              <label className={buttonClass({ block: true, className: "tap" })}>
                 Check out (selfie)
                 <input type="file" accept="image/*" capture="user" hidden onChange={(e) => void checkOut(e.target.files?.[0] ?? null)} />
               </label>
-              <button className="btn btn-ghost btn-small" disabled={busy} onClick={() => void checkOut(null)}>
+              <Button variant="ghost" size="small" disabled={busy} onClick={() => void checkOut(null)}>
                 Check out without a selfie
-              </button>
+              </Button>
             </div>
           )}
           {day.stops.length > 0 && (
@@ -503,20 +504,20 @@ export function MyDay() {
             </>
           )}
           <Link to={`/field/days/${day.id}`}>The day on the map</Link>
-        </div>
+        </Card>
       )}
       {day && !day.ended_at && !current && <CheckIn me={me} fix={fix} onDone={() => void load()} onError={setError} />}
       {day && !day.ended_at && !current && (
-        <button className="btn btn-block tap" disabled={busy} onClick={() => void act("/api/field/day/end")}>
+        <Button block className="tap" disabled={busy} onClick={() => void act("/api/field/day/end")}>
           End day
-        </button>
+        </Button>
       )}
       <TodaysRoute me={me} />
       <HomeSetter me={me} onDone={() => void load()} />
       <p className="small muted">
         Consent given {me.consent.given_at ? new Date(me.consent.given_at).toLocaleDateString("en-IN") : ""} (version {me.consent.version}).{" "}
         <button
-          className="btn-link"
+          className="link-button"
           onClick={async () => {
             if (!window.confirm("Withdraw your consent? Tracking stops now (an open day ends) and no travel claim is made from here on.")) return;
             await api("/api/field/consent", { method: "DELETE" });

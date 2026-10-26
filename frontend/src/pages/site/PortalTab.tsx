@@ -5,6 +5,7 @@ import { useAuth } from "../../auth";
 import { errorText } from "../../format";
 import { day, Framed, PortalSite } from "../../portal/Portal";
 import type { Site } from "../../types";
+import { Button, Card, Field } from "../../ui/components";
 
 type PortalUser = {
   id: string;
@@ -105,7 +106,7 @@ export default function PortalTab({ site }: { site: Site }) {
       {manage && s && (
         <>
           {!s.client_id && <div className="alert alert-warn">Set the site's client before sharing it in the portal.</div>}
-          <div className="card">
+          <Card as="div">
             <label className="check">
               <input type="checkbox" checked={s.visible} onChange={(e) => void save({ visible: e.target.checked })} /> <strong>Visible in the client portal</strong>
             </label>
@@ -117,16 +118,18 @@ export default function PortalTab({ site }: { site: Site }) {
               ))}
             </div>
             <p className="small muted">Costs, supplier rates, margins, budgets, salaries and wages are never shown in the portal.</p>
-          </div>
+          </Card>
 
           {link && (
             <div className="alert alert-ok top-gap">
               Invite link for {link.name} (one-time, expires {day(link.expires_at)}). No email or SMS is sent: copy it and send it yourself.
               <div className="inline-form top-gap">
-                <input className="grow" readOnly value={link.url} onFocus={(e) => e.target.select()} />
-                <button className="btn btn-small" onClick={() => void navigator.clipboard?.writeText(link.url)}>
+                <Field label="Invite link" bare>
+                  <input className="grow" readOnly value={link.url} onFocus={(e) => e.target.select()} />
+                </Field>
+                <Button size="small" onClick={() => void navigator.clipboard?.writeText(link.url)}>
                   Copy
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -177,8 +180,8 @@ export default function PortalTab({ site }: { site: Site }) {
                     </td>
                     <td className="row-actions">
                       {!u.has_password && u.is_active && (
-                        <button
-                          className="btn btn-small"
+                        <Button
+                          size="small"
                           onClick={() =>
                             void run(api<{ link: string; expires_at: string }>(`/api/portal-admin/users/${u.id}/reinvite`, { method: "POST" })).then(
                               (r) => r && (showLink(u.full_name, r), load()),
@@ -186,17 +189,18 @@ export default function PortalTab({ site }: { site: Site }) {
                           }
                         >
                           New link
-                        </button>
+                        </Button>
                       )}
-                      <button
-                        className={`btn btn-small ${u.is_active ? "btn-danger" : ""}`}
+                      <Button
+                        size="small"
+                        variant={u.is_active ? "danger" : "secondary"}
                         onClick={() =>
                           (!u.is_active || confirm(`Disable ${u.full_name}? Their session ends at once.`)) &&
                           void run(api(`/api/portal-admin/users/${u.id}/active`, { method: "PUT", json: { is_active: !u.is_active } })).then(load)
                         }
                       >
                         {u.is_active ? "Disable" : "Enable"}
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -212,13 +216,19 @@ export default function PortalTab({ site }: { site: Site }) {
           </div>
 
           {s.client_id && (
-            <form className="card top-gap" onSubmit={sendInvite}>
+            <Card as="form" className="top-gap" onSubmit={sendInvite}>
               <h3 className="section-title">Invite a client contact</h3>
               <div className="inline-form">
-                <input className="grow" placeholder="Name" value={invite.full_name} onChange={(e) => setInvite({ ...invite, full_name: e.target.value })} required />
-                <input className="grow" type="email" placeholder="Email" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} required />
-                <input placeholder="Phone" value={invite.phone} onChange={(e) => setInvite({ ...invite, phone: e.target.value })} />
-                <button className="btn btn-primary">Create invite link</button>
+                <Field label="Name" bare>
+                  <input className="grow" placeholder="Name" value={invite.full_name} onChange={(e) => setInvite({ ...invite, full_name: e.target.value })} required />
+                </Field>
+                <Field label="Email" bare>
+                  <input className="grow" type="email" placeholder="Email" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} required />
+                </Field>
+                <Field label="Phone" bare>
+                  <input placeholder="Phone" value={invite.phone} onChange={(e) => setInvite({ ...invite, phone: e.target.value })} />
+                </Field>
+                <Button type="submit" variant="primary">Create invite link</Button>
               </div>
               {roles.length > 0 && (
                 <div className="top-gap">
@@ -235,7 +245,7 @@ export default function PortalTab({ site }: { site: Site }) {
                   ))}
                 </div>
               )}
-            </form>
+            </Card>
           )}
         </>
       )}
@@ -279,30 +289,34 @@ export default function PortalTab({ site }: { site: Site }) {
         </table>
       </div>
       <form className="inline-form top-gap" onSubmit={(e) => void uploadDoc(e)}>
-        <input name="title" placeholder="Title" required className="grow" />
+        <Field label="Title" bare>
+          <input name="title" placeholder="Title" required className="grow" />
+        </Field>
         <input name="file" type="file" accept=".pdf,image/*,.dwg,.dxf" required />
         <label className="check small">
           <input name="share_with_client" type="checkbox" value="true" /> Share with client
         </label>
-        <button className="btn">Upload</button>
+        <Button type="submit">Upload</Button>
       </form>
 
       {manage && s && s.users.length > 0 && (
         <>
           <h3 className="section-title top-gap">Preview as client</h3>
           <div className="inline-form">
-            <select value={preview} onChange={(e) => setPreview(e.target.value)}>
-              <option value="">Choose a client user…</option>
-              {s.users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.full_name}
-                </option>
-              ))}
-            </select>
+            <Field label="Preview as client" bare>
+              <select value={preview} onChange={(e) => setPreview(e.target.value)}>
+                <option value="">Choose a client user…</option>
+                {s.users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.full_name}
+                  </option>
+                ))}
+              </select>
+            </Field>
             {preview && (
-              <button className="btn btn-small btn-ghost" onClick={() => setPreview("")}>
+              <Button variant="ghost" size="small" onClick={() => setPreview("")}>
                 Close preview
-              </button>
+              </Button>
             )}
           </div>
           {preview && (

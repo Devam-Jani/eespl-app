@@ -11,6 +11,7 @@ import { errorText, inr, num } from "../format";
 import { shortDate } from "../pages/Tenders";
 import { GapNote, LibraryPicker } from "../knowledge/Picker";
 import type { Gap } from "../knowledge/Picker";
+import { Button, buttonClass, Card, Field } from "../ui/components";
 
 type Line = { key: string; kind: string; id: number; item_no: string | null; description: string; unit: string | null; qty: string | null; rate: string | null };
 type Product = {
@@ -140,8 +141,7 @@ export function RateWorkingView({ tenderId, quotationId }: { tenderId?: number; 
           </p>
           {w.margin_basis_note && <p className="small text-warn">{w.margin_basis_note}.</p>}
           {w.can_edit && (
-            <label className="small">
-              Margin for this working:{" "}
+            <Field label="Margin for this working:" inline className="small">
               <select
                 value={w.margin_basis}
                 onChange={(e) =>
@@ -151,27 +151,27 @@ export function RateWorkingView({ tenderId, quotationId }: { tenderId?: number; 
                 <option value="selling">on the selling price</option>
                 <option value="cost">on cost</option>
               </select>
-            </label>
+            </Field>
           )}
         </div>
         <div className="page-actions">
           {w.can_edit && (
             <>
-              <button className="btn btn-small" onClick={() => void suggest(w.groups.length > 0)}>
+              <Button size="small" onClick={() => void suggest(w.groups.length > 0)}>
                 {w.groups.length ? "Group again" : "Suggest the groups"}
-              </button>
+              </Button>
               {w.ungrouped.length > 0 && w.groups.length > 0 && (
-                <button className="btn btn-small" onClick={() => void suggest(false)}>
+                <Button size="small" onClick={() => void suggest(false)}>
                   Group the rest
-                </button>
+                </Button>
               )}
               {tenderId && (
-                <Link className="btn btn-small" to={`/knowledge/match/tender/${tenderId}`}>
+                <Link className={buttonClass({ size: "small" })} to={`/knowledge/match/tender/${tenderId}`}>
                   Match the client BOQ to the library
                 </Link>
               )}
-              <button
-                className="btn btn-small"
+              <Button
+                size="small"
                 title="Its workings are added to the BOQ knowledge as new evidence (a won BOQ is added by itself)"
                 onClick={() =>
                   void api<{ lines: number }>(`/api/knowledge/learn/workings/${w.id}`, { method: "POST" }).then(
@@ -181,16 +181,16 @@ export function RateWorkingView({ tenderId, quotationId }: { tenderId?: number; 
                 }
               >
                 Mark final: add to the library
-              </button>
-              <button className="btn btn-small btn-primary" onClick={() => void apply()}>
+              </Button>
+              <Button variant="primary" size="small" onClick={() => void apply()}>
                 Rates to the lines
-              </button>
+              </Button>
             </>
           )}
           {w.sees_cost && (
-            <button className="btn btn-small btn-ghost" onClick={() => void downloadFile(`/api/rate-working/${w.id}/export.xlsx`)}>
+            <Button variant="ghost" size="small" onClick={() => void downloadFile(`/api/rate-working/${w.id}/export.xlsx`)}>
               Working sheet (Excel)
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -240,7 +240,7 @@ function Grouping({ w, onChange, onError }: { w: Working; onChange: (w: Working)
   return (
     <div className="group-board">
       {columns.map((c) => (
-        <section key={c.id ?? "none"} className={`card group-col ${c.id === null ? "group-none" : ""}`}>
+        <Card key={c.id ?? "none"} className={`group-col ${c.id === null ? "group-none" : ""}`}>
           <h3>
             {c.name} <span className="badge badge-muted">{c.lines.length}</span>
           </h3>
@@ -260,20 +260,22 @@ function Grouping({ w, onChange, onError }: { w: Working; onChange: (w: Working)
                   </span>
                 </span>
                 {w.can_edit && (
-                  <select value={c.id ?? ""} onChange={(e) => void move(ln.key, e.target.value)} aria-label="Move to">
-                    {w.groups.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        → {g.name.slice(0, 40)}
-                      </option>
-                    ))}
-                    <option value="new">→ a new main item…</option>
-                    <option value="">→ not grouped</option>
-                  </select>
+                  <Field label="Move to" bare>
+                    <select value={c.id ?? ""} onChange={(e) => void move(ln.key, e.target.value)} aria-label="Move to">
+                      {w.groups.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          → {g.name.slice(0, 40)}
+                        </option>
+                      ))}
+                      <option value="new">→ a new main item…</option>
+                      <option value="">→ not grouped</option>
+                    </select>
+                  </Field>
                 )}
               </li>
             ))}
           </ul>
-        </section>
+        </Card>
       ))}
     </div>
   );
@@ -414,7 +416,7 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
   }
   if (!w.sees_cost)
     return (
-      <div className="card">
+      <Card as="div">
         <h3>{g.name}</h3>
         <p>
           {g.rate_sqm ? (
@@ -427,19 +429,17 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
           {g.system && <span className="muted"> · {g.system}</span>}
         </p>
         <LinesTable lines={g.lines} />
-      </div>
+      </Card>
     );
   const s = shown;
   return (
     <div className="working-sheet">
-      <div className="card">
+      <Card as="div">
         <div className="grid-3">
-          <label className="field">
-            <span>Main item</span>
+          <Field label="Main item">
             <input value={f.name} onChange={set("name")} disabled={!edit} />
-          </label>
-          <label className="field">
-            <span>System</span>
+          </Field>
+          <Field label="System">
             <select
               value={f.system_id}
               onChange={(e) => setF({ ...f, system_id: e.target.value })}
@@ -454,9 +454,8 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
               ))}
             </select>
             {s.system_to_confirm && <span className="small text-warn">This system's consumption or coats are still to confirm.</span>}
-          </label>
-          <label className="field">
-            <span>Application (its wastage comes from the settings)</span>
+          </Field>
+          <Field label="Application (its wastage comes from the settings)">
             <select
               value={f.application}
               onChange={(e) => {
@@ -473,9 +472,8 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
               ))}
               {f.application && !(s.applications ?? []).some((a) => a.name === f.application) && <option value={f.application}>{f.application}</option>}
             </select>
-          </label>
-          <label className="field">
-            <span>Surface (picks the consumption)</span>
+          </Field>
+          <Field label="Surface (picks the consumption)">
             <select value={shown.surface ?? ""} onChange={(e) => void save(false, { surface: e.target.value || null })} disabled={!edit}>
               <option value="">— any —</option>
               {SURFACES.map(([k, label]) => (
@@ -484,9 +482,8 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Client asks: min kg/sqm · DFT mm</span>
+          </Field>
+          <Field label="Client asks: min kg/sqm · DFT mm">
             <span className="inline-form">
               <input
                 className="input-num"
@@ -505,25 +502,21 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
                 aria-label="DFT in mm"
               />
             </span>
-          </label>
-          <label className="field">
-            <span>Wastage %</span>
+          </Field>
+          <Field label="Wastage %">
             <input className="input-num" value={f.wastage_percent} onChange={set("wastage_percent")} disabled={!edit} />
             {s.wastage_source && <span className="small muted">from {s.wastage_source}</span>}
-          </label>
-          <label className="field">
-            <span>Coats</span>
+          </Field>
+          <Field label="Coats">
             <input className="input-num" value={f.coats} onChange={set("coats")} disabled={!edit} />
             {(s.system_coats ?? []).length > 0 && (
               <span className="small muted">system: {(s.system_coats ?? []).map((c) => `${c.product} ${c.coats ? `${c.coats} coats` : "coats to confirm"}`).join("; ")}</span>
             )}
-          </label>
-          <label className="field">
-            <span>Surface preparation (₹/sqm)</span>
+          </Field>
+          <Field label="Surface preparation (₹/sqm)">
             <input className="input-num" value={f.surface_prep} onChange={set("surface_prep")} disabled={!edit} />
-          </label>
-          <label className="field">
-            <span>Labour rate card (what we pay)</span>
+          </Field>
+          <Field label="Labour rate card (what we pay)">
             <select value={f.labour_rate_card_id} onChange={set("labour_rate_card_id")} disabled={!edit}>
               <option value="">—</option>
               {(cards.length
@@ -537,22 +530,19 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Labour in the rate (₹/sq ft)</span>
+          </Field>
+          <Field label="Labour in the rate (₹/sq ft)">
             <input className="input-num" value={f.labour_used_sqft} onChange={set("labour_used_sqft")} disabled={!edit} />
-          </label>
-          <label className="field">
-            <span>Labour paid (₹/sq ft)</span>
+          </Field>
+          <Field label="Labour paid (₹/sq ft)">
             <input className="input-num" value={f.labour_paid_sqft} onChange={set("labour_paid_sqft")} disabled={!edit} />
-          </label>
-          <label className="field">
-            <span>Margin %</span>
+          </Field>
+          <Field label="Margin %">
             <input className="input-num" value={f.margin_percent} onChange={set("margin_percent")} disabled={!edit} />
-          </label>
+          </Field>
         </div>
-      </div>
-      <div className="card top-gap">
+      </Card>
+      <Card as="div" className="top-gap">
         <h3>Products (per sqm for this site)</h3>
         <div className="table-wrap">
           <table className="table compact">
@@ -575,29 +565,39 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
                       {p.product} <span className="muted small">/{p.unit}</span>
                     </td>
                     <td className="num">
-                      <input className="input-num" value={p.consumption} placeholder="to confirm" onChange={(e) => setP(i, { consumption: e.target.value })} disabled={!edit} />
+                      <Field label="Consumption" bare>
+                        <input className="input-num" value={p.consumption} placeholder="to confirm" onChange={(e) => setP(i, { consumption: e.target.value })} disabled={!edit} />
+                      </Field>
                       <div className="small muted" title={p.consumption_source ?? undefined}>
                         {p.default_consumption === null ? "to confirm" : num(p.default_consumption)} from {p.consumption_source ?? "the system"}
                       </div>
                     </td>
                     <td>
                       {changed || p.consumption_reason ? (
-                        <input value={p.consumption_reason} placeholder="Why, for this site?" onChange={(e) => setP(i, { consumption_reason: e.target.value })} disabled={!edit} />
+                        <Field label="Reason (when changed)" bare>
+                          <input value={p.consumption_reason} placeholder="Why, for this site?" onChange={(e) => setP(i, { consumption_reason: e.target.value })} disabled={!edit} />
+                        </Field>
                       ) : (
                         <span className="muted small">as the system</span>
                       )}
                     </td>
                     <td className="num">
-                      <input className="input-num" value={p.price} onChange={(e) => setP(i, { price: e.target.value })} disabled={!edit} />
+                      <Field label="Price" bare>
+                        <input className="input-num" value={p.price} onChange={(e) => setP(i, { price: e.target.value })} disabled={!edit} />
+                      </Field>
                       <div>
                         <LastPrice productId={p.product_id} rate={p.price} excludeId={p.price_info?.id} />
                       </div>
                     </td>
                     <td className="num">
-                      <input className="input-num" value={p.freight_used} onChange={(e) => setP(i, { freight_used: e.target.value })} disabled={!edit} />
+                      <Field label="Freight used" bare>
+                        <input className="input-num" value={p.freight_used} onChange={(e) => setP(i, { freight_used: e.target.value })} disabled={!edit} />
+                      </Field>
                     </td>
                     <td className="num">
-                      <input className="input-num" value={p.freight_actual} placeholder="—" onChange={(e) => setP(i, { freight_actual: e.target.value })} disabled={!edit} />
+                      <Field label="Freight actual" bare>
+                        <input className="input-num" value={p.freight_actual} placeholder="—" onChange={(e) => setP(i, { freight_actual: e.target.value })} disabled={!edit} />
+                      </Field>
                     </td>
                   </tr>
                 );
@@ -613,13 +613,13 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
             </div>
           ))}
         {edit && (
-          <button className="btn btn-primary top-gap" onClick={() => void save()}>
+          <Button variant="primary" className="top-gap" onClick={() => void save()}>
             Work the rate
-          </button>
+          </Button>
         )}
-      </div>
+      </Card>
       <div className="split top-gap">
-        <div className="card">
+        <Card as="div">
           <h3>Build-up per sqm</h3>
           {s.errors.length > 0 ? (
             <div className="alert alert-warn">{s.errors.join("; ")}</div>
@@ -677,9 +677,9 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
               </tbody>
             </table>
           )}
-        </div>
+        </Card>
         <div>
-          <div className="card">
+          <Card as="div">
             <h3>Cushions (visible, not hidden)</h3>
             {(s.cushions ?? []).length === 0 ? (
               <p className="small muted">Enter what the gang is paid and the actual freight to see them.</p>
@@ -703,18 +703,18 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
                 </tbody>
               </table>
             )}
-          </div>
+          </Card>
           {canDo("knowledge.view") && (
-            <div className={`card top-gap ${gap?.flagged ? "card-warn" : ""}`}>
+            <Card as="div" className={`top-gap ${gap?.flagged ? "card-warn" : ""}`}>
               <h3>Against what we sold at before</h3>
               {fromLibrary && <p className="small muted">From the library: {fromLibrary}</p>}
               {gap ? <GapNote gap={gap} /> : <p className="small muted">Not from the library yet.</p>}
               {edit && (
-                <button className="btn btn-small" onClick={() => setPicking(true)}>
+                <Button size="small" onClick={() => setPicking(true)}>
                   {fromLibrary ? "Pick another template…" : "New main item from the library…"}
-                </button>
+                </Button>
               )}
-            </div>
+            </Card>
           )}
           {picking && (
             <LibraryPicker
@@ -728,7 +728,7 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
               }}
             />
           )}
-          <div className={`card top-gap ${s.library_flagged ? "card-warn" : ""}`}>
+          <Card as="div" className={`top-gap ${s.library_flagged ? "card-warn" : ""}`}>
             <h3>Against the rate library</h3>
             {s.library_median_sqm ? (
               <p>
@@ -738,14 +738,14 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
             ) : (
               <p className="small muted">No rate library match for these lines.</p>
             )}
-          </div>
+          </Card>
         </div>
       </div>
-      <div className="card top-gap">
+      <Card as="div" className="top-gap">
         <h3>The client's lines in this main item ({s.lines.length})</h3>
         {s.unit_note.length > 0 && <p className="small text-warn">Lines in {s.unit_note.join(", ")} are left for you (the working is per sqm and sq ft).</p>}
         <LinesTable lines={s.lines} />
-      </div>
+      </Card>
     </div>
   );
 }
@@ -869,7 +869,7 @@ export function ProductPrices() {
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       <div className="split">
-        <div className="card">
+        <Card as="div">
           <h2 className="section-title">Price history</h2>
           <table className="table compact">
             <thead>
@@ -901,12 +901,10 @@ export function ProductPrices() {
           </table>
           {canAdd && (
             <div className="form-row top-gap">
-              <label className="field">
-                <span>New price</span>
+              <Field label="New price">
                 <input className="input-num" value={rate} onChange={(e) => setRate(e.target.value)} />
-              </label>
-              <label className="field">
-                <span>Source</span>
+              </Field>
+              <Field label="Source">
                 <select value={source} onChange={(e) => setSource(e.target.value)}>
                   {Object.entries(SOURCES).map(([k, v]) => (
                     <option key={k} value={k}>
@@ -914,21 +912,20 @@ export function ProductPrices() {
                     </option>
                   ))}
                 </select>
-              </label>
-              <label className="field">
-                <span>Reference</span>
+              </Field>
+              <Field label="Reference">
                 <input value={ref} onChange={(e) => setRef(e.target.value)} />
-              </label>
-              <button className="btn btn-primary" disabled={!rate} onClick={() => void add()}>
+              </Field>
+              <Button variant="primary" disabled={!rate} onClick={() => void add()}>
                 Add
-              </button>
+              </Button>
               <div className="full">
                 <LastPrice productId={p.product.id} rate={rate} />
               </div>
             </div>
           )}
-        </div>
-        <div className="card">
+        </Card>
+        <Card as="div">
           <h2 className="section-title">Freight per {p.product.unit}</h2>
           <p className="small muted">Per product, or per vendor and godown (the most specific one in force is used).</p>
           <table className="table compact">
@@ -953,16 +950,15 @@ export function ProductPrices() {
           </table>
           {canAdd && (
             <div className="form-row top-gap">
-              <label className="field">
-                <span>Freight per unit</span>
+              <Field label="Freight per unit">
                 <input className="input-num" value={freight} onChange={(e) => setFreight(e.target.value)} />
-              </label>
-              <button className="btn" disabled={!freight} onClick={() => void addFreight()}>
+              </Field>
+              <Button disabled={!freight} onClick={() => void addFreight()}>
                 Add freight
-              </button>
+              </Button>
             </div>
           )}
-        </div>
+        </Card>
       </div>
     </>
   );
@@ -1050,7 +1046,7 @@ export function LabourRates() {
           {can("payables.edit") && <NewBill cards={cards} onDone={(id) => (load(), setOpen(id))} onError={setError} />}
         </div>
       )}
-      <div className="card top-gap">
+      <Card as="div" className="top-gap">
         <h2 className="section-title">Rate cards</h2>
         {byContractor.length === 0 && <p className="empty">No rate cards yet.</p>}
         {byContractor.map(([name, list]) => (
@@ -1085,9 +1081,9 @@ export function LabourRates() {
             </table>
           </div>
         ))}
-      </div>
+      </Card>
       {can("payables.view") && (
-        <div className="card top-gap">
+        <Card as="div" className="top-gap">
           <h2 className="section-title">Labour bills</h2>
           <table className="table compact">
             <thead>
@@ -1123,20 +1119,26 @@ export function LabourRates() {
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
       {shownBill && (
-        <div className="card top-gap">
-          <div className="card-head">
-            <h2 className="section-title">
+        <Card
+          as="div"
+          className="top-gap"
+          title={
+            <>
               {shownBill.number}: {shownBill.contractor}
-            </h2>
-            {shownBill.status === "draft" && can("payables.edit") && (
-              <button className="btn btn-small btn-primary" onClick={() => void approve(shownBill)}>
+            </>
+          }
+          actions={
+            shownBill.status === "draft" &&
+            can("payables.edit") && (
+              <Button variant="primary" size="small" onClick={() => void approve(shownBill)}>
                 Approve (vendor bill)
-              </button>
-            )}
-          </div>
+              </Button>
+            )
+          }
+        >
           <table className="table compact">
             <thead>
               <tr>
@@ -1185,7 +1187,7 @@ export function LabourRates() {
             Made by {shownBill.made_by}
             {shownBill.approved_by ? `, approved by ${shownBill.approved_by}` : ""}. No labour quantity is typed: it comes from the client bills (or attendance).
           </p>
-        </div>
+        </Card>
       )}
     </>
   );
@@ -1200,14 +1202,14 @@ export function LabourPerSqm({ siteId }: { siteId: number }) {
   }, [siteId]);
   if (!d) return null;
   return (
-    <div className={`card ${d.over ? "card-warn" : ""}`}>
+    <Card as="div" className={d.over ? "card-warn" : ""}>
       <h2 className="section-title">Labour cost per sqm</h2>
       <p>
         {d.per_sqm ? <b>{inr(d.per_sqm)}</b> : "—"} per sqm paid ({inr(d.labour_cost)} over {num(d.area_sqm, 2)} sqm billed) against{" "}
         {d.working_per_sqm ? <b>{inr(d.working_per_sqm)}</b> : "—"} in the rate working's labour line
         {d.over && <span className="badge badge-warn"> over the working</span>}
       </p>
-    </div>
+    </Card>
   );
 }
 
@@ -1235,27 +1237,25 @@ export function CostingSettingsCard() {
     }
   }
   return (
-    <div className="card top-gap">
+    <Card as="div" className="top-gap">
       <h2 className="section-title">Prices, rate working and lots</h2>
       <div className="grid-2">
-        <label className="field">
-          <span>Margin in new rate workings (a saved working keeps its own)</span>
+        <Field label="Margin in new rate workings (a saved working keeps its own)">
           <select value={String(s.margin_basis ?? "selling")} onChange={(e) => setS({ ...s, margin_basis: e.target.value })}>
             <option value="cost">on cost: rate = cost × (1 + margin)</option>
             <option value="selling">on the selling price: rate = cost ÷ (1 − margin)</option>
           </select>
-        </label>
+        </Field>
         {fields.map(([k, label]) => (
-          <label key={k} className="field">
-            <span>{label}</span>
+          <Field label={label} key={k}>
             <input className="input-num" value={String(s[k] ?? "")} onChange={(e) => setS({ ...s, [k]: e.target.value })} />
-          </label>
+          </Field>
         ))}
       </div>
-      <button className="btn btn-small top-gap" onClick={() => void save()}>
+      <Button size="small" className="top-gap" onClick={() => void save()}>
         Save
-      </button>
+      </Button>
       {saved && <span className="small muted"> {saved}</span>}
-    </div>
+    </Card>
   );
 }

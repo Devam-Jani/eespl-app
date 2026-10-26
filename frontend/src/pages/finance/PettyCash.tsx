@@ -9,6 +9,7 @@ import type { SiteLookups } from "../../types";
 import { localToday } from "../site/DprTab";
 import { shortDate } from "../Tenders";
 import { useFinanceLookups } from "./Billing";
+import { Button, Card, Field, buttonClass } from "../../ui/components";
 
 type Category = { id: number; name: string; budget_head: string };
 
@@ -43,12 +44,10 @@ export function ExpenseForm({ onClose, onSaved }: { onClose: () => void; onSaved
     <Modal title="Expense" onClose={onClose}>
       <form onSubmit={submit} className="daily">
         {error && <div className="alert alert-error">{error}</div>}
-        <label className="field">
-          <span>Amount (₹) *</span>
+        <Field label="Amount (₹) *">
           <input required className="tap-input" inputMode="decimal" value={form.amount} onChange={set("amount")} autoFocus />
-        </label>
-        <div className="field">
-          <span>Category *</span>
+        </Field>
+        <Field as="div" label="Category *">
           <div className="tap-group">
             {cats.map((c) => (
               <button key={c.id} type="button" className={`tap ${form.category_id === String(c.id) ? "on" : ""}`} onClick={() => setForm({ ...form, category_id: String(c.id) })}>
@@ -56,9 +55,8 @@ export function ExpenseForm({ onClose, onSaved }: { onClose: () => void; onSaved
               </button>
             ))}
           </div>
-        </div>
-        <label className="field">
-          <span>Site</span>
+        </Field>
+        <Field label="Site">
           <select className="tap-input" value={form.site_id} onChange={set("site_id")}>
             <option value="">— office / none —</option>
             {lookups?.sites.map((s) => (
@@ -67,32 +65,29 @@ export function ExpenseForm({ onClose, onSaved }: { onClose: () => void; onSaved
               </option>
             ))}
           </select>
-        </label>
+        </Field>
         <div className="grid-2">
-          <label className="field">
-            <span>Paid to</span>
+          <Field label="Paid to">
             <input className="tap-input" value={form.paid_to} onChange={set("paid_to")} />
-          </label>
-          <label className="field">
-            <span>Date</span>
+          </Field>
+          <Field label="Date">
             <input type="date" className="tap-input" value={form.on_date} max={localToday()} onChange={set("on_date")} />
-          </label>
+          </Field>
         </div>
-        <label className="field">
-          <span>Remark</span>
+        <Field label="Remark">
           <input className="tap-input" value={form.remark} onChange={set("remark")} />
-        </label>
-        <label className={`btn tap-wide ${photo ? "btn-primary" : ""}`}>
+        </Field>
+        <label className={buttonClass({ variant: photo ? "primary" : "secondary", className: "tap-wide" })}>
           📷 {photo ? photo.name : "Photo of the bill (required above the limit)"}
           <input type="file" accept="image/*,.pdf" capture="environment" hidden onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
         </label>
         <div className="daily-actions">
-          <button type="button" className="btn tap-wide" onClick={onClose}>
+          <Button type="button" className="tap-wide" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary tap-wide" disabled={busy || !form.category_id}>
+          </Button>
+          <Button type="submit" variant="primary" className="tap-wide" disabled={busy || !form.category_id}>
             Submit
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>
@@ -143,18 +138,18 @@ function Entries({ acc, canApprove, onChange }: { acc: PettyAccount; canApprove:
               <td className="nowrap">
                 {e.status !== "approved" && <span className={`badge ${e.status === "submitted" ? "badge-warn" : "badge-danger"}`}>{e.status}</span>}
                 {e.has_photo && (
-                  <button className="btn btn-small btn-ghost" onClick={() => void photo(e)}>
+                  <Button variant="ghost" size="small" onClick={() => void photo(e)}>
                     bill
-                  </button>
+                  </Button>
                 )}
                 {canApprove && e.status === "submitted" && (
                   <>
-                    <button className="btn btn-small btn-primary" onClick={() => void decide(e, true)}>
+                    <Button variant="primary" size="small" onClick={() => void decide(e, true)}>
                       Approve
-                    </button>
-                    <button className="btn btn-small" onClick={() => void decide(e, false)}>
+                    </Button>
+                    <Button size="small" onClick={() => void decide(e, false)}>
                       Reject
-                    </button>
+                    </Button>
                   </>
                 )}
               </td>
@@ -205,20 +200,20 @@ export default function PettyCash() {
         <h1>Petty cash</h1>
         <div className="page-actions">
           {approver && (
-            <button className="btn" onClick={() => setAdvance(true)}>
+            <Button onClick={() => setAdvance(true)}>
               Give advance
-            </button>
+            </Button>
           )}
           {mine && can("expense.create") && (
-            <button className="btn btn-primary" onClick={() => setSpending(true)}>
+            <Button variant="primary" onClick={() => setSpending(true)}>
               + Expense
-            </button>
+            </Button>
           )}
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {mine && (
-        <div className="card daily">
+        <Card as="div" className="daily">
           <div className="tiles">
             <div className="tile">
               <div className="tile-title">My balance</div>
@@ -227,13 +222,13 @@ export default function PettyCash() {
             </div>
           </div>
           <Entries acc={mine} canApprove={false} onChange={setMine} />
-        </div>
+        </Card>
       )}
       {!mine && <p className="muted">{me ? "No petty cash account yet: it opens with the first advance." : ""}</p>}
       {(approver || accounts.length > 1) && (
         <>
           <h2 className="section-title top-gap">Accounts</h2>
-          <div className="card table-wrap">
+          <Card as="div" className="table-wrap">
             <table className="table">
               <thead>
                 <tr>
@@ -260,7 +255,7 @@ export default function PettyCash() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         </>
       )}
       {open && (
@@ -271,9 +266,9 @@ export default function PettyCash() {
           <Entries acc={open} canApprove={approver} onChange={(a) => (setOpen(a), void load())} />
           {approver && (
             <div className="form-actions">
-              <button className="btn" onClick={() => void settle(open)}>
+              <Button onClick={() => void settle(open)}>
                 Record cash returned
-              </button>
+              </Button>
             </div>
           )}
         </Modal>
@@ -311,8 +306,7 @@ function AdvanceForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
     <Modal title="Petty cash advance" onClose={onClose}>
       <form onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
-        <label className="field">
-          <span>To *</span>
+        <Field label="To *">
           <select required value={form.user_id} onChange={(e) => setForm({ ...form, user_id: e.target.value })}>
             <option value="">—</option>
             {users.map((u) => (
@@ -321,23 +315,20 @@ function AdvanceForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
               </option>
             ))}
           </select>
-        </label>
+        </Field>
         <div className="grid-2">
-          <label className="field">
-            <span>Amount (₹) *</span>
+          <Field label="Amount (₹) *">
             <input required inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Mode</span>
+          </Field>
+          <Field label="Mode">
             <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
               {["cash", "upi", "neft"].map((m) => (
                 <option key={m}>{m}</option>
               ))}
             </select>
-          </label>
+          </Field>
           {form.mode !== "cash" && (
-            <label className="field">
-              <span>From bank</span>
+            <Field label="From bank">
               <select value={form.bank_account_id} onChange={(e) => setForm({ ...form, bank_account_id: e.target.value })}>
                 <option value="">—</option>
                 {lookups?.banks.map((b) => (
@@ -346,11 +337,11 @@ function AdvanceForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
                   </option>
                 ))}
               </select>
-            </label>
+            </Field>
           )}
         </div>
         <div className="form-actions">
-          <button className="btn btn-primary">Give</button>
+          <Button type="submit" variant="primary">Give</Button>
         </div>
       </form>
     </Modal>

@@ -12,6 +12,7 @@ import { localToday } from "../site/DprTab";
 import { MusterTable, WorkerForm } from "../site/LabourTab";
 import { WoStatus } from "../site/WorkOrdersTab";
 import { shortDate } from "../Tenders";
+import { Button, Card, Field } from "../../ui/components";
 
 type TodayRow = { site_id: number; code: string; name: string; posted: number; present: number; half_day: number; absent: number };
 
@@ -48,14 +49,18 @@ export function AttendanceToday() {
               Muster roll
             </button>
           </div>
-          {view === "today" && <input type="date" value={day} max={localToday()} onChange={(e) => setDay(e.target.value)} aria-label="Day" />}
+          {view === "today" && (
+            <Field label="Day" bare>
+              <input type="date" value={day} max={localToday()} onChange={(e) => setDay(e.target.value)} aria-label="Day" />
+            </Field>
+          )}
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {view === "muster" ? (
         <MusterTable />
       ) : (
-        <div className="card table-wrap">
+        <Card as="div" className="table-wrap">
           <table className="table">
             <thead>
               <tr>
@@ -102,7 +107,7 @@ export function AttendanceToday() {
               )}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
     </>
   );
@@ -123,16 +128,18 @@ export function LabourMaster() {
       <div className="page-header">
         <h1>Labour</h1>
         <div className="page-actions">
-          <input className="search" placeholder="Search name or phone" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Field label="Search name or phone" bare>
+            <input className="search" placeholder="Search name or phone" value={q} onChange={(e) => setQ(e.target.value)} />
+          </Field>
           {can("labour.edit") && (
-            <button className="btn btn-primary" onClick={() => setEditing("new")}>
+            <Button variant="primary" onClick={() => setEditing("new")}>
               Add worker
-            </button>
+            </Button>
           )}
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -161,7 +168,7 @@ export function LabourMaster() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
       {editing && <WorkerForm worker={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} onSaved={() => (setEditing(null), void load())} />}
     </>
   );
@@ -184,7 +191,7 @@ export function Subcontractors() {
         </p>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -218,9 +225,9 @@ export function Subcontractors() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       <h2 className="section-title top-gap">Work orders</h2>
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -251,7 +258,7 @@ export function Subcontractors() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -306,9 +313,9 @@ export function Assets() {
             ))}
           </div>
           {edit && (
-            <button className="btn btn-primary" onClick={() => setAdding(true)}>
+            <Button variant="primary" onClick={() => setAdding(true)}>
               Add asset
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -317,7 +324,7 @@ export function Assets() {
         <AssetTable assets={assets} onMove={edit ? setMoving : undefined} onUsage={edit ? setLogging : undefined} />
       ) : (
         <>
-          <div className="card table-wrap">
+          <Card as="div" className="table-wrap">
             <table className="table compact">
               <thead>
                 <tr>
@@ -340,7 +347,7 @@ export function Assets() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
           <h2 className="section-title top-gap">Usage (90 days)</h2>
           <UsageTable rows={usage} showSite />
         </>
@@ -384,40 +391,33 @@ function AssetForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
       <form onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
         <div className="grid-2">
-          <label className="field">
-            <span>Name *</span>
+          <Field label="Name *">
             <input required value={form.name} onChange={set("name")} />
-          </label>
-          <label className="field">
-            <span>Category</span>
+          </Field>
+          <Field label="Category">
             <select value={form.category} onChange={set("category")}>
               {["tool", "equipment", "machine", "vehicle"].map((c) => (
                 <option key={c}>{c}</option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Make</span>
+          </Field>
+          <Field label="Make">
             <input value={form.make} onChange={set("make")} />
-          </label>
-          <label className="field">
-            <span>Model</span>
+          </Field>
+          <Field label="Model">
             <input value={form.model} onChange={set("model")} />
-          </label>
-          <label className="field">
-            <span>Serial no</span>
+          </Field>
+          <Field label="Serial no">
             <input value={form.serial_no} onChange={set("serial_no")} />
-          </label>
-          <label className="field">
-            <span>Ownership</span>
+          </Field>
+          <Field label="Ownership">
             <select value={form.ownership} onChange={set("ownership")}>
               <option value="own">Own</option>
               <option value="hired">Hired</option>
             </select>
-          </label>
+          </Field>
           {form.ownership === "hired" && (
-            <label className="field">
-              <span>Hired from *</span>
+            <Field label="Hired from *">
               <select required value={form.vendor_id} onChange={set("vendor_id")}>
                 <option value="">—</option>
                 {lookups?.vendors.map((v) => (
@@ -426,30 +426,26 @@ function AssetForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
                   </option>
                 ))}
               </select>
-            </label>
+            </Field>
           )}
-          <label className="field">
-            <span>Purchase date</span>
+          <Field label="Purchase date">
             <input type="date" value={form.purchase_date} onChange={set("purchase_date")} />
-          </label>
-          <label className="field">
-            <span>Purchase value (₹)</span>
+          </Field>
+          <Field label="Purchase value (₹)">
             <input inputMode="decimal" value={form.purchase_value} onChange={set("purchase_value")} />
-          </label>
-          <label className="field">
-            <span>Rate per day (₹)</span>
+          </Field>
+          <Field label="Rate per day (₹)">
             <input inputMode="decimal" value={form.rate_per_day} onChange={set("rate_per_day")} />
-          </label>
-          <label className="field">
-            <span>Rate per hour (₹)</span>
+          </Field>
+          <Field label="Rate per hour (₹)">
             <input inputMode="decimal" value={form.rate_per_hour} onChange={set("rate_per_hour")} />
-          </label>
+          </Field>
         </div>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary">Add (kept in the godown)</button>
+          </Button>
+          <Button type="submit" variant="primary">Add (kept in the godown)</Button>
         </div>
       </form>
     </Modal>
@@ -480,7 +476,7 @@ export function DailyReports() {
           ))}
         </div>
       )}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -507,7 +503,7 @@ export function DailyReports() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -543,23 +539,23 @@ export function Checklists() {
       <div className="page-header">
         <h1>Checklist templates</h1>
         {canEdit && (
-          <button className="btn btn-primary" onClick={() => setEditing({ name: "", is_active: true, items: [{ text: "", type: "pass_fail", required: true }] })}>
+          <Button variant="primary" onClick={() => setEditing({ name: "", is_active: true, items: [{ text: "", type: "pass_fail", required: true }] })}>
             New checklist
-          </button>
+          </Button>
         )}
       </div>
       <p className="muted small">Pick a checklist on a hold-point step in Settings › Stage templates: the step is then certified only after a passed inspection.</p>
       {error && <div className="alert alert-error">{error}</div>}
       {list.map((c) => (
-        <div key={c.id} className="card top-gap">
+        <Card key={c.id} as="div" className="top-gap">
           <div className="toolbar">
             <b>
               {c.name} {!c.is_active && <span className="badge badge-muted">inactive</span>}
             </b>
             {canEdit && (
-              <button className="btn btn-small" onClick={() => setEditing({ ...c, items: c.items.map((i) => ({ ...i })) })}>
+              <Button size="small" onClick={() => setEditing({ ...c, items: c.items.map((i) => ({ ...i })) })}>
                 Edit
-              </button>
+              </Button>
             )}
           </div>
           <ol className="small">
@@ -573,44 +569,47 @@ export function Checklists() {
               </li>
             ))}
           </ol>
-        </div>
+        </Card>
       ))}
       {editing && (
         <Modal title={editing.id ? "Edit checklist" : "New checklist"} onClose={() => setEditing(null)} wide>
           <form onSubmit={save}>
-            <label className="field">
-              <span>Name</span>
+            <Field label="Name">
               <input required value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
-            </label>
+            </Field>
             {editing.items.map((it, i) => (
               <div key={i} className="line-row">
-                <input className="grow" required value={it.text} onChange={(e) => setItem(i, { text: e.target.value })} aria-label="Check" />
-                <select value={it.type} onChange={(e) => setItem(i, { type: e.target.value as ItemForm["type"] })}>
-                  <option value="pass_fail">pass / fail</option>
-                  <option value="number">number</option>
-                  <option value="text">text</option>
-                  <option value="photo">photo</option>
-                </select>
+                <Field label="Check" bare>
+                  <input className="grow" required value={it.text} onChange={(e) => setItem(i, { text: e.target.value })} aria-label="Check" />
+                </Field>
+                <Field label="Check type" bare>
+                  <select value={it.type} onChange={(e) => setItem(i, { type: e.target.value as ItemForm["type"] })}>
+                    <option value="pass_fail">pass / fail</option>
+                    <option value="number">number</option>
+                    <option value="text">text</option>
+                    <option value="photo">photo</option>
+                  </select>
+                </Field>
                 <label className="check">
                   <input type="checkbox" checked={it.required} onChange={(e) => setItem(i, { required: e.target.checked })} /> required
                 </label>
-                <button type="button" className="btn btn-ghost btn-icon" onClick={() => setEditing({ ...editing, items: editing.items.filter((_, j) => j !== i) })}>
+                <Button type="button" variant="ghost" icon onClick={() => setEditing({ ...editing, items: editing.items.filter((_, j) => j !== i) })}>
                   ×
-                </button>
+                </Button>
               </div>
             ))}
-            <button
+            <Button
               type="button"
-              className="btn btn-small top-gap"
+              size="small" className="top-gap"
               onClick={() => setEditing({ ...editing, items: [...editing.items, { text: "", type: "pass_fail", required: true }] })}
             >
               + Item
-            </button>
+            </Button>
             <label className="check top-gap">
               <input type="checkbox" checked={editing.is_active} onChange={(e) => setEditing({ ...editing, is_active: e.target.checked })} /> Active
             </label>
             <div className="form-actions">
-              <button className="btn btn-primary">Save</button>
+              <Button type="submit" variant="primary">Save</Button>
             </div>
           </form>
         </Modal>

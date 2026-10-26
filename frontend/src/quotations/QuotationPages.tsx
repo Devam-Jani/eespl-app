@@ -13,6 +13,7 @@ import { Modal } from "../ui/Overlay";
 import { errorText } from "../format";
 import { loadLookups, MarkupField, money, plain, SectionsEditor, STATUS_BADGE, useLookups } from "./common";
 import type { Lookups, QItem, QLine, Quotation, Ref, SpecCopy, Term } from "./common";
+import { Button, buttonClass, Card, Field } from "../ui/components";
 
 type Row = {
   id: number;
@@ -74,20 +75,24 @@ export function QuotationsList() {
         <h1>Quotations</h1>
         <div className="page-actions">
           <form onSubmit={(e) => e.preventDefault()}>
-            <input className="search" placeholder="Search code, client or project" defaultValue={q} onChange={(e) => set("q", e.target.value)} />
+            <Field label="Search code, client or project" bare>
+              <input className="search" placeholder="Search code, client or project" defaultValue={q} onChange={(e) => set("q", e.target.value)} />
+            </Field>
           </form>
-          <select value={status} onChange={(e) => set("status", e.target.value)}>
-            <option value="">All statuses</option>
-            {["draft", "sent", "negotiation", "won", "lost", "expired"].map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+          <Field label="Status" bare>
+            <select value={status} onChange={(e) => set("status", e.target.value)}>
+              <option value="">All statuses</option>
+              {["draft", "sent", "negotiation", "won", "lost", "expired"].map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </Field>
           {can("quotation.edit") && (
-            <button className="btn btn-primary" onClick={() => setCreating(true)}>
+            <Button variant="primary" onClick={() => setCreating(true)}>
               New quotation
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -97,7 +102,7 @@ export function QuotationsList() {
       ) : rows.length === 0 ? (
         <p className="empty">No quotations yet. About 90 % of the work starts here: make one from a lead, a client or blank.</p>
       ) : (
-        <div className="table-wrap card">
+        <Card as="div" className="table-wrap">
           <table className="table">
             <thead>
               <tr>
@@ -134,7 +139,7 @@ export function QuotationsList() {
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
       {creating && <NewQuotation leadId={params.get("lead_id")} clientId={params.get("client_id")} onClose={() => setCreating(false)} />}
     </>
@@ -211,12 +216,10 @@ function NewQuotation({ leadId, clientId, onClose }: { leadId: string | null; cl
         </div>
         {from !== "blank" && (
           <div className="form-grid">
-            <label className="field">
-              <span>Search {from === "lead" ? "leads" : "clients"}</span>
+            <Field label={<>Search {from === "lead" ? "leads" : "clients"}</>}>
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name or code" />
-            </label>
-            <label className="field">
-              <span>{from === "lead" ? "Lead" : "Client"}</span>
+            </Field>
+            <Field label={from === "lead" ? "Lead" : "Client"}>
               <select value={parent} onChange={(e) => setParent(e.target.value)} required>
                 <option value="">Choose…</option>
                 {options.map((o) => (
@@ -226,28 +229,23 @@ function NewQuotation({ leadId, clientId, onClose }: { leadId: string | null; cl
                 ))}
                 {parent && !options.some((o) => String(o.id) === parent) && <option value={parent}>#{parent}</option>}
               </select>
-            </label>
+            </Field>
           </div>
         )}
         <div className="form-grid">
-          <label className="field">
-            <span>Client firm {from !== "blank" && <em className="muted">(empty: from the {from})</em>}</span>
+          <Field label={<>Client firm {from !== "blank" && <em className="muted">(empty: from the {from})</em>}</>}>
             <input value={form.client_firm} onChange={(e) => setForm({ ...form, client_firm: e.target.value })} required={from === "blank"} />
-          </label>
-          <label className="field">
-            <span>Project</span>
+          </Field>
+          <Field label="Project">
             <input value={form.project} onChange={(e) => setForm({ ...form, project: e.target.value })} required={from === "blank"} />
-          </label>
-          <label className="field">
-            <span>City</span>
+          </Field>
+          <Field label="City">
             <input value={form.client_city} onChange={(e) => setForm({ ...form, client_city: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Kind attention</span>
+          </Field>
+          <Field label="Kind attention">
             <input value={form.attention} onChange={(e) => setForm({ ...form, attention: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Letterhead</span>
+          </Field>
+          <Field label="Letterhead">
             <select value={form.letterhead_id} onChange={(e) => setForm({ ...form, letterhead_id: e.target.value })}>
               {lookups?.letterheads.map((h) => (
                 <option key={h.id} value={h.id}>
@@ -255,10 +253,9 @@ function NewQuotation({ leadId, clientId, onClose }: { leadId: string | null; cl
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
         </div>
-        <label className="field">
-          <span>Start from a preset</span>
+        <Field label="Start from a preset">
           <select value={preset} onChange={(e) => setPreset(e.target.value)}>
             <option value="">No preset: pick the letterhead and areas below</option>
             {lookups?.presets.map((p) => (
@@ -267,7 +264,7 @@ function NewQuotation({ leadId, clientId, onClose }: { leadId: string | null; cl
               </option>
             ))}
           </select>
-        </label>
+        </Field>
         {preset && (
           <p className="muted small">The preset sets the letterhead, the letter, the areas in order, the T&amp;C and the references. Areas ticked below replace its areas.</p>
         )}
@@ -302,12 +299,12 @@ function NewQuotation({ leadId, clientId, onClose }: { leadId: string | null; cl
           {lookups && lookups.offer_items.length === 0 && <p className="muted">The library has no offer items yet (Settings › Quotation library).</p>}
         </div>
         <div className="modal-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary" disabled={busy}>
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy}>
             {busy ? "Building…" : "Build the quotation"}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>
@@ -400,13 +397,15 @@ export function QuotationEditor() {
         </p>
       </div>
       {q.revisions.length > 1 && (
-        <select className="rev-select" value={q.id} onChange={(e) => navigate(`/quotations/${e.target.value}`)} aria-label="Revision">
-          {q.revisions.map((r) => (
-            <option key={r.id} value={r.id}>
-              R{r.revision} · {r.status}
-            </option>
-          ))}
-        </select>
+        <Field label="Revision" bare>
+          <select className="rev-select" value={q.id} onChange={(e) => navigate(`/quotations/${e.target.value}`)} aria-label="Revision">
+            {q.revisions.map((r) => (
+              <option key={r.id} value={r.id}>
+                R{r.revision} · {r.status}
+              </option>
+            ))}
+          </select>
+        </Field>
       )}
     </div>
   );
@@ -428,30 +427,30 @@ export function QuotationEditor() {
         }
       />
       <div className="q-actions">
-        <button className="btn btn-small" onClick={() => void downloadFile(`${base}/docx`).catch((e) => setError(errorText(e)))}>
+        <Button size="small" onClick={() => void downloadFile(`${base}/docx`).catch((e) => setError(errorText(e)))}>
           ⤓ Word
-        </button>
-        <button className="btn btn-small" onClick={() => void downloadFile(`${base}/pdf`).catch((e) => setError(errorText(e)))}>
+        </Button>
+        <Button size="small" onClick={() => void downloadFile(`${base}/pdf`).catch((e) => setError(errorText(e)))}>
           ⤓ PDF
-        </button>
-        <button
-          className="btn btn-small btn-ghost"
+        </Button>
+        <Button
+          variant="ghost" size="small"
           title="Header and footer left blank, for printing on letterhead stationery"
           onClick={() => void downloadFile(`${base}/pdf?preprinted=true`).catch((e) => setError(errorText(e)))}
         >
           ⤓ PDF for letterhead paper
-        </button>
+        </Button>
         {q.can_send && (
-          <button
-            className="btn btn-small"
+          <Button
+            size="small"
             onClick={() => void apply(`${base}/issue`, undefined, "POST", "Issued: the Word and PDF files are kept with this revision and attached to the lead.")}
           >
             {q.files.length ? "Re-issue files" : "Issue files"}
-          </button>
+          </Button>
         )}
         {q.can_send && q.is_latest && ["draft", "negotiation"].includes(q.status) && (
-          <button
-            className="btn btn-small btn-primary"
+          <Button
+            variant="primary" size="small"
             onClick={() => {
               const warn = q.items.flatMap((i) => i.checks.map((c) => `${i.name}: ${c}`));
               if (warn.length && !window.confirm(`Check before sending (warnings, not blocks):\n\n${warn.join("\n")}\n\nSend anyway?`)) return;
@@ -480,26 +479,26 @@ Send anyway? Give the reason:`)
             }}
           >
             Mark sent
-          </button>
+          </Button>
         )}
         {q.can_edit && q.status === "sent" && (
-          <button className="btn btn-small" onClick={() => void apply(`${base}/status`, { status: "negotiation" })}>
+          <Button size="small" onClick={() => void apply(`${base}/status`, { status: "negotiation" })}>
             Negotiation
-          </button>
+          </Button>
         )}
         {q.can_send && q.is_latest && ["draft", "sent", "negotiation"].includes(q.status) && (
           <>
-            <button className="btn btn-small" onClick={() => setDialog("won")}>
+            <Button size="small" onClick={() => setDialog("won")}>
               Won
-            </button>
-            <button className="btn btn-small" onClick={() => setDialog("lost")}>
+            </Button>
+            <Button size="small" onClick={() => setDialog("lost")}>
               Lost
-            </button>
+            </Button>
           </>
         )}
         {q.is_latest && q.status !== "won" && (
-          <button
-            className="btn btn-small"
+          <Button
+            size="small"
             onClick={() =>
               void api<Quotation>(`${base}/revision`, { method: "POST" }).then(
                 (r) => navigate(`/quotations/${r.id}`),
@@ -508,24 +507,24 @@ Send anyway? Give the reason:`)
             }
           >
             New revision
-          </button>
+          </Button>
         )}
-        <Link className="btn btn-small" to={`/quotations/${q.id}/working`}>
+        <Link className={buttonClass({ size: "small" })} to={`/quotations/${q.id}/working`}>
           Rate working
         </Link>
         {q.previous_id && (
-          <button className="btn btn-small" onClick={() => setDialog("diff")}>
+          <Button size="small" onClick={() => setDialog("diff")}>
             Changes from R{q.revision - 1}
-          </button>
+          </Button>
         )}
         {q.can_edit && (
           <>
-            <button className="btn btn-small btn-ghost" onClick={() => setDialog("survey")}>
+            <Button variant="ghost" size="small" onClick={() => setDialog("survey")}>
               Quantities from a survey
-            </button>
-            <button className="btn btn-small btn-ghost" onClick={() => void apply(`${base}/refill-rates`, undefined, "POST", "Rates filled again (typed rates stay).")}>
+            </Button>
+            <Button variant="ghost" size="small" onClick={() => void apply(`${base}/refill-rates`, undefined, "POST", "Rates filled again (typed rates stay).")}>
               Refill rates
-            </button>
+            </Button>
           </>
         )}
       </div>
@@ -536,7 +535,7 @@ Send anyway? Give the reason:`)
         </div>
       )}
       <div className="q-editor">
-        <nav className="q-outline card" aria-label="Outline">
+        <Card as="nav" className="q-outline" aria-label="Outline">
           <button className={`outline-row ${sel.kind === "letter" ? "on" : ""}`} onClick={() => setSel({ kind: "letter" })}>
             Cover letter
           </button>
@@ -573,11 +572,11 @@ Send anyway? Give the reason:`)
               {q.total_option_note && <span className="muted small"> (first option)</span>}
             </div>
           )}
-        </nav>
-        <section className="q-preview card" aria-label="Preview">
+        </Card>
+        <Card className="q-preview" aria-label="Preview">
           <iframe title="Quotation preview" srcDoc={html} sandbox="" />
-        </section>
-        <aside className="q-panel card">
+        </Card>
+        <Card as="aside" className="q-panel">
           {sel.kind === "letter" && <LetterPanel q={q} lookups={lookups} apply={apply} />}
           {sel.kind === "item" && q.items.find((i) => i.id === sel.id) && (
             <ItemPanel key={sel.id} q={q} item={q.items.find((i) => i.id === sel.id)!} lookups={lookups} apply={apply} onRemoved={() => setSel({ kind: "letter" })} />
@@ -585,7 +584,7 @@ Send anyway? Give the reason:`)
           {sel.kind === "terms" && <TermsPanel q={q} lookups={lookups} apply={apply} />}
           {sel.kind === "refs" && <RefsPanel q={q} apply={apply} />}
           {sel.kind === "follow" && <FollowPanel q={q} apply={apply} />}
-        </aside>
+        </Card>
       </div>
       {dialog === "won" && <WonDialog q={q} onClose={() => setDialog(null)} apply={apply} />}
       {dialog === "lost" && <LostDialog q={q} lookups={lookups} onClose={() => setDialog(null)} apply={apply} />}
@@ -620,18 +619,18 @@ function PhoneView({ q, html, header }: { q: Quotation; html: string; header: Re
     <div className="q-phone">
       {header}
       <div className="q-phone-actions">
-        <button className="btn btn-primary" onClick={() => void share()}>
+        <Button variant="primary" onClick={() => void share()}>
           Share PDF
-        </button>
-        <button className="btn" onClick={() => void downloadFile(`/api/quotations/${q.id}/pdf`)}>
+        </Button>
+        <Button onClick={() => void downloadFile(`/api/quotations/${q.id}/pdf`)}>
           ⤓ PDF
-        </button>
+        </Button>
       </div>
       {msg && <p className="muted small">{msg}</p>}
       <p className="muted small">Read-only on a phone: edit the quotation on a laptop.</p>
-      <div className="q-phone-preview card">
+      <Card as="div" className="q-phone-preview">
         <iframe title="Quotation preview" srcDoc={html} sandbox="" />
-      </div>
+      </Card>
     </div>
   );
 }
@@ -685,44 +684,34 @@ function LetterPanel({ q, lookups, apply }: { q: Quotation; lookups: Lookups; ap
     >
       <h2 className="section-title">Cover letter</h2>
       <div className="form-grid two">
-        <label className="field">
-          <span>Client firm</span>
+        <Field label="Client firm">
           <input value={f.client_firm} onChange={set("client_firm")} disabled={ro} />
-        </label>
-        <label className="field">
-          <span>City</span>
+        </Field>
+        <Field label="City">
           <input value={f.client_city} onChange={set("client_city")} disabled={ro} />
-        </label>
-        <label className="field">
-          <span>Kind attention</span>
+        </Field>
+        <Field label="Kind attention">
           <input value={f.attention} onChange={set("attention")} disabled={ro} />
-        </label>
-        <label className="field">
-          <span>Project</span>
+        </Field>
+        <Field label="Project">
           <input value={f.project} onChange={set("project")} disabled={ro} />
-        </label>
-        <label className="field">
-          <span>Brand</span>
+        </Field>
+        <Field label="Brand">
           <input value={f.brand} onChange={set("brand")} disabled={ro} />
-        </label>
-        <label className="field">
-          <span>Areas list</span>
+        </Field>
+        <Field label="Areas list">
           <input value={f.areas_list} placeholder={q.areas_list_auto} onChange={set("areas_list")} disabled={ro} />
-        </label>
-        <label className="field">
-          <span>Date</span>
+        </Field>
+        <Field label="Date">
           <input type="date" value={f.quote_date} onChange={set("quote_date")} disabled={ro} />
-        </label>
-        <label className="field">
-          <span>Valid for (days)</span>
+        </Field>
+        <Field label="Valid for (days)">
           <input type="number" min={1} max={365} value={f.validity_days} onChange={set("validity_days")} disabled={ro} />
-        </label>
-        <label className="field">
-          <span>Guarantee (years)</span>
+        </Field>
+        <Field label="Guarantee (years)">
           <input type="number" min={0} max={50} value={f.guarantee_years} onChange={set("guarantee_years")} disabled={ro} placeholder="needed to send" />
-        </label>
-        <label className="field">
-          <span>Letterhead</span>
+        </Field>
+        <Field label="Letterhead">
           <select value={f.letterhead_id} onChange={set("letterhead_id")} disabled={ro}>
             {lookups.letterheads.map((h) => (
               <option key={h.id} value={h.id}>
@@ -730,9 +719,8 @@ function LetterPanel({ q, lookups, apply }: { q: Quotation; lookups: Lookups; ap
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Salesperson</span>
+        </Field>
+        <Field label="Salesperson">
           <select value={f.salesperson_id} onChange={set("salesperson_id")} disabled={ro}>
             <option value="">—</option>
             {lookups.salespeople.map((p) => (
@@ -741,15 +729,13 @@ function LetterPanel({ q, lookups, apply }: { q: Quotation; lookups: Lookups; ap
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Signatory name</span>
+        </Field>
+        <Field label="Signatory name">
           <input value={f.signatory_name} placeholder="the salesperson" onChange={set("signatory_name")} disabled={ro} />
-        </label>
-        <label className="field">
-          <span>Designation</span>
+        </Field>
+        <Field label="Designation">
           <input value={f.signatory_designation} placeholder="their job title" onChange={set("signatory_designation")} disabled={ro} />
-        </label>
+        </Field>
       </div>
       <label className="check">
         <input type="checkbox" checked={f.show_amounts} onChange={(e) => setF({ ...f, show_amounts: e.target.checked })} disabled={ro} /> Show quantities, amounts and a total
@@ -759,16 +745,16 @@ function LetterPanel({ q, lookups, apply }: { q: Quotation; lookups: Lookups; ap
       <MarkupField label="Body" value={f.body} onChange={(v) => setF({ ...f, body: v })} rows={7} placeholders={lookups.placeholders} disabled={ro} />
       <MarkupField label="Enclosures (one per line)" value={f.enclosures} onChange={(v) => setF({ ...f, enclosures: v })} rows={2} disabled={ro} />
       <div className="panel-actions">
-        {!ro && <button className="btn btn-primary">Save</button>}
+        {!ro && <Button type="submit" variant="primary">Save</Button>}
         {q.can_template_edit && (
-          <button
+          <Button
             type="button"
-            className="btn btn-ghost"
+            variant="ghost"
             onClick={() => void apply(`/api/quotations/${q.id}/save-back`, { kind: "letter" })}
             title="Write this letter into its library template as a new version"
           >
             Save back to library
-          </button>
+          </Button>
         )}
       </div>
     </form>
@@ -796,8 +782,7 @@ function ItemPanel({ q, item, lookups, apply, onRemoved }: { q: Quotation; item:
           </ul>
         </div>
       )}
-      <label className="field">
-        <span>Area type {item.area_type_id === null && <span className="badge badge-warn">area type missing</span>}</span>
+      <Field label={<>Area type {item.area_type_id === null && <span className="badge badge-warn">area type missing</span>}</>}>
         <select
           value={item.area_type_id ?? ""}
           disabled={ro}
@@ -810,20 +795,17 @@ function ItemPanel({ q, item, lookups, apply, onRemoved }: { q: Quotation; item:
             </option>
           ))}
         </select>
-      </label>
+      </Field>
       <div className="form-grid two">
-        <label className="field">
-          <span>Area name</span>
+        <Field label="Area name">
           <input value={head.name} onChange={(e) => setHead({ ...head, name: e.target.value })} disabled={ro} />
-        </label>
-        <label className="field">
-          <span>Budgetary offer title</span>
+        </Field>
+        <Field label="Budgetary offer title">
           <input value={head.budget_title} onChange={(e) => setHead({ ...head, budget_title: e.target.value })} disabled={ro} />
-        </label>
+        </Field>
       </div>
       {item.option_labels.length > 1 && (
-        <div className="field">
-          <span>Options offered</span>
+        <Field as="div" label="Options offered">
           <div>
             {item.option_labels.map((o) => (
               <label key={o} className="check inline">
@@ -840,26 +822,26 @@ function ItemPanel({ q, item, lookups, apply, onRemoved }: { q: Quotation; item:
               </label>
             ))}
           </div>
-        </div>
+        </Field>
       )}
       {!ro && (
         <div className="panel-actions">
-          <button className="btn btn-small" onClick={() => void apply(`${base}/items/${item.id}`, head, "PUT", "Saved for this quotation only.")}>
+          <Button size="small" onClick={() => void apply(`${base}/items/${item.id}`, head, "PUT", "Saved for this quotation only.")}>
             Save names
-          </button>
+          </Button>
           {q.can_template_edit && item.offer_item_id && (
-            <button className="btn btn-small btn-ghost" onClick={() => void apply(`${base}/save-back`, { kind: "item", item_id: item.id })}>
+            <Button variant="ghost" size="small" onClick={() => void apply(`${base}/save-back`, { kind: "item", item_id: item.id })}>
               Save names back to library
-            </button>
+            </Button>
           )}
-          <button
-            className="btn btn-small btn-ghost danger"
+          <Button
+            variant="ghost" size="small" className="danger"
             onClick={() => {
               if (window.confirm(`Remove ${item.name} from this quotation?`)) void apply(`${base}/items/${item.id}`, undefined, "DELETE").then(onRemoved);
             }}
           >
             Remove area
-          </button>
+          </Button>
         </div>
       )}
       <h3 className="section-title top-gap">Technical specification</h3>
@@ -869,23 +851,22 @@ function ItemPanel({ q, item, lookups, apply, onRemoved }: { q: Quotation; item:
             {s.option_label ? `Option ${s.option_label}: ` : ""}
             {s.title} {s.version ? <span className="muted small">library v{s.version}</span> : null}
           </summary>
-          <label className="field">
-            <span>Title</span>
+          <Field label="Title">
             <input value={s.title} onChange={(e) => setSpecs(specs.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} disabled={ro} />
-          </label>
+          </Field>
           <SectionsEditor sections={s.sections} stages={lookups.stages} disabled={ro} onChange={(sections) => setSpecs(specs.map((x, j) => (j === i ? { ...x, sections } : x)))} />
           {!ro && (
             <div className="panel-actions">
-              <button
-                className="btn btn-small btn-primary"
+              <Button
+                variant="primary" size="small"
                 onClick={() => void apply(`${base}/items/${item.id}`, { specs }, "PUT", "Saved for this quotation only (the library is unchanged).")}
               >
                 Save specification
-              </button>
+              </Button>
               {q.can_template_edit && s.spec_block_id && (
-                <button className="btn btn-small btn-ghost" onClick={() => void apply(`${base}/save-back`, { kind: "spec", item_id: item.id, spec_index: i })}>
+                <Button variant="ghost" size="small" onClick={() => void apply(`${base}/save-back`, { kind: "spec", item_id: item.id, spec_index: i })}>
                   Save back to library
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -899,9 +880,9 @@ function ItemPanel({ q, item, lookups, apply, onRemoved }: { q: Quotation; item:
         (adding ? (
           <AddLine q={q} item={item} lookups={lookups} apply={apply} onDone={() => setAdding(false)} />
         ) : (
-          <button className="btn btn-small" onClick={() => setAdding(true)}>
+          <Button size="small" onClick={() => setAdding(true)}>
             + Line
-          </button>
+          </Button>
         ))}
       {item.total && q.show_amounts && <p className="small top-gap">Item total ₹ {money(item.total)}</p>}
     </div>
@@ -942,8 +923,7 @@ function LineEditor({ q, line, lookups, apply }: { q: Quotation; line: QLine; lo
           {!line.offered && <p className="muted small">This option is not offered (tick it under Options offered).</p>}
           <MarkupField label="Description" value={f.description} onChange={(v) => setF({ ...f, description: v })} rows={4} disabled={ro} />
           <div className="form-grid four">
-            <label className="field">
-              <span>UoM</span>
+            <Field label="UoM">
               <select value={f.uom} onChange={(e) => setF({ ...f, uom: e.target.value })} disabled={ro}>
                 {lookups.uoms.map((u) => (
                   <option key={u.code} value={u.code}>
@@ -951,19 +931,16 @@ function LineEditor({ q, line, lookups, apply }: { q: Quotation; line: QLine; lo
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="field">
-              <span>Rate (₹)</span>
+            </Field>
+            <Field label="Rate (₹)">
               <input inputMode="decimal" value={f.rate} onChange={(e) => setF({ ...f, rate: e.target.value })} disabled={ro || f.client_scope} />
-            </label>
-            <label className="field">
-              <span>Qty</span>
+            </Field>
+            <Field label="Qty">
               <input inputMode="decimal" value={f.qty} placeholder="rate only" onChange={(e) => setF({ ...f, qty: e.target.value })} disabled={ro} />
-            </label>
-            <div className="field">
-              <span>Amount</span>
+            </Field>
+            <Field as="div" label="Amount">
               <span className="num">{line.amount ? `₹ ${money(line.amount)}` : "—"}</span>
-            </div>
+            </Field>
           </div>
           <label className="check inline">
             <input type="checkbox" checked={f.if_required} onChange={(e) => setF({ ...f, if_required: e.target.checked })} disabled={ro} /> If required
@@ -973,8 +950,8 @@ function LineEditor({ q, line, lookups, apply }: { q: Quotation; line: QLine; lo
           </label>
           {!ro && (
             <div className="panel-actions">
-              <button
-                className="btn btn-small btn-primary"
+              <Button
+                variant="primary" size="small"
                 onClick={() => {
                   const body: Record<string, unknown> = {};
                   if (dirty)
@@ -984,20 +961,20 @@ function LineEditor({ q, line, lookups, apply }: { q: Quotation; line: QLine; lo
                 }}
               >
                 Save line
-              </button>
+              </Button>
               {line.overridden && (
-                <button className="btn btn-small btn-ghost" onClick={() => void apply(url, { rate: null }, "PUT", "Rate filled again from its source.")}>
+                <Button variant="ghost" size="small" onClick={() => void apply(url, { rate: null }, "PUT", "Rate filled again from its source.")}>
                   Use the filled rate
-                </button>
+                </Button>
               )}
               {q.can_template_edit && (
-                <button className="btn btn-small btn-ghost" onClick={() => void apply(`/api/quotations/${q.id}/save-back`, { kind: "line", line_id: line.id })}>
+                <Button variant="ghost" size="small" onClick={() => void apply(`/api/quotations/${q.id}/save-back`, { kind: "line", line_id: line.id })}>
                   Save back to library
-                </button>
+                </Button>
               )}
-              <button className="btn btn-small btn-ghost danger" onClick={() => void apply(url, undefined, "DELETE")}>
+              <Button variant="ghost" size="small" className="danger" onClick={() => void apply(url, undefined, "DELETE")}>
                 Delete
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -1015,41 +992,46 @@ function AddLine({ q, item, lookups, apply, onDone }: { q: Quotation; item: QIte
   }, [search]);
   const base = `/api/quotations/${q.id}/items/${item.id}/lines`;
   return (
-    <div className="add-line card">
-      <label className="field">
-        <span>From the library</span>
+    <Card as="div" className="add-line">
+      <Field label="From the library">
         <input placeholder="Search offer lines" value={search} onChange={(e) => setSearch(e.target.value)} />
-      </label>
+      </Field>
       <div className="lib-pick">
         {lines.map((l) => (
-          <button key={l.id} className="btn btn-small btn-ghost" onClick={() => void apply(base, { offer_line_id: l.id }).then(onDone)}>
+          <Button key={l.id} variant="ghost" size="small" onClick={() => void apply(base, { offer_line_id: l.id }).then(onDone)}>
             {plain(l.description).slice(0, 70)} <span className="muted">· {l.uom}</span>
-          </button>
+          </Button>
         ))}
       </div>
       <MarkupField label="Or a new line (this quotation only)" value={blank.description} onChange={(v) => setBlank({ ...blank, description: v })} rows={2} />
       <div className="inline-form">
-        <select value={blank.uom} onChange={(e) => setBlank({ ...blank, uom: e.target.value })}>
-          {lookups.uoms.map((u) => (
-            <option key={u.code} value={u.code}>
-              {u.label}
-            </option>
-          ))}
-        </select>
-        <input placeholder="Rate (empty: Suggest)" value={blank.rate} onChange={(e) => setBlank({ ...blank, rate: e.target.value })} />
-        <input placeholder="Option" className="option-input" value={blank.option} onChange={(e) => setBlank({ ...blank, option: e.target.value })} />
-        <button
-          className="btn btn-small btn-primary"
+        <Field label="Unit" bare>
+          <select value={blank.uom} onChange={(e) => setBlank({ ...blank, uom: e.target.value })}>
+            {lookups.uoms.map((u) => (
+              <option key={u.code} value={u.code}>
+                {u.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Rate (empty: Suggest)" bare>
+          <input placeholder="Rate (empty: Suggest)" value={blank.rate} onChange={(e) => setBlank({ ...blank, rate: e.target.value })} />
+        </Field>
+        <Field label="Option" bare>
+          <input placeholder="Option" className="option-input" value={blank.option} onChange={(e) => setBlank({ ...blank, option: e.target.value })} />
+        </Field>
+        <Button
+          variant="primary" size="small"
           disabled={!blank.description.trim()}
           onClick={() => void apply(base, { description: blank.description, uom: blank.uom, rate: blank.rate || null, option: blank.option || null }).then(onDone)}
         >
           Add
-        </button>
-        <button className="btn btn-small" onClick={onDone}>
+        </Button>
+        <Button size="small" onClick={onDone}>
           Cancel
-        </button>
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -1076,24 +1058,26 @@ function TermsPanel({ q, lookups, apply }: { q: Quotation; lookups: Lookups; app
         <div key={i} className="term-row">
           <div className="inline-form">
             <span className="step-n">{i + 1}.</span>
-            <select value={t.category} onChange={(e) => setTerms(terms.map((x, j) => (j === i ? { ...x, category: e.target.value } : x)))} disabled={ro}>
-              {[...new Set([...Object.keys(lookups.tc_groups), t.category])].map((c) => (
-                <option key={c} value={c}>
-                  {label(c)}
-                </option>
-              ))}
-            </select>
+            <Field label="Category" bare>
+              <select value={t.category} onChange={(e) => setTerms(terms.map((x, j) => (j === i ? { ...x, category: e.target.value } : x)))} disabled={ro}>
+                {[...new Set([...Object.keys(lookups.tc_groups), t.category])].map((c) => (
+                  <option key={c} value={c}>
+                    {label(c)}
+                  </option>
+                ))}
+              </select>
+            </Field>
             {!ro && (
               <>
-                <button className="btn btn-small btn-ghost" onClick={() => move(i, -1)} aria-label="Up">
+                <Button variant="ghost" size="small" onClick={() => move(i, -1)} aria-label="Up">
                   ↑
-                </button>
-                <button className="btn btn-small btn-ghost" onClick={() => move(i, 1)} aria-label="Down">
+                </Button>
+                <Button variant="ghost" size="small" onClick={() => move(i, 1)} aria-label="Down">
                   ↓
-                </button>
-                <button className="btn btn-small btn-ghost" onClick={() => setTerms(terms.filter((_, j) => j !== i))}>
+                </Button>
+                <Button variant="ghost" size="small" onClick={() => setTerms(terms.filter((_, j) => j !== i))}>
                   Remove
-                </button>
+                </Button>
               </>
             )}
           </div>
@@ -1109,20 +1093,20 @@ function TermsPanel({ q, lookups, apply }: { q: Quotation; lookups: Lookups; app
       ))}
       {!ro && (
         <div className="panel-actions">
-          <button className="btn btn-primary" onClick={() => void apply(`/api/quotations/${q.id}`, { terms }, "PUT", "Saved for this quotation only.")}>
+          <Button variant="primary" onClick={() => void apply(`/api/quotations/${q.id}`, { terms }, "PUT", "Saved for this quotation only.")}>
             Save terms
-          </button>
-          <button className="btn btn-ghost" onClick={() => setPicking(!picking)}>
+          </Button>
+          <Button variant="ghost" onClick={() => setPicking(!picking)}>
             + From the T&amp;C library
-          </button>
+          </Button>
         </div>
       )}
       {picking && (
         <div className="lib-pick tall">
           {library.map((c) => (
-            <button key={c.id} className="btn btn-small btn-ghost" onClick={() => setTerms([...terms, { category: c.category, text: c.text, clause_id: c.id }])}>
+            <Button key={c.id} variant="ghost" size="small" onClick={() => setTerms([...terms, { category: c.category, text: c.text, clause_id: c.id }])}>
               <span className="badge badge-muted">{label(c.category)}</span> {plain(c.text).slice(0, 110)}
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -1154,24 +1138,27 @@ function RefsPanel({ q, apply }: { q: Quotation; apply: Apply }) {
   return (
     <div>
       <h2 className="section-title">Our esteemed clients</h2>
-      <label className="field">
-        <span>Title</span>
+      <Field label="Title">
         <input value={title} onChange={(e) => setTitle(e.target.value)} disabled={ro} />
-      </label>
+      </Field>
       {!ro && (
         <div className="inline-form">
-          <input placeholder="State (e.g. Gujarat)" value={state} onChange={(e) => setState(e.target.value)} />
-          <select value={areaType} onChange={(e) => setAreaType(e.target.value)}>
-            <option value="">Any area type</option>
-            {lookups?.area_types.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-          <button className="btn btn-small" onClick={() => void reload()}>
+          <Field label="State (e.g. Gujarat)" bare>
+            <input placeholder="State (e.g. Gujarat)" value={state} onChange={(e) => setState(e.target.value)} />
+          </Field>
+          <Field label="Area type" bare>
+            <select value={areaType} onChange={(e) => setAreaType(e.target.value)}>
+              <option value="">Any area type</option>
+              {lookups?.area_types.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Button size="small" onClick={() => void reload()}>
             Load from the library
-          </button>
+          </Button>
         </div>
       )}
       <div className="ref-rows">
@@ -1186,24 +1173,24 @@ function RefsPanel({ q, apply }: { q: Quotation; apply: Apply }) {
             </span>
             {!ro && (
               <span>
-                <button className="btn btn-small btn-ghost" onClick={() => move(i, -1)} aria-label="Up">
+                <Button variant="ghost" size="small" onClick={() => move(i, -1)} aria-label="Up">
                   ↑
-                </button>
-                <button className="btn btn-small btn-ghost" onClick={() => move(i, 1)} aria-label="Down">
+                </Button>
+                <Button variant="ghost" size="small" onClick={() => move(i, 1)} aria-label="Down">
                   ↓
-                </button>
+                </Button>
               </span>
             )}
           </div>
         ))}
       </div>
       {!ro && (
-        <button
-          className="btn btn-primary top-gap"
+        <Button
+          variant="primary" className="top-gap"
           onClick={() => void apply(`/api/quotations/${q.id}`, { references: rows, references_title: title }, "PUT", "Saved for this quotation only.")}
         >
           Save references
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -1238,9 +1225,9 @@ function FollowPanel({ q, apply }: { q: Quotation; apply: Apply }) {
                 </td>
                 <td>
                   {f.status === "open" && (
-                    <button className="btn btn-small" disabled={busy === f.id} onClick={() => void done(f.id)}>
+                    <Button size="small" disabled={busy === f.id} onClick={() => void done(f.id)}>
                       Done
-                    </button>
+                    </Button>
                   )}
                   {f.note && <span className="muted small"> {f.note}</span>}
                 </td>
@@ -1256,9 +1243,9 @@ function FollowPanel({ q, apply }: { q: Quotation; apply: Apply }) {
         <ul className="file-list">
           {q.files.map((f) => (
             <li key={f.id}>
-              <button className="btn btn-small btn-ghost" onClick={() => void downloadFile(`/api/quotations/files/${f.id}`)}>
+              <Button variant="ghost" size="small" onClick={() => void downloadFile(`/api/quotations/files/${f.id}`)}>
                 ⤓ {f.file_name}
-              </button>{" "}
+              </Button>{" "}
               {f.replaced && <span className="badge badge-muted">replaced</span>}{" "}
               <span className="muted small">
                 {(f.size_bytes / 1024).toFixed(0)} KB · {f.by ?? "—"} · {new Date(f.created_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}
@@ -1294,19 +1281,18 @@ function WonDialog({ q, onClose, apply }: { q: Quotation; onClose: () => void; a
             Tender (order) <b>{result.tender_code}</b> holds the quotation's lines; site <b>{result.site_code}</b> is ready for execution and billing.
           </p>
           <div className="modal-actions">
-            <Link className="btn btn-primary" to={`/sites/${result.site_id}`}>
+            <Link className={buttonClass({ variant: "primary" })} to={`/sites/${result.site_id}`}>
               Open the site
             </Link>
-            <button className="btn" onClick={onClose}>
+            <Button onClick={onClose}>
               Close
-            </button>
+            </Button>
           </div>
         </>
       ) : (
         <>
           {multi.map((i) => (
-            <label key={i.id} className="field">
-              <span>{i.name}: the client chose</span>
+            <Field label={<>{i.name}: the client chose</>} key={i.id}>
               <select value={choices[i.id]} onChange={(e) => setChoices({ ...choices, [i.id]: e.target.value })}>
                 {(i.options.length ? i.options : i.option_labels).map((o) => (
                   <option key={o} value={o}>
@@ -1314,10 +1300,9 @@ function WonDialog({ q, onClose, apply }: { q: Quotation; onClose: () => void; a
                   </option>
                 ))}
               </select>
-            </label>
+            </Field>
           ))}
-          <label className="field">
-            <span>Site</span>
+          <Field label="Site">
             <select value={site} onChange={(e) => setSite(e.target.value)}>
               <option value="">Make a new site</option>
               {sites.map((s) => (
@@ -1326,20 +1311,20 @@ function WonDialog({ q, onClose, apply }: { q: Quotation; onClose: () => void; a
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
           <p className="muted small">Follow-ups stop; the lead is marked won.</p>
           <div className="modal-actions">
-            <button className="btn" onClick={onClose}>
+            <Button onClick={onClose}>
               Cancel
-            </button>
-            <button
-              className="btn btn-primary"
+            </Button>
+            <Button
+              variant="primary"
               onClick={() =>
                 void apply(`/api/quotations/${q.id}/status`, { status: "won", choices, site_id: site ? Number(site) : null }).then((r) => r?.result && setResult(r.result))
               }
             >
               Mark won
-            </button>
+            </Button>
           </div>
         </>
       )}
@@ -1352,8 +1337,7 @@ function LostDialog({ q, lookups, onClose, apply }: { q: Quotation; lookups: Loo
   const [note, setNote] = useState("");
   return (
     <Modal title={`${q.code} R${q.revision} lost`} onClose={onClose}>
-      <label className="field">
-        <span>Why was it lost?</span>
+      <Field label="Why was it lost?">
         <select value={reason} onChange={(e) => setReason(e.target.value)} required>
           <option value="">Choose…</option>
           {lookups.lost_reasons.map((r) => (
@@ -1362,22 +1346,21 @@ function LostDialog({ q, lookups, onClose, apply }: { q: Quotation; lookups: Loo
             </option>
           ))}
         </select>
-      </label>
-      <label className="field">
-        <span>Note (who won it, at what rate…)</span>
+      </Field>
+      <Field label="Note (who won it, at what rate…)">
         <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
-      </label>
+      </Field>
       <div className="modal-actions">
-        <button className="btn" onClick={onClose}>
+        <Button onClick={onClose}>
           Cancel
-        </button>
-        <button
-          className="btn btn-primary"
+        </Button>
+        <Button
+          variant="primary"
           disabled={!reason}
           onClick={() => void apply(`/api/quotations/${q.id}/status`, { status: "lost", lost_reason: reason, lost_note: note || null }).then((r) => r && onClose())}
         >
           Mark lost
-        </button>
+        </Button>
       </div>
     </Modal>
   );
@@ -1490,21 +1473,23 @@ function SurveyDialog({ q, onClose, apply }: { q: Quotation; onClose: () => void
   return (
     <Modal title="Quantities from a site survey" onClose={onClose}>
       <p className="muted small">Each area's treated sqm (by its area type) goes on its sqm and sqft lines; R FT and NOS lines stay as they are.</p>
-      <select value={pick} onChange={(e) => setPick(e.target.value)}>
-        <option value="">Choose a survey…</option>
-        {surveys?.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.code} · {s.title ?? ""} ({s.status})
-          </option>
-        ))}
-      </select>
+      <Field label="Survey" bare>
+        <select value={pick} onChange={(e) => setPick(e.target.value)}>
+          <option value="">Choose a survey…</option>
+          {surveys?.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.code} · {s.title ?? ""} ({s.status})
+            </option>
+          ))}
+        </select>
+      </Field>
       {msg && <p className="small">{msg}</p>}
       <div className="modal-actions">
-        <button className="btn" onClick={onClose}>
+        <Button onClick={onClose}>
           Close
-        </button>
-        <button
-          className="btn btn-primary"
+        </Button>
+        <Button
+          variant="primary"
           disabled={!pick}
           onClick={() =>
             void apply(`/api/quotations/${q.id}/survey-quantities`, { survey_id: Number(pick) }).then((r) => {
@@ -1514,7 +1499,7 @@ function SurveyDialog({ q, onClose, apply }: { q: Quotation; onClose: () => void
           }
         >
           Fill quantities
-        </button>
+        </Button>
       </div>
     </Modal>
   );
@@ -1527,14 +1512,16 @@ function AddItemDialog({ q, lookups, onClose, apply }: { q: Quotation; lookups: 
   useEffect(() => setOpts(item?.option_labels ?? []), [item]);
   return (
     <Modal title="Add an area" onClose={onClose}>
-      <select value={pick} onChange={(e) => setPick(e.target.value)}>
-        <option value="">Choose an offer item…</option>
-        {lookups.offer_items.map((i) => (
-          <option key={i.id} value={i.id}>
-            {i.name}
-          </option>
-        ))}
-      </select>
+      <Field label="Offer item" bare>
+        <select value={pick} onChange={(e) => setPick(e.target.value)}>
+          <option value="">Choose an offer item…</option>
+          {lookups.offer_items.map((i) => (
+            <option key={i.id} value={i.id}>
+              {i.name}
+            </option>
+          ))}
+        </select>
+      </Field>
       {item && item.option_labels.length > 1 && (
         <div className="top-gap">
           {item.option_labels.map((o) => (
@@ -1545,16 +1532,16 @@ function AddItemDialog({ q, lookups, onClose, apply }: { q: Quotation; lookups: 
         </div>
       )}
       <div className="modal-actions">
-        <button className="btn" onClick={onClose}>
+        <Button onClick={onClose}>
           Cancel
-        </button>
-        <button
-          className="btn btn-primary"
+        </Button>
+        <Button
+          variant="primary"
           disabled={!pick}
           onClick={() => void apply(`/api/quotations/${q.id}/items`, { offer_item_id: Number(pick), options: opts }).then((r) => r && onClose())}
         >
           Add
-        </button>
+        </Button>
       </div>
     </Modal>
   );

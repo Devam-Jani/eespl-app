@@ -10,6 +10,7 @@ import type { Page } from "../../types";
 import { Pager } from "../Clients";
 import { shortDate } from "../Tenders";
 import { ProductSelect, StatusBadge, today, UnitSelect, useMaterialLookups } from "./common";
+import { Button, Card, Field } from "../../ui/components";
 
 export default function Grns() {
   const { can } = useAuth();
@@ -44,18 +45,20 @@ export default function Grns() {
       <div className="page-header">
         <h1>Goods receipts (GRN)</h1>
         <div className="page-actions">
-          <select value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">All statuses</option>
-            {["draft", "submitted", "approved", "rejected"].map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+          <Field label="Status" bare>
+            <select value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All statuses</option>
+              {["draft", "submitted", "approved", "rejected"].map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </Field>
           {can("grn.edit") && (
-            <button className="btn btn-primary" onClick={() => setCreating(true)}>
+            <Button variant="primary" onClick={() => setCreating(true)}>
               New GRN
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -89,7 +92,7 @@ export default function Grns() {
 
 export function GrnTable({ grns, onOpen }: { grns: Grn[]; onOpen: (g: Grn) => void }) {
   return (
-    <div className="card table-wrap">
+    <Card as="div" className="table-wrap">
       <table className="table">
         <thead>
           <tr>
@@ -133,7 +136,7 @@ export function GrnTable({ grns, onOpen }: { grns: Grn[]; onOpen: (g: Grn) => vo
           )}
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 }
 
@@ -249,8 +252,7 @@ export function GrnForm({
         {error && <div className="alert alert-error">{error}</div>}
         {!givenPo && (
           <div className="grid-2">
-            <label className="field">
-              <span>Against</span>
+            <Field label="Against">
               <select
                 value={direct ? "direct" : (po?.id ?? "")}
                 onChange={(e) => {
@@ -272,10 +274,9 @@ export function GrnForm({
                 ))}
                 <option value="direct">Direct purchase (no PO)</option>
               </select>
-            </label>
+            </Field>
             {direct && (
-              <label className="field">
-                <span>Vendor *</span>
+              <Field label="Vendor *">
                 <select required value={head.vendor_id} onChange={(e) => setHead({ ...head, vendor_id: Number(e.target.value) || "" })}>
                   <option value="">— vendor —</option>
                   {lookups.vendors.map((v) => (
@@ -284,13 +285,12 @@ export function GrnForm({
                     </option>
                   ))}
                 </select>
-              </label>
+              </Field>
             )}
           </div>
         )}
         <div className="grid-2">
-          <label className="field">
-            <span>Received into *</span>
+          <Field label="Received into *">
             <select required value={head.store_id} onChange={(e) => setHead({ ...head, store_id: Number(e.target.value) })}>
               <option value="">—</option>
               {lookups.stores.map((s) => (
@@ -299,35 +299,28 @@ export function GrnForm({
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Received on</span>
+          </Field>
+          <Field label="Received on">
             <input type="date" value={head.received_at} onChange={set("received_at")} />
-          </label>
-          <label className="field">
-            <span>Challan no</span>
+          </Field>
+          <Field label="Challan no">
             <input value={head.challan_no} onChange={set("challan_no")} />
-          </label>
-          <label className="field">
-            <span>Vehicle no</span>
+          </Field>
+          <Field label="Vehicle no">
             <input value={head.vehicle_no} onChange={set("vehicle_no")} placeholder="GJ01AB1234" />
-          </label>
-          <label className="field">
-            <span>Invoice no</span>
+          </Field>
+          <Field label="Invoice no">
             <input value={head.invoice_no} onChange={set("invoice_no")} />
-          </label>
-          <label className="field">
-            <span>Invoice date</span>
+          </Field>
+          <Field label="Invoice date">
             <input type="date" value={head.invoice_date} onChange={set("invoice_date")} />
-          </label>
-          <label className="field">
-            <span>Invoice amount (₹)</span>
+          </Field>
+          <Field label="Invoice amount (₹)">
             <input inputMode="decimal" value={head.invoice_amount} onChange={set("invoice_amount")} />
-          </label>
-          <label className="field">
-            <span>Remark</span>
+          </Field>
+          <Field label="Remark">
             <input value={head.remark} onChange={set("remark")} />
-          </label>
+          </Field>
         </div>
         <h2 className="section-title">Material</h2>
         <div className="line-cards">
@@ -335,18 +328,11 @@ export function GrnForm({
             <div key={i} className="line-card">
               {direct ? (
                 <div className="line-row">
-                  <label className="field grow">
-                    <span>Product</span>
-                    <ProductSelect products={lookups.products} value={l.product_id} onChange={(p) => setLine(i, { product_id: p?.id ?? "", unit: p?.unit ?? "" })} />
-                  </label>
-                  <label className="field">
-                    <span>Unit</span>
-                    <UnitSelect units={lookups.units} value={l.unit || lookups.units[0]} onChange={(u) => setLine(i, { unit: u })} />
-                  </label>
-                  <label className="field">
-                    <span>Rate (net)</span>
+                  <ProductSelect label="Product" className="grow" products={lookups.products} value={l.product_id} onChange={(p) => setLine(i, { product_id: p?.id ?? "", unit: p?.unit ?? "" })} />
+                  <UnitSelect label="Unit" units={lookups.units} value={l.unit || lookups.units[0]} onChange={(u) => setLine(i, { unit: u })} />
+                  <Field label="Rate (net)">
                     <input className="input-num" inputMode="decimal" value={l.rate} onChange={(e) => setLine(i, { rate: e.target.value })} />
-                  </label>
+                  </Field>
                 </div>
               ) : (
                 <strong>
@@ -357,50 +343,46 @@ export function GrnForm({
                 </strong>
               )}
               <div className="line-row">
-                <label className="field">
-                  <span>Received</span>
+                <Field label="Received">
                   <input inputMode="decimal" value={l.received_qty} onChange={(e) => setLine(i, { received_qty: e.target.value })} />
-                </label>
-                <label className="field">
-                  <span>Rejected</span>
+                </Field>
+                <Field label="Rejected">
                   <input inputMode="decimal" value={l.rejected_qty} onChange={(e) => setLine(i, { rejected_qty: e.target.value })} />
-                </label>
-                <div className="field">
-                  <span>Accepted</span>
+                </Field>
+                <Field as="div" label="Accepted">
                   <b className="accepted">{num(Math.max(0, Number(l.received_qty || 0) - Number(l.rejected_qty || 0)))}</b>
-                </div>
+                </Field>
               </div>
               {Number(l.rejected_qty) > 0 && (
-                <label className="field">
-                  <span>Reason for rejection *</span>
+                <Field label="Reason for rejection *">
                   <input required value={l.reason} onChange={(e) => setLine(i, { reason: e.target.value })} />
-                </label>
+                </Field>
               )}
             </div>
           ))}
           {!po && !direct && <p className="muted">Pick the PO the material came against.</p>}
         </div>
         {direct && (
-          <button
+          <Button
             type="button"
-            className="btn btn-small top-gap"
+            size="small" className="top-gap"
             onClick={() =>
               setLines((ls) => [...ls, { po_line_id: null, product_id: "", unit: "", label: "", pending: null, received_qty: "", rejected_qty: "0", reason: "", rate: "" }])
             }
           >
             + Item
-          </button>
+          </Button>
         )}
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button type="button" className="btn" disabled={busy || lines.length === 0} onClick={(e) => void submit(e, false)}>
+          </Button>
+          <Button type="button" disabled={busy || lines.length === 0} onClick={(e) => void submit(e, false)}>
             Save draft
-          </button>
-          <button className="btn btn-primary" disabled={busy || lines.length === 0}>
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy || lines.length === 0}>
             Submit for approval
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>
@@ -519,35 +501,37 @@ export function GrnView({ grn, onClose, onChange }: { grn: Grn; onClose: () => v
       </div>
       {grn.status !== "approved" && can("grn.edit") && (
         <div className="inline-form top-gap">
-          <select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Photo of">
-            <option value="material">Material</option>
-            <option value="challan">Challan</option>
-            <option value="invoice">Invoice</option>
-          </select>
+          <Field label="Photo of" bare>
+            <select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Photo of">
+              <option value="material">Material</option>
+              <option value="challan">Challan</option>
+              <option value="invoice">Invoice</option>
+            </select>
+          </Field>
           <input type="file" accept="image/*,.pdf" capture="environment" multiple onChange={(e) => void upload(e.target.files)} />
         </div>
       )}
       <div className="form-actions">
         {grn.status === "draft" && grn.can_edit && (
-          <button className="btn" onClick={() => void act("submit")}>
+          <Button onClick={() => void act("submit")}>
             Submit
-          </button>
+          </Button>
         )}
         {["draft", "submitted"].includes(grn.status) && can("grn.approve") && (
-          <button
-            className="btn btn-danger"
+          <Button
+            variant="danger"
             onClick={() => {
               const reason = prompt("Why is the GRN rejected?");
               if (reason) void act("reject", { reason });
             }}
           >
             Reject
-          </button>
+          </Button>
         )}
         {grn.can_approve && (
-          <button className="btn btn-primary" onClick={() => void act("approve")}>
+          <Button variant="primary" onClick={() => void act("approve")}>
             {grn.levels_required > grn.approvals + 1 ? "Approve (level 1)" : "Approve: put in stock"}
-          </button>
+          </Button>
         )}
       </div>
     </Modal>

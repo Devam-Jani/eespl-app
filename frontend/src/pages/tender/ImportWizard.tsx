@@ -3,6 +3,7 @@ import { api } from "../../api";
 import { Modal } from "../../ui/Overlay";
 import { errorText, inr, num } from "../../format";
 import type { ImportPreview, ImportReport } from "../../types";
+import { Button, Field } from "../../ui/components";
 
 const FIELDS: [string, string][] = [
   ["item_no", "Item no"],
@@ -111,8 +112,7 @@ export default function ImportWizard({ tenderId, onClose, onImported }: { tender
       {step === "map" && preview && (
         <div className="import-map">
           <div className="grid-4">
-            <label className="field">
-              <span>Sheet</span>
+            <Field label="Sheet">
               <select
                 value={preview.sheet}
                 disabled={busy}
@@ -127,9 +127,8 @@ export default function ImportWizard({ tenderId, onClose, onImported }: { tender
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="field">
-              <span>Header row</span>
+            </Field>
+            <Field label="Header row">
               <input
                 type="number"
                 min={1}
@@ -140,14 +139,13 @@ export default function ImportWizard({ tenderId, onClose, onImported }: { tender
                   if (n >= 1) void refresh(preview.sheet, n, null);
                 }}
               />
-            </label>
-            <div className="field">
-              <span>File</span>
+            </Field>
+            <Field as="div" label="File">
               <span className="muted small">
                 {preview.filename}
                 {preview.page_count ? ` · ${preview.page_count} pages` : ""}
               </span>
-            </div>
+            </Field>
           </div>
 
           <h3 className="section-title">Columns</h3>
@@ -155,16 +153,13 @@ export default function ImportWizard({ tenderId, onClose, onImported }: { tender
             {FIELDS.map(([field, label]) => {
               const guess = preview.column_map[field];
               return (
-                <label key={field} className="field">
-                  <span>
-                    {label}{" "}
+                <Field label={<>{label}{" "}
                     {guess && guess.confidence < 1 && (
                       <span className={`badge ${guess.confidence >= 0.9 ? "badge-ok" : guess.confidence >= 0.7 ? "badge-info" : "badge-warn"}`}>
                         guessed {Math.round(guess.confidence * 100)}%
                         {guess.alternatives.length ? ` · also ${guess.alternatives.join(", ")}` : ""}
                       </span>
-                    )}
-                  </span>
+                    )}</>} key={field}>
                   <select
                     value={guess ? String(guess.column) : ""}
                     disabled={busy}
@@ -183,7 +178,7 @@ export default function ImportWizard({ tenderId, onClose, onImported }: { tender
                       </option>
                     ))}
                   </select>
-                </label>
+                </Field>
               );
             })}
           </div>
@@ -257,16 +252,16 @@ export default function ImportWizard({ tenderId, onClose, onImported }: { tender
             </label>
           )}
           <div className="form-actions">
-            <button className="btn" onClick={onClose}>
+            <Button onClick={onClose}>
               Cancel
-            </button>
-            <button
-              className="btn btn-primary"
+            </Button>
+            <Button
+              variant="primary"
               disabled={busy || !preview.column_map.description || (preview.existing_lines > 0 && !replace)}
               onClick={() => void confirmImport()}
             >
               Import {preview.counts.lines} lines
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -298,9 +293,9 @@ export default function ImportWizard({ tenderId, onClose, onImported }: { tender
             </dd>
           </dl>
           <div className="form-actions">
-            <button className="btn btn-primary" onClick={() => void onImported()}>
+            <Button variant="primary" onClick={() => void onImported()}>
               Done
-            </button>
+            </Button>
           </div>
         </div>
       )}

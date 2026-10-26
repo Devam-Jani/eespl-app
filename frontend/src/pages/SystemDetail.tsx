@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { errorText, inr, num } from "../format";
 import type { Page, Product, RateBreakdown, System } from "../types";
 import { useLearned } from "../sitecontrol/learned";
+import { Button, Card, Field } from "../ui/components";
 
 // consumption or coats left blank: "to confirm" (never guessed); the note says where figures come from
 type Row = { product_id: number; consumption_per_unit: string; wastage_percent: string; coats: string; to_confirm: boolean; note: string };
@@ -61,7 +62,7 @@ export default function SystemDetail() {
       {notice && <div className="alert alert-ok">{notice}</div>}
 
       {!seesCost ? (
-        <div className="card">
+        <Card as="div">
           <h2 className="section-title">Products used</h2>
           <ul className="plain-list">
             {system.components.map((c) => (
@@ -70,7 +71,7 @@ export default function SystemDetail() {
               </li>
             ))}
           </ul>
-        </div>
+        </Card>
       ) : (
         <CostView
           // remount after a save so the form starts from what the server stored
@@ -189,7 +190,7 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
 
   return (
     <div className="split">
-      <div className="card">
+      <Card as="div">
         <h2 className="section-title">Build-up</h2>
         <div className="table-wrap">
           <table className="table compact">
@@ -210,14 +211,16 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
                 <tr key={i}>
                   <td>
                     {canEdit ? (
-                      <select value={r.product_id} onChange={(e) => setRow(i, { product_id: Number(e.target.value) })}>
-                        <option value={0}>Choose a product…</option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name} {p.brand ? `(${p.brand})` : ""} — {p.unit}
-                          </option>
-                        ))}
-                      </select>
+                      <Field label="Product" bare>
+                        <select value={r.product_id} onChange={(e) => setRow(i, { product_id: Number(e.target.value) })}>
+                          <option value={0}>Choose a product…</option>
+                          {products.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} {p.brand ? `(${p.brand})` : ""} — {p.unit}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
                     ) : (
                       productName(r.product_id)
                     )}
@@ -225,15 +228,17 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
                   </td>
                   <td className="num">
                     {canEdit ? (
-                      <input
-                        className="input-num"
-                        type="number"
-                        step="0.0001"
-                        min="0"
-                        value={r.consumption_per_unit}
-                        placeholder="to confirm"
-                        onChange={(e) => setRow(i, { consumption_per_unit: e.target.value })}
-                      />
+                      <Field label="to confirm" bare>
+                        <input
+                          className="input-num"
+                          type="number"
+                          step="0.0001"
+                          min="0"
+                          value={r.consumption_per_unit}
+                          placeholder="to confirm"
+                          onChange={(e) => setRow(i, { consumption_per_unit: e.target.value })}
+                        />
+                      </Field>
                     ) : r.consumption_per_unit === "" ? (
                       <span className="badge badge-warn">to confirm</span>
                     ) : (
@@ -242,7 +247,9 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
                   </td>
                   <td className="num">
                     {canEdit ? (
-                      <input className="input-num" type="number" step="1" min="1" value={r.coats} placeholder="to confirm" onChange={(e) => setRow(i, { coats: e.target.value })} />
+                      <Field label="to confirm" bare>
+                        <input className="input-num" type="number" step="1" min="1" value={r.coats} placeholder="to confirm" onChange={(e) => setRow(i, { coats: e.target.value })} />
+                      </Field>
                     ) : r.coats === "" ? (
                       <span className="muted">to confirm</span>
                     ) : (
@@ -251,7 +258,9 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
                   </td>
                   <td className="num">
                     {canEdit ? (
-                      <input className="input-num" type="number" step="0.01" min="0" value={r.wastage_percent} onChange={(e) => setRow(i, { wastage_percent: e.target.value })} />
+                      <Field label="Wastage %" bare>
+                        <input className="input-num" type="number" step="0.01" min="0" value={r.wastage_percent} onChange={(e) => setRow(i, { wastage_percent: e.target.value })} />
+                      </Field>
                     ) : (
                       num(r.wastage_percent, 2)
                     )}
@@ -261,9 +270,9 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
                   </td>
                   {canEdit && (
                     <td>
-                      <button className="btn btn-small" onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))} aria-label="Remove">
+                      <Button size="small" onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))} aria-label="Remove">
                         ×
-                      </button>
+                      </Button>
                     </td>
                   )}
                 </tr>
@@ -272,50 +281,45 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
           </table>
         </div>
         {canEdit && (
-          <button
-            className="btn btn-small"
+          <Button
+            size="small"
             onClick={() => setRows((rs) => [...rs, { product_id: 0, consumption_per_unit: "", wastage_percent: "0", coats: "", to_confirm: true, note: "" }])}
           >
             + Add product
-          </button>
+          </Button>
         )}
 
         <div className="grid-2 top-gap">
-          <label className="field">
-            <span>Surface prep (₹ / {system.unit})</span>
+          <Field label={<>Surface prep (₹ / {system.unit})</>}>
             <input type="number" step="0.01" min="0" value={settings.surface_prep_per_unit} onChange={setSetting("surface_prep_per_unit")} disabled={!canEdit} />
-          </label>
-          <label className="field">
-            <span>Default margin %</span>
+          </Field>
+          <Field label="Default margin %">
             <input type="number" step="0.01" min="0" value={settings.default_margin_percent} onChange={setSetting("default_margin_percent")} disabled={!canEdit} />
-          </label>
-          <label className="field">
-            <span>Labour rate (₹)</span>
+          </Field>
+          <Field label="Labour rate (₹)">
             <input type="number" step="0.01" min="0" value={settings.labour_rate} onChange={setSetting("labour_rate")} disabled={!canEdit} />
-          </label>
-          <label className="field">
-            <span>Labour per</span>
+          </Field>
+          <Field label="Labour per">
             <select value={settings.labour_unit} onChange={setSetting("labour_unit")} disabled={!canEdit}>
               <option value="sqm">sqm</option>
               <option value="sqft">sqft</option>
             </select>
-          </label>
+          </Field>
         </div>
         {canEdit && (
           <div className="form-actions">
-            <button className="btn btn-primary" disabled={!dirty} onClick={() => void save()}>
+            <Button variant="primary" disabled={!dirty} onClick={() => void save()}>
               Save system
-            </button>
+            </Button>
           </div>
         )}
-      </div>
+      </Card>
 
-      <div className="card calculator">
+      <Card as="div" className="calculator">
         <h2 className="section-title">Rate calculator</h2>
-        <label className="field">
-          <span>Margin %</span>
+        <Field label="Margin %">
           <input type="number" step="0.5" min="0" value={margin} onChange={(e) => setMargin(e.target.value)} />
-        </label>
+        </Field>
         {dirty && <p className="muted small">Save the system to include unsaved changes in the calculation.</p>}
         {calcError && <div className="alert alert-warn">{calcError}</div>}
         {breakdown && (
@@ -367,7 +371,7 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
             </dl>
           </>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

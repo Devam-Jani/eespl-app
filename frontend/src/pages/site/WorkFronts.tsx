@@ -6,6 +6,7 @@ import { Link, useParams } from "react-router-dom";
 import { api, fetchObjectUrl } from "../../api";
 import { useAuth } from "../../auth";
 import { errorText } from "../../format";
+import { Button, buttonClass } from "../../ui/components";
 
 type Node = {
   id: number;
@@ -74,24 +75,24 @@ export default function WorkFronts() {
                     ✓ ready · {n.front_ready_by_name ?? "—"} ·{" "}
                     {n.front_ready_at ? new Date(n.front_ready_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",  day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
                     {n.front_ready_photo && (
-                      <button className="btn btn-small btn-ghost" onClick={() => void show(n)}>
+                      <Button variant="ghost" size="small" onClick={() => void show(n)}>
                         photo
-                      </button>
+                      </Button>
                     )}
                   </div>
                 )}
               </div>
               {mayTick &&
                 (n.front_ready ? (
-                  <button className="btn btn-small" disabled={busy === n.id} onClick={() => void mark(n, false)}>
+                  <Button size="small" disabled={busy === n.id} onClick={() => void mark(n, false)}>
                     Not ready
-                  </button>
+                  </Button>
                 ) : (
                   <span className="front-actions">
-                    <button className="btn btn-primary" disabled={busy === n.id} onClick={() => void mark(n, true)}>
+                    <Button variant="primary" disabled={busy === n.id} onClick={() => void mark(n, true)}>
                       Ready
-                    </button>
-                    <label className="btn btn-ghost">
+                    </Button>
+                    <label className={buttonClass({ variant: "ghost" })}>
                       📷
                       <input type="file" accept="image/*" capture="environment" hidden onChange={(e) => e.target.files?.[0] && void mark(n, true, e.target.files[0])} />
                     </label>

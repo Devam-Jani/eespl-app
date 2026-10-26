@@ -10,6 +10,7 @@ import { errorText } from "../format";
 import { loadLookups, MarkupField, plain, SectionsEditor, useLookups } from "./common";
 import type { Lookups, Section } from "./common";
 import { ART } from "../ui/tokens";
+import { Button, Card, Field } from "../ui/components";
 
 type Kind = "letterhead" | "letter" | "spec" | "line" | "item" | "reference" | "preset";
 type Row = Record<string, unknown> & { id: number; version: number; needs_check: boolean; is_active: boolean; updated_at: string };
@@ -73,21 +74,23 @@ function KindPanel({ kind }: { kind: Kind }) {
   useEffect(load, [load]);
   return (
     <div className="lib-layout">
-      <div className="lib-list card">
+      <Card as="div" className="lib-list">
         <div className="inline-form">
-          <input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Field label="Search" bare>
+            <input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
+          </Field>
           <label className="check small">
             <input type="checkbox" checked={onlyCheck} onChange={(e) => setOnlyCheck(e.target.checked)} /> To check
           </label>
         </div>
         {edit && (
-          <button className="btn btn-small btn-primary" onClick={() => setSel("new")}>
+          <Button variant="primary" size="small" onClick={() => setSel("new")}>
             + New
-          </button>
+          </Button>
         )}
         {kind === "reference" && edit && (
-          <button
-            className="btn btn-small"
+          <Button
+            size="small"
             onClick={() =>
               void api<{ added: number }>("/api/quotations/library/reference/from-sites", { method: "POST" }).then(
                 (r) => (setError(`${r.added} reference(s) added from completed sites`), load()),
@@ -96,7 +99,7 @@ function KindPanel({ kind }: { kind: Kind }) {
             }
           >
             Add from completed sites
-          </button>
+          </Button>
         )}
         {error && <p className="small muted">{error}</p>}
         <ul className="lib-rows">
@@ -116,7 +119,7 @@ function KindPanel({ kind }: { kind: Kind }) {
           ))}
           {rows.length === 0 && <li className="muted small">Nothing here yet.</li>}
         </ul>
-      </div>
+      </Card>
       <div className="lib-detail">
         {sel && lookups ? (
           <Editor
@@ -178,10 +181,9 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
   const v = (k: string) => (f[k] ?? "") as string;
   const set = (k: string, val: unknown) => setF({ ...f, [k]: val });
   const input = (k: string, label: string, type = "text") => (
-    <label className="field">
-      <span>{label}</span>
+    <Field label={label}>
       <input type={type} value={v(k)} onChange={(e) => set(k, e.target.value)} disabled={ro} />
-    </label>
+    </Field>
   );
   async function save() {
     setError("");
@@ -221,13 +223,13 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
   }
   return (
     <div className="lib-editor">
-      <div className="card">
+      <Card as="div">
         <div className="toolbar">
           <h2 className="section-title">{row ? `${title(kind, row)} · version ${row.version}` : "New"}</h2>
           {row?.needs_check && edit && (
-            <button className="btn btn-small" onClick={() => set("needs_check", false)}>
+            <Button size="small" onClick={() => set("needs_check", false)}>
               Mark checked
-            </button>
+            </Button>
           )}
         </div>
         {error && <div className="alert alert-error">{error}</div>}
@@ -243,18 +245,16 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
               {input("signatory_designation", "Designation (printed under the name)")}
               {input("signatory2_name", "Second signatory (optional)")}
               {input("signatory2_designation", "Second signatory's designation")}
-              <label className="field">
-                <span>Signs the certificates (work completion, guarantee)</span>
+              <Field label="Signs the certificates (work completion, guarantee)">
                 <select value={String(v("certificate_signatory") || 1)} onChange={(e) => set("certificate_signatory", Number(e.target.value))} disabled={ro}>
                   <option value="1">The default signatory</option>
                   <option value="2">The second signatory</option>
                 </select>
-              </label>
+              </Field>
               {input("primary_color", "Colour", "color")}
               {input("accent_color", "Accent colour", "color")}
               {input("references_state", "References from state")}
-              <label className="field">
-                <span>Letter template</span>
+              <Field label="Letter template">
                 <select value={v("letter_template_id")} onChange={(e) => set("letter_template_id", e.target.value ? Number(e.target.value) : null)} disabled={ro}>
                   <option value="">—</option>
                   {lookups.letters.map((l) => (
@@ -263,7 +263,7 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
                     </option>
                   ))}
                 </select>
-              </label>
+              </Field>
             </div>
             <MarkupField label="Header text" value={v("header_text")} onChange={(x) => set("header_text", x)} rows={2} disabled={ro} />
             <MarkupField label="Footer text" value={v("footer_text")} onChange={(x) => set("footer_text", x)} rows={2} disabled={ro} />
@@ -275,8 +275,7 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
               (["logo", "header", "footer", "watermark"] as const).map((slot) => {
                 const key = { logo: "logo_path", header: "header_image_path", footer: "footer_image_path", watermark: "watermark_path" }[slot];
                 return (
-                  <div key={slot} className="field">
-                    <span>{{ logo: "Logo", header: "Header band (full width)", footer: "Footer band (full width)", watermark: "Watermark (made faint)" }[slot]}</span>
+                  <Field as="div" label={{ logo: "Logo", header: "Header band (full width)", footer: "Footer band (full width)", watermark: "Watermark (made faint)" }[slot]} key={slot}>
                     <Logo path={v(key)} />
                     {edit && (
                       <input
@@ -285,7 +284,7 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
                         onChange={(e) => e.target.files?.[0] && void upload(`/api/quotations/library/letterhead/${row.id}/logo?slot=${slot}`, e.target.files[0])}
                       />
                     )}
-                  </div>
+                  </Field>
                 );
               })}
             <p className="muted small">The default T&amp;C set for this letterhead is a T&amp;C template (Masters › T&amp;C library); the applicator clause always names EESPL.</p>
@@ -314,8 +313,7 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
               {input("title", "Title (prints in capitals)")}
               {input("heading_prefix", "Heading prefix")}
               {input("option_label", "Option (empty: always)")}
-              <label className="field">
-                <span>Area type</span>
+              <Field label="Area type">
                 <select value={v("area_type_id")} onChange={(e) => set("area_type_id", e.target.value ? Number(e.target.value) : null)} disabled={ro}>
                   <option value="">—</option>
                   {lookups.area_types.map((a) => (
@@ -324,7 +322,7 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
                     </option>
                   ))}
                 </select>
-              </label>
+              </Field>
             </div>
             <SectionsEditor sections={(f.sections as Section[]) ?? []} onChange={(s) => set("sections", s)} stages={lookups.stages} disabled={ro} />
             {((f.images as { path: string; caption: string }[]) ?? []).map((im, i) => (
@@ -340,8 +338,7 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
           <>
             <MarkupField label="Description" value={v("description")} onChange={(x) => set("description", x)} rows={5} disabled={ro} />
             <div className="form-grid four">
-              <label className="field">
-                <span>UoM</span>
+              <Field label="UoM">
                 <select value={v("uom")} onChange={(e) => set("uom", e.target.value)} disabled={ro}>
                   {lookups.uoms.map((u) => (
                     <option key={u.code} value={u.code}>
@@ -349,15 +346,14 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
                     </option>
                   ))}
                 </select>
-              </label>
-              <label className="field">
-                <span>Rate from</span>
+              </Field>
+              <Field label="Rate from">
                 <select value={v("rate_source")} onChange={(e) => set("rate_source", e.target.value)} disabled={ro}>
                   <option value="fixed">Fixed rate</option>
                   <option value="system">System build-up</option>
                   <option value="library">Rate library</option>
                 </select>
-              </label>
+              </Field>
               {input("default_rate", "Default rate (₹)")}
               {v("rate_source") === "system" && input("system_id", "System id")}
               {v("rate_source") === "library" && input("library_item_id", "Rate library item id")}
@@ -398,9 +394,9 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
         )}
         {edit && (
           <div className="panel-actions">
-            <button className="btn btn-primary" onClick={() => void save()}>
+            <Button variant="primary" onClick={() => void save()}>
               {row ? "Save (new version)" : "Create"}
-            </button>
+            </Button>
             {row && (
               <label className="check small">
                 <input type="checkbox" checked={!!f.is_active} onChange={(e) => set("is_active", e.target.checked)} /> Active
@@ -408,14 +404,14 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
             )}
           </div>
         )}
-      </div>
+      </Card>
       {row && (
         <div className="lib-side">
-          <div className="card">
+          <Card as="div">
             <h3 className="section-title">Preview</h3>
             <iframe className="lib-preview" title="Preview" srcDoc={preview} sandbox="" />
-          </div>
-          <div className="card versions">
+          </Card>
+          <Card as="div" className="versions">
             <h3 className="section-title">Version history</h3>
             <table className="table compact">
               <tbody>
@@ -432,16 +428,16 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
                     </td>
                     <td>
                       {edit && ver.version !== row.version && (
-                        <button className="btn btn-small btn-ghost" onClick={() => void restore(ver.version)}>
+                        <Button variant="ghost" size="small" onClick={() => void restore(ver.version)}>
                           Restore
-                        </button>
+                        </Button>
                       )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         </div>
       )}
     </div>
@@ -461,16 +457,13 @@ function ItemEditor({ f, set, lookups, ro }: { f: Record<string, unknown>; set: 
   return (
     <>
       <div className="form-grid two">
-        <label className="field">
-          <span>Name</span>
+        <Field label="Name">
           <input value={v("name")} onChange={(e) => set("name", e.target.value)} disabled={ro} />
-        </label>
-        <label className="field">
-          <span>Budgetary offer title</span>
+        </Field>
+        <Field label="Budgetary offer title">
           <input value={v("budget_title")} onChange={(e) => set("budget_title", e.target.value)} disabled={ro} />
-        </label>
-        <label className="field">
-          <span>Area type</span>
+        </Field>
+        <Field label="Area type">
           <select value={v("area_type_id")} onChange={(e) => set("area_type_id", e.target.value ? Number(e.target.value) : null)} disabled={ro}>
             <option value="">—</option>
             {lookups.area_types.map((a) => (
@@ -479,11 +472,10 @@ function ItemEditor({ f, set, lookups, ro }: { f: Record<string, unknown>; set: 
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Order</span>
+        </Field>
+        <Field label="Order">
           <input type="number" value={v("sort_order")} onChange={(e) => set("sort_order", Number(e.target.value))} disabled={ro} />
-        </label>
+        </Field>
       </div>
       <h3 className="section-title">Specification blocks (options)</h3>
       {specs.map((s, i) => (
@@ -493,8 +485,8 @@ function ItemEditor({ f, set, lookups, ro }: { f: Record<string, unknown>; set: 
             {s.title ?? `#${s.spec_block_id}`}
           </span>
           {!ro && (
-            <button
-              className="btn btn-small btn-ghost"
+            <Button
+              variant="ghost" size="small"
               onClick={() =>
                 set(
                   "specs",
@@ -503,45 +495,49 @@ function ItemEditor({ f, set, lookups, ro }: { f: Record<string, unknown>; set: 
               }
             >
               Remove
-            </button>
+            </Button>
           )}
         </div>
       ))}
       {!ro && (
-        <select
-          value=""
-          onChange={(e) => {
-            const s = allSpecs.find((x) => String(x.id) === e.target.value);
-            if (s) set("specs", [...specs, { spec_block_id: s.id, title: String(s.title), option_label: (s.option_label as string) ?? null }]);
-          }}
-        >
-          <option value="">+ Add a specification block…</option>
-          {allSpecs.map((s) => (
-            <option key={s.id} value={s.id}>
-              {title("spec", s)}
-            </option>
-          ))}
-        </select>
+        <Field label="Add a spec" bare>
+          <select
+            value=""
+            onChange={(e) => {
+              const s = allSpecs.find((x) => String(x.id) === e.target.value);
+              if (s) set("specs", [...specs, { spec_block_id: s.id, title: String(s.title), option_label: (s.option_label as string) ?? null }]);
+            }}
+          >
+            <option value="">+ Add a specification block…</option>
+            {allSpecs.map((s) => (
+              <option key={s.id} value={s.id}>
+                {title("spec", s)}
+              </option>
+            ))}
+          </select>
+        </Field>
       )}
       <h3 className="section-title top-gap">Offer lines</h3>
       {lines.map((l, i) => (
         <div key={i} className="inline-form">
-          <input
-            className="option-input"
-            value={l.option ?? ""}
-            placeholder="Opt."
-            onChange={(e) =>
-              set(
-                "lines",
-                lines.map((x, j) => (j === i ? { ...x, option: e.target.value || null } : x)),
-              )
-            }
-            disabled={ro}
-          />
+          <Field label="Opt." bare>
+            <input
+              className="option-input"
+              value={l.option ?? ""}
+              placeholder="Opt."
+              onChange={(e) =>
+                set(
+                  "lines",
+                  lines.map((x, j) => (j === i ? { ...x, option: e.target.value || null } : x)),
+                )
+              }
+              disabled={ro}
+            />
+          </Field>
           <span className="small">{plain(l.description ?? `#${l.offer_line_id}`).slice(0, 80)}</span>
           {!ro && (
-            <button
-              className="btn btn-small btn-ghost"
+            <Button
+              variant="ghost" size="small"
               onClick={() =>
                 set(
                   "lines",
@@ -550,25 +546,27 @@ function ItemEditor({ f, set, lookups, ro }: { f: Record<string, unknown>; set: 
               }
             >
               Remove
-            </button>
+            </Button>
           )}
         </div>
       ))}
       {!ro && (
-        <select
-          value=""
-          onChange={(e) => {
-            const l = allLines.find((x) => String(x.id) === e.target.value);
-            if (l) set("lines", [...lines, { offer_line_id: l.id, option: null, description: String(l.description) }]);
-          }}
-        >
-          <option value="">+ Add an offer line…</option>
-          {allLines.map((l) => (
-            <option key={l.id} value={l.id}>
-              {title("line", l)}
-            </option>
-          ))}
-        </select>
+        <Field label="Add a line" bare>
+          <select
+            value=""
+            onChange={(e) => {
+              const l = allLines.find((x) => String(x.id) === e.target.value);
+              if (l) set("lines", [...lines, { offer_line_id: l.id, option: null, description: String(l.description) }]);
+            }}
+          >
+            <option value="">+ Add an offer line…</option>
+            {allLines.map((l) => (
+              <option key={l.id} value={l.id}>
+                {title("line", l)}
+              </option>
+            ))}
+          </select>
+        </Field>
       )}
     </>
   );
@@ -591,7 +589,9 @@ function ImageUpload({ onUpload }: { onUpload: (file: File, caption: string) => 
   const [caption, setCaption] = useState("");
   return (
     <div className="inline-form">
-      <input placeholder="Caption" value={caption} onChange={(e) => setCaption(e.target.value)} />
+      <Field label="Caption" bare>
+        <input placeholder="Caption" value={caption} onChange={(e) => setCaption(e.target.value)} />
+      </Field>
       <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0], caption)} />
     </div>
   );
@@ -646,23 +646,19 @@ function SettingsPanel() {
     }
   }
   return (
-    <div className="card settings-card">
+    <Card as="div" className="settings-card">
       {msg && <div className="alert alert-ok">{msg}</div>}
       <div className="form-grid two">
-        <label className="field">
-          <span>Validity (days, default)</span>
+        <Field label="Validity (days, default)">
           <input type="number" value={s.default_validity_days} onChange={(e) => setS({ ...s, default_validity_days: Number(e.target.value) })} disabled={!edit} />
-        </label>
-        <label className="field">
-          <span>Follow-up days after sending</span>
+        </Field>
+        <Field label="Follow-up days after sending">
           <input value={days} onChange={(e) => setDays(e.target.value)} disabled={!edit} />
-        </label>
-        <label className="field">
-          <span>Closure target (%), everyone</span>
+        </Field>
+        <Field label="Closure target (%), everyone">
           <input type="number" value={s.closure_target_percent} onChange={(e) => setS({ ...s, closure_target_percent: e.target.value })} disabled={!edit} />
-        </label>
-        <label className="field">
-          <span>Default letterhead</span>
+        </Field>
+        <Field label="Default letterhead">
           <select value={s.default_letterhead_id ?? ""} onChange={(e) => setS({ ...s, default_letterhead_id: e.target.value ? Number(e.target.value) : null })} disabled={!edit}>
             {lookups.letterheads.map((h) => (
               <option key={h.id} value={h.id}>
@@ -670,13 +666,12 @@ function SettingsPanel() {
               </option>
             ))}
           </select>
-        </label>
+        </Field>
       </div>
       <h3 className="section-title">Closure target per salesperson</h3>
       <div className="form-grid four">
         {lookups.salespeople.map((p) => (
-          <label key={p.id} className="field">
-            <span>{p.full_name}</span>
+          <Field label={p.full_name} key={p.id}>
             <input
               type="number"
               placeholder={String(Number(s.closure_target_percent))}
@@ -689,13 +684,13 @@ function SettingsPanel() {
               }}
               disabled={!edit}
             />
-          </label>
+          </Field>
         ))}
       </div>
       {edit && (
-        <button className="btn btn-primary" onClick={() => void save()}>
+        <Button variant="primary" onClick={() => void save()}>
           Save settings
-        </button>
+        </Button>
       )}
       <h3 className="section-title top-gap">Word template</h3>
       <p className="small muted">
@@ -703,17 +698,17 @@ function SettingsPanel() {
         the quotation.
       </p>
       <div className="inline-form">
-        <button className="btn btn-small" onClick={() => void downloadFile("/api/quotations/settings/word-template")}>
+        <Button size="small" onClick={() => void downloadFile("/api/quotations/settings/word-template")}>
           ⤓ Template
-        </button>
+        </Button>
         {edit && <input type="file" accept=".docx" onChange={(e) => e.target.files?.[0] && void uploadTemplate(e.target.files[0])} />}
         {edit && s.word_template === "uploaded" && (
-          <button className="btn btn-small btn-ghost" onClick={() => void api<Settings>("/api/quotations/settings/word-template", { method: "DELETE" }).then(setS)}>
+          <Button variant="ghost" size="small" onClick={() => void api<Settings>("/api/quotations/settings/word-template", { method: "DELETE" }).then(setS)}>
             Back to the built-in one
-          </button>
+          </Button>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -730,12 +725,10 @@ function PresetEditor({ f, set, lookups, ro }: { f: Record<string, unknown>; set
   return (
     <>
       <div className="form-grid two">
-        <label className="field">
-          <span>Name</span>
+        <Field label="Name">
           <input value={v("name")} onChange={(e) => set("name", e.target.value)} disabled={ro} placeholder="Bungalow - EESPL" />
-        </label>
-        <label className="field">
-          <span>Letterhead</span>
+        </Field>
+        <Field label="Letterhead">
           <select value={v("letterhead_id")} onChange={(e) => set("letterhead_id", e.target.value ? Number(e.target.value) : null)} disabled={ro}>
             <option value="">—</option>
             {lookups.letterheads.map((h) => (
@@ -744,9 +737,8 @@ function PresetEditor({ f, set, lookups, ro }: { f: Record<string, unknown>; set
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>Letter template</span>
+        </Field>
+        <Field label="Letter template">
           <select value={v("letter_template_id")} onChange={(e) => set("letter_template_id", e.target.value ? Number(e.target.value) : null)} disabled={ro}>
             <option value="">The letterhead's</option>
             {lookups.letters.map((l) => (
@@ -755,11 +747,10 @@ function PresetEditor({ f, set, lookups, ro }: { f: Record<string, unknown>; set
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span>T&amp;C template id (empty: the letterhead's)</span>
+        </Field>
+        <Field label="T&amp;C template id (empty: the letterhead's)">
           <input value={v("tc_template_id")} onChange={(e) => set("tc_template_id", e.target.value ? Number(e.target.value) : null)} disabled={ro} />
-        </label>
+        </Field>
       </div>
       <label className="check">
         <input type="checkbox" checked={!!f.include_references} onChange={(e) => set("include_references", e.target.checked)} disabled={ro} /> Include "Our esteemed clients"
@@ -773,14 +764,14 @@ function PresetEditor({ f, set, lookups, ro }: { f: Record<string, unknown>; set
           </span>
           {!ro && (
             <>
-              <button className="btn btn-small btn-ghost" onClick={() => move(i, -1)} aria-label="Up">
+              <Button variant="ghost" size="small" onClick={() => move(i, -1)} aria-label="Up">
                 ↑
-              </button>
-              <button className="btn btn-small btn-ghost" onClick={() => move(i, 1)} aria-label="Down">
+              </Button>
+              <Button variant="ghost" size="small" onClick={() => move(i, 1)} aria-label="Down">
                 ↓
-              </button>
-              <button
-                className="btn btn-small btn-ghost"
+              </Button>
+              <Button
+                variant="ghost" size="small"
                 onClick={() =>
                   set(
                     "items",
@@ -789,20 +780,22 @@ function PresetEditor({ f, set, lookups, ro }: { f: Record<string, unknown>; set
                 }
               >
                 Remove
-              </button>
+              </Button>
             </>
           )}
         </div>
       ))}
       {!ro && (
-        <select value="" onChange={(e) => e.target.value && set("items", [...items, { offer_item_id: Number(e.target.value), options: [] }])}>
-          <option value="">+ Add an area…</option>
-          {lookups.offer_items.map((i) => (
-            <option key={i.id} value={i.id}>
-              {i.name}
-            </option>
-          ))}
-        </select>
+        <Field label="Add an area" bare>
+          <select value="" onChange={(e) => e.target.value && set("items", [...items, { offer_item_id: Number(e.target.value), options: [] }])}>
+            <option value="">+ Add an area…</option>
+            {lookups.offer_items.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.name}
+              </option>
+            ))}
+          </select>
+        </Field>
       )}
     </>
   );

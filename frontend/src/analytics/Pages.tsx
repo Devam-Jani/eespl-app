@@ -7,6 +7,7 @@ import { BarChart, FunnelChart, HBarChart, LineChart, PALETTE, ScatterChart } fr
 import type { Row } from "./charts";
 import type { Column, Drill, Table } from "./ui";
 import { asOf, DataTable, drillHref, ExportButton, FilterBar, fmtValue, useData, useFilters } from "./ui";
+import { Button, Card, Field } from "../ui/components";
 
 type PageData = { as_of: string | null; tables: Record<string, Table>; summary?: Record<string, number | null>; cost_shown?: boolean; salary_included?: boolean };
 
@@ -30,15 +31,15 @@ function usePage(page: string) {
   return useData<PageData>(`/api/analytics/pages/${page}${qs ? `?${qs}` : ""}`);
 }
 
-function Card({ title, children, extra }: { title: string; children: React.ReactNode; extra?: React.ReactNode }) {
+function ChartCard({ title, children, extra }: { title: string; children: React.ReactNode; extra?: React.ReactNode }) {
   return (
-    <section className="card chart-card">
+    <Card className="chart-card">
       <div className="toolbar">
         <h2 className="section-title">{title}</h2>
         {extra}
       </div>
       {children}
-    </section>
+    </Card>
   );
 }
 
@@ -65,7 +66,7 @@ export function SitesAnalytics() {
             on average · {asOf(data.as_of)}
           </p>
           <div className="analytics-grid">
-            <Card title={data.tables.scatter.title}>
+            <ChartCard title={data.tables.scatter.title}>
               <ScatterChart
                 rows={data.tables.scatter.rows as Row[]}
                 x="elapsed"
@@ -75,8 +76,8 @@ export function SitesAnalytics() {
                 threshold={Number(data.summary?.threshold ?? 15)}
                 onClick={(r) => navigate(String(r.link))}
               />
-            </Card>
-            <Card title={data.tables.bottlenecks.title}>
+            </ChartCard>
+            <ChartCard title={data.tables.bottlenecks.title}>
               <HBarChart
                 rows={data.tables.bottlenecks.rows as Row[]}
                 label="step"
@@ -86,14 +87,14 @@ export function SitesAnalytics() {
                 note={(r) => `· ${r.open} open on ${r.sites} site(s)`}
                 onClick={(r) => navigate(drillHref(r.drill as Drill, demo))}
               />
-            </Card>
+            </ChartCard>
           </div>
-          <Card title={data.tables.forecast.title}>
+          <ChartCard title={data.tables.forecast.title}>
             <DataTable table={data.tables.forecast} demo={demo} limit={15} />
-          </Card>
-          <Card title={data.tables.snags.title}>
+          </ChartCard>
+          <ChartCard title={data.tables.snags.title}>
             <DataTable table={data.tables.snags} demo={demo} limit={10} />
-          </Card>
+          </ChartCard>
         </>
       )}
     </>
@@ -114,7 +115,7 @@ export function FinanceAnalytics() {
         <Loading error={error} />
       ) : (
         <>
-          <Card title={data.tables.monthly.title} extra={<span className="muted small">{asOf(data.as_of)}</span>}>
+          <ChartCard title={data.tables.monthly.title} extra={<span className="muted small">{asOf(data.as_of)}</span>}>
             <BarChart
               rows={data.tables.monthly.rows as Row[]}
               x="label"
@@ -125,9 +126,9 @@ export function FinanceAnalytics() {
               ]}
               onClick={(r) => navigate(drillHref(r.drill as Drill, demo))}
             />
-          </Card>
+          </ChartCard>
           <div className="analytics-grid">
-            <Card title={data.tables.cashflow.title}>
+            <ChartCard title={data.tables.cashflow.title}>
               <BarChart
                 rows={data.tables.cashflow.rows as Row[]}
                 x="label"
@@ -138,16 +139,16 @@ export function FinanceAnalytics() {
                 height={230}
               />
               <p className="muted small">{data.tables.cashflow.note}</p>
-            </Card>
-            <Card title={data.tables.dso.title}>
+            </ChartCard>
+            <ChartCard title={data.tables.dso.title}>
               <LineChart rows={data.tables.dso.rows as Row[]} x="label" series={[{ key: "dso", label: "DSO (days)", color: PALETTE[4] }]} />
               <p className="muted small">{data.tables.dso.note}</p>
-            </Card>
+            </ChartCard>
           </div>
-          <Card title={data.tables.clients.title}>
+          <ChartCard title={data.tables.clients.title}>
             <HBarChart rows={(data.tables.clients.rows as Row[]).slice(0, 12)} label="client" value="outstanding" onClick={(r) => navigate(drillHref(r.drill as Drill, demo))} />
             <DataTable table={data.tables.clients} demo={demo} limit={10} />
-          </Card>
+          </ChartCard>
         </>
       )}
     </>
@@ -170,7 +171,7 @@ export function ProfitabilityAnalytics() {
           {!data.salary_included && <div className="alert alert-warn">Staff salary is not included in cost (needs payroll.view).</div>}
           <div className="analytics-grid">
             {(["clients", "systems", "salespeople"] as const).map((k) => (
-              <Card key={k} title={data.tables[k].title}>
+              <ChartCard key={k} title={data.tables[k].title}>
                 <HBarChart
                   rows={(data.tables[k].rows as Row[]).slice(0, 10)}
                   label="key"
@@ -179,13 +180,13 @@ export function ProfitabilityAnalytics() {
                   color={PALETTE[2]}
                   note={(r) => `on ${fmtValue(r.billed, "inr")}`}
                 />
-              </Card>
+              </ChartCard>
             ))}
           </div>
-          <Card title={data.tables.sites.title}>
+          <ChartCard title={data.tables.sites.title}>
             <DataTable table={data.tables.sites} demo={demo} limit={15} />
-          </Card>
-          <Card title={data.tables.quoted_vs_actual.title}>
+          </ChartCard>
+          <ChartCard title={data.tables.quoted_vs_actual.title}>
             <BarChart
               rows={(data.tables.quoted_vs_actual.rows as Row[]).slice(0, 20)}
               x="code"
@@ -196,7 +197,7 @@ export function ProfitabilityAnalytics() {
               fmt={(v) => `${v.toFixed(0)}%`}
             />
             <DataTable table={data.tables.quoted_vs_actual} demo={demo} limit={10} />
-          </Card>
+          </ChartCard>
         </>
       )}
     </>
@@ -218,23 +219,25 @@ export function PurchaseAnalytics() {
       ) : (
         <>
           <div className="analytics-grid">
-            <Card title={data.tables.vendors.title}>
+            <ChartCard title={data.tables.vendors.title}>
               <HBarChart rows={(data.tables.vendors.rows as Row[]).slice(0, 12)} label="vendor" value="spend" />
-            </Card>
-            <Card title={data.tables.categories.title}>
+            </ChartCard>
+            <ChartCard title={data.tables.categories.title}>
               <HBarChart rows={data.tables.categories.rows as Row[]} label="category" value="spend" color={PALETTE[1]} />
-            </Card>
+            </ChartCard>
           </div>
-          <Card
+          <ChartCard
             title={data.tables.prices.title}
             extra={
-              <select value={product} onChange={(e) => setProduct(Number(e.target.value))} aria-label="Product">
-                {(data.tables.prices.rows as Row[]).map((r, i) => (
-                  <option key={i} value={i}>
-                    {String(r.product)}
-                  </option>
-                ))}
-              </select>
+              <Field label="Product" bare>
+                <select value={product} onChange={(e) => setProduct(Number(e.target.value))} aria-label="Product">
+                  {(data.tables.prices.rows as Row[]).map((r, i) => (
+                    <option key={i} value={i}>
+                      {String(r.product)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             }
           >
             {data.tables.prices.rows[product] ? (
@@ -247,10 +250,10 @@ export function PurchaseAnalytics() {
             ) : (
               <p className="muted">No POs in this range.</p>
             )}
-          </Card>
-          <Card title={data.tables.freight.title}>
+          </ChartCard>
+          <ChartCard title={data.tables.freight.title}>
             <DataTable table={data.tables.freight} demo={demo} limit={12} />
-          </Card>
+          </ChartCard>
         </>
       )}
     </>
@@ -270,21 +273,21 @@ export function LabourAnalytics() {
         <Loading error={error} />
       ) : (
         <>
-          <Card title={data.tables.monthly.title}>
+          <ChartCard title={data.tables.monthly.title}>
             <BarChart rows={data.tables.monthly.rows as Row[]} x="label" series={[{ key: "man_days", label: "Man-days", color: PALETTE[0] }]} fmt={(v) => v.toFixed(0)} />
-          </Card>
+          </ChartCard>
           <div className="analytics-grid">
-            <Card title={data.tables.attendance.title}>
+            <ChartCard title={data.tables.attendance.title}>
               <HBarChart rows={data.tables.attendance.rows as Row[]} label="code" value="rate" fmt={(v) => `${v.toFixed(1)}%`} scale={100} color={PALETTE[2]} />
-            </Card>
-            <Card title={data.tables.per_sqm.title}>
+            </ChartCard>
+            <ChartCard title={data.tables.per_sqm.title}>
               <HBarChart rows={(data.tables.per_sqm.rows as Row[]).slice(0, 15)} label="code" value="per_sqm" fmt={(v) => `₹${v.toFixed(0)}`} color={PALETTE[1]} />
               <p className="muted small">{data.tables.per_sqm.note}</p>
-            </Card>
+            </ChartCard>
           </div>
-          <Card title={data.tables.man_days.title}>
+          <ChartCard title={data.tables.man_days.title}>
             <DataTable table={data.tables.man_days} demo={demo} limit={15} />
-          </Card>
+          </ChartCard>
         </>
       )}
     </>
@@ -381,31 +384,33 @@ function FunnelTab() {
   return (
     <>
       <div className="analytics-grid">
-        <Card title="Leads → tenders → submitted → won" extra={<ExportButton path={`/api/analytics/strategy/funnel?format=xlsx&${qs}${dim ? `&group_by=${dim}` : ""}`} />}>
+        <ChartCard title="Leads → tenders → submitted → won" extra={<ExportButton path={`/api/analytics/strategy/funnel?format=xlsx&${qs}${dim ? `&group_by=${dim}` : ""}`} />}>
           <FunnelChart steps={data.total.steps.map((s) => ({ ...s, value: Number(s.value) }))} onClick={(s) => open(s)} />
           <p className="small">
             Lost: <b>{data.total.lost.count}</b> ({fmtValue(data.total.lost.value, "inr")}) · win rate <b>{fmtValue(data.total.win_rate, "pct")}</b> (won ÷ won + lost)
           </p>
           <p className="muted small basis">{data.basis}</p>
-        </Card>
-        <Card
+        </ChartCard>
+        <ChartCard
           title="By segment"
           extra={
-            <select
-              value={dim}
-              onChange={(e) => {
-                const next = new URLSearchParams(params);
-                if (e.target.value) next.set("by", e.target.value);
-                else next.delete("by");
-                setParams(next, { replace: true });
-              }}
-            >
-              {DIMS.map(([k, l]) => (
-                <option key={k} value={k}>
-                  {l}
-                </option>
-              ))}
-            </select>
+            <Field label="Segment" bare>
+              <select
+                value={dim}
+                onChange={(e) => {
+                  const next = new URLSearchParams(params);
+                  if (e.target.value) next.set("by", e.target.value);
+                  else next.delete("by");
+                  setParams(next, { replace: true });
+                }}
+              >
+                {DIMS.map(([k, l]) => (
+                  <option key={k} value={k}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </Field>
           }
         >
           {dim ? (
@@ -442,7 +447,7 @@ function FunnelTab() {
           ) : (
             <p className="muted">Pick a segment: month, salesperson, client type, source or region.</p>
           )}
-        </Card>
+        </ChartCard>
       </div>
     </>
   );
@@ -466,7 +471,7 @@ function WinLossTab() {
       <p className="muted small basis">{data.basis}</p>
       <div className="analytics-grid">
         {Object.entries(data.segments).map(([dim, rows]) => (
-          <Card key={dim} title={`Win rate by ${SEG_LABEL[dim]?.toLowerCase() ?? dim}`}>
+          <ChartCard key={dim} title={`Win rate by ${SEG_LABEL[dim]?.toLowerCase() ?? dim}`}>
             <HBarChart
               rows={rows as unknown as Row[]}
               label="key"
@@ -477,9 +482,9 @@ function WinLossTab() {
               note={(r) => `${r.won} won / ${r.lost} lost`}
               onClick={(r) => navigate(drillHref({ kind: "tenders", filter: "segment", [dim]: String(r.key) }, demo, "&decided=1"))}
             />
-          </Card>
+          </ChartCard>
         ))}
-        <Card title="Why we lose">
+        <ChartCard title="Why we lose">
           <HBarChart
             rows={data.lost_reasons.filter((r) => r.tenders || r.leads) as unknown as Row[]}
             label="reason"
@@ -490,7 +495,7 @@ function WinLossTab() {
             onClick={(r) => navigate(drillHref({ kind: "tenders", filter: "segment", status: "lost", lost_reason: String(r.reason) }, demo, "&decided=1"))}
           />
           {data.competitors.length > 0 && <p className="small top-gap">Lost to: {data.competitors.map((c) => `${c.name} (${c.count})`).join(", ")}</p>}
-        </Card>
+        </ChartCard>
       </div>
     </>
   );
@@ -502,7 +507,7 @@ function PricingTab() {
   if (!data) return <Loading error={error} />;
   const rows = data.systems.map((s) => ({ system: s.system, won: s.won.median_ratio, lost: s.lost.median_ratio, n: `${s.won.lines} / ${s.lost.lines}` }));
   return (
-    <Card title="Our quoted rate ÷ rate-library median, won vs lost" extra={<ExportButton path={`/api/analytics/strategy/pricing?format=xlsx&${qs}`} />}>
+    <ChartCard title="Our quoted rate ÷ rate-library median, won vs lost" extra={<ExportButton path={`/api/analytics/strategy/pricing?format=xlsx&${qs}`} />}>
       <BarChart
         rows={rows}
         x="system"
@@ -515,7 +520,7 @@ function PricingTab() {
       <p className="muted small">
         {data.note} Above 1.00: we quoted above the median. Lines counted (won / lost): {rows.map((r) => `${r.system} ${r.n}`).join(" · ")}.
       </p>
-    </Card>
+    </ChartCard>
   );
 }
 
@@ -534,7 +539,7 @@ function RepeatTab() {
         </span>
       </p>
       <div className="analytics-grid">
-        <Card title="Top 10 clients by billed value">
+        <ChartCard title="Top 10 clients by billed value">
           <HBarChart
             rows={data.top.map((t) => ({ ...t, label: `${t.name}${t.repeat ? " ↻" : ""}` })) as unknown as Row[]}
             label="label"
@@ -542,8 +547,8 @@ function RepeatTab() {
             onClick={(r) => navigate(drillHref(r.drill as Drill, demo))}
           />
           <p className="muted small">↻ repeat client</p>
-        </Card>
-        <Card title="No enquiry in 12 months: worth a call">
+        </ChartCard>
+        <ChartCard title="No enquiry in 12 months: worth a call">
           <DataTable
             demo={demo}
             limit={12}
@@ -559,7 +564,7 @@ function RepeatTab() {
               rows: data.quiet,
             }}
           />
-        </Card>
+        </ChartCard>
       </div>
     </>
   );
@@ -660,27 +665,31 @@ export function AlertsPage() {
         </div>
         {can("dashboard.company") && (
           <div className="page-actions">
-            <button className="btn btn-small" onClick={() => void runNow()}>
+            <Button size="small" onClick={() => void runNow()}>
               Check now
-            </button>
+            </Button>
           </div>
         )}
       </div>
       {msg && <div className="alert alert-ok">{msg}</div>}
       <div className="filters">
-        <select value={state} onChange={(e) => setState(e.target.value)} aria-label="State">
-          <option value="open">Open</option>
-          <option value="acknowledged">Acknowledged</option>
-          <option value="all">All</option>
-        </select>
-        <select value={rule} onChange={(e) => setRule(e.target.value)} aria-label="Rule">
-          <option value="">All rules</option>
-          {Object.entries(data?.rules ?? {}).map(([k, l]) => (
-            <option key={k} value={k}>
-              {l}
-            </option>
-          ))}
-        </select>
+        <Field label="State" bare>
+          <select value={state} onChange={(e) => setState(e.target.value)} aria-label="State">
+            <option value="open">Open</option>
+            <option value="acknowledged">Acknowledged</option>
+            <option value="all">All</option>
+          </select>
+        </Field>
+        <Field label="Rule" bare>
+          <select value={rule} onChange={(e) => setRule(e.target.value)} aria-label="Rule">
+            <option value="">All rules</option>
+            {Object.entries(data?.rules ?? {}).map(([k, l]) => (
+              <option key={k} value={k}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </Field>
       </div>
       {!data ? (
         <Loading error={error} />
@@ -699,9 +708,9 @@ export function AlertsPage() {
                     {a.acknowledged_at ? (
                       <span className="small muted">acknowledged by {a.acknowledged_by}</span>
                     ) : (
-                      <button className="btn btn-small" onClick={() => void ack(a.id)}>
+                      <Button size="small" onClick={() => void ack(a.id)}>
                         Acknowledge
-                      </button>
+                      </Button>
                     )}
                   </td>
                 </tr>
@@ -736,39 +745,41 @@ export function ReportsPage() {
           <p className="muted small">The management summary is filed every Monday at 8 am (IST) and announced in the bell. No email yet.</p>
         </div>
         <div className="page-actions">
-          <button className="btn btn-small" onClick={() => void api("/api/analytics/reports/weekly", { method: "POST" }).then(reload, (err) => showError(err))}>
+          <Button size="small" onClick={() => void api("/api/analytics/reports/weekly", { method: "POST" }).then(reload, (err) => showError(err))}>
             File this week's now
-          </button>
+          </Button>
         </div>
       </div>
       {can("reports.export") && (
-        <div className="card">
+        <Card as="div">
           <h2 className="section-title">Download</h2>
           <div className="inline-form">
-            <button className="btn btn-small" onClick={() => dl("/api/analytics/pdf/management")}>
+            <Button size="small" onClick={() => dl("/api/analytics/pdf/management")}>
               Management summary (PDF)
-            </button>
-            <button className="btn btn-small" onClick={() => dl("/api/analytics/pdf/receivables")}>
+            </Button>
+            <Button size="small" onClick={() => dl("/api/analytics/pdf/receivables")}>
               Receivables (PDF)
-            </button>
-            <button className="btn btn-small" onClick={() => dl("/api/analytics/pdf/pipeline")}>
+            </Button>
+            <Button size="small" onClick={() => dl("/api/analytics/pdf/pipeline")}>
               Sales pipeline (PDF)
-            </button>
-            <select value={site} onChange={(e) => setSite(e.target.value)} aria-label="Site">
-              <option value="">Site status report for…</option>
-              {(sites?.items ?? []).map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.code} {s.name}
-                </option>
-              ))}
-            </select>
+            </Button>
+            <Field label="Site" bare>
+              <select value={site} onChange={(e) => setSite(e.target.value)} aria-label="Site">
+                <option value="">Site status report for…</option>
+                {(sites?.items ?? []).map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.code} {s.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
             {site && (
-              <button className="btn btn-small btn-primary" onClick={() => dl(`/api/analytics/pdf/site/${site}`)}>
+              <Button variant="primary" size="small" onClick={() => dl(`/api/analytics/pdf/site/${site}`)}>
                 Site status (PDF, no costs)
-              </button>
+              </Button>
             )}
           </div>
-        </div>
+        </Card>
       )}
       <h2 className="section-title top-gap">Weekly management summaries</h2>
       {!data ? (
@@ -782,9 +793,9 @@ export function ReportsPage() {
                   <td className="nowrap">Week of {fmtValue(r.week_start, "date")}</td>
                   <td className="small muted">{r.tiles.map((t) => `${t.label}: ${fmtValue(t.value, t.unit)}`).join(" · ")}</td>
                   <td>
-                    <button className="btn btn-small" onClick={() => dl(`/api/analytics/reports/${r.id}/pdf`)}>
+                    <Button size="small" onClick={() => dl(`/api/analytics/reports/${r.id}/pdf`)}>
                       PDF
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}

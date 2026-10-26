@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { Modal } from "../ui/Overlay";
 import { errorText, inr } from "../format";
+import { Button, Card, Field } from "../ui/components";
 
 export type Stats = { n: number; min: string; median: string; max: string; latest: { rate: string; on_date: string | null; city: string | null } } | null;
 export type Brief = {
@@ -179,8 +180,7 @@ export function LibraryPicker({ groupId, onApplied, onClose }: { groupId: number
     <Modal title="New main item from the library" onClose={onClose} wide>
       <div className="library-picker">
         <div className="grid-4">
-          <label className="field">
-            <span>Area</span>
+          <Field label="Area">
             <select value={f.area_type} onChange={set("area_type")}>
               <option value="">— any —</option>
               {opts?.areas.map((a) => (
@@ -189,9 +189,8 @@ export function LibraryPicker({ groupId, onApplied, onClose }: { groupId: number
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Surface</span>
+          </Field>
+          <Field label="Surface">
             <select value={f.surface} onChange={set("surface")}>
               <option value="">— any —</option>
               {opts?.surfaces.map((a) => (
@@ -200,34 +199,28 @@ export function LibraryPicker({ groupId, onApplied, onClose }: { groupId: number
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Coats</span>
+          </Field>
+          <Field label="Coats">
             <input className="input-num" value={f.coats} onChange={set("coats")} />
-          </label>
-          <label className="field">
-            <span>Min kg/sqm</span>
+          </Field>
+          <Field label="Min kg/sqm">
             <input className="input-num" value={f.min_kg_sqm} onChange={set("min_kg_sqm")} />
-          </label>
-          <label className="field">
-            <span>DFT mm</span>
+          </Field>
+          <Field label="DFT mm">
             <input className="input-num" value={f.dft_mm} onChange={set("dft_mm")} />
-          </label>
-          <label className="field">
-            <span>Protection</span>
+          </Field>
+          <Field label="Protection">
             <select value={f.protection} onChange={set("protection")}>
               <option value="">— none —</option>
               <option value="screed">Screed</option>
               <option value="tile">Tile</option>
               <option value="board">Board / geotextile</option>
             </select>
-          </label>
-          <label className="field">
-            <span>Warranty (years)</span>
+          </Field>
+          <Field label="Warranty (years)">
             <input className="input-num" value={f.warranty_years} onChange={set("warranty_years")} />
-          </label>
-          <label className="field">
-            <span>Brand asked</span>
+          </Field>
+          <Field label="Brand asked">
             <select value={f.brand} onChange={set("brand")}>
               <option value="">— any —</option>
               {opts?.brands.map((b) => (
@@ -236,15 +229,14 @@ export function LibraryPicker({ groupId, onApplied, onClose }: { groupId: number
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>Site location</span>
+          </Field>
+          <Field label="Site location">
             <input value={f.city} onChange={set("city")} placeholder="Ahmedabad" />
-          </label>
+          </Field>
         </div>
-        <button className="btn btn-primary" disabled={busy} onClick={() => void search()}>
+        <Button variant="primary" disabled={busy} onClick={() => void search()}>
           Propose templates
-        </button>
+        </Button>
         {error && <div className="alert alert-error top-gap-small">{error}</div>}
         {found && (
           <div className="top-gap">
@@ -252,7 +244,7 @@ export function LibraryPicker({ groupId, onApplied, onClose }: { groupId: number
               {found.length} template(s) fit{region ? `; ${f.city} is in ${region}` : ""}. Best first.
             </p>
             {found.map((t) => (
-              <div key={t.id} className="card library-proposal">
+              <Card key={t.id} as="div" className="library-proposal">
                 <div className="card-head">
                   <div>
                     <b>{t.name}</b> <span className="badge badge-muted">{t.confidence} %</span> {t.to_check && <span className="badge badge-warn">to check</span>}
@@ -261,9 +253,9 @@ export function LibraryPicker({ groupId, onApplied, onClose }: { groupId: number
                       {t.margins?.usual ? ` · margin ${t.margins.usual}` : ""}
                     </div>
                   </div>
-                  <button className="btn btn-primary btn-small" disabled={busy} onClick={() => void use(t)}>
+                  <Button variant="primary" size="small" disabled={busy} onClick={() => void use(t)}>
                     Use this
-                  </button>
+                  </Button>
                 </div>
                 {t.why && <p className="small muted">Why here: {t.why.join(" · ")}</p>}
                 <p className="small">
@@ -306,7 +298,7 @@ export function LibraryPicker({ groupId, onApplied, onClose }: { groupId: number
                   </div>
                   <NearRates r={t.rates} />
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         )}

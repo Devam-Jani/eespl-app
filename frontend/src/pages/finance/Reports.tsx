@@ -5,6 +5,7 @@ import { api, downloadFile, queryString } from "../../api";
 import { useAuth } from "../../auth";
 import { errorText, inr, num } from "../../format";
 import type { Profit } from "../../finance/types";
+import { Button, Card, Field } from "../../ui/components";
 
 const COST_LABEL: Record<string, string> = {
   material: "Material",
@@ -20,7 +21,7 @@ const COST_LABEL: Record<string, string> = {
 export function ProfitCard({ p }: { p: Profit }) {
   return (
     <div className="split">
-      <div className="card">
+      <Card as="div">
         <h2 className="section-title">Billing</h2>
         <table className="table compact">
           <tbody>
@@ -41,8 +42,8 @@ export function ProfitCard({ p }: { p: Profit }) {
             ))}
           </tbody>
         </table>
-      </div>
-      <div className="card">
+      </Card>
+      <Card as="div">
         <h2 className="section-title">Cost to date</h2>
         <table className="table compact">
           <tbody>
@@ -74,7 +75,7 @@ export function ProfitCard({ p }: { p: Profit }) {
         </table>
         {p.salary_hidden && <p className="small muted">Staff salary is left out (needs the payroll permission).</p>}
         {p.over_cost && <p className="text-danger small">Cost to date is more than what is billed.</p>}
-      </div>
+      </Card>
     </div>
   );
 }
@@ -89,7 +90,7 @@ export default function SiteProfit() {
     <>
       <h1>Site profit</h1>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -127,7 +128,7 @@ export default function SiteProfit() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -189,20 +190,24 @@ export function Tally() {
       <p className="muted small">Download only: the XML is imported in TallyPrime (Gateway › Import › Vouchers). Nothing is sent anywhere.</p>
       {error && <div className="alert alert-error">{error}</div>}
       {message && <div className="alert alert-ok">{message}</div>}
-      <div className="card inline-form wrap">
-        <input type="date" value={range.date_from} onChange={(e) => setRange({ ...range, date_from: e.target.value })} aria-label="From" />
-        <input type="date" value={range.date_to} onChange={(e) => setRange({ ...range, date_to: e.target.value })} aria-label="To" />
+      <Card as="div" className="inline-form wrap">
+        <Field label="From" bare>
+          <input type="date" value={range.date_from} onChange={(e) => setRange({ ...range, date_from: e.target.value })} aria-label="From" />
+        </Field>
+        <Field label="To" bare>
+          <input type="date" value={range.date_to} onChange={(e) => setRange({ ...range, date_to: e.target.value })} aria-label="To" />
+        </Field>
         <label className="check">
           <input type="checkbox" checked={range.include_exported} onChange={(e) => setRange({ ...range, include_exported: e.target.checked })} /> include exported
         </label>
-        <button className="btn btn-primary" disabled={!preview?.count} onClick={() => void exportXml()}>
+        <Button variant="primary" disabled={!preview?.count} onClick={() => void exportXml()}>
           Export {preview?.count ?? 0} voucher(s) as XML
-        </button>
-        <button className="btn" onClick={() => void downloadFile(`/api/finance/tally/day-book${q}`)}>
+        </Button>
+        <Button onClick={() => void downloadFile(`/api/finance/tally/day-book${q}`)}>
           Day book (Excel)
-        </button>
-      </div>
-      <div className="card table-wrap top-gap">
+        </Button>
+      </Card>
+      <Card as="div" className="table-wrap top-gap">
         <table className="table compact">
           <thead>
             <tr>
@@ -229,25 +234,24 @@ export function Tally() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       {ledgers && (
-        <form className="card top-gap" onSubmit={saveLedgers}>
+        <Card as="form" className="top-gap" onSubmit={saveLedgers}>
           <h2 className="section-title">Ledger names in Tally</h2>
           <div className="grid-4">
             {Object.entries(ledgers)
               .filter(([, v]) => typeof v === "string")
               .map(([k, v]) => (
-                <label key={k} className="field">
-                  <span>{k.replace(/_/g, " ")}</span>
+                <Field label={k.replace(/_/g, " ")} key={k}>
                   <input value={v as string} onChange={(e) => setLedgers({ ...ledgers, [k]: e.target.value })} />
-                </label>
+                </Field>
               ))}
           </div>
           <p className="small muted">Clients and vendors map to party ledgers of the same name.</p>
           <div className="form-actions">
-            <button className="btn btn-primary">Save ledger names</button>
+            <Button type="submit" variant="primary">Save ledger names</Button>
           </div>
-        </form>
+        </Card>
       )}
     </>
   );
@@ -272,17 +276,16 @@ export function FinanceSettings() {
   }
   if (!s) return error ? <div className="alert alert-error">{error}</div> : <p className="muted">Loading…</p>;
   const field = (k: string, label: string) => (
-    <label className="field">
-      <span>{label}</span>
+    <Field label={label}>
       <input value={String(s[k] ?? "")} onChange={(e) => setS({ ...s, [k]: e.target.value })} disabled={!can("settings.company")} />
-    </label>
+    </Field>
   );
   return (
     <>
       <h1>Finance settings</h1>
       {error && <div className="alert alert-error">{error}</div>}
       {message && <div className="alert alert-ok">{message}</div>}
-      <form className="card" onSubmit={save}>
+      <Card as="form" onSubmit={save}>
         <div className="grid-4">
           {field("invoice_prefix", `Invoice prefix (e.g. ${String(s.invoice_example)})`)}
           {field("works_sac", "Works contract SAC")}
@@ -295,20 +298,18 @@ export function FinanceSettings() {
           {field("esi_employee_percent", "ESI employee %")}
           {field("esi_employer_percent", "ESI employer %")}
         </div>
-        <label className="field">
-          <span>TDS by vendor type (JSON)</span>
+        <Field label="TDS by vendor type (JSON)">
           <textarea rows={4} defaultValue={JSON.stringify(s.tds_rules, null, 1)} onBlur={(e) => setS({ ...s, tds_rules: JSON.parse(e.target.value) })} />
-        </label>
-        <label className="field">
-          <span>Professional tax slabs (JSON; default Gujarat)</span>
+        </Field>
+        <Field label="Professional tax slabs (JSON; default Gujarat)">
           <textarea rows={3} defaultValue={JSON.stringify(s.pt_slabs)} onBlur={(e) => setS({ ...s, pt_slabs: JSON.parse(e.target.value) })} />
-        </label>
+        </Field>
         {can("settings.company") && (
           <div className="form-actions">
-            <button className="btn btn-primary">Save</button>
+            <Button type="submit" variant="primary">Save</Button>
           </div>
         )}
-      </form>
+      </Card>
     </>
   );
 }

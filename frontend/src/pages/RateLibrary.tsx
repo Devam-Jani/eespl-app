@@ -6,6 +6,7 @@ import { Modal } from "../ui/Overlay";
 import { errorText, inr, num } from "../format";
 import type { LibraryHit, LibraryItemDetail, LibraryLine, LibrarySearch } from "../types";
 import { useUnits } from "./Products";
+import { Button, Card, Field } from "../ui/components";
 
 const PAGE_SIZE = 25;
 
@@ -96,18 +97,16 @@ export default function RateLibrary() {
           })}`}
         />
       </div>
-      <div className="card filters">
-        <label className="field grow">
-          <span>Search past BOQ items</span>
+      <Card as="div" className="filters">
+        <Field label="Search past BOQ items" className="grow">
           <input
             autoFocus
             placeholder="e.g. app based membrane, crystalline, pvc pipe sealing"
             value={filters.q}
             onChange={(e) => set("q", e.target.value)}
           />
-        </label>
-        <label className="field">
-          <span>Unit</span>
+        </Field>
+        <Field label="Unit">
           <select value={filters.unit} onChange={(e) => set("unit", e.target.value)}>
             <option value="">Any</option>
             {units.map((u) => (
@@ -116,7 +115,7 @@ export default function RateLibrary() {
               </option>
             ))}
           </select>
-        </label>
+        </Field>
         <div className="toggles">
           <label className="check" title="Working / margin rows, rates below ₹1 and items hidden by hand">
             <input type="checkbox" checked={filters.includeFlagged} onChange={(e) => set("includeFlagged", e.target.checked)} />
@@ -131,7 +130,7 @@ export default function RateLibrary() {
             Include competitor rates
           </label>
         </div>
-      </div>
+      </Card>
       {error && <div className="alert alert-error">{error}</div>}
       {result && (
         <p className="muted small">
@@ -141,7 +140,7 @@ export default function RateLibrary() {
         </p>
       )}
 
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -186,12 +185,12 @@ export default function RateLibrary() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       {result?.has_more && (
         <div className="pager">
-          <button className="btn" disabled={loadingMore} onClick={() => void showMore()}>
+          <Button disabled={loadingMore} onClick={() => void showMore()}>
             {loadingMore ? "Loading…" : "Show more"}
-          </button>
+          </Button>
         </div>
       )}
       {open !== null && (
@@ -307,9 +306,9 @@ function ItemPanel({
                 {m.description.slice(0, 100)} <span className="muted">({m.unit ?? "—"})</span>
               </span>
               {canEdit && (
-                <button className="btn btn-small" onClick={() => void act(`${m.id}/unmerge`, "POST")}>
+                <Button size="small" onClick={() => void act(`${m.id}/unmerge`, "POST")}>
                   Unmerge
-                </button>
+                </Button>
               )}
             </div>
           ))}
@@ -319,16 +318,15 @@ function ItemPanel({
       {canEdit && !item.merged_into && (
         <div className="toolbar item-actions">
           {item.is_excluded ? (
-            <button className="btn btn-small" onClick={() => void act(`${itemId}`, "PATCH", { is_excluded: false })}>
+            <Button size="small" onClick={() => void act(`${itemId}`, "PATCH", { is_excluded: false })}>
               Show in search again
-            </button>
+            </Button>
           ) : (
-            <button className="btn btn-small" onClick={hide}>
+            <Button size="small" onClick={hide}>
               Hide from search
-            </button>
+            </Button>
           )}
-          <label className="inline">
-            Change unit
+          <Field label="Change unit" inline className="inline">
             <select
               value={item.unit ?? ""}
               onChange={(e) => e.target.value && void act(`${itemId}`, "PATCH", { unit: e.target.value })}
@@ -340,17 +338,17 @@ function ItemPanel({
                 </option>
               ))}
             </select>
-          </label>
-          <button className="btn btn-small" onClick={() => setMerging(true)}>
+          </Field>
+          <Button size="small" onClick={() => setMerging(true)}>
             Merge into…
-          </button>
+          </Button>
         </div>
       )}
       {canEdit && item.merged_into && (
         <div className="toolbar item-actions">
-          <button className="btn btn-small" onClick={() => void act(`${itemId}/unmerge`, "POST")}>
+          <Button size="small" onClick={() => void act(`${itemId}/unmerge`, "POST")}>
             Unmerge
-          </button>
+          </Button>
         </div>
       )}
 
@@ -456,7 +454,9 @@ function MergePicker({
       <p className="muted small">
         Choose the item to keep. This item's lines will count towards it and this item leaves search. Nothing is deleted.
       </p>
-      <input className="full" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+      <Field label="Search items" bare>
+        <input className="full" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+      </Field>
       <div className="table-wrap top-gap">
         <table className="table compact">
           <tbody>

@@ -8,6 +8,7 @@ import { GrnForm, GrnTable, GrnView } from "../material/Grns";
 import { IndentForm, IndentTable, IndentView } from "../material/Indents";
 import { IssueForm, IssueTable, ReceiveForm, StockTable, TransferForm, TransferTable } from "../material/Stores";
 import { useMaterialLookups } from "../material/common";
+import { Button } from "../../ui/components";
 
 /** A site's material: its store's stock, indents, transfers in, GRNs, issues and freight. */
 export default function MaterialTab({ site }: { site: Site }) {
@@ -79,26 +80,26 @@ export default function MaterialTab({ site }: { site: Site }) {
       {lookups && (
         <div className="page-actions top-gap">
           {p["indent.create"] && (
-            <button className="btn btn-primary" onClick={() => setDialog("indent")}>
+            <Button variant="primary" onClick={() => setDialog("indent")}>
               New indent
-            </button>
+            </Button>
           )}
           {p["grn.edit"] && summary.store && (
-            <button className="btn" onClick={() => setDialog("grn")}>
+            <Button onClick={() => setDialog("grn")}>
               Receive material (GRN)
-            </button>
+            </Button>
           )}
           {p["store.edit"] && (
             <>
-              <button className="btn" onClick={() => setDialog("issue")}>
+              <Button onClick={() => setDialog("issue")}>
                 Issue to work
-              </button>
-              <button className="btn" onClick={() => setDialog("return")}>
+              </Button>
+              <Button onClick={() => setDialog("return")}>
                 Return to store
-              </button>
-              <button className="btn" onClick={() => setDialog("transfer")}>
+              </Button>
+              <Button onClick={() => setDialog("transfer")}>
                 Request / send transfer
-              </button>
+              </Button>
             </>
           )}
         </div>

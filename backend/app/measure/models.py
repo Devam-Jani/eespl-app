@@ -25,11 +25,14 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Identity,
+    Index,
     Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
+    func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -41,10 +44,10 @@ Exact = Numeric(24, 10)  # sizes and quantities at full precision
 Total = Numeric(16, 3)  # a sheet line's total, rounded half up to 3 decimals
 
 AREA_KINDS = ("area", "slope")
-EDGE_ANSWERS = ("both", "open", "weir")
+EDGE_ANSWERS = ("both", "open", "weir", "none")  # none: drawn close, not one wall
 PARTS = ("floor", "walls", "tops", "slope", "count")
-SHEET_STATUSES = ("draft", "sent", "approved", "billed")
-LINE_KINDS = ("area", "line", "deduction", "not_done")
+SHEET_STATUSES = ("draft", "sent", "approved", "billed", "study")  # study: a what-if, never sent or billed
+LINE_KINDS = ("area", "line", "deduction", "not_done", "total")
 
 
 def _in(column: str, values: tuple[str, ...]) -> str:
@@ -71,6 +74,10 @@ class MeasureArea(Tracked, Base):
     layer: Mapped[str | None] = mapped_column(String(200))
     area_sqm: Mapped[Decimal] = mapped_column(Exact)  # the outline's, exact
     periphery_m: Mapped[Decimal] = mapped_column(Exact)
+    # a polyline drawn round but not closed (its ends this far apart): the app closes it; the line
+    # as drawn (without the closing gap) is what AutoCAD shows as its length
+    closed_gap_mm: Mapped[Decimal | None] = mapped_column(Exact)
+    drawn_length_m: Mapped[Decimal | None] = mapped_column(Exact)
     trim_with: Mapped[list[int]] = mapped_column(JSONB, server_default="[]")  # area ids cut away
     net_area_sqm: Mapped[Decimal] = mapped_column(Exact)  # after the trim
     net_periphery_m: Mapped[Decimal] = mapped_column(Exact)
@@ -84,6 +91,7 @@ class MeasureArea(Tracked, Base):
     # a slope: its rise over its horizontal run (mm), from the section
     rise_mm: Mapped[Decimal | None] = mapped_column(Exact)
     run_mm: Mapped[Decimal | None] = mapped_column(Exact)
+    slope_mm: Mapped[Decimal | None] = mapped_column(Exact)  # the slope's own length (a picked line, an arc kept)
     slope_source: Mapped[str | None] = mapped_column(Text)
     # what is drawn inside it, counted when it was picked: {"layer:SLEEVE": 4, "block:SLV": 2}
     counts: Mapped[dict[str, int]] = mapped_column(JSONB, server_default="{}")
@@ -111,6 +119,9 @@ class MeasureEdge(Base):
     weir_mm: Mapped[Decimal | None] = mapped_column(Exact)
     answered_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # drawn as its own line between two areas drawn apart (not found from the outlines): kept
+    source: Mapped[str | None] = mapped_column(Text)
+    manual: Mapped[bool] = mapped_column(Boolean, server_default="false")
 
 
 class MeasureItem(Base):
@@ -133,6 +144,8 @@ class MeasureItem(Base):
     layers: Mapped[int] = mapped_column(Integer, server_default="1")
     layers_answer: Mapped[str | None] = mapped_column(String(4))
     areas: Mapped[list[int] | None] = mapped_column(JSONB)  # only these areas (none: every area)
+    skip: Mapped[dict[str, list[str]]] = mapped_column(JSONB, server_default="{}")  # {area id: parts not done there}
+    manual: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")  # {area id: count on site}
 
 
 class MeasureSheet(Tracked, Base):
@@ -151,12 +164,23 @@ class MeasureSheet(Tracked, Base):
     status: Mapped[str] = mapped_column(String(8), server_default="draft")
     # (area, item, layer) the billing team marked as work not done on this bill: "–" on the sheet
     not_done: Mapped[list[Any]] = mapped_column(JSONB, server_default="[]")
+    # a study sheet's way of measuring (another way to compare with the app's): its areas, sizes
+    # truncated or not, sqft per sqm, converted per line or per item, grouped by area or item, and
+    # what it takes differently for an area, an edge or an item
+    options: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
     set_id: Mapped[int | None] = mapped_column(ForeignKey("measurement_sets.id", ondelete="SET NULL"))
     ra_bill_id: Mapped[int | None] = mapped_column(ForeignKey("ra_bills.id", ondelete="SET NULL"))
     # read from an old Excel sheet: its quantities are the "previous" (what could not be read is kept)
     imported_from: Mapped[str | None] = mapped_column(String(300))
     import_skipped: Mapped[list[Any] | None] = mapped_column(JSONB)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # a bill from a site slip: the client's handwritten page (photo or PDF) with its lines in ft-in,
+    # signed and dated by the client's person on site (their role, never a name)
+    slip_path: Mapped[str | None] = mapped_column(String(400))
+    slip_name: Mapped[str | None] = mapped_column(String(300))
+    slip_on: Mapped[date | None] = mapped_column(Date)
+    signed_by: Mapped[str | None] = mapped_column(String(200))
+    signed_on: Mapped[date | None] = mapped_column(Date)
 
 
 class MeasureLine(Base):
@@ -183,6 +207,51 @@ class MeasureLine(Base):
     unit: Mapped[str | None] = mapped_column(String(20))
     formula: Mapped[str | None] = mapped_column(Text)  # how the qty was worked out, in words
     reason: Mapped[str | None] = mapped_column(Text)  # a deduction's
+    # a slip's line as written ({"no": "26", "length": "16'0\"", "width": null}) and whether it is
+    # billed (a line the billing team leaves out stays listed, with the reason)
+    typed: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    billed: Mapped[bool] = mapped_column(Boolean, server_default="true")
+
+
+class BillRevision(Base):
+    """One version of an RA bill (R0, R1 ...) as it was made: its lines and totals kept as they
+    were, where it came from (the app, or an old file: "Not for invoice", "revised"), and the one
+    sent to the client."""
+
+    __tablename__ = "bill_revisions"
+    __table_args__ = (
+        UniqueConstraint("ra_bill_id", "rev_no"),
+        Index("ux_bill_revisions_one_sent", "ra_bill_id", unique=True, postgresql_where=text("sent")),  # one sent per bill
+    )
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    ra_bill_id: Mapped[int] = mapped_column(ForeignKey("ra_bills.id", ondelete="CASCADE"), index=True)
+    rev_no: Mapped[int] = mapped_column(Integer)
+    label: Mapped[str | None] = mapped_column(String(200))
+    source: Mapped[str | None] = mapped_column(String(300))  # "the app", or the old file's name
+    made_on: Mapped[date | None] = mapped_column(Date)
+    lines: Mapped[list[Any]] = mapped_column(JSONB, server_default="[]")  # [{item_no, description, unit, qty, rate, amount}]
+    basic: Mapped[Decimal] = mapped_column(Numeric(14, 2), server_default="0")
+    gst: Mapped[Decimal] = mapped_column(Numeric(14, 2), server_default="0")
+    total: Mapped[Decimal] = mapped_column(Numeric(14, 2), server_default="0")
+    sent: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class RegisterImport(Tracked, Base):
+    """An old bill register (the billing team's Excel) and the project folder read for a site: the
+    register's rows as written, and what was found (numbers missing or used twice, dates out of
+    order, bills missing from the register)."""
+
+    __tablename__ = "register_imports"
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    site_id: Mapped[int] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"), index=True)
+    source: Mapped[str] = mapped_column(String(300))
+    rows: Mapped[list[Any]] = mapped_column(JSONB, server_default="[]")
+    files: Mapped[list[Any]] = mapped_column(JSONB, server_default="[]")  # the folder's bill files as read
+    findings: Mapped[list[Any]] = mapped_column(JSONB, server_default="[]")
 
 
 class MeasureBilled(Base):

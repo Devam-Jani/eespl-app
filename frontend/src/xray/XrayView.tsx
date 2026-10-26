@@ -17,7 +17,7 @@ import { placeLabels } from "./labels";
 import { roomsFirstByDefault, showsSectionLine } from "./views";
 import type { Label, Mode, Preset, RoomState } from "./scene";
 import { XrayScene } from "./scene";
-import { Icon } from "../ui/components";
+import { Button, buttonClass, Field, Icon } from "../ui/components";
 
 export type XNode = { id: number; name: string; kind: string; status: NodeStatus; timeline?: TimelineRow[] };
 type Props = {
@@ -273,58 +273,62 @@ export default function XrayView({ site, building, nodes, portal, cover, compact
           {building.ifc && (
             <div className="xray-seg" role="group" aria-label="Source">
               {hasDrawing && (
-                <button className={`btn btn-small${source === "drawing" ? " active" : ""}`} onClick={() => setSource("drawing")}>
+                <Button size="small" className={source === "drawing" ? "active" : ""} onClick={() => setSource("drawing")}>
                   Drawing
-                </button>
+                </Button>
               )}
-              <button className={`btn btn-small${source === "bim" ? " active" : ""}`} onClick={() => setSource("bim")} title={building.ifc.filename ?? undefined}>
+              <Button size="small" className={source === "bim" ? "active" : ""} onClick={() => setSource("bim")} title={building.ifc.filename ?? undefined}>
                 BIM (IFC)
-              </button>
+              </Button>
             </div>
           )}
           <div className="xray-seg" role="group" aria-label="View mode">
             {(portal ? (["xray", "real"] as Mode[]) : (["xray", "status", "real"] as Mode[])).map((m) => (
-              <button key={m} className={`btn ${mode === m ? "btn-primary" : "btn-secondary"}`} aria-pressed={mode === m} onClick={() => setMode(m)}>
+              <Button key={m} variant={mode === m ? "primary" : "secondary"} aria-pressed={mode === m} onClick={() => setMode(m)}>
                 {MODE_LABEL[m]}
-              </button>
+              </Button>
             ))}
           </div>
-          <button className="btn btn-secondary" aria-pressed={roomsFirst} onClick={() => setRoomsFirst(!roomsFirst)} title="Dim the building, light up our rooms">
+          <Button aria-pressed={roomsFirst} onClick={() => setRoomsFirst(!roomsFirst)} title="Dim the building, light up our rooms">
             Rooms first
-          </button>
-          <button className="btn btn-secondary" aria-pressed={explode} onClick={() => setExplode(!explode)} title="Spread the floors apart">
+          </Button>
+          <Button aria-pressed={explode} onClick={() => setExplode(!explode)} title="Spread the floors apart">
             Explode
-          </button>
+          </Button>
           <span className="xray-spacer" />
-          <select className="xray-floor" value={cut ?? ""} onChange={(e) => setCut(e.target.value === "" ? null : Number(e.target.value))} aria-label="Open a floor (cutaway)">
-            <option value="">Floor: All floors</option>
-            {floors.map((f) => (
-              <option key={f.level} value={f.level}>
-                Floor: {f.name}
-              </option>
-            ))}
-          </select>
+          <Field label="Open a floor (cutaway)" bare>
+            <select className="xray-floor" value={cut ?? ""} onChange={(e) => setCut(e.target.value === "" ? null : Number(e.target.value))} aria-label="Open a floor (cutaway)">
+              <option value="">Floor: All floors</option>
+              {floors.map((f) => (
+                <option key={f.level} value={f.level}>
+                  Floor: {f.name}
+                </option>
+              ))}
+            </select>
+          </Field>
           <details className="xray-more">
-            <summary className="btn btn-secondary btn-icon" aria-label="More view tools: camera, save image, glow" title="Camera, save image, glow">
+            <summary className={buttonClass({ variant: "secondary", icon: true })} aria-label="More view tools: camera, save image, glow" title="Camera, save image, glow">
               <span aria-hidden="true">⋯</span>
             </summary>
             <div className="xray-more-menu">
               <div className="xray-seg" role="group" aria-label="Camera">
                 {(["reset", "top", "front", "iso"] as Preset[]).map((p) => (
-                  <button key={p} className="btn btn-small" onClick={() => view(p)}>
+                  <Button key={p} size="small" onClick={() => view(p)}>
                     {p === "reset" ? "Reset" : p[0].toUpperCase() + p.slice(1)}
-                  </button>
+                  </Button>
                 ))}
               </div>
-              <button className="btn btn-small" onClick={saveImage}>
+              <Button size="small" onClick={saveImage}>
                 Save image
-              </button>
+              </Button>
               {!portal && (
-                <select value={bloom} onChange={(e) => setBloom(e.target.value as typeof bloom)} aria-label="Glow" title={`Glow (${fps} fps)`}>
-                  <option value="auto">Glow: auto</option>
-                  <option value="on">Glow: on</option>
-                  <option value="off">Glow: off</option>
-                </select>
+                <Field label="Glow" bare>
+                  <select value={bloom} onChange={(e) => setBloom(e.target.value as typeof bloom)} aria-label="Glow" title={`Glow (${fps} fps)`}>
+                    <option value="auto">Glow: auto</option>
+                    <option value="on">Glow: on</option>
+                    <option value="off">Glow: off</option>
+                  </select>
+                </Field>
               )}
             </div>
           </details>
@@ -360,17 +364,16 @@ export default function XrayView({ site, building, nodes, portal, cover, compact
             <p>
               This BIM file is {building.ifc?.size_mb} MB, more than an office laptop opens comfortably (the limit for this site is {building.ifc?.max_mb} MB). It may take minutes and freeze the browser.
             </p>
-            <button className="btn btn-small" onClick={() => setAllowBig(true)}>
+            <Button size="small" onClick={() => setAllowBig(true)}>
               Open it anyway
-            </button>
+            </Button>
           </div>
         )}
         {ifcNote && <div className="xray-over">{ifcNote}</div>}
         {linkFor && (
           <div className="xray-over xray-link">
             <b>{linkFor.type.replace("IFC", "")}</b> {linkFor.name ?? `#${linkFor.expressID}`}
-            <label className="field">
-              <span>Our place</span>
+            <Field label="Our place">
               <select value={links[String(linkFor.expressID)] ?? ""} onChange={(e) => void link(linkFor, e.target.value ? Number(e.target.value) : null)}>
                 <option value="">— not linked —</option>
                 {nodes
@@ -381,10 +384,10 @@ export default function XrayView({ site, building, nodes, portal, cover, compact
                     </option>
                   ))}
               </select>
-            </label>
-            <button className="btn btn-small" onClick={() => setLinkFor(null)}>
+            </Field>
+            <Button size="small" onClick={() => setLinkFor(null)}>
               Close
-            </button>
+            </Button>
           </div>
         )}
         {!compact && (
@@ -407,18 +410,18 @@ export default function XrayView({ site, building, nodes, portal, cover, compact
       </div>
       {!compact && !bare && span > 0 && (
         <div className="xray-time">
-          <button className="btn btn-secondary xray-play" onClick={() => (day >= span ? (setDay(0), setPlaying(true)) : setPlaying(!playing))} aria-label={playing ? "Pause the replay" : "Play the replay"}>
+          <Button className="xray-play" onClick={() => (day >= span ? (setDay(0), setPlaying(true)) : setPlaying(!playing))} aria-label={playing ? "Pause the replay" : "Play the replay"}>
             {playing ? <span aria-hidden="true">❚❚</span> : <Icon name="play" size={16} />}
-          </button>
+          </Button>
           <label className="xray-slider">
             <span>Progress on a date</span>
             <input type="range" min={0} max={span} value={Math.min(day, span)} onChange={(e) => (setPlaying(false), setDay(Number(e.target.value)))} />
           </label>
           <b className="xray-date">{on >= now ? "Today" : new Date(`${on}T12:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</b>
           {!portal && (
-            <button className="btn btn-secondary" onClick={saveVideo} disabled={recording} title="The replay as a short video (WebM, at most 30 s)">
+            <Button onClick={saveVideo} disabled={recording} title="The replay as a short video (WebM, at most 30 s)">
               {recording ? "Recording…" : "Save video for client"}
-            </button>
+            </Button>
           )}
         </div>
       )}

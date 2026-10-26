@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { errorText, inr } from "../format";
 import { AuthImage, km } from "./common";
 import type { Flag } from "./common";
+import { Button, buttonClass, Field } from "../ui/components";
 
 type ClaimDay = {
   id: number;
@@ -69,9 +70,10 @@ export function Claims() {
           <p className="muted">Built from each day&apos;s km and the rate per km on that date; ready on the 1st; the manager approves the days, then accounts approve the month.</p>
         </div>
         <div className="page-actions">
-          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month" />
-          <button
-            className="btn"
+          <Field label="Month" bare>
+            <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month" />
+          </Field>
+          <Button
             onClick={async () => {
               try {
                 await api("/api/field/claims/build", { method: "POST", json: { month: thisMonth() } });
@@ -82,11 +84,11 @@ export function Claims() {
             }}
           >
             My claim this month so far
-          </button>
+          </Button>
           {can("field.claims") && month && (
-            <button className="btn" onClick={() => void downloadFile(`/api/field/claims-export.xlsx?month=${month}`)}>
+            <Button onClick={() => void downloadFile(`/api/field/claims-export.xlsx?month=${month}`)}>
               ⤓ Excel ({month})
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -168,18 +170,18 @@ export function ClaimDetail() {
           </p>
         </div>
         <div className="page-actions">
-          <button className="btn" onClick={() => void downloadFile(`/api/field/claims/${c.id}/export.xlsx`)}>
+          <Button onClick={() => void downloadFile(`/api/field/claims/${c.id}/export.xlsx`)}>
             ⤓ Excel
-          </button>
+          </Button>
           {c.can_manager_approve && (
-            <button className="btn btn-primary" onClick={() => void run(api(`/api/field/claims/${c.id}/manager-approve`, { method: "POST" }))}>
+            <Button variant="primary" onClick={() => void run(api(`/api/field/claims/${c.id}/manager-approve`, { method: "POST" }))}>
               Approve the days
-            </button>
+            </Button>
           )}
           {c.can_approve && (
-            <button className="btn btn-primary" onClick={() => void run(api(`/api/field/claims/${c.id}/approve`, { method: "POST" }))}>
+            <Button variant="primary" onClick={() => void run(api(`/api/field/claims/${c.id}/approve`, { method: "POST" }))}>
               Approve the month (accounts)
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -217,21 +219,25 @@ export function ClaimDetail() {
                 {c.can_manager_approve &&
                   (edit?.id === d.id ? (
                     <span className="inline-form">
-                      <input className="input-small" value={edit.km} onChange={(e) => setEdit({ ...edit, km: e.target.value })} aria-label="Km" />
-                      <input value={edit.reason} onChange={(e) => setEdit({ ...edit, reason: e.target.value })} placeholder="Reason" />
-                      <button
-                        className="btn btn-small btn-primary"
+                      <Field label="Km" bare>
+                        <input className="input-small" value={edit.km} onChange={(e) => setEdit({ ...edit, km: e.target.value })} aria-label="Km" />
+                      </Field>
+                      <Field label="Reason" bare>
+                        <input value={edit.reason} onChange={(e) => setEdit({ ...edit, reason: e.target.value })} placeholder="Reason" />
+                      </Field>
+                      <Button
+                        variant="primary" size="small"
                         onClick={() =>
                           void run(api(`/api/field/claims/${c.id}/days/${d.id}`, { method: "PUT", json: { km: edit.km, reason: edit.reason } })).then(() => setEdit(null))
                         }
                       >
                         Save
-                      </button>
+                      </Button>
                     </span>
                   ) : (
-                    <button className="btn btn-small btn-ghost" onClick={() => setEdit({ id: d.id, km: String(d.km), reason: "" })}>
+                    <Button variant="ghost" size="small" onClick={() => setEdit({ id: d.id, km: String(d.km), reason: "" })}>
                       Edit
-                    </button>
+                    </Button>
                   ))}
               </td>
             </tr>
@@ -256,20 +262,28 @@ export function ClaimDetail() {
       </table>
       {c.can_add_extras && (
         <div className="form-row">
-          <input type="date" value={extra.on_date} onChange={(e) => setExtra({ ...extra, on_date: e.target.value })} aria-label="Date" />
-          <select value={extra.kind} onChange={(e) => setExtra({ ...extra, kind: e.target.value })} aria-label="Kind">
-            <option value="toll">Toll</option>
-            <option value="parking">Parking</option>
-            <option value="other">Other</option>
-          </select>
-          <input className="input-small" value={extra.amount} onChange={(e) => setExtra({ ...extra, amount: e.target.value })} placeholder="₹" aria-label="Amount" />
-          <input value={extra.note} onChange={(e) => setExtra({ ...extra, note: e.target.value })} placeholder="Note" />
-          <label className="btn btn-small">
+          <Field label="Date" bare>
+            <input type="date" value={extra.on_date} onChange={(e) => setExtra({ ...extra, on_date: e.target.value })} aria-label="Date" />
+          </Field>
+          <Field label="Kind" bare>
+            <select value={extra.kind} onChange={(e) => setExtra({ ...extra, kind: e.target.value })} aria-label="Kind">
+              <option value="toll">Toll</option>
+              <option value="parking">Parking</option>
+              <option value="other">Other</option>
+            </select>
+          </Field>
+          <Field label="Amount" bare>
+            <input className="input-small" value={extra.amount} onChange={(e) => setExtra({ ...extra, amount: e.target.value })} placeholder="₹" aria-label="Amount" />
+          </Field>
+          <Field label="Note" bare>
+            <input value={extra.note} onChange={(e) => setExtra({ ...extra, note: e.target.value })} placeholder="Note" />
+          </Field>
+          <label className={buttonClass({ size: "small" })}>
             {bill ? "Bill photo ✓" : "Bill photo"}
             <input type="file" accept="image/*,application/pdf" capture="environment" hidden onChange={(e) => setBill(e.target.files?.[0] ?? null)} />
           </label>
-          <button
-            className="btn btn-small btn-primary"
+          <Button
+            variant="primary" size="small"
             disabled={!extra.on_date || !extra.amount || !bill}
             onClick={() => {
               const form = new FormData();
@@ -282,7 +296,7 @@ export function ClaimDetail() {
             }}
           >
             Add
-          </button>
+          </Button>
         </div>
       )}
     </>

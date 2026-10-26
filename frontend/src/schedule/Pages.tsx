@@ -7,6 +7,7 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import { errorText, num } from "../format";
 import { shortDate } from "../pages/Tenders";
+import { Button, Card, Field } from "../ui/components";
 
 type PlanRow = {
   product_id: number;
@@ -93,15 +94,18 @@ export function PlanLots({ siteId }: { siteId: number }) {
     <>
       {error && <div className="alert alert-error">{error}</div>}
       {notice && <div className="alert alert-ok">{notice}</div>}
-      <div className="card">
-        <div className="card-head">
-          <h2 className="section-title">Material planned for the whole project</h2>
-          {can("planning.edit") && !plan.products.some((p) => p.fixed) && (
-            <button className="btn btn-small" onClick={() => void fix()}>
+      <Card
+        as="div"
+        title="Material planned for the whole project"
+        actions={
+          can("planning.edit") &&
+          !plan.products.some((p) => p.fixed) && (
+            <Button size="small" onClick={() => void fix()}>
               Fix the plan
-            </button>
-          )}
-        </div>
+            </Button>
+          )
+        }
+      >
         <p className="small muted">
           The whole site's quantity per product (BOQ and survey quantities with consumption and wastage). The site calls off lots for the ready work fronts; a call-off past the
           balance plus {num(plan.tolerance_percent)} % waits for planning.
@@ -137,13 +141,15 @@ export function PlanLots({ siteId }: { siteId: number }) {
                   <td className={`num ${Number(p.balance) < 0 ? "text-danger" : ""}`}>{num(p.balance, 3)}</td>
                   {canCall && (
                     <td className="num">
-                      <input
-                        className="input-num"
-                        inputMode="decimal"
-                        value={qty[p.product_id] ?? ""}
-                        onChange={(e) => setQty({ ...qty, [p.product_id]: e.target.value })}
-                        aria-label={`Call off ${p.product}`}
-                      />
+                      <Field label={`Call off ${p.product}`} bare>
+                        <input
+                          className="input-num"
+                          inputMode="decimal"
+                          value={qty[p.product_id] ?? ""}
+                          onChange={(e) => setQty({ ...qty, [p.product_id]: e.target.value })}
+                          aria-label={`Call off ${p.product}`}
+                        />
+                      </Field>
                     </td>
                   )}
                 </tr>
@@ -153,21 +159,19 @@ export function PlanLots({ siteId }: { siteId: number }) {
         </div>
         {canCall && (
           <div className="form-row top-gap">
-            <label className="field">
-              <span>For the next (days)</span>
+            <Field label="For the next (days)">
               <input className="input-num" inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} />
-            </label>
-            <label className="field grow">
-              <span>Reason (needed past the plan)</span>
+            </Field>
+            <Field label="Reason (needed past the plan)" className="grow">
               <input value={reason} onChange={(e) => setReason(e.target.value)} />
-            </label>
-            <button className="btn btn-primary" disabled={!Object.values(qty).some((v) => Number(v) > 0)} onClick={() => void callOff()}>
+            </Field>
+            <Button variant="primary" disabled={!Object.values(qty).some((v) => Number(v) > 0)} onClick={() => void callOff()}>
               Call off the lot
-            </button>
+            </Button>
           </div>
         )}
-      </div>
-      <div className="card top-gap">
+      </Card>
+      <Card as="div" className="top-gap">
         <h2 className="section-title">Lots</h2>
         {plan.lots.length === 0 ? (
           <p className="empty">No lots yet.</p>
@@ -212,12 +216,12 @@ export function PlanLots({ siteId }: { siteId: number }) {
                     {l.decided_by && <div className="small muted">by {l.decided_by}</div>}
                     {l.status === "pending" && can("planning.edit") && (
                       <div className="top-gap-small">
-                        <button className="btn btn-small btn-primary" onClick={() => void decide(l, true)}>
+                        <Button variant="primary" size="small" onClick={() => void decide(l, true)}>
                           Approve
-                        </button>{" "}
-                        <button className="btn btn-small" onClick={() => void decide(l, false)}>
+                        </Button>{" "}
+                        <Button size="small" onClick={() => void decide(l, false)}>
                           Reject
-                        </button>
+                        </Button>
                       </div>
                     )}
                   </td>
@@ -227,7 +231,7 @@ export function PlanLots({ siteId }: { siteId: number }) {
             </tbody>
           </table>
         )}
-      </div>
+      </Card>
     </>
   );
 }
@@ -302,7 +306,7 @@ export function HandoverTab({ siteId }: { siteId: number }) {
   }
   if (!h) return error ? <div className="alert alert-error">{error}</div> : <p className="muted">Loading…</p>;
   return (
-    <div className="card">
+    <Card as="div">
       <h2 className="section-title">Handover and the schedule</h2>
       <p className="small muted">
         The engineer enters the date the client promised (and who promised it). Only the supervisor's confirmation starts the clock: target finish = the real handover + the stage
@@ -379,26 +383,26 @@ export function HandoverTab({ siteId }: { siteId: number }) {
                 <td className={`num ${a.our_delay_days ? "text-danger" : ""}`}>{a.our_delay_days === null ? "—" : `${a.our_delay_days} d`}</td>
                 <td className="nowrap">
                   {h.can_promise && (
-                    <button
-                      className="btn btn-small btn-ghost"
+                    <Button
+                      variant="ghost" size="small"
                       onClick={() => setEdit({ node: a.node_id, promised_on: a.promised_on ?? "", promised_by: a.promised_by ?? "", client_says_on: a.client_says_on ?? "" })}
                     >
                       Promised date
-                    </button>
+                    </Button>
                   )}
                   {can("closeout.site") && !a.received_on && a.promised_on && (
-                    <button className="btn btn-small btn-ghost" onClick={() => setMoving({ node: a.node_id, place: a.place, to: a.promised_on ?? "", reason: "" })}>
+                    <Button variant="ghost" size="small" onClick={() => setMoving({ node: a.node_id, place: a.place, to: a.promised_on ?? "", reason: "" })}>
                       Move the date
-                    </button>
+                    </Button>
                   )}
                   {h.can_confirm && !a.received_on && (
                     <>
-                      <button className="btn btn-small btn-primary" onClick={() => void confirm(a, true)}>
+                      <Button variant="primary" size="small" onClick={() => void confirm(a, true)}>
                         Received
-                      </button>
-                      <button className="btn btn-small" onClick={() => void confirm(a, false)}>
+                      </Button>
+                      <Button size="small" onClick={() => void confirm(a, false)}>
                         Not yet
-                      </button>
+                      </Button>
                     </>
                   )}
                 </td>
@@ -412,45 +416,40 @@ export function HandoverTab({ siteId }: { siteId: number }) {
           <span className="small">
             <b>{moving.place}</b>: moved to
           </span>
-          <label className="field">
-            <span>New date</span>
+          <Field label="New date">
             <input type="date" value={moving.to} onChange={(e) => setMoving({ ...moving, to: e.target.value })} />
-          </label>
-          <label className="field grow">
-            <span>Because (the client sees it)</span>
+          </Field>
+          <Field label="Because (the client sees it)" className="grow">
             <input value={moving.reason} onChange={(e) => setMoving({ ...moving, reason: e.target.value })} />
-          </label>
-          <button className="btn btn-primary" disabled={!moving.to || moving.reason.trim().length < 3} onClick={() => void move()}>
+          </Field>
+          <Button variant="primary" disabled={!moving.to || moving.reason.trim().length < 3} onClick={() => void move()}>
             Move
-          </button>
-          <button className="btn btn-ghost" onClick={() => setMoving(null)}>
+          </Button>
+          <Button variant="ghost" onClick={() => setMoving(null)}>
             Cancel
-          </button>
+          </Button>
         </div>
       )}
       {edit && (
         <div className="form-row top-gap">
-          <label className="field">
-            <span>Promised handover</span>
+          <Field label="Promised handover">
             <input type="date" value={edit.promised_on} onChange={(e) => setEdit({ ...edit, promised_on: e.target.value })} />
-          </label>
-          <label className="field grow">
-            <span>Who promised it</span>
+          </Field>
+          <Field label="Who promised it" className="grow">
             <input value={edit.promised_by} onChange={(e) => setEdit({ ...edit, promised_by: e.target.value })} />
-          </label>
-          <label className="field">
-            <span>Client says handed over (does not count)</span>
+          </Field>
+          <Field label="Client says handed over (does not count)">
             <input type="date" value={edit.client_says_on} onChange={(e) => setEdit({ ...edit, client_says_on: e.target.value })} />
-          </label>
-          <button className="btn btn-primary" disabled={!edit.promised_on || edit.promised_by.trim().length < 2} onClick={() => void savePromise()}>
+          </Field>
+          <Button variant="primary" disabled={!edit.promised_on || edit.promised_by.trim().length < 2} onClick={() => void savePromise()}>
             Save
-          </button>
-          <button className="btn btn-ghost" onClick={() => setEdit(null)}>
+          </Button>
+          <Button variant="ghost" onClick={() => setEdit(null)}>
             Cancel
-          </button>
+          </Button>
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -469,7 +468,7 @@ export function DelaysCard() {
   }, []);
   if (!d || d.sites.length === 0) return null;
   return (
-    <div className="card">
+    <Card as="div">
       <h2 className="section-title">Delays: the client's and ours</h2>
       <div className="stat-row">
         <span className="stat stat-warn">
@@ -509,6 +508,6 @@ export function DelaysCard() {
           ))}
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 }

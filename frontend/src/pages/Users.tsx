@@ -7,6 +7,7 @@ import { Modal } from "../ui/Overlay";
 import { canGrant } from "../scopes";
 import type { Role, User } from "../types";
 import { errorText } from "../format";
+import { Button, Card, Field } from "../ui/components";
 
 type Dialog = { kind: "create" } | { kind: "edit"; user: User } | { kind: "password"; user: User } | null;
 
@@ -86,17 +87,19 @@ export default function Users() {
       <div className="page-header">
         <h1>Users</h1>
         <div className="page-actions">
-          <input className="search" placeholder="Search name or email" value={filter} onChange={(e) => setFilter(e.target.value)} />
+          <Field label="Search name or email" bare>
+            <input className="search" placeholder="Search name or email" value={filter} onChange={(e) => setFilter(e.target.value)} />
+          </Field>
           <ExportButton path="/api/users/export" />
-          <button className="btn btn-primary" onClick={() => setDialog({ kind: "create" })}>
+          <Button variant="primary" onClick={() => setDialog({ kind: "create" })}>
             Add user
-          </button>
+          </Button>
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {notice && <div className="alert alert-ok link-notice">{notice}</div>}
 
-      <div className="card table-wrap">
+      <Card as="div" className="table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -146,22 +149,22 @@ export default function Users() {
                   </td>
                   <td className="nowrap">{formatDate(u.last_login_at)}</td>
                   <td className="row-actions">
-                    <button className="btn btn-small" onClick={() => setDialog({ kind: "edit", user: u })}>
+                    <Button size="small" onClick={() => setDialog({ kind: "edit", user: u })}>
                       Edit
-                    </button>
-                    <button className="btn btn-small" onClick={() => setDialog({ kind: "password", user: u })}>
+                    </Button>
+                    <Button size="small" onClick={() => setDialog({ kind: "password", user: u })}>
                       Reset password
-                    </button>
-                    <button
-                      className="btn btn-small"
+                    </Button>
+                    <Button
+                      size="small"
                       onClick={() => void passwordLink(u)}
                       title="A one-time link for the person to set their own password"
                     >
                       Set-password link
-                    </button>
+                    </Button>
                     {locked && (
-                      <button
-                        className="btn btn-small"
+                      <Button
+                        size="small"
                         onClick={() =>
                           void act(
                             `/api/admin/users/${u.id}/unlock`,
@@ -170,11 +173,11 @@ export default function Users() {
                         }
                       >
                         Unlock
-                      </button>
+                      </Button>
                     )}
                     {u.totp_enabled_at && (
-                      <button
-                        className="btn btn-small"
+                      <Button
+                        size="small"
                         onClick={() =>
                           confirm(
                             `Turn two-step sign-in off for ${u.full_name} (a lost phone)?`,
@@ -186,12 +189,12 @@ export default function Users() {
                         }
                       >
                         Reset two-step
-                      </button>
+                      </Button>
                     )}
                     {u.id !== me?.user.id && (
-                      <button className="btn btn-small" onClick={() => void toggleActive(u)}>
+                      <Button size="small" onClick={() => void toggleActive(u)}>
                         {u.is_active ? "Deactivate" : "Activate"}
-                      </button>
+                      </Button>
                     )}
                   </td>
                 </tr>
@@ -206,7 +209,7 @@ export default function Users() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
 
       {(dialog?.kind === "create" || dialog?.kind === "edit") && (
         <UserForm
@@ -292,36 +295,29 @@ function UserForm({ user, roles, onClose, onSaved }: { user: User | null; roles:
     <Modal title={user ? `Edit ${user.full_name}` : "Add user"} onClose={onClose}>
       <form onSubmit={submit} className="form">
         {error && <div className="alert alert-error">{error}</div>}
-        <label className="field">
-          <span>Full name</span>
+        <Field label="Full name">
           <input value={fullName} onChange={(e) => setFullName(e.target.value)} required autoFocus />
-        </label>
-        <label className="field">
-          <span>Email</span>
+        </Field>
+        <Field label="Email">
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </label>
-        <label className="field">
-          <span>Phone</span>
+        </Field>
+        <Field label="Phone">
           <input value={phone} onChange={(e) => setPhone(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Job title (printed on letters and bills, e.g. Assistant Manager Billing)</span>
+        </Field>
+        <Field label="Job title (printed on letters and bills, e.g. Assistant Manager Billing)">
           <input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} maxLength={100} />
-        </label>
+        </Field>
         {user && canKylas && (
-          <label className="field">
-            <span>Kylas user id (owner of the Kylas leads this person enters)</span>
+          <Field label="Kylas user id (owner of the Kylas leads this person enters)">
             <input value={kylasUserId} inputMode="numeric" onChange={(e) => setKylasUserId(e.target.value.replace(/\D/g, ""))} placeholder="see python -m app.cli kylas-discover" />
-          </label>
+          </Field>
         )}
         {!user && (
-          <label className="field">
-            <span>Password (at least 10 characters)</span>
+          <Field label="Password (at least 10 characters)">
             <input type="password" autoComplete="new-password" minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} required />
-          </label>
+          </Field>
         )}
-        <fieldset className="field">
-          <span>Roles</span>
+        <Field as="fieldset" label="Roles">
           <div className="checks">
             {roles.map((r) => {
               const allowed = !!me && canGrant(me.permissions, r.permissions);
@@ -333,14 +329,14 @@ function UserForm({ user, roles, onClose, onSaved }: { user: User | null; roles:
               );
             })}
           </div>
-        </fieldset>
+        </Field>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary" disabled={busy}>
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy}>
             {busy ? "Saving…" : "Save"}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>
@@ -375,21 +371,19 @@ function PasswordForm({ user, onClose, onSaved }: { user: User; onClose: () => v
     <Modal title={`Reset password: ${user.full_name}`} onClose={onClose}>
       <form onSubmit={submit} className="form">
         {error && <div className="alert alert-error">{error}</div>}
-        <label className="field">
-          <span>New password (at least 10 characters)</span>
+        <Field label="New password (at least 10 characters)">
           <input type="password" autoComplete="new-password" minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} required autoFocus />
-        </label>
-        <label className="field">
-          <span>Repeat password</span>
+        </Field>
+        <Field label="Repeat password">
           <input type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
-        </label>
+        </Field>
         <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button className="btn btn-primary" disabled={busy}>
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy}>
             {busy ? "Saving…" : "Reset password"}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../api";
 import { label, STATUS_BADGE } from "../../material/gst";
 import type { MaterialLookups, ProductPick } from "../../material/types";
+import { Field } from "../../ui/components";
 
 export function StatusBadge({ status }: { status: string }) {
   return <span className={`badge ${STATUS_BADGE[status] ?? "badge-muted"}`}>{label(status)}</span>;
@@ -31,33 +32,42 @@ export function ProductSelect({
   value,
   onChange,
   required,
+  label: text,
+  className,
 }: {
   products: ProductPick[];
   value: number | "";
   onChange: (p: ProductPick | null) => void;
   required?: boolean;
+  /** shown above the select; without it the label is for screen readers only (a grid cell) */
+  label?: string;
+  className?: string;
 }) {
   return (
-    <select required={required} value={value} onChange={(e) => onChange(products.find((p) => p.id === Number(e.target.value)) ?? null)}>
-      <option value="">— product —</option>
-      {products.map((p) => (
-        <option key={p.id} value={p.id}>
-          {p.name} ({p.code}, {p.unit})
-        </option>
-      ))}
-    </select>
+    <Field label={text ?? "Product"} bare={!text} className={className}>
+      <select required={required} value={value} onChange={(e) => onChange(products.find((p) => p.id === Number(e.target.value)) ?? null)}>
+        <option value="">— product —</option>
+        {products.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name} ({p.code}, {p.unit})
+          </option>
+        ))}
+      </select>
+    </Field>
   );
 }
 
-export function UnitSelect({ units, value, onChange }: { units: string[]; value: string; onChange: (u: string) => void }) {
+export function UnitSelect({ units, value, onChange, label: text }: { units: string[]; value: string; onChange: (u: string) => void; label?: string }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}>
-      {units.map((u) => (
-        <option key={u} value={u}>
-          {u}
-        </option>
-      ))}
-    </select>
+    <Field label={text ?? "Unit"} bare={!text}>
+      <select value={value} onChange={(e) => onChange(e.target.value)}>
+        {units.map((u) => (
+          <option key={u} value={u}>
+            {u}
+          </option>
+        ))}
+      </select>
+    </Field>
   );
 }
 

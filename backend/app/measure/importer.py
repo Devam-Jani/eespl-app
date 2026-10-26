@@ -24,12 +24,15 @@ from app.team.models import Measurement
 ZERO = Decimal(0)
 
 
-def run(db: Session, site: Site, *, sheet_file: tuple[str, bytes] | None, proforma_file: tuple[str, bytes] | None, measured_on: date, user) -> dict:
+def run(db: Session, site: Site, *, sheet_file: tuple[str, bytes] | None, proforma_file: tuple[str, bytes] | None, measured_on: date, user, ra_no: int | None = None) -> dict:
     if sheet_file is None and proforma_file is None:
         raise mb.Refused("Choose the old measurement sheet, the proforma, or both")
     c = mb.contract_of(db, site.id)
     if db.scalar(select(RaBill.id).where(RaBill.contract_id == c.id, RaBill.imported.is_(False), RaBill.status != "cancelled")):
         raise mb.Clash("The site has RA bills made in the app: import the old sheets before the first one")
+    # the old bill's own number (RA 10): never one the site has given, even to a cancelled bill
+    if ra_no and db.scalar(select(RaBill.id).where(RaBill.contract_id == c.id, RaBill.seq >= ra_no)):
+        raise mb.Clash(f"RA {ra_no} or a later bill exists for this site: RA numbers are never reused")
     wo_lines = ms.work_order_lines(db, site.id)
     if not wo_lines:
         raise mb.Refused("The site has no work order to match the old items to")
@@ -54,7 +57,7 @@ def run(db: Session, site: Site, *, sheet_file: tuple[str, bytes] | None, profor
         raise mb.Refused("Nothing could be read: " + "; ".join(skipped[:5]))
     by_id = {w.id: w for w in wo_lines}
     # the proforma against the sheet: the same quantities, and the work order's rates
-    checks = [f"{sheet_file[0]}: {a}" for a in sheet_read["assumed"]] if sheet_read else []
+    checks = [f"{sheet_file[0]}: {a}" for a in sheet_read["assumed"] + sheet_read.get("notes", [])] if sheet_read else []
     if sheet_read and pro_read:
         pm, _ = excel.match(pro_read["items"], wo_lines)
         for wid, row in matched.items():
@@ -74,10 +77,13 @@ def run(db: Session, site: Site, *, sheet_file: tuple[str, bytes] | None, profor
     sheet.imported_from, sheet.status, sheet.import_skipped = names[:300], "billed", skipped
     by_wo = mb.contract_lines_by_wo(c)
     seq = (db.scalar(select(RaBill.seq).where(RaBill.contract_id == c.id).order_by(RaBill.seq.desc()).limit(1)) or 0) + 1
+    if ra_no:
+        seq = ra_no
     b = RaBill(code=f"RA-{site.code}-{seq:02d}", contract_id=c.id, site_id=site.id, seq=seq, period_to=measured_on, status="certified", imported=True,
                certified_at=svc.now(), remark=f"Imported from {names}", created_by=user.id)  # fmt: skip
     db.add(b)
     out_rows = []
+    exact: dict[int, Decimal] = {}  # per contract line: the quantity as read, before rounding to 3 decimals
     for i, (wid, row) in enumerate(sorted(matched.items(), key=lambda kv: (by_id[kv[0]].sort_order, kv[0]))):
         w = by_id[wid]
         qty = excel.geom.round3(row["qty"])
@@ -88,19 +94,34 @@ def run(db: Session, site: Site, *, sheet_file: tuple[str, bytes] | None, profor
             skipped.append(f"Item {w.item_no}: the contract has no line for it (not billed as previous)")
             continue
         rate = Decimal(w.rate if w.rate is not None else cl.rate)
+        exact[cl.id] = Decimal(row["qty"])
         b.lines.append(RaBillLine(contract_line_id=cl.id, previous_qty=ZERO, suggested_qty=qty, qty=qty, certified_qty=qty, rate=rate))
         db.add(Measurement(site_id=site.id, contract_line_id=cl.id, description=f"{sheet.code}: imported item {w.item_no or ''}".strip(), qty=qty, unit=cl.unit,
                            source="manual", measured_on=measured_on, measured_by=user.id, note=f"{sheet.code}: imported from {names}", status="approved",
                            approved_at=svc.now(), approved_name="Imported bill", created_by=user.id))  # fmt: skip
-        out_rows.append({"wo_line_id": w.id, "item_no": w.item_no, "description": w.description, "unit": w.unit, "qty": qty, "rows": row.get("rows")})
+        out_rows.append({"wo_line_id": w.id, "item_no": w.item_no, "description": w.description, "unit": w.unit, "qty": qty, "read": Decimal(row["qty"]),
+                         "sqm": row.get("sqm"), "rows": row.get("rows")})  # fmt: skip
     svc.ra_totals(db, b, c)
+    # the old bill as it was billed: each line's amount from the quantity as read (the old sheet
+    # does not round it), and its basic as the proforma printed it
+    lines_sum = Decimal(0)
+    for ln in b.lines:
+        if ln.contract_line_id in exact:
+            ln.amount = ln.certified_amount = svc.money(exact[ln.contract_line_id] * Decimal(ln.rate))
+        lines_sum += Decimal(ln.amount)
+    b.gross = b.certified_gross = svc.money(pro_read["basic"]) if pro_read and pro_read["basic"] is not None else lines_sum
+    b.net = Decimal(b.certified_gross) - Decimal(b.retention) - Decimal(b.advance_recovery) - Decimal(b.other_deduction)
     db.flush()
     for m in db.scalars(select(Measurement).where(Measurement.note == f"{sheet.code}: imported from {names}")):
         m.ra_bill_id = b.id
     sheet.ra_bill_id = b.id
     sheet.import_skipped = skipped + checks
-    if pro_read and pro_read["basic"] is not None and Decimal(pro_read["basic"]) != Decimal(b.certified_gross):
-        checks.append(f"The proforma's basic {pro_read['basic']} is not the quantities × the order's rates ({b.certified_gross})")
-    totals = {"basic": b.certified_gross, "read_basic": pro_read["basic"] if pro_read else None, "read_grand": pro_read["grand"] if pro_read else None}
+    if pro_read and pro_read["basic"] is not None:
+        unrounded = sum((exact[k] * Decimal(ln.rate) for ln in b.lines for k in [ln.contract_line_id] if k in exact), Decimal(0))
+        if svc.money(unrounded) != svc.money(pro_read["basic"]):
+            checks.append(f"The proforma's basic {svc.money(pro_read['basic'])} is not the quantities × the order's rates ({svc.money(unrounded)})")
+        if lines_sum != Decimal(b.certified_gross):
+            checks.append(f"The lines, each to the paisa, add to {lines_sum}; the proforma's basic {b.certified_gross} rounds its unrounded total once")
+    totals = {"basic": b.certified_gross, "lines": lines_sum, "read_basic": pro_read["basic"] if pro_read else None, "read_grand": pro_read["grand"] if pro_read else None}
     db.flush()
     return {"sheet_id": sheet.id, "sheet_code": sheet.code, "ra_bill_id": b.id, "ra_code": b.code, "items": out_rows, "skipped": skipped, "checks": checks, "totals": totals}

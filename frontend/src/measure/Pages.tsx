@@ -12,6 +12,9 @@ import { Button, Card, EmptyState, Field, PageSkeleton, Tabs } from "../ui/compo
 import { Modal } from "../ui/Overlay";
 import { CHART } from "../ui/tokens";
 import { bbox, flatten, levelOf, outlinePath } from "./geom";
+import { DrawnWallStart, ItemAreas, LineChoice, OutlineChooser, StudyForm, SumHeight } from "./Picking";
+import { MaterialCheck, RegisterView, Revisions, SlipNew, SlipPanel } from "./Billing";
+import type { SlipInfo } from "./Billing";
 import type { Pt } from "./geom";
 
 const Measure3D = lazy(() => import("./Measure3D").then((m) => ({ default: m.Measure3D })));
@@ -21,26 +24,35 @@ type Area = {
   area_sqm: string; periphery_m: string; trim_with: number[]; net_area_sqm: string; net_periphery_m: string;
   height_mm: string | null; height_source: string | null; height2_mm: string | null; height2_source: string | null; wall_top_mm: string;
   rise_mm: string | null; run_mm: string | null; slope_source: string | null; counts: Record<string, number>; billed: boolean;
+  slope_mm: string | null; closed_gap_mm: string | null; drawn_length_m: string | null;
 }; // prettier-ignore
-type Edge = { id: number; area_a_id: number; area_b_id: number; a: string; b: string; length_m: string; line: [number, number, number, number]; answer: "both" | "open" | "weir" | null; weir_mm: string | null };
+type Edge = {
+  id: number; area_a_id: number; area_b_id: number; a: string; b: string; length_m: string; line: number[]; answer: "both" | "open" | "weir" | "none" | null;
+  weir_mm: string | null; manual: boolean; source: string | null;
+}; // prettier-ignore
 type Item = {
   wo_line_id: number; item_no: string | null; description: string; unit: string | null; qty: string | null; rate: string | null; per_layer: boolean; wo_layers: number;
   sac: string | null; parts: string[]; count_of: string | null; layers: number; layers_answer: "each" | "once" | null; areas: number[] | null; measured: boolean;
+  skip: Record<string, string[]>; manual: Record<string, string>;
 }; // prettier-ignore
 type SheetRow = { id: number; code: string; seq: number; title: string | null; measured_on: string; status: string; imported_from: string | null; ra_bill_id: number | null };
 type State = { site: { id: number; code: string; name: string }; drawings: { id: number; title: string; rev: number; unit_m: number }[]; areas: Area[]; edges: Edge[]; items: Item[]; sheets: SheetRow[]; sqft_per_sqm: string };
 type Outline = { handle: string; layer: string; outline: Pt[] };
 type Drawing = { id: number; outlines: Outline[]; texts: [number, number, number, string, string][] };
 type Line = {
-  kind: "area" | "line" | "deduction" | "not_done"; area_id: number | null; edge_id: number | null; wo_line_id: number | null; item_no: string | null; layer: number;
+  kind: "area" | "line" | "deduction" | "not_done" | "total"; area_id: number | null; edge_id: number | null; wo_line_id: number | null; item_no: string | null; layer: number;
   part: string | null; particulars: string; no: string | null; length_m: string | null; width_m: string | null; height_m: string | null; qty: string | null;
-  total: string | null; unit: string | null; formula: string | null; reason: string | null;
+  total: string | null; unit: string | null; formula: string | null; reason: string | null; id?: number; typed?: Record<string, string | null> | null; billed?: boolean;
 }; // prettier-ignore
-type Cum = { wo_line_id: number; item_no: string | null; description: string; unit: string | null; wo_qty: string | null; rate: string | null; previous: string; this: string; upto: string };
+type Cum = {
+  wo_line_id: number; item_no: string | null; description: string; unit: string | null; wo_qty: string | null; rate: string | null; previous: string;
+  drawing: string; approved: string | null; this: string; upto: string; note: string | null;
+}; // prettier-ignore
 type Sheet = {
   id: number; code: string; title: string | null; measured_on: string; status: string; site_id: number; not_done: [number, number, number][]; imported_from: string | null;
   import_skipped: string[] | null; ra_bill_id: number | null; ra_code: string | null; lines: Line[]; questions: { kind: string; text: string; edge_id?: number; area_id?: number }[];
   cumulative: Cum[]; corrections: { field: string; old: string; new: string; remark: string | null; by: string; at: string; status: string }[]; sqft_per_sqm: string;
+  way: string; options: Record<string, unknown>; slip: SlipInfo | null;
 }; // prettier-ignore
 type Check = { key: string; label: string; ok: boolean; detail: string[] };
 type Bill = {
@@ -52,8 +64,9 @@ type Bill = {
 }; // prettier-ignore
 
 const PART_LABEL: Record<string, string> = { floor: "Floor", walls: "Side walls", tops: "Wall tops", slope: "Slope face", count: "Count" };
-const ANSWER_LABEL = { both: "Wall on this edge, both faces", open: "Open (no wall)", weir: "Weir or cut wall" };
-type Mode = "look" | "pick" | "trace" | "levels";
+const ANSWER_LABEL = { both: "Wall on this edge, both faces", open: "Open (no wall)", weir: "Weir or cut wall", none: "Not a shared edge (drawn close, not one wall)" };
+type Mode = "look" | "pick" | "trace" | "levels" | "line";
+type LineFor = { purpose: "height" | "height2" | "slope" | "wall"; area?: Area; pair?: [number, number] };
 type Pick = { areaId: number | null; edgeId: number | null };
 
 export function MeasurePage() {
@@ -71,6 +84,13 @@ export function MeasurePage() {
   const [levels, setLevels] = useState<string[]>([]);
   const [heightFor, setHeightFor] = useState<{ area: Area; what: "height" | "height2" | "slope" } | null>(null);
   const [view3d, setView3d] = useState(false);
+  const [lineFor, setLineFor] = useState<LineFor | null>(null);
+  const [lineAt, setLineAt] = useState<{ x: number; y: number } | null>(null);
+  const [sumFor, setSumFor] = useState<{ area: Area; which: 1 | 2 } | null>(null);
+  const [wallStart, setWallStart] = useState(false);
+  const [studyNew, setStudyNew] = useState(false);
+  const [slipNew, setSlipNew] = useState(false);
+  const showRegister = params.get("register") === "1";
   const sheetId = params.get("sheet") ? Number(params.get("sheet")) : null;
   const billId = params.get("bill") ? Number(params.get("bill")) : null;
 
@@ -134,6 +154,9 @@ export function MeasurePage() {
           <Button variant="ghost" type="button" onClick={() => setView3d(!view3d)} disabled={!st.areas.length}>
             {view3d ? "Drawing" : "3D"}
           </Button>
+          <Button variant="ghost" type="button" onClick={() => open({ register: showRegister ? null : "1" })}>
+            Register
+          </Button>
         </div>
       </header>
       {error && <div className="alert alert-error">{error}</div>}
@@ -152,7 +175,7 @@ export function MeasurePage() {
               mode={mode}
               pick={pick}
               levels={levels}
-              onPoint={(x, y) => setNaming({ x, y })}
+              onPoint={(x, y) => (mode === "line" ? setLineAt({ x, y }) : setNaming({ x, y }))}
               onTraced={(outline) => {
                 setNaming({ outline });
                 setMode("look");
@@ -162,12 +185,13 @@ export function MeasurePage() {
               onEdge={(e) => setAsking(e)}
             />
           ) : (
-            st.drawings.length > 0 && <PageSkeleton label="Reading the drawing" />
+            st.drawings.length > 0 && !error && <PageSkeleton label="Reading the drawing" />
           )}
           <p className="muted measure-hint">
             {mode === "pick" && "Click inside an outline: its true area and periphery (arcs as arcs) are taken from the drawing."}
             {mode === "trace" && "Click the corners; click the first corner again (or double-click) to close the outline."}
             {mode === "levels" && `Click two levels on the section (${levels.length} of 2): ${levels.join(" and ")}`}
+            {mode === "line" && "Click on the line: the lines near the click are listed to choose from (an arc is measured as an arc)."}
             {mode === "look" && "Drag to pan, wheel to zoom. Click an area or a number on the sheet to find it."}
           </p>
         </div>
@@ -196,12 +220,17 @@ export function MeasurePage() {
                 setLevels([]);
                 setMode("levels");
               }}
+              onSum={(area, which) => setSumFor({ area, which })}
+              onLine={(purpose, area) => {
+                setLineFor({ purpose, area });
+                setMode("line");
+              }}
               reload={load}
             />
           )}
-          {tab === "edges" && <EdgesPanel st={st} onAsk={setAsking} />}
+          {tab === "edges" && <EdgesPanel st={st} onAsk={setAsking} onWall={() => setWallStart(true)} />}
           {tab === "items" && <ItemsPanel st={st} reload={load} />}
-          {tab === "sheets" && <SheetsPanel st={st} reload={load} onOpen={(s) => open({ sheet: String(s), bill: null })} />}
+          {tab === "sheets" && <SheetsPanel st={st} reload={load} onOpen={(s) => open({ sheet: String(s), bill: null })} onStudy={() => setStudyNew(true)} onSlip={() => setSlipNew(true)} />}
           {tab === "import" && <ImportPanel siteId={siteId} reload={load} />}
         </div>
       </div>
@@ -217,7 +246,19 @@ export function MeasurePage() {
           onClose={() => open({ sheet: null })}
         />
       )}
+      {showRegister && <RegisterView siteId={siteId} onOpen={(b) => open({ bill: String(b) })} onClose={() => open({ register: null })} />}
       {billId && <BillView key={billId} billId={billId} onClose={() => open({ bill: null })} />}
+      {slipNew && (
+        <SlipNew
+          siteId={siteId}
+          onClose={() => setSlipNew(false)}
+          onDone={async (sid) => {
+            setSlipNew(false);
+            await load();
+            open({ sheet: String(sid), bill: null });
+          }}
+        />
+      )}
       {naming && (
         <NameArea
           siteId={siteId}
@@ -245,6 +286,66 @@ export function MeasurePage() {
           }}
         />
       )}
+      {lineFor && lineAt && fileId && (
+        <LineChoice
+          siteId={siteId}
+          fileId={fileId}
+          x={lineAt.x}
+          y={lineAt.y}
+          askSection={lineFor.purpose !== "wall"}
+          title={lineFor.purpose === "wall" ? "The wall drawn between the two areas" : lineFor.purpose === "slope" ? `${lineFor.area?.code}: the slope's line` : `${lineFor.area?.code}: a line's length as its height`}
+          onClose={() => {
+            setLineAt(null);
+            setLineFor(null);
+            setMode("look");
+          }}
+          onPick={async (l, section) => {
+            if (lineFor.purpose === "wall" && lineFor.pair)
+              await api(`/api/measure/sites/${siteId}/edges`, { method: "POST", json: { area_a_id: lineFor.pair[0], area_b_id: lineFor.pair[1], cad_file_id: fileId, line_handle: l.handle } });
+            else if (lineFor.purpose === "slope" && lineFor.area) await api(`/api/measure/areas/${lineFor.area.id}/slope`, { method: "POST", json: { section, cad_file_id: fileId, line_handle: l.handle } });
+            else if (lineFor.area)
+              await api(`/api/measure/areas/${lineFor.area.id}/height`, { method: "POST", json: { section, cad_file_id: fileId, line_handle: l.handle, which: lineFor.purpose === "height2" ? 2 : 1 } });
+            setLineAt(null);
+            setLineFor(null);
+            setMode("look");
+            await load();
+          }}
+        />
+      )}
+      {sumFor && (
+        <SumHeight
+          area={sumFor.area}
+          which={sumFor.which}
+          onClose={() => setSumFor(null)}
+          onDone={async () => {
+            setSumFor(null);
+            await load();
+          }}
+        />
+      )}
+      {wallStart && (
+        <DrawnWallStart
+          areas={st.areas}
+          onClose={() => setWallStart(false)}
+          onStart={(a, b) => {
+            setWallStart(false);
+            setLineFor({ purpose: "wall", pair: [a, b] });
+            setMode("line");
+          }}
+        />
+      )}
+      {studyNew && (
+        <StudyForm
+          siteId={siteId}
+          areas={st.areas}
+          onClose={() => setStudyNew(false)}
+          onDone={async (sid) => {
+            setStudyNew(false);
+            await load();
+            open({ sheet: String(sid), bill: null });
+          }}
+        />
+      )}
       {heightFor && levels.length === 2 && (
         <HeightConfirm
           area={heightFor.area}
@@ -263,6 +364,13 @@ export function MeasurePage() {
       )}
     </div>
   );
+}
+
+/** An edge's path ([x1, y1, x2, y2, ...], straight or along an arc) as SVG points, y turned. */
+export function edgePoints(line: number[]): string {
+  const out: string[] = [];
+  for (let i = 0; i + 1 < line.length; i += 2) out.push(`${line[i]},${-line[i + 1]}`);
+  return out.join(" ");
 }
 
 function nextCode(areas: Area[]): string {
@@ -288,6 +396,15 @@ function DrawingView(props: {
   }, [drawing]);
   const [vb, setVb] = useState(extent);
   useEffect(() => setVb(extent), [extent]);
+  // an area picked (in the list, or a number on the sheet): the drawing comes to it, with the
+  // areas around it in view
+  useEffect(() => {
+    const a = areas.find((x) => x.id === pick.areaId);
+    if (!a) return;
+    const [x1, y1, x2, y2] = bbox(flatten(a.outline, 16));
+    const m = Math.max(x2 - x1, y2 - y1) * 1.2 + 1;
+    setVb({ x: x1 - m, y: -(y2 + m), w: x2 - x1 + 2 * m, h: y2 - y1 + 2 * m });
+  }, [pick.areaId, areas]);
   // picking levels: the whole drawing, so the sections beside the plan are in view
   useEffect(() => {
     if (mode !== "levels") return;
@@ -332,7 +449,7 @@ function DrawingView(props: {
     drag.current = null;
     if (!d || d.moved) return;
     const [x, y] = toDrawing(e.clientX, e.clientY);
-    if (mode === "pick") props.onPoint(x, y);
+    if (mode === "pick" || mode === "line") props.onPoint(x, y);
     if (mode === "trace") {
       const first = trace[0];
       if (first && trace.length >= 3 && Math.hypot(first[0] - x, first[1] - y) < unit * 10) {
@@ -378,13 +495,10 @@ function DrawingView(props: {
         );
       })}
       {edges.map((e) => (
-        <line
+        <polyline
           key={e.id}
           className={`m-edge ${e.answer ? "answered" : "open"} ${pick.edgeId === e.id ? "on" : ""}`}
-          x1={e.line[0]}
-          y1={-e.line[1]}
-          x2={e.line[2]}
-          y2={-e.line[3]}
+          points={edgePoints(e.line)}
           strokeWidth={unit * (pick.edgeId === e.id ? 9 : 6)}
           onPointerUp={(ev) => {
             ev.stopPropagation();
@@ -394,7 +508,7 @@ function DrawingView(props: {
           <title>
             {e.a}|{e.b}: {num(e.length_m, 3)} m {e.answer ? `(${ANSWER_LABEL[e.answer]})` : "(not answered)"}
           </title>
-        </line>
+        </polyline>
       ))}
       <g className="m-texts">
         {drawing.texts.map(([x, y, h, t], i) => {
@@ -426,7 +540,11 @@ function DrawingView(props: {
 
 // --- the side panels -------------------------------------------------------------------------------
 
-function AreasPanel({ st, pick, onPick, onHeight, reload }: { st: State; pick: Pick; onPick: (id: number) => void; onHeight: (a: Area, w: "height" | "height2" | "slope") => void; reload: () => Promise<void> }) {
+function AreasPanel(props: {
+  st: State; pick: Pick; onPick: (id: number) => void; onHeight: (a: Area, w: "height" | "height2" | "slope") => void; onSum: (a: Area, which: 1 | 2) => void;
+  onLine: (purpose: "height" | "slope", a: Area) => void; reload: () => Promise<void>;
+}) { // prettier-ignore
+  const { st, pick, onPick, onHeight, onSum, onLine, reload } = props;
   const codes = Object.fromEntries(st.areas.map((a) => [a.id, a.code]));
   const [err, setErr] = useState("");
   if (!st.areas.length) return <EmptyState title="No area yet" hint="Click an area on the drawing (or trace one) and name it: A, Q, R, as the billing team marks the drawing." />;
@@ -452,7 +570,14 @@ function AreasPanel({ st, pick, onPick, onHeight, reload }: { st: State; pick: P
               {num(a.net_area_sqm, 4)} sqm{a.trim_with.length > 0 && <span className="muted"> (as drawn {num(a.area_sqm, 4)}, less the overlap with {a.trim_with.map((i) => codes[i]).join(", ")})</span>}
             </dd>
             <dt>Periphery</dt>
-            <dd>{num(a.net_periphery_m, 3)} m</dd>
+            <dd>
+              {num(a.net_periphery_m, 3)} m
+              {a.closed_gap_mm && (
+                <div className="m-why">
+                  Drawn open ({num(a.closed_gap_mm, 1)} mm gap), closed by the app; its line as drawn is {num(a.drawn_length_m, 3)} m
+                </div>
+              )}
+            </dd>
             {a.kind === "slope" ? (
               <>
                 <dt>Slope</dt>
@@ -482,13 +607,24 @@ function AreasPanel({ st, pick, onPick, onHeight, reload }: { st: State; pick: P
           {!a.billed && (
             <div className="row-actions">
               {a.kind === "slope" ? (
-                <Button size="small" type="button" onClick={() => onHeight(a, "slope")}>
-                  Pick the rise on a section
-                </Button>
+                <>
+                  <Button size="small" type="button" onClick={() => onLine("slope", a)}>
+                    Pick the slope's line
+                  </Button>
+                  <Button size="small" variant="ghost" type="button" onClick={() => onHeight(a, "slope")}>
+                    Rise from two levels
+                  </Button>
+                </>
               ) : (
                 <>
                   <Button size="small" type="button" onClick={() => onHeight(a, "height")}>
                     Pick the height on a section
+                  </Button>
+                  <Button size="small" variant="ghost" type="button" onClick={() => onSum(a, 1)}>
+                    Add numbers
+                  </Button>
+                  <Button size="small" variant="ghost" type="button" onClick={() => onLine("height", a)}>
+                    A line's length
                   </Button>
                   <Button size="small" variant="ghost" type="button" onClick={() => onHeight(a, "height2")}>
                     Deep end
@@ -506,9 +642,24 @@ function AreasPanel({ st, pick, onPick, onHeight, reload }: { st: State; pick: P
   );
 }
 
-function EdgesPanel({ st, onAsk }: { st: State; onAsk: (e: Edge) => void }) {
-  if (!st.edges.length) return <EmptyState title="No shared edge" hint="Two areas side by side on one wall show here, to be answered once." />;
+function EdgesPanel({ st, onAsk, onWall }: { st: State; onAsk: (e: Edge) => void; onWall: () => void }) {
+  const wall = (
+    <div className="row-actions">
+      <Button size="small" type="button" onClick={onWall} disabled={st.areas.length < 2}>
+        A wall drawn on its own between two areas
+      </Button>
+    </div>
+  );
+  if (!st.edges.length)
+    return (
+      <>
+        <EmptyState title="No shared edge" hint="Two areas side by side on one wall show here, to be answered once." />
+        {wall}
+      </>
+    );
   return (
+    <>
+    {wall}
     <ul className="m-list">
       {st.edges.map((e) => (
         <li key={e.id}>
@@ -527,9 +678,11 @@ function EdgesPanel({ st, onAsk }: { st: State; onAsk: (e: Edge) => void }) {
           <Button size="small" variant="ghost" type="button" onClick={() => onAsk(e)}>
             {e.answer ? "Change" : "Answer"}
           </Button>
+          {e.manual && <div className="m-why">From {e.source}</div>}
         </li>
       ))}
     </ul>
+    </>
   );
 }
 
@@ -540,7 +693,7 @@ function ItemsPanel({ st, reload }: { st: State; reload: () => Promise<void> }) 
     try {
       await api(`/api/measure/sites/${st.site.id}/items/${it.wo_line_id}`, {
         method: "PUT",
-        json: { parts: next.parts, count_of: next.count_of, layers: next.layers, layers_answer: next.layers_answer, areas: next.areas },
+        json: { parts: next.parts, count_of: next.count_of, layers: next.layers, layers_answer: next.layers_answer, areas: next.areas, skip: next.skip, manual: next.manual },
       });
       await reload();
     } catch (e) {
@@ -594,6 +747,7 @@ function ItemsPanel({ st, reload }: { st: State; reload: () => Promise<void> }) 
                 ))}
               </select>
             </Field>
+            <ItemAreas areas={st.areas} parts={it.parts} skip={it.skip} manual={it.manual} onSave={(skip, manual) => save(it, { skip, manual })} />
             {it.layers > 1 && !it.per_layer && (
               <Field label="The order's rate is not per layer: bill">
                 <select value={it.layers_answer ?? ""} onChange={(e) => save(it, { layers_answer: (e.target.value || null) as Item["layers_answer"] })}>
@@ -610,7 +764,7 @@ function ItemsPanel({ st, reload }: { st: State; reload: () => Promise<void> }) 
   );
 }
 
-function SheetsPanel({ st, reload, onOpen }: { st: State; reload: () => Promise<void>; onOpen: (id: number) => void }) {
+function SheetsPanel({ st, reload, onOpen, onStudy, onSlip }: { st: State; reload: () => Promise<void>; onOpen: (id: number) => void; onStudy: () => void; onSlip: () => void }) {
   const [on, setOn] = useState(new Date().toISOString().slice(0, 10));
   const [err, setErr] = useState("");
   const draft = st.sheets.some((s) => s.status === "draft");
@@ -630,7 +784,7 @@ function SheetsPanel({ st, reload, onOpen }: { st: State; reload: () => Promise<
         {st.sheets.map((s) => (
           <li key={s.id}>
             <button type="button" className="m-list-head" onClick={() => onOpen(s.id)}>
-              <b>{s.code}</b> {s.title} <span className={`chip chip-${s.status === "billed" || s.status === "approved" ? "done" : s.status === "sent" ? "prog" : "idle"}`}>{s.status}</span>
+              <b>{s.code}</b> {s.title} <span className={`chip chip-${s.status === "billed" || s.status === "approved" ? "done" : s.status === "sent" || s.status === "study" ? "prog" : "idle"}`}>{s.status === "study" ? "study (not billed)" : s.status}</span>
             </button>
             <span className="muted">
               measured {s.measured_on}
@@ -649,6 +803,14 @@ function SheetsPanel({ st, reload, onOpen }: { st: State; reload: () => Promise<
           </Button>
         </div>
       )}
+      <div className="row-actions">
+        <Button type="button" onClick={onSlip} disabled={draft}>
+          Bill from a slip
+        </Button>
+        <Button type="button" onClick={onStudy} disabled={!st.areas.length}>
+          Compare another way
+        </Button>
+      </div>
     </div>
   );
 }
@@ -741,10 +903,12 @@ function NameArea({ siteId, fileId, at, next, onClose, onDone }: { siteId: numbe
   const [code, setCode] = useState(next);
   const [name, setName] = useState("");
   const [kind, setKind] = useState<"area" | "slope">("area");
+  const [handle, setHandle] = useState<string | null>(null);
   const [err, setErr] = useState("");
+  const clicked = at.x !== undefined && at.y !== undefined && fileId !== null && !at.outline;
   async function save() {
     try {
-      await api(`/api/measure/sites/${siteId}/areas`, { method: "POST", json: { cad_file_id: fileId, x: at.x, y: at.y, outline: at.outline, code, name, kind } });
+      await api(`/api/measure/sites/${siteId}/areas`, { method: "POST", json: { cad_file_id: fileId, x: at.x, y: at.y, outline: at.outline, handle: clicked ? handle : null, code, name, kind } });
       await onDone();
     } catch (e) {
       setErr(errorText(e));
@@ -758,6 +922,7 @@ function NameArea({ siteId, fileId, at, next, onClose, onDone }: { siteId: numbe
           void save();
         }}
       >
+        {clicked && <OutlineChooser siteId={siteId} fileId={fileId} x={at.x as number} y={at.y as number} value={handle} onChange={setHandle} />}
         <Field label="Letter on the drawing">
           <input value={code} maxLength={10} onChange={(e) => setCode(e.target.value.toUpperCase())} required />
         </Field>
@@ -772,7 +937,7 @@ function NameArea({ siteId, fileId, at, next, onClose, onDone }: { siteId: numbe
         </Field>
         {err && <div className="alert alert-error">{err}</div>}
         <div className="row-actions">
-          <Button variant="primary" type="submit">
+          <Button variant="primary" type="submit" disabled={clicked && !handle}>
             Measure it
           </Button>
           <Button variant="ghost" type="button" onClick={onClose}>
@@ -800,18 +965,18 @@ function EdgeQuestion({ edge, onClose, onDone }: { edge: Edge; onClose: () => vo
     <Modal title={`${edge.a}|${edge.b}: ${num(edge.length_m, 3)} m shared`} onClose={onClose}>
       <p>Wall on this edge?</p>
       <div className="m-answers" role="radiogroup" aria-label="Wall on this edge?">
-        {(["both", "open", "weir"] as const).map((a) => (
+        {(["both", "open", "weir", "none"] as const).map((a) => (
           <label key={a} className={answer === a ? "on" : ""}>
-            <input type="radio" name="edge" checked={answer === a} onChange={() => setAnswer(a)} /> {a === "both" ? "Yes, both faces" : a === "open" ? "Open (no wall)" : "Weir or cut wall"}
-            {a === "weir" && answer === "weir" && (
-              <span>
-                {" "}
-                height <input className="m-weir" inputMode="decimal" value={weir} onChange={(e) => setWeir(e.target.value)} aria-label="Weir height in mm" /> mm
-              </span>
-            )}
+            <input type="radio" name="edge" checked={answer === a} onChange={() => setAnswer(a)} />{" "}
+            {a === "both" ? "Yes, both faces" : a === "open" ? "Open (no wall)" : a === "weir" ? "Weir or cut wall" : "Not a shared edge (drawn close, not one wall)"}
           </label>
         ))}
       </div>
+      {answer === "weir" && (
+        <Field label="The weir's height (mm)">
+          <input className="m-weir" inputMode="decimal" value={weir} onChange={(e) => setWeir(e.target.value)} />
+        </Field>
+      )}
       <p className="muted">Asked once: the answer changes both areas' walls and wall tops on the sheet.</p>
       {err && <div className="alert alert-error">{err}</div>}
       <div className="row-actions">
@@ -950,8 +1115,13 @@ function SheetView({ sheetId, st, pick, onPick, onBill, reload, onClose }: { she
         </div>
       )}
       <p className="muted">
-        1 sqm = {s.sqft_per_sqm} sqft · sizes in metres at full precision · each line's total rounded to 3 decimals (half up). Click a number to find its outline.
+        1 sqm = {s.sqft_per_sqm} sqft · sizes in metres · Click a number to find its outline.
       </p>
+      {s.slip ? (
+        <SlipPanel sheetId={s.id} slip={s.slip} items={st.items} draft={draft} onChanged={(out) => setS(out as Sheet)} />
+      ) : (
+        <p className={`m-way ${s.status === "study" ? "study" : ""}`}>{s.way}</p>
+      )}
       <div className="table-wrap">
         <table className="table compact m-sheet">
           <thead>
@@ -980,7 +1150,7 @@ function SheetView({ sheetId, st, pick, onPick, onBill, reload, onClose }: { she
                   </td>
                 </tr>
               ) : (
-                <tr key={i} className={`${ln.kind === "deduction" ? "m-ded" : ""} ${pick.areaId === ln.area_id ? "on" : ""}`}>
+                <tr key={i} className={`${ln.kind === "deduction" ? "m-ded" : ""} ${ln.kind === "total" ? "m-total" : ""} ${pick.areaId === ln.area_id && ln.area_id ? "on" : ""}`}>
                   <td>{ln.item_no}</td>
                   <td>
                     {ln.particulars}
@@ -1005,6 +1175,11 @@ function SheetView({ sheetId, st, pick, onPick, onBill, reload, onClose }: { she
                   <td>{ln.unit}</td>
                   {draft && (
                     <td>
+                      {s.slip && ln.id && ln.kind !== "total" && (
+                        <Button size="small" variant="ghost" type="button" onClick={async () => setS(await api<Sheet>(`/api/measure/sheets/${s.id}/slip-lines/${ln.id}`, { method: "DELETE" }))}>
+                          Remove
+                        </Button>
+                      )}
                       {ln.area_id && ln.wo_line_id && (ln.kind === "not_done" || pair.get(`${ln.area_id},${ln.wo_line_id},${ln.layer}`) === ln) && (
                         <Button
                           size="small"
@@ -1060,6 +1235,8 @@ function SheetView({ sheetId, st, pick, onPick, onBill, reload, onClose }: { she
             <th>Description</th>
             <th>Unit</th>
             <th className="num">Previous</th>
+            <th className="num">On the drawing</th>
+            <th className="num">Approved by the client</th>
             <th className="num">This bill</th>
             <th className="num">Up to date</th>
             <th className="num">WO qty</th>
@@ -1069,10 +1246,17 @@ function SheetView({ sheetId, st, pick, onPick, onBill, reload, onClose }: { she
           {s.cumulative.map((r) => (
             <tr key={r.wo_line_id}>
               <td>{r.item_no}</td>
-              <td>{r.description.slice(0, 80)}</td>
+              <td>
+                {r.description.slice(0, 80)}
+                {r.note && <div className="m-why m-corrected">{r.note}</div>}
+              </td>
               <td>{r.unit}</td>
               <td className="num">{num(r.previous, 3)}</td>
-              <td className="num">{num(r.this, 3)}</td>
+              <td className="num">{num(r.drawing, 3)}</td>
+              <td className="num">{r.approved === null ? "—" : num(r.approved, 3)}</td>
+              <td className="num">
+                <b>{num(r.this, 3)}</b>
+              </td>
               <td className="num">{num(r.upto, 3)}</td>
               <td className="num">{num(r.wo_qty, 3)}</td>
             </tr>
@@ -1316,6 +1500,8 @@ function BillView({ billId, onClose }: { billId: number; onClose: () => void }) 
           </tfoot>
         </table>
       </div>
+      <Revisions billId={b.id} canEdit />
+      <MaterialCheck billId={b.id} />
       <h3>Billing checklist</h3>
       <ul className="m-checks">
         {b.checklist.map((c) => (

@@ -1015,7 +1015,7 @@ def list_new_areas(
         q = q.where(NewAreaRequest.status == state)
     if site_id:
         q = q.where(NewAreaRequest.site_id == site_id)
-    allowed = None if scope == "all" else set(material.assigned_sites(principal))
+    allowed = None if scope == "all" else material.site_ids(db, principal)
     return jsonable_encoder(
         [
             _area_out(db, r)

@@ -7,6 +7,7 @@ import { errorText, inr, num } from "../../format";
 import type { PayrollRun } from "../../finance/types";
 import type { SiteLookups } from "../../types";
 import { useFinanceLookups } from "./Billing";
+import { Button, Card, Field } from "../../ui/components";
 
 type Structure = {
   id: number;
@@ -98,11 +99,12 @@ export default function Payroll() {
       {tab === "runs" && salaries && (
         <>
           {can("payroll.edit") && (
-            <div className="card inline-form wrap">
-              <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month" />
+            <Card as="div" className="inline-form wrap">
+              <Field label="Month" bare>
+                <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month" />
+              </Field>
               {people.map(([id, name]) => (
-                <label key={id} className="small">
-                  {name} LOP{" "}
+                <Field key={id} label={`${name} LOP`} inline className="small">
                   <input
                     className="input-num"
                     inputMode="decimal"
@@ -110,10 +112,10 @@ export default function Payroll() {
                     onChange={(e) => setLop({ ...lop, [id]: e.target.value })}
                     aria-label={`${name} loss of pay days`}
                   />
-                </label>
+                </Field>
               ))}
-              <button
-                className="btn btn-primary"
+              <Button
+                variant="primary"
                 onClick={() =>
                   void run(
                     api("/api/finance/payroll", {
@@ -124,25 +126,25 @@ export default function Payroll() {
                 }
               >
                 Compute {month}
-              </button>
-            </div>
+              </Button>
+            </Card>
           )}
           {runs.map((r) => (
-            <div key={r.id} className="card top-gap table-wrap">
+            <Card key={r.id} as="div" className="top-gap table-wrap">
               <div className="toolbar">
                 <b>
                   {r.month} <span className={`badge ${r.status === "locked" ? "badge-ok" : "badge-warn"}`}>{r.status === "locked" ? "paid, locked" : "draft"}</span>
                 </b>
                 {r.status === "draft" && can("payroll.edit") && (
-                  <button
-                    className="btn btn-small btn-primary"
+                  <Button
+                    variant="primary" size="small"
                     onClick={() => {
                       const ref = prompt(`Paid ${inr(r.totals.net)} for ${r.month}: bank reference?`);
                       if (ref !== null) void run(api(`/api/finance/payroll/${r.id}/lock`, { method: "POST", json: { mode: "neft", ref_no: ref || null } }));
                     }}
                   >
                     Mark paid and lock
-                  </button>
+                  </Button>
                 )}
               </div>
               <table className="table compact">
@@ -177,9 +179,9 @@ export default function Payroll() {
                         <b>{inr(p.net)}</b>
                       </td>
                       <td>
-                        <button className="btn btn-small" onClick={() => void downloadFile(`/api/finance/payslips/${p.id}/pdf`)}>
+                        <Button size="small" onClick={() => void downloadFile(`/api/finance/payslips/${p.id}/pdf`)}>
                           Payslip
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -194,18 +196,18 @@ export default function Payroll() {
                   </tr>
                 </tbody>
               </table>
-            </div>
+            </Card>
           ))}
         </>
       )}
       {tab === "salaries" && salaries && (
         <>
           {can("payroll.edit") && (
-            <button className="btn btn-primary" onClick={() => setAdding(true)}>
+            <Button variant="primary" onClick={() => setAdding(true)}>
               Set a salary
-            </button>
+            </Button>
           )}
-          <div className="card table-wrap top-gap">
+          <Card as="div" className="table-wrap top-gap">
             <table className="table compact">
               <thead>
                 <tr>
@@ -234,23 +236,25 @@ export default function Payroll() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         </>
       )}
       {tab === "wages" && lookups && (
         <>
-          <div className="card inline-form wrap">
-            <select value={wageSite} onChange={(e) => setWageSite(Number(e.target.value) || "")} aria-label="Site">
-              <option value="">Site…</option>
-              {lookups.sites.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.code} {s.name}
-                </option>
-              ))}
-            </select>
+          <Card as="div" className="inline-form wrap">
+            <Field label="Site" bare>
+              <select value={wageSite} onChange={(e) => setWageSite(Number(e.target.value) || "")} aria-label="Site">
+                <option value="">Site…</option>
+                {lookups.sites.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.code} {s.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
             {wageSite && can("payables.edit") && <WagePeriod siteId={wageSite} onDone={load} />}
-          </div>
-          <div className="card table-wrap top-gap">
+          </Card>
+          <Card as="div" className="table-wrap top-gap">
             <table className="table compact">
               <thead>
                 <tr>
@@ -285,9 +289,9 @@ export default function Payroll() {
                         <span className="badge badge-ok">paid</span>
                       ) : (
                         can("payables.edit") && (
-                          <button className="btn btn-small" onClick={() => void run(api(`/api/finance/labour-wages/${w.id}/paid`, { method: "POST", json: { mode: "cash" } }))}>
+                          <Button size="small" onClick={() => void run(api(`/api/finance/labour-wages/${w.id}/paid`, { method: "POST", json: { mode: "cash" } }))}>
                             Mark paid
-                          </button>
+                          </Button>
                         )
                       )}
                     </td>
@@ -295,7 +299,7 @@ export default function Payroll() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         </>
       )}
       {adding && <SalaryForm onClose={() => setAdding(false)} onSaved={() => (setAdding(false), void load())} />}
@@ -308,10 +312,14 @@ function WagePeriod({ siteId, onDone }: { siteId: number; onDone: () => Promise<
   const [error, setError] = useState<string | null>(null);
   return (
     <>
-      <input type="date" value={p.period_from} onChange={(e) => setP({ ...p, period_from: e.target.value })} aria-label="From" />
-      <input type="date" value={p.period_to} onChange={(e) => setP({ ...p, period_to: e.target.value })} aria-label="To" />
-      <button
-        className="btn btn-primary"
+      <Field label="From" bare>
+        <input type="date" value={p.period_from} onChange={(e) => setP({ ...p, period_from: e.target.value })} aria-label="From" />
+      </Field>
+      <Field label="To" bare>
+        <input type="date" value={p.period_to} onChange={(e) => setP({ ...p, period_to: e.target.value })} aria-label="To" />
+      </Field>
+      <Button
+        variant="primary"
         disabled={!p.period_from || !p.period_to}
         onClick={() =>
           void api("/api/finance/labour-wages", { method: "POST", json: { site_id: siteId, ...p } })
@@ -320,7 +328,7 @@ function WagePeriod({ siteId, onDone }: { siteId: number; onDone: () => Promise<
         }
       >
         Make wages from the muster roll
-      </button>
+      </Button>
       {error && <span className="text-danger small">{error}</span>}
     </>
   );
@@ -351,8 +359,7 @@ function SalaryForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
       <form onSubmit={submit}>
         {error && <div className="alert alert-error">{error}</div>}
         <div className="grid-2">
-          <label className="field">
-            <span>Person *</span>
+          <Field label="Person *">
             <select required value={form.user_id} onChange={set("user_id")}>
               <option value="">—</option>
               {users.map((u) => (
@@ -361,34 +368,30 @@ function SalaryForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field">
-            <span>From</span>
+          </Field>
+          <Field label="From">
             <input type="date" value={form.effective_from} onChange={set("effective_from")} />
-          </label>
-          <label className="field">
-            <span>Basic (₹ a month) *</span>
+          </Field>
+          <Field label="Basic (₹ a month) *">
             <input required inputMode="decimal" value={form.basic} onChange={set("basic")} />
-          </label>
-          <label className="field">
-            <span>HRA</span>
+          </Field>
+          <Field label="HRA">
             <input inputMode="decimal" value={form.hra} onChange={set("hra")} />
-          </label>
-          <label className="field">
-            <span>Other allowances</span>
+          </Field>
+          <Field label="Other allowances">
             <input inputMode="decimal" value={form.other_allowance} onChange={set("other_allowance")} />
-          </label>
-          <div className="field">
+          </Field>
+          <Field as="div" label="">
             <label className="check">
               <input type="checkbox" checked={form.pf} onChange={(e) => setForm({ ...form, pf: e.target.checked })} /> PF
             </label>
             <label className="check">
               <input type="checkbox" checked={form.esi} onChange={(e) => setForm({ ...form, esi: e.target.checked })} /> ESI (below the threshold)
             </label>
-          </div>
+          </Field>
         </div>
         <div className="form-actions">
-          <button className="btn btn-primary">Save</button>
+          <Button type="submit" variant="primary">Save</Button>
         </div>
       </form>
     </Modal>

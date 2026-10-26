@@ -3,6 +3,7 @@ import { api } from "../../api";
 import { useAuth } from "../../auth";
 import { errorText } from "../../format";
 import type { StageTemplate, TemplateStep } from "../../types";
+import { Button, Card, Field } from "../../ui/components";
 
 const EMPTY_STEP: TemplateStep = { name: "", weight_percent: "0", needs_photo: true, needs_inspection: false, hold_point: false, typical_days: 1 };
 
@@ -95,15 +96,15 @@ export default function StageTemplates() {
       <div className="page-header">
         <h1>Stage templates</h1>
         {canEdit && (
-          <button className="btn btn-primary" onClick={() => setSelected("new")}>
+          <Button variant="primary" onClick={() => setSelected("new")}>
             New template
-          </button>
+          </Button>
         )}
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {notice && <div className="alert alert-ok">{notice}</div>}
       <div className="split split-narrow">
-        <div className="card">
+        <Card as="div">
           <ul className="plain-list">
             {templates.map((t) => (
               <li key={t.id} className={`pick ${selected === t.id ? "active" : ""}`} onClick={() => setSelected(t.id)}>
@@ -115,18 +116,16 @@ export default function StageTemplates() {
               </li>
             ))}
           </ul>
-        </div>
+        </Card>
         {draft && (
-          <div className="card">
+          <Card as="div">
             <div className="grid-2">
-              <label className="field">
-                <span>Name</span>
+              <Field label="Name">
                 <input disabled={!canEdit} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-              </label>
-              <label className="field">
-                <span>Keywords (suggest this template for BOQ lines with these words)</span>
+              </Field>
+              <Field label="Keywords (suggest this template for BOQ lines with these words)">
                 <input disabled={!canEdit} value={draft.keywords ?? ""} onChange={(e) => setDraft({ ...draft, keywords: e.target.value })} />
-              </label>
+              </Field>
             </div>
             <p className="muted small">
               Work category: {draft.work_category_name ?? "—"} · system: {draft.system_name ?? "—"}
@@ -150,10 +149,14 @@ export default function StageTemplates() {
                   <tr key={s.id ?? `n${i}`}>
                     <td>{i + 1}</td>
                     <td>
-                      <input disabled={!canEdit} value={s.name} onChange={(e) => setStep(i, { name: e.target.value })} />
+                      <Field label="Step" bare>
+                        <input disabled={!canEdit} value={s.name} onChange={(e) => setStep(i, { name: e.target.value })} />
+                      </Field>
                     </td>
                     <td className="num">
-                      <input className="input-num" disabled={!canEdit} value={s.weight_percent} onChange={(e) => setStep(i, { weight_percent: e.target.value })} />
+                      <Field label="Weight %" bare>
+                        <input className="input-num" disabled={!canEdit} value={s.weight_percent} onChange={(e) => setStep(i, { weight_percent: e.target.value })} />
+                      </Field>
                     </td>
                     <td className="center">
                       <input type="checkbox" disabled={!canEdit} checked={s.needs_photo} onChange={(e) => setStep(i, { needs_photo: e.target.checked })} />
@@ -166,42 +169,46 @@ export default function StageTemplates() {
                     </td>
                     <td>
                       {s.hold_point && (
-                        <select
-                          disabled={!canEdit}
-                          value={s.checklist_template_id ?? ""}
-                          onChange={(e) => setStep(i, { checklist_template_id: Number(e.target.value) || null })}
-                          aria-label="Hold-point checklist"
-                        >
-                          <option value="">— none —</option>
-                          {checklists.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </select>
+                        <Field label="Hold-point checklist" bare>
+                          <select
+                            disabled={!canEdit}
+                            value={s.checklist_template_id ?? ""}
+                            onChange={(e) => setStep(i, { checklist_template_id: Number(e.target.value) || null })}
+                            aria-label="Hold-point checklist"
+                          >
+                            <option value="">— none —</option>
+                            {checklists.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
                       )}
                     </td>
                     <td className="num">
-                      <input
-                        className="input-num"
-                        type="number"
-                        min={1}
-                        disabled={!canEdit}
-                        value={s.typical_days}
-                        onChange={(e) => setStep(i, { typical_days: Number(e.target.value) || 1 })}
-                      />
+                      <Field label="Days" bare>
+                        <input
+                          className="input-num"
+                          type="number"
+                          min={1}
+                          disabled={!canEdit}
+                          value={s.typical_days}
+                          onChange={(e) => setStep(i, { typical_days: Number(e.target.value) || 1 })}
+                        />
+                      </Field>
                     </td>
                     {canEdit && (
                       <td className="row-actions nowrap">
-                        <button className="btn btn-small btn-ghost" onClick={() => move(i, i - 1)}>
+                        <Button variant="ghost" size="small" onClick={() => move(i, i - 1)}>
                           ↑
-                        </button>
-                        <button className="btn btn-small btn-ghost" onClick={() => move(i, i + 1)}>
+                        </Button>
+                        <Button variant="ghost" size="small" onClick={() => move(i, i + 1)}>
                           ↓
-                        </button>
-                        <button className="btn btn-small btn-ghost" onClick={() => setDraft({ ...draft, steps: draft.steps.filter((_, j) => j !== i) })}>
+                        </Button>
+                        <Button variant="ghost" size="small" onClick={() => setDraft({ ...draft, steps: draft.steps.filter((_, j) => j !== i) })}>
                           ×
-                        </button>
+                        </Button>
                       </td>
                     )}
                   </tr>
@@ -213,18 +220,18 @@ export default function StageTemplates() {
             </p>
             {canEdit && (
               <div className="form-actions">
-                <button className="btn" onClick={() => setDraft({ ...draft, steps: [...draft.steps, { ...EMPTY_STEP }] })}>
+                <Button onClick={() => setDraft({ ...draft, steps: [...draft.steps, { ...EMPTY_STEP }] })}>
                   Add step
-                </button>
+                </Button>
                 <label className="check">
                   <input type="checkbox" checked={draft.is_active} onChange={(e) => setDraft({ ...draft, is_active: e.target.checked })} /> Active
                 </label>
-                <button className="btn btn-primary" disabled={total !== 100 || !draft.name} onClick={() => void save()}>
+                <Button variant="primary" disabled={total !== 100 || !draft.name} onClick={() => void save()}>
                   Save template
-                </button>
+                </Button>
               </div>
             )}
-          </div>
+          </Card>
         )}
       </div>
     </>

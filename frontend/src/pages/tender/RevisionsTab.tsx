@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, queryString } from "../../api";
 import { errorText, inr } from "../../format";
 import type { Revision, RevisionCompare, Tender } from "../../types";
+import { Card, Field } from "../../ui/components";
 
 function Delta({ value }: { value: string | null }) {
   if (value === null) return <>—</>;
@@ -40,7 +41,7 @@ export default function RevisionsTab({ tender, revisions }: { tender: Tender; re
 
   return (
     <div className="split split-narrow">
-      <div className="card">
+      <Card as="div">
         <h2 className="section-title">Submitted revisions</h2>
         {revisions.length === 0 && <p className="muted">Nothing submitted yet. “Submit {tender.revision_label.split(" ")[0]}” freezes the BOQ as it is.</p>}
         <table className="table compact revision-list">
@@ -63,26 +64,30 @@ export default function RevisionsTab({ tender, revisions }: { tender: Tender; re
             ))}
           </tbody>
         </table>
-      </div>
-      <div className="card">
+      </Card>
+      <Card as="div">
         <div className="toolbar">
           <h2 className="section-title">Compare</h2>
           <span className="inline-form">
-            <select value={a} onChange={(e) => setA(e.target.value)} aria-label="From revision">
-              {options.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            <Field label="From revision" bare>
+              <select value={a} onChange={(e) => setA(e.target.value)} aria-label="From revision">
+                {options.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
             →
-            <select value={b} onChange={(e) => setB(e.target.value)} aria-label="To revision">
-              {options.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            <Field label="To revision" bare>
+              <select value={b} onChange={(e) => setB(e.target.value)} aria-label="To revision">
+                {options.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
             <label className="check">
               <input type="checkbox" checked={onlyChanged} onChange={(e) => setOnlyChanged(e.target.checked)} /> Only changes
             </label>
@@ -149,7 +154,7 @@ export default function RevisionsTab({ tender, revisions }: { tender: Tender; re
             </div>
           </>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

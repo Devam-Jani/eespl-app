@@ -15,6 +15,7 @@ import { verdict } from "./quality";
 import type { Quality } from "./quality";
 import type { Area, Survey } from "./SurveyPages";
 import { ART } from "../ui/tokens";
+import { Button, Field } from "../ui/components";
 
 type Mode = "marker" | "ar" | "photo";
 type Shot = { blob: Blob; width: number; height: number; work: ImageData; url: string; quality: Quality };
@@ -329,14 +330,14 @@ export default function Camera({ area, onClose, onSaved }: { area: Area; onClose
             )}
           </div>
           <div className="camera-top">
-            <button className="btn btn-small" onClick={onClose}>
+            <Button size="small" onClick={onClose}>
               ✕
-            </button>
+            </Button>
             <span className="camera-title">{area.name}</span>
             {torch !== null && (
-              <button className={`btn btn-small ${dark && !torch ? "btn-primary" : ""}`} onClick={() => void toggleTorch()}>
+              <Button size="small" variant={dark && !torch ? "primary" : "secondary"} onClick={() => void toggleTorch()}>
                 {torch ? "Torch off" : "Torch"}
-              </button>
+              </Button>
             )}
           </div>
           <div className="camera-status">
@@ -345,14 +346,14 @@ export default function Camera({ area, onClose, onSaved }: { area: Area; onClose
                 {wall ? `Wall: ${Math.round(tilt.beta)}° upright` : `Floor: ${Math.round(tilt.beta)}° down`} {tiltOk ? "✓" : wall ? "hold it upright" : "aim 30°–60° down"}
               </span>
             ) : needsTiltPermission ? (
-              <button
-                className="btn btn-small"
+              <Button
+                size="small"
                 onClick={() =>
                   void (window.DeviceOrientationEvent as unknown as { requestPermission: () => Promise<string> }).requestPermission().then(() => setNeedsTiltPermission(false))
                 }
               >
                 Show the tilt guide
-              </button>
+              </Button>
             ) : (
               <span className="tilt">No tilt sensor</span>
             )}
@@ -384,9 +385,9 @@ export default function Camera({ area, onClose, onSaved }: { area: Area; onClose
               {(["marker", "ar", "photo"] as Mode[])
                 .filter((m) => m !== "ar" || arReason === null)
                 .map((m) => (
-                  <button key={m} className={`btn btn-small ${mode === m ? "btn-primary" : "btn-ghost"}`} onClick={() => setMode(m)}>
+                  <Button key={m} size="small" variant={mode === m ? "primary" : "ghost"} onClick={() => setMode(m)}>
                     {m === "marker" ? "Marker photo" : m === "ar" ? "AR measure" : "Laser / hand: proof photo"}
-                  </button>
+                  </Button>
                 ))}
             </div>
             {arReason && arReason !== "checking…" && <div className="small muted ar-why">AR measure hidden: {arReason}</div>}
@@ -437,12 +438,12 @@ export default function Camera({ area, onClose, onSaved }: { area: Area; onClose
           <img src={shot.url} alt="" className="review-img" />
           <div className="camera-bottom">
             <p className="small">Proof photo: the size is the laser / hand reading typed in the area.</p>
-            <button className="btn" onClick={() => setShot(null)}>
+            <Button onClick={() => setShot(null)}>
               Retake
-            </button>
-            <button className="btn btn-primary" disabled={busy} onClick={() => void saveProof()}>
+            </Button>
+            <Button variant="primary" disabled={busy} onClick={() => void saveProof()}>
               Save photo
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -457,18 +458,20 @@ export default function Camera({ area, onClose, onSaved }: { area: Area; onClose
               {arRead.area !== null && <b>{arRead.area.toFixed(2)} sqm</b>}
             </div>
             <div className="ar-buttons">
-              <button className="btn" onClick={() => arDone.current("cancel")}>
+              <Button onClick={() => arDone.current("cancel")}>
                 Cancel
-              </button>
-              <button className="btn btn-primary" onClick={() => arDone.current(wall ? "wall" : "floor")}>
+              </Button>
+              <Button variant="primary" onClick={() => arDone.current(wall ? "wall" : "floor")}>
                 Done
-              </button>
+              </Button>
               {wall && (
                 <span className="inline-form">
-                  <input placeholder="or type the wall height, m" value={arWallTyped} onChange={(e) => setArWallTyped(e.target.value)} inputMode="decimal" />
-                  <button className="btn btn-small" onClick={() => wallDone.current(arWallTyped ? Number(arWallTyped) : null)}>
+                  <Field label="or type the wall height, m" bare>
+                    <input placeholder="or type the wall height, m" value={arWallTyped} onChange={(e) => setArWallTyped(e.target.value)} inputMode="decimal" />
+                  </Field>
+                  <Button size="small" onClick={() => wallDone.current(arWallTyped ? Number(arWallTyped) : null)}>
                     Use
-                  </button>
+                  </Button>
                 </span>
               )}
             </div>
@@ -597,17 +600,17 @@ function MarkerReview({
           </p>
         )}
         <div className="inline-form">
-          <button className="btn" onClick={onRetake}>
+          <Button onClick={onRetake}>
             Retake
-          </button>
+          </Button>
           {taps.length > 0 && (
-            <button className="btn btn-ghost" onClick={() => setTaps(taps.slice(0, -1))}>
+            <Button variant="ghost" onClick={() => setTaps(taps.slice(0, -1))}>
               Undo corner
-            </button>
+            </Button>
           )}
-          <button className="btn btn-primary" disabled={!m || m.tooBig || busy} onClick={() => void save()}>
+          <Button variant="primary" disabled={!m || m.tooBig || busy} onClick={() => void save()}>
             Save measurement
-          </button>
+          </Button>
         </div>
       </div>
     </div>

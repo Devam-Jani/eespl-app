@@ -4,6 +4,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
 import { errorText } from "../format";
+import { Button, buttonClass, Card, Field } from "../ui/components";
 
 const d = (v: string | null | undefined) =>
   v ? new Date(v.length === 10 ? `${v}T00:00:00` : v).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
@@ -58,7 +59,7 @@ export function TenderCustomers({ tenderId }: { tenderId: number }) {
   if (!data) return error ? <div className="alert alert-error">{error}</div> : null;
   const edit = can("tender.edit") && !data.main_contractor;
   return (
-    <div className="card top-gap">
+    <Card as="div" className="top-gap">
       <h2 className="section-title">Quoted to (civil contractors bidding for the main job)</h2>
       {error && <div className="alert alert-error">{error}</div>}
       {data.main_contractor && (
@@ -97,14 +98,14 @@ export function TenderCustomers({ tenderId }: { tenderId: number }) {
               </td>
               <td>
                 {edit && (
-                  <button
-                    className="btn btn-small"
+                  <Button
+                    size="small"
                     onClick={() =>
                       void run(api<Customers>(`/api/closeout/tenders/${tenderId}/customers/${c.id}/main-won`, { method: "POST" }), setError).then((r) => r && setData(r))
                     }
                   >
                     Won the main contract
-                  </button>
+                  </Button>
                 )}
               </td>
             </tr>
@@ -132,18 +133,20 @@ export function TenderCustomers({ tenderId }: { tenderId: number }) {
             });
           }}
         >
-          <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Civil contractor">
-            <option value="">Add a civil contractor…</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <button className="btn">Quote it to them too</button>
+          <Field label="Civil contractor" bare>
+            <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Civil contractor">
+              <option value="">Add a civil contractor…</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Button type="submit">Quote it to them too</Button>
         </form>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -195,7 +198,7 @@ export function WorkOrders() {
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card">
+      <Card as="div">
         <table className="table compact">
           <thead>
             <tr>
@@ -220,7 +223,7 @@ export function WorkOrders() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -268,30 +271,30 @@ export function WorkOrderPage() {
         <div className="page-actions">
           {edit && (
             <>
-              <label className="btn">
+              <label className={buttonClass()}>
                 Upload the work order (PDF / Excel)
                 <input type="file" hidden accept=".pdf,.xlsx,.xlsm" onChange={(e) => upload(e.target.files?.[0])} />
               </label>
-              <button className="btn" disabled={busy} onClick={() => void act(api<WO>(`/api/closeout/work-orders/${wo.id}/copy-quotation`, { method: "POST" }))}>
+              <Button disabled={busy} onClick={() => void act(api<WO>(`/api/closeout/work-orders/${wo.id}/copy-quotation`, { method: "POST" }))}>
                 Copy lines from our quotation
-              </button>
-              <button className="btn" disabled={busy} onClick={() => void act(api<WO>(`/api/closeout/work-orders/${wo.id}/compare`, { method: "POST" }))}>
+              </Button>
+              <Button disabled={busy} onClick={() => void act(api<WO>(`/api/closeout/work-orders/${wo.id}/compare`, { method: "POST" }))}>
                 Compare with our offer
-              </button>
-              <button
-                className="btn btn-primary"
+              </Button>
+              <Button
+                variant="primary"
                 disabled={busy || wo.open > 0}
                 title={wo.open ? "Resolve every deviation first" : ""}
                 onClick={() => void act(api<WO>(`/api/closeout/work-orders/${wo.id}/accept`, { method: "POST" }))}
               >
                 Work order accepted
-              </button>
+              </Button>
             </>
           )}
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card">
+      <Card as="div">
         <h2 className="section-title">
           Deviations from our offer ({wo.deviations.length}, {wo.open} open)
         </h2>
@@ -317,12 +320,12 @@ export function WorkOrderPage() {
                 <td className="small">
                   {dv.status === "open" && edit ? (
                     <>
-                      <button className="btn btn-small" onClick={() => resolve(dv, "accept")}>
+                      <Button size="small" onClick={() => resolve(dv, "accept")}>
                         Accept
-                      </button>{" "}
-                      <button className="btn btn-small" onClick={() => resolve(dv, "amend")}>
+                      </Button>{" "}
+                      <Button size="small" onClick={() => resolve(dv, "amend")}>
                         Ask the client to amend
-                      </button>
+                      </Button>
                     </>
                   ) : (
                     <>
@@ -342,9 +345,9 @@ export function WorkOrderPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       <div className="grid-2 top-gap">
-        <div className="card">
+        <Card as="div">
           <h2 className="section-title">Payment and terms (structured)</h2>
           <p className="small">
             Payment: <b>{t.payment_days ?? "—"} days</b> after the {String(t.payment_basis ?? "invoice").replace("_", " ")} · retention {num(t.retention_percent as string)} %
@@ -355,8 +358,8 @@ export function WorkOrderPage() {
           <p className="small">
             On us in the work order: {((t.scope_on_us as string[]) ?? []).join(", ") || "—"} · on the client: {((t.scope_on_client as string[]) ?? []).join(", ") || "—"}
           </p>
-        </div>
-        <div className="card">
+        </Card>
+        <Card as="div">
           <h2 className="section-title">Lines ({wo.lines.length})</h2>
           <table className="table compact">
             <tbody>
@@ -370,7 +373,7 @@ export function WorkOrderPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       </div>
     </>
   );
@@ -429,7 +432,7 @@ export function SiteZones() {
           <p className="muted">Which zones the client handed to us, which went to another applicator. Measurements and bills outside our zones need a reason.</p>
         </div>
       </div>
-      <div className="card">
+      <Card as="div">
         {towers.map((t) => (
           <div key={t.id} className="zone-tower">
             <h3 className="section-title">{t.name}</h3>
@@ -454,8 +457,8 @@ export function SiteZones() {
         <div className="small muted top-gap">
           <span className="zone-key ours" /> ours <span className="zone-key theirs" /> another applicator <span className="zone-key unmarked" /> not marked
         </div>
-      </div>
-      <div className="card top-gap">
+      </Card>
+      <Card as="div" className="top-gap">
         <h2 className="section-title">Zones and RFI signatures</h2>
         <table className="table compact">
           <thead>
@@ -477,7 +480,7 @@ export function SiteZones() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -540,28 +543,32 @@ export function BillingChecklist() {
           <p className="muted">Filled from the RFI zones, the handover, the stages, the measurement book and the bills: nothing typed here.</p>
         </div>
         <div className="page-actions">
-          <select value={String(data.tower_id)} onChange={(e) => set("tower", e.target.value)} aria-label="Tower">
-            {data.towers.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-          <select value={params.get("month") ?? ""} onChange={(e) => set("month", e.target.value)} aria-label="Bill month">
-            <option value="">All bills</option>
-            {data.months.map((m) => (
-              <option key={m} value={m}>
-                billed in {m}
-              </option>
-            ))}
-          </select>
-          <button className="btn" onClick={() => void downloadFile(`/api/closeout/sites/${id}/billing-checklist.xlsx?${q}`)}>
+          <Field label="Tower" bare>
+            <select value={String(data.tower_id)} onChange={(e) => set("tower", e.target.value)} aria-label="Tower">
+              {data.towers.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Bill month" bare>
+            <select value={params.get("month") ?? ""} onChange={(e) => set("month", e.target.value)} aria-label="Bill month">
+              <option value="">All bills</option>
+              {data.months.map((m) => (
+                <option key={m} value={m}>
+                  billed in {m}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Button onClick={() => void downloadFile(`/api/closeout/sites/${id}/billing-checklist.xlsx?${q}`)}>
             Excel
-          </button>
+          </Button>
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card">
+      <Card as="div">
         <div className="stat-row">
           {Object.entries(data.counts).map(([k, v]) => (
             <div key={k} className="stat">
@@ -597,7 +604,7 @@ export function BillingChecklist() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -636,7 +643,7 @@ export function Payments() {
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card">
+      <Card as="div">
         <table className="table compact">
           <thead>
             <tr>
@@ -673,9 +680,9 @@ export function Payments() {
                     </div>
                   ))}
                   {can("closeout.payments") && (
-                    <button className="btn btn-small" onClick={() => setForm({ id: b.id, spoke_to: "", said: "", promised_on: "" })}>
+                    <Button size="small" onClick={() => setForm({ id: b.id, spoke_to: "", said: "", promised_on: "" })}>
                       Log a call
-                    </button>
+                    </Button>
                   )}
                 </td>
               </tr>
@@ -689,10 +696,10 @@ export function Payments() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
       {form && (
-        <form
-          className="card top-gap"
+        <Card
+          as="form" className="top-gap"
           onSubmit={(e) => {
             e.preventDefault();
             void run(
@@ -705,12 +712,18 @@ export function Payments() {
           }}
         >
           <div className="inline-form">
-            <input placeholder="Who you spoke to" value={form.spoke_to} onChange={(e) => setForm({ ...form, spoke_to: e.target.value })} required />
-            <input className="grow" placeholder="What was said" value={form.said} onChange={(e) => setForm({ ...form, said: e.target.value })} required />
-            <input type="date" value={form.promised_on} onChange={(e) => setForm({ ...form, promised_on: e.target.value })} aria-label="Promised date" />
-            <button className="btn btn-primary">Save</button>
+            <Field label="Who you spoke to" bare>
+              <input placeholder="Who you spoke to" value={form.spoke_to} onChange={(e) => setForm({ ...form, spoke_to: e.target.value })} required />
+            </Field>
+            <Field label="What was said" bare>
+              <input className="grow" placeholder="What was said" value={form.said} onChange={(e) => setForm({ ...form, said: e.target.value })} required />
+            </Field>
+            <Field label="Promised date" bare>
+              <input type="date" value={form.promised_on} onChange={(e) => setForm({ ...form, promised_on: e.target.value })} aria-label="Promised date" />
+            </Field>
+            <Button type="submit" variant="primary">Save</Button>
           </div>
-        </form>
+        </Card>
       )}
     </>
   );
@@ -758,17 +771,19 @@ export function SiteWorkCompletions() {
           <h1>Work completion certificates</h1>
         </div>
         <div className="page-actions">
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Completion date" />
-          <button
-            className="btn btn-primary"
+          <Field label="Completion date" bare>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Completion date" />
+          </Field>
+          <Button
+            variant="primary"
             onClick={() => void run(api(`/api/closeout/sites/${id}/work-completions`, { method: "POST", json: { completion_date: date } }), setError).then(load)}
           >
             Make the certificate
-          </button>
+          </Button>
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card">
+      <Card as="div">
         <table className="table compact">
           <thead>
             <tr>
@@ -794,28 +809,28 @@ export function SiteWorkCompletions() {
                 </td>
                 <td>{w.status === "signed" ? <span className="badge badge-ok">signed by {w.signed_name} · locked</span> : <span className="badge badge-warn">draft</span>}</td>
                 <td>
-                  <button className="btn btn-small" onClick={() => void downloadFile(`/api/closeout/work-completions/${w.id}/pdf`)}>
+                  <Button size="small" onClick={() => void downloadFile(`/api/closeout/work-completions/${w.id}/pdf`)}>
                     PDF
-                  </button>{" "}
-                  <button className="btn btn-small" onClick={() => void downloadFile(`/api/closeout/work-completions/${w.id}/bond.pdf`)}>
+                  </Button>{" "}
+                  <Button size="small" onClick={() => void downloadFile(`/api/closeout/work-completions/${w.id}/bond.pdf`)}>
                     Guarantee bond
-                  </button>{" "}
+                  </Button>{" "}
                   {w.status !== "signed" &&
                     (w.image_3d ? (
-                      <button className="btn btn-small" title="Leave the 3D page out of the certificate" onClick={() => void run(api(`/api/closeout/work-completions/${w.id}/image-3d`, { method: "DELETE" }), setError).then(load)}>
+                      <Button size="small" title="Leave the 3D page out of the certificate" onClick={() => void run(api(`/api/closeout/work-completions/${w.id}/image-3d`, { method: "DELETE" }), setError).then(load)}>
                         Remove the 3D page
-                      </button>
+                      </Button>
                     ) : (
-                      <button className="btn btn-small" title="Add a page with the building in 3D (Status view)" onClick={() => void run(addImage3d(id, w.id), setError).then(load)}>
+                      <Button size="small" title="Add a page with the building in 3D (Status view)" onClick={() => void run(addImage3d(id, w.id), setError).then(load)}>
                         Add the 3D page
-                      </button>
+                      </Button>
                     ))}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -847,16 +862,16 @@ export function Guarantees() {
           </p>
         </div>
         <div className="page-actions">
-          <button className="btn" onClick={() => void downloadFile("/api/closeout/past-projects.xlsx")}>
+          <Button onClick={() => void downloadFile("/api/closeout/past-projects.xlsx")}>
             Past projects (Excel)
-          </button>
-          <button className="btn" onClick={() => void downloadFile("/api/closeout/past-projects.pdf")}>
+          </Button>
+          <Button onClick={() => void downloadFile("/api/closeout/past-projects.pdf")}>
             Past projects (PDF)
-          </button>
+          </Button>
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card">
+      <Card as="div">
         <table className="table compact">
           <thead>
             <tr>
@@ -890,7 +905,7 @@ export function Guarantees() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }
@@ -932,7 +947,7 @@ export function Issues() {
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
-      <div className="card">
+      <Card as="div">
         <table className="table compact">
           <thead>
             <tr>
@@ -978,27 +993,29 @@ export function Issues() {
                       ))}
                       {can("issues.edit") && (
                         <div className="inline-form top-gap">
-                          <input className="grow" placeholder="Comment" value={text} onChange={(e) => setText(e.target.value)} />
-                          <button
-                            className="btn btn-small"
+                          <Field label="Comment" bare>
+                            <input className="grow" placeholder="Comment" value={text} onChange={(e) => setText(e.target.value)} />
+                          </Field>
+                          <Button
+                            size="small"
                             onClick={() =>
                               void run(api(`/api/closeout/issues/${i.id}/comments`, { method: "POST", json: { body: text } }), setError).then(() => (setText(""), load()))
                             }
                           >
                             Comment
-                          </button>
+                          </Button>
                           {!i.snag_id && (
-                            <button className="btn btn-small" onClick={() => void run(api(`/api/closeout/issues/${i.id}/share`, { method: "POST" }), setError).then(load)}>
+                            <Button size="small" onClick={() => void run(api(`/api/closeout/issues/${i.id}/share`, { method: "POST" }), setError).then(load)}>
                               Share with the client
-                            </button>
+                            </Button>
                           )}
                           {i.status !== "resolved" && (
-                            <button
-                              className="btn btn-small"
+                            <Button
+                              size="small"
                               onClick={() => void run(api(`/api/closeout/issues/${i.id}`, { method: "PUT", json: { status: "resolved" } }), setError).then(load)}
                             >
                               Resolved
-                            </button>
+                            </Button>
                           )}
                         </div>
                       )}
@@ -1009,7 +1026,7 @@ export function Issues() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </>
   );
 }

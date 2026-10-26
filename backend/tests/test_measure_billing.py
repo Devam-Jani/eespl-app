@@ -120,7 +120,11 @@ def pool(boss, db):  # noqa: F811
     wl = {w.item_no: w.id for w in wo.lines}
     for no, body in (("1", {"parts": ["floor", "walls", "tops", "slope"]}), ("2", {"parts": ["count"], "count_of": "layer:SLEEVE"}), ("3", {"parts": ["floor"], "layers": 2, "areas": [areas["A"], areas["R"]]})):
         assert c.put(f"/api/measure/sites/{site.id}/items/{wl[no]}", json=body, headers=h).status_code == 200
-    edge = db.scalar(select(MeasureEdge).where(MeasureEdge.site_id == site.id))
+    edges = list(db.scalars(select(MeasureEdge).where(MeasureEdge.site_id == site.id)))
+    edge = next(e for e in edges if {e.area_a_id, e.area_b_id} == {areas["A"], areas["R"]})
+    # the slope trimmed to the pool shares the cut edge with it: the pool's wall stays there
+    aq = next(e for e in edges if {e.area_a_id, e.area_b_id} == {areas["A"], areas["Q"]})
+    assert c.post(f"/api/measure/edges/{aq.id}/answer", json={"answer": "both"}, headers=h).status_code == 200
     return {"c": c, "h": h, "me": me, "site": site, "wo": wo, "wl": wl, "areas": areas, "edge": edge, "contract": k, "client": cl, "file": f}
 
 
@@ -143,7 +147,10 @@ def test_areas_picked_from_the_drawing_and_the_edge_asked_once(pool, db):
     assert D(a["R"]["area_sqm"]).quantize(D("0.0001")) == D("16.9877") and D(a["R"]["periphery_m"]).quantize(D("0.001")) == D("15.786")
     assert a["Q"]["trim_with"] == [a["A"]["id"]] and a["A"]["counts"] == {"layer:SLEEVE": 4}
     assert a["A"]["height_source"] == "Section Y-Y: +1800 to +600 = 1200 mm"
-    assert len(st["edges"]) == 1 and D(st["edges"][0]["length_m"]) == D("5.19") and st["edges"][0]["answer"] is None
+    edges = {f"{e['a']}|{e['b']}": e for e in st["edges"]}
+    assert set(edges) == {"A|R", "A|Q"}
+    assert D(edges["A|R"]["length_m"]) == D("5.19") and edges["A|R"]["answer"] is None
+    assert abs(D(edges["A|Q"]["length_m"]) - D("5.835038670")) < D("0.000001")  # the slope's cut edge
     s = _sheet(pool)
     assert any(q["kind"] == "edge" and "Wall on this edge?" in q["text"] for q in s["questions"])
     assert pool["c"].post(f"/api/measure/sheets/{s['id']}/send", headers=pool["h"]).status_code == 422  # not before the answer
@@ -203,7 +210,7 @@ def test_the_excel_formulas_give_the_apps_totals(pool, db):
     r = pool["c"].get(f"/api/measure/sheets/{s['id']}/xlsx", headers=pool["h"])
     assert r.status_code == 200
     ws = openpyxl.load_workbook(io.BytesIO(r.content)).active
-    assert ws["K3"].value == 10.7639
+    assert ws["H3"].value == 10.7639
     app_lines = [ln for ln in s["lines"] if ln["kind"] != "area"]
     rows = [rr for rr in range(7, ws.max_row + 1) if isinstance(ws.cell(rr, 8).value, str) and ws.cell(rr, 8).value.startswith("=ROUND(G")]
     assert len(rows) == len(app_lines)
@@ -212,7 +219,7 @@ def test_the_excel_formulas_give_the_apps_totals(pool, db):
     this = {x["wo_line_id"]: D(x["this"]) for x in s["cumulative"]}
     ab = next(rr for rr in range(1, ws.max_row + 1) if ws.cell(rr, 1).value == "Abstract") + 2
     for i, x in enumerate(s["cumulative"]):
-        assert abs(D(repr(excel.evaluate(ws, ab + i, 5))) - this[x["wo_line_id"]]) < D("0.0000001")
+        assert abs(D(repr(excel.evaluate(ws, ab + i, 7))) - this[x["wo_line_id"]]) < D("0.0000001")
 
 
 def _send_and_bill(p, db, sheet_id, **body):
@@ -329,6 +336,24 @@ def test_client_corrections_are_logged_and_billed(pool, db):
     assert out["status"] == "approved" and len(out["corrections"]) == 1 and out["corrections"][0]["remark"] == "One sleeve is not fixed"
     b = pool["c"].post(f"/api/measure/sheets/{s['id']}/bill", json={}, headers=pool["h"]).json()
     assert {ln["item_no"]: D(ln["this"]) for ln in b["lines"]}["2"] == 5  # the corrected figure is billed
+    # the sheet's Abstract, the bill, the Excel and the PDF say the same, the drawing figure beside it
+    out = pool["c"].get(f"/api/measure/sheets/{s['id']}", headers=pool["h"]).json()
+    row = next(r for r in out["cumulative"] if r["item_no"] == "2")
+    assert D(row["this"]) == 5 and D(row["drawing"]) == 6 and D(row["approved"]) == 5 and D(row["upto"]) == 5
+    assert row["note"] == "6 on the drawing, 5 approved by the client"
+    bills = {ln["item_no"]: ln for ln in b["lines"]}
+    for r in out["cumulative"]:
+        assert D(r["this"]) == D(bills[r["item_no"]]["this"]) and D(r["upto"]) == D(bills[r["item_no"]]["cumulative"])
+    ws = openpyxl.load_workbook(io.BytesIO(pool["c"].get(f"/api/measure/sheets/{s['id']}/xlsx", headers=pool["h"]).content)).active
+    ab = next(rr for rr in range(1, ws.max_row + 1) if ws.cell(rr, 1).value == "Abstract") + 2
+    for i, r in enumerate(out["cumulative"]):
+        assert abs(D(repr(excel.evaluate(ws, ab + i, 7))) - D(r["this"])) < D("0.0000001"), r["item_no"]
+    assert excel.evaluate(ws, ab + 1, 5) == 6.0 and excel.evaluate(ws, ab + 1, 7) == 5.0
+    from pypdf import PdfReader
+
+    pdf = pool["c"].get(f"/api/measure/sheets/{s['id']}/pdf", headers=pool["h"]).content
+    text = " ".join(p.extract_text() for p in PdfReader(io.BytesIO(pdf)).pages)
+    assert "6 on the drawing, 5 approved by the client" in " ".join(text.split())
 
 
 def test_import_gives_the_same_totals_as_the_sheet(pool, db):
@@ -382,12 +407,45 @@ def test_an_old_row_without_an_item_is_listed_never_silently_added():
     ws.append([None, "A - Pool"])
     ws.append(["1", "Floor", 1, None, None, None, 10, 107.639, "sqft"])
     ws.append([None, "Walls (the same item, no number)", 1, 10, None, 1, 10, 107.639, "sqft"])
-    ws.append([None, "Lift pit (extra)"])
+    ws.append([None, "Lift pit (extra)"])  # an area's header inside the item: the item goes on
     ws.append([None, "Floor", 1, 2, 2, None, 4, 43.056, "sqft"])
-    ws.append([None, "Total", None, None, None, None, None, 258.334])
     buf = io.BytesIO()
     wb.save(buf)
     read = excel.read_sheet(buf.getvalue())
-    assert read["items"]["1"]["qty"] == D("215.278")
-    assert len(read["assumed"]) == 1 and "counted under item 1" in read["assumed"][0]
-    assert len(read["skipped"]) == 1 and "43.056 with no work-order item" in read["skipped"][0]
+    assert read["items"]["1"]["qty"] == D("258.334")
+    assert len(read["assumed"]) == 2 and all("counted under item 1" in a for a in read["assumed"])  # listed to check
+    # the item's own total row confirms the lines under it: nothing left to check
+    ws.append([None, "Total Quantity =", None, None, None, None, 24, 258.334])
+    ws.append([None, None, None, None, None, None, "Sq Mt", "Sq Ft"])
+    buf = io.BytesIO()
+    wb.save(buf)
+    read = excel.read_sheet(buf.getvalue())
+    assert read["items"]["1"]["qty"] == D("258.334") and read["items"]["1"]["unit"] == "sqft" and read["items"]["1"]["sqm"] == 24
+    assert read["assumed"] == [] and read["skipped"] == []
+    # a row with a number before any item is never placed
+    wb2 = openpyxl.Workbook()
+    w2 = wb2.active
+    w2.append(["Sr / WO item", "Particulars", "No", "Length", "Width", "Height / Depth", "Qty", "Total qty", "Unit"])
+    w2.append([None, "Lift pit (extra)", 1, 2, 2, None, 4, 43.056, "sqft"])
+    buf = io.BytesIO()
+    wb2.save(buf)
+    read = excel.read_sheet(buf.getvalue())
+    assert read["items"] == {} and "43.056 with no work-order item" in read["skipped"][0]
+
+
+def test_a_shared_edge_along_an_arc_is_found_with_its_true_length():
+    # A: a half disc of radius 2 on the x axis; B: a frame around it whose inner edge is that arc
+    a = [[2, 0, 1], [-2, 0, 0]]
+    b = [[-2, 0, -1], [2, 0, 0], [3, 0, 0], [3, 3, 0], [-3, 3, 0], [-3, 0, 0]]
+    found = geom.shared_paths(a, b)
+    assert len(found) == 1
+    length, path = found[0]
+    assert abs(length - 2 * math.pi) < 1e-5  # within a hundredth of a millimetre
+    assert len(path) >= 8 and abs(math.hypot(path[len(path) // 2 // 2 * 2], path[len(path) // 2 // 2 * 2 + 1]) - 2) < 1e-6
+    assert geom.shared_edges(a, b) == []  # the straight-edge finder alone missed it
+    # a slope drawn into the pool and trimmed to it: the edge is the pool's arc inside the slope
+    pool = [[0, 0, 0], [6, 0, 1], [6, 4, 0], [0, 4, 1]]  # straight sides, round ends of radius 2
+    slope = [[6.5, 1, 0], [9, 1, 0], [9, 3, 0], [6.5, 3, 0]]  # over the right-hand end
+    (length, _), = geom.shared_paths(pool, slope, a_trims_b=True)
+    half = math.asin(1 / 2)  # the arc of radius 2 between y = 1 and y = 3 around its centre (6, 2)
+    assert abs(length - 2 * 2 * half) < 1e-5
