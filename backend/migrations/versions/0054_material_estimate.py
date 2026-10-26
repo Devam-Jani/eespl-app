@@ -54,7 +54,7 @@ def _tracked() -> list[sa.Column]:
 def upgrade() -> None:
     op.add_column("products", sa.Column("wastage_percent", sa.Numeric(precision=6, scale=2), server_default="0", nullable=False))
     op.add_column("systems", sa.Column("upturn_mm", sa.Numeric(precision=8, scale=2), server_default="300", nullable=False))
-    op.add_column("costing_settings", sa.Column("material_share_warn_percent", sa.Numeric(precision=6, scale=3), server_default="70", nullable=False))
+    op.add_column("costing_settings", sa.Column("material_share_warn_percent", sa.Numeric(precision=7, scale=3), server_default="70", nullable=False))
     op.add_column("rate_workings", sa.Column("free_issue_product_ids", JSON, server_default="[]", nullable=False))
 
     op.create_table(
