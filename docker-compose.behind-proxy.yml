@@ -1,0 +1,114 @@
+# Behind an existing web server: for a server where another nginx (or any proxy) already owns ports
+# 80 and 443, e.g. the shared test server. Laid over docker-compose.prod.yml:
+#
+#   docker compose -p eespl-test -f docker-compose.prod.yml -f docker-compose.behind-proxy.yml \
+#     --env-file .env up -d --build
+#
+# - one published port, on the host's loopback only: 127.0.0.1:9400 (Caddy, plain HTTP; the host's
+#   nginx does TLS and passes <domain> and training.<domain> here, see deploy/behind-proxy/);
+# - every other service on an internal network (no route out, nothing published);
+# - memory and CPU limits on every service, about 3.75 GB and 3 CPUs in all, so the stack can never
+#   starve the other apps on the server;
+# - no company data: the app's /data is an empty folder; the road map (public OpenStreetMap data,
+#   made on the server by scripts/osrm-prepare.sh) and the backups live in EESPL_STORE, a folder of
+#   ours on the big disk, the backups kept 7 days;
+# - email, Kylas and the helper off (the helper only if HELPER_AI_ENABLED and a key are set in .env,
+#   and then the api needs the egress network: see docs/DEPLOY.md).
+#
+# Every container, network and volume carries the project name (eespl-test) as its prefix.
+name: eespl-test
+
+x-off: &off
+  EMAIL_ENABLED: "false"
+  KYLAS_ENABLED: "false"
+
+services:
+  db:
+    networks: [back]
+    deploy:
+      resources:
+        limits: {memory: 512M, cpus: "0.50"}
+
+  api:
+    environment:
+      <<: *off
+      HELPER_AI_ENABLED: ${HELPER_AI_ENABLED:-false}
+    volumes: !override
+      - media:/media
+      - ./deploy/behind-proxy/empty-data:/data:ro
+    networks: [back]
+    deploy:
+      resources:
+        limits: {memory: 768M, cpus: "0.75"}
+
+  worker:
+    environment:
+      <<: *off
+    networks: [back]
+    deploy:
+      resources:
+        limits: {memory: 320M, cpus: "0.25"}
+
+  api-training:
+    networks: [back]
+    deploy:
+      resources:
+        limits: {memory: 384M, cpus: "0.40"}
+
+  worker-training:
+    networks: [back]
+    deploy:
+      resources:
+        limits: {memory: 384M, cpus: "0.20"}
+
+  web:
+    networks: [back]
+    deploy:
+      resources:
+        limits: {memory: 64M, cpus: "0.10"}
+
+  # --mmap: the map files are read through the page cache, which the kernel can reclaim, instead of
+  # being copied into the container's memory (about 1.6 GB otherwise)
+  osrm:
+    command: osrm-routed --algorithm mld --mmap --max-table-size 200 /data/western-zone-latest.osrm
+    volumes: !override
+      - ${EESPL_STORE:?set EESPL_STORE in .env}/osrm:/data:ro
+    networks: [back]
+    deploy:
+      resources:
+        limits: {memory: 1024M, cpus: "0.30"}
+
+  backup:
+    environment:
+      BACKUP_KEEP_DAILY: "7"
+      BACKUP_KEEP_WEEKLY: "0"
+      BACKUP_KEEP_MONTHLY: "0"
+      BACKUP_REMOTE: ""
+    volumes: !override
+      - media:/media:ro
+      - ${EESPL_STORE:?set EESPL_STORE in .env}/backups:/backups
+    networks: [back]
+    deploy:
+      resources:
+        limits: {memory: 256M, cpus: "0.25"}
+
+  caddy:
+    environment:
+      ACME_EMAIL: ""
+    ports: !override
+      - "127.0.0.1:9400:9400"
+    volumes: !override
+      - ./deploy/behind-proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [front, back]
+    deploy:
+      resources:
+        limits: {memory: 128M, cpus: "0.25"}
+
+networks:
+  # Caddy's way in from the host's loopback port
+  front: {}
+  # everything else: no route out of the server, nothing published
+  back:
+    internal: true

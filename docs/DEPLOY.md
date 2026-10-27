@@ -321,3 +321,102 @@ carries the commit marks it released (section 8).
 - [ ] Each role's training PDF handed out; everyone has practised in the training company
 - [ ] `EMAIL_ENABLED` as the director decided (staff only, never clients)
 - [ ] Kylas still pointed at the sandbox until Devam confirms
+
+## 14. Behind an existing nginx (the shared test server)
+
+For a server where another web server already holds 80 and 443 (the test server lent by a friend:
+its system nginx serves about 30 sites, and we have no sudo). `docker-compose.behind-proxy.yml`
+is laid over the production file:
+
+- compose project **`eespl-test`**: every container, network and volume starts with it;
+- one published port, on the loopback only: **`127.0.0.1:9400`**. Our Caddy answers plain HTTP
+  there (`deploy/behind-proxy/Caddyfile`), routes `training.<domain>` to the training company and
+  everything else to the app, keeps the security headers, and trusts the host's
+  `X-Forwarded-Proto` (the cookies stay Secure);
+- every other service on an internal network (`eespl-test_back`): nothing published, no route out.
+  The helper needs one: if `HELPER_AI_ENABLED` and `ANTHROPIC_API_KEY` are set, add `front` to the
+  api's networks in the override;
+- limits on every service, 3.75 GB and 3 CPUs in all:
+
+  | service | memory | CPUs | | service | memory | CPUs |
+  |---|---|---|---|---|---|---|
+  | db | 512 MB | 0.50 | | worker-training | 384 MB | 0.20 |
+  | api (3 workers) | 768 MB | 0.75 | | osrm (`--mmap`) | 1024 MB | 0.30 |
+  | worker | 320 MB | 0.25 | | backup | 256 MB | 0.25 |
+  | api-training | 384 MB | 0.40 | | caddy | 128 MB | 0.25 |
+  | web | 64 MB | 0.10 | | **total** | **3840 MB** | **3.00** |
+
+- no company data: the api's `/data` is the empty `deploy/behind-proxy/empty-data`. The main
+  database gets the DEMO data, and the training company resets itself as usual. Real company data
+  only when the director asks.
+- `EESPL_STORE` in `.env`: a folder of ours on the big disk holding `osrm/` (the road map, made
+  there by `osrm-prepare.sh`) and `backups/` (kept 7 days, no off-site copy);
+- email, Kylas and the helper off.
+
+`python3 scripts/check-behind-proxy.py` checks all of this on the resolved configuration (CI runs
+it): only 127.0.0.1:9400 published, every service limited, no `data/` mount, internal networks.
+
+### Deploy
+
+No git credentials on the server: the code goes over ssh as an archive of the commit.
+
+```sh
+# on the PC
+git archive --format=tar.gz -o eespl.tar.gz <commit>
+scp eespl.tar.gz devam@<server>:~/eespl-test.tar.gz
+python3 scripts/make-prod-secrets.py --out .env.test-server --dev-env .env   # fresh, mode 600
+#   + APP_DOMAIN, PUBLIC_BASE_URL, CORS_ORIGINS, MAIN_URL, TRAINING_URL, EESPL_STORE, CRAWLER_TOKEN
+scp .env.test-server devam@<server>:~/eespl-test/.env      # then chmod 600 there; never cat it
+
+# on the server, in ~/eespl-test only
+tar -xzf ~/eespl-test.tar.gz -C ~/eespl-test
+mkdir -p "$EESPL_STORE/osrm" "$EESPL_STORE/backups"
+# the road map, in EESPL_STORE, with limits (public OpenStreetMap data, not company data)
+docker run --rm --memory 4g --cpus 2 -v "$EESPL_STORE/osrm:/data" ghcr.io/project-osrm/osrm-backend:v5.27.1 osrm-extract -p /opt/car.lua /data/western-zone-latest.osm.pbf   # then osrm-partition, osrm-customize
+C="docker compose -p eespl-test -f docker-compose.prod.yml -f docker-compose.behind-proxy.yml --env-file .env"
+ENV_FILE=.env $C up -d --build
+$C ps
+curl -s -o /dev/null -w "%{http_code}\n" -H "Host: <domain>" http://127.0.0.1:9400/api/health
+curl -s -o /dev/null -w "%{http_code}\n" -H "Host: training.<domain>" http://127.0.0.1:9400/api/health
+docker stats --no-stream $(docker ps -q --filter label=com.docker.compose.project=eespl-test)
+```
+
+Never `docker system/image/volume/network prune` or `compose down` outside this folder on a
+shared server: those remove other people's things.
+
+The server's owner adds the nginx site (`deploy/behind-proxy/nginx-site.conf`: both names to
+127.0.0.1:9400, websocket headers, 200 MB uploads, 10-minute timeouts) and the certificate; the
+steps are in `deploy/behind-proxy/FOR-THE-SERVER-OWNER.md`.
+
+Before DNS, check through a tunnel: `ssh -L 9400:127.0.0.1:9400 devam@<server>`, then
+http://localhost:9400 (the app) and http://training.localhost:9400 (the training company). The
+browser treats both as secure, so the Secure cookies work over plain HTTP there.
+
+### Moving to the new server
+
+1. **On the old server**, a backup, and copy it off:
+
+   ```sh
+   $C exec backup python3 /opt/backup/backup.py run
+   scp devam@<old>:$EESPL_STORE/backups/eespl-<date>.tar.gpg .
+   ```
+
+   Keep the old `.env`'s `BACKUP_KEY`: the archive opens only with it.
+2. **On the new server**, sections 4 and 5 as usual (it owns 80/443, so no override). Use a
+   **fresh** `.env`, but carry over the old `BACKUP_KEY`, then restore:
+
+   ```sh
+   docker compose -f docker-compose.prod.yml cp eespl-<date>.tar.gpg backup:/backups/
+   docker compose -f docker-compose.prod.yml stop api worker caddy
+   docker compose -f docker-compose.prod.yml run --rm -v eespl-prod_media:/media-restore backup \
+       python3 /opt/backup/backup.py restore eespl-<date>.tar.gpg --into eespl --drop --media /media-restore
+   docker compose -f docker-compose.prod.yml up -d
+   ```
+
+   The training company needs no copy: it rebuilds itself from the DEMO data.
+3. **Switch DNS**: point the A records for `<domain>` and `training.<domain>` at the new server.
+   Lower their TTL to 300 a day before. Caddy fetches the certificate once they resolve.
+4. **Clean up the old server** (our things only): `$C down -v` in `~/eespl-test`, then remove
+   `~/eespl-test` and `$EESPL_STORE`. The backups are root's files, so remove them with
+   `docker run --rm -v $EESPL_STORE:/s alpine rm -rf /s/backups /s/osrm`. Ask the owner to remove
+   the nginx site and the certificate (the undo steps in the note).

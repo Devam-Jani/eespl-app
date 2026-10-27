@@ -42,6 +42,13 @@ jobs:
       - run: alembic check
       - run: pytest -q
 
+  # the behind-a-proxy stack as docker compose resolves it: one loopback port, limits, no data/
+  deploy-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/check-behind-proxy.py
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
