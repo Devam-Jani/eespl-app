@@ -336,15 +336,15 @@ is laid over the production file:
 - every other service on an internal network (`eespl-test_back`): nothing published, no route out.
   The helper needs one: if `HELPER_AI_ENABLED` and `ANTHROPIC_API_KEY` are set, add `front` to the
   api's networks in the override;
-- limits on every service, 3.75 GB and 3 CPUs in all:
+- limits on every service, 3.5 GB and 3 CPUs in all:
 
   | service | memory | CPUs | | service | memory | CPUs |
   |---|---|---|---|---|---|---|
   | db | 512 MB | 0.50 | | worker-training | 384 MB | 0.20 |
-  | api (3 workers) | 768 MB | 0.75 | | osrm (`--mmap`) | 1024 MB | 0.30 |
+  | api (3 workers) | 1024 MB | 0.75 | | osrm (`--mmap`) | 512 MB | 0.30 |
   | worker | 320 MB | 0.25 | | backup | 256 MB | 0.25 |
   | api-training | 384 MB | 0.40 | | caddy | 128 MB | 0.25 |
-  | web | 64 MB | 0.10 | | **total** | **3840 MB** | **3.00** |
+  | web | 64 MB | 0.10 | | **total** | **3584 MB** | **3.00** |
 
 - no company data: the api's `/data` is the empty `deploy/behind-proxy/empty-data`. The main
   database gets the DEMO data, and the training company resets itself as usual. Real company data
@@ -371,14 +371,23 @@ scp .env.test-server devam@<server>:~/eespl-test/.env      # then chmod 600 ther
 # on the server, in ~/eespl-test only
 tar -xzf ~/eespl-test.tar.gz -C ~/eespl-test
 mkdir -p "$EESPL_STORE/osrm" "$EESPL_STORE/backups"
-# the road map, in EESPL_STORE, with limits (public OpenStreetMap data, not company data)
-docker run --rm --memory 4g --cpus 2 -v "$EESPL_STORE/osrm:/data" ghcr.io/project-osrm/osrm-backend:v5.27.1 osrm-extract -p /opt/car.lua /data/western-zone-latest.osm.pbf   # then osrm-partition, osrm-customize
+# the road map, in EESPL_STORE (public OpenStreetMap data, not company data): once, before the
+# stack starts, in one detached container (it survives the ssh session); osrm-extract needs about
+# 8 GB for western India (4 GB is killed), about 10 minutes
+curl -fL -o "$EESPL_STORE/osrm/western-zone-latest.osm.pbf" https://download.geofabrik.de/asia/india/western-zone-latest.osm.pbf
+docker run -d --name eespl-test-osrm-prep --memory 8g --memory-swap 8g --cpus 2 -v "$EESPL_STORE/osrm:/data"   ghcr.io/project-osrm/osrm-backend:v5.27.1 sh -c "osrm-extract -p /opt/car.lua /data/western-zone-latest.osm.pbf   && osrm-partition /data/western-zone-latest.osrm && osrm-customize /data/western-zone-latest.osrm"
+docker wait eespl-test-osrm-prep && docker rm eespl-test-osrm-prep      # 0 = done
 C="docker compose -p eespl-test -f docker-compose.prod.yml -f docker-compose.behind-proxy.yml --env-file .env"
 ENV_FILE=.env $C up -d --build
 $C ps
 curl -s -o /dev/null -w "%{http_code}\n" -H "Host: <domain>" http://127.0.0.1:9400/api/health
 curl -s -o /dev/null -w "%{http_code}\n" -H "Host: training.<domain>" http://127.0.0.1:9400/api/health
 docker stats --no-stream $(docker ps -q --filter label=com.docker.compose.project=eespl-test)
+# the DEMO company in the main database (the training company seeds itself); a one-off container:
+# inside the running api, next to its 3 workers, it would pass the api's memory limit
+ENV_FILE=.env $C run --rm -T --no-deps api python -c "import app.main; from app.ops import training; print(training._seed_demo())"
+# the super admin: the password on stdin, never on the command line
+ENV_FILE=.env $C run --rm -T --no-deps api python -m app.cli create-admin --email <role address> --name "Super admin" < password-file
 ```
 
 Never `docker system/image/volume/network prune` or `compose down` outside this folder on a

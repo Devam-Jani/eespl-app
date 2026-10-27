@@ -13,7 +13,7 @@ account doesn't have.
   `/data/docker_volumes/eespl-test`.
 - One port only, on the loopback: **`127.0.0.1:9400`** (plain HTTP). The database and everything
   else are on an internal docker network, not published.
-- Limits on every container: about **3.75 GB of RAM and 3 CPUs** in all.
+- Limits on every container: about **3.5 GB of RAM and 3 CPUs** in all.
 - No email is sent, and no outside service is called.
 
 ## The steps that need sudo
