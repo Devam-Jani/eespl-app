@@ -1,53 +1,55 @@
 # EESPL test app: what we need from the server's owner
 
-Hello, and thank you for lending us room on vm-noesis-prod-ci-01.
+Hello, and thank you for lending us room on vm-noesis-prod-ci-01, and for making
+`/data/projects/eespl-test` for us.
 
 We are running a test copy of the EESPL App on the server until it passes its checks; then it
-moves to its own server. Here is what is already done and the few steps that need sudo, which our
+moves to its own server. Here is what we set up and the few steps that need sudo, which our
 account doesn't have.
 
-## What is already there (nothing of yours was touched)
+## What we run (nothing of yours is touched)
 
-- Docker compose project **`eespl-test`**: every container, network and volume starts with
-  `eespl-test`. Code in `~devam/eespl-test`; backups and the road map in
-  `/data/docker_volumes/eespl-test`.
+- Docker compose project **`eespl-test`**, from `/data/projects/eespl-test` only: every
+  container, network and volume starts with `eespl-test`. Backups (kept 7 days) and the road map
+  are in that folder too.
 - One port only, on the loopback: **`127.0.0.1:9400`** (plain HTTP). The database and everything
   else are on an internal docker network, not published.
-- Limits on every container: about **3.5 GB of RAM and 3 CPUs** in all.
+- Limits on every container: about **3.6 GB of RAM and 3 CPUs** in all.
 - No email is sent, and no outside service is called.
+
+## The two names
+
+| Name | What |
+|---|---|
+| `eespl.noesisanalytics.co.in` | the app |
+| `eespl-training.noesisanalytics.co.in` | the training company (practice data, rebuilt every night) |
+
+Both go to the same port. Our side tells them apart by the Host header, so nginx only has to
+pass it through. We understand your team handles DNS (A records to 20.204.77.70).
 
 ## The steps that need sudo
 
-The domain below is a placeholder, **`eespl.example.com`**. We will send the real one; replace it
-in the commands and in the site file (3 places).
-
-1. DNS (wherever the domain is managed): two A records to this server.
-
-   ```
-   eespl.example.com.            A   20.204.77.70
-   training.eespl.example.com.   A   20.204.77.70
-   ```
-
-2. The nginx site. The file is `~devam/eespl-test/deploy/behind-proxy/nginx-site.conf`. It proxies
-   both names to 127.0.0.1:9400, with Host, X-Forwarded-For, X-Forwarded-Proto, websocket upgrade,
-   200 MB uploads (600 MB for one model upload) and 10-minute timeouts for large drawings.
+1. The nginx site. The file is `/data/projects/eespl-test/deploy/behind-proxy/nginx-site.conf`.
+   It proxies both names to 127.0.0.1:9400, with Host, X-Forwarded-For, X-Forwarded-Proto,
+   websocket upgrade, 200 MB uploads (600 MB for one model upload) and 10-minute timeouts for large
+   drawings.
 
    ```
-   sudo cp ~devam/eespl-test/deploy/behind-proxy/nginx-site.conf /etc/nginx/sites-available/eespl
+   sudo cp /data/projects/eespl-test/deploy/behind-proxy/nginx-site.conf /etc/nginx/sites-available/eespl
    sudo ln -s /etc/nginx/sites-available/eespl /etc/nginx/sites-enabled/eespl
    sudo nginx -t
    sudo systemctl reload nginx
    ```
 
-3. The certificate, once the DNS records answer:
+2. The certificate, once DNS answers:
 
    ```
-   sudo certbot --nginx -d eespl.example.com -d training.eespl.example.com
+   sudo certbot --nginx -d eespl.noesisanalytics.co.in -d eespl-training.noesisanalytics.co.in
    ```
 
 To undo everything later: remove the two files from `/etc/nginx/sites-*/`, `sudo nginx -t`,
-reload nginx, `sudo certbot delete --cert-name eespl.example.com`. We remove our containers and
-folders ourselves.
+reload nginx, `sudo certbot delete --cert-name eespl.noesisanalytics.co.in`. We remove our
+containers and the folder's contents ourselves.
 
 ## A friendly heads-up from our read-only look around
 

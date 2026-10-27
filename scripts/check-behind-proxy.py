@@ -29,6 +29,7 @@ MAX_CPUS = 3.0
 DUMMY = {
     "APP_DOMAIN": "eespl.example.com",
     "EESPL_STORE": "/srv/eespl-test-store",
+    "TRAINING_DOMAIN": "eespl-training.example.com",
     "POSTGRES_DB": "eespl",
     "POSTGRES_USER": "eespl",
     "POSTGRES_PASSWORD": "dummy",
@@ -69,7 +70,7 @@ def problems(cfg: dict) -> list[str]:
         if name != "caddy" and (not nets or nets - internal):
             bad.append(f"{name}: on a network that is not internal ({sorted(nets - internal) or ['default']})")
     caddy = (ROOT / "deploy/behind-proxy/Caddyfile").read_text(encoding="utf-8")
-    for needed in ("Strict-Transport-Security", "Content-Security-Policy", "X-Frame-Options", "frame-ancestors 'none'", "trusted_proxies static private_ranges", ":9400"):
+    for needed in ("Strict-Transport-Security", "Content-Security-Policy", "X-Frame-Options", "frame-ancestors 'none'", "trusted_proxies static private_ranges", ":9400", "{$TRAINING_DOMAIN}"):
         if needed not in caddy:
             bad.append(f"deploy/behind-proxy/Caddyfile: no {needed}")
     if published != [("caddy", *PORT)]:

@@ -1,5 +1,5 @@
 # Behind an existing web server (docker-compose.behind-proxy.yml): the server's own nginx holds 80
-# and 443 and the certificates, and passes <domain> and training.<domain> to 127.0.0.1:9400. Here
+# and 443 and the certificates, and passes APP_DOMAIN and TRAINING_DOMAIN to 127.0.0.1:9400. Here
 # Caddy answers plain HTTP on 9400, routes by the Host header, and keeps our security headers.
 # X-Forwarded-Proto and X-Forwarded-For are trusted from the host (the docker bridge is a private
 # range), so the api sees https and the cookies stay Secure.
@@ -41,8 +41,8 @@
 :9400 {
 	import common
 
-	# training.<domain> (and training.localhost, for a check through an ssh tunnel)
-	@training host training.{$APP_DOMAIN} training.localhost
+	# TRAINING_DOMAIN (and training.localhost, for a check through an ssh tunnel)
+	@training host {$TRAINING_DOMAIN} training.localhost
 	handle @training {
 		handle /api/* {
 			reverse_proxy api-training:8000
@@ -56,7 +56,7 @@
 		}
 	}
 
-	# <domain> (and anything else that reaches the port: only the host's nginx and a tunnel can)
+	# APP_DOMAIN (and anything else that reaches the port: only the host's nginx and a tunnel can)
 	handle {
 		handle /api/* {
 			reverse_proxy api:8000
