@@ -14,7 +14,7 @@ account doesn't have.
   are in that folder too.
 - One port only, on the loopback: **`127.0.0.1:9400`** (plain HTTP). The database and everything
   else are on an internal docker network, not published.
-- Limits on every container: about **3.6 GB of RAM and 3 CPUs** in all.
+- Limits on every container: about **3.9 GB of RAM and 3 CPUs** in all.
 - No email is sent, and no outside service is called.
 
 ## The two names

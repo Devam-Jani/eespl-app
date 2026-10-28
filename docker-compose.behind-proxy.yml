@@ -7,7 +7,7 @@
 # - one published port, on the host's loopback only: 127.0.0.1:9400 (Caddy, plain HTTP; the host's
 #   nginx does TLS and passes APP_DOMAIN and TRAINING_DOMAIN here, see deploy/behind-proxy/);
 # - every other service on an internal network (no route out, nothing published);
-# - memory and CPU limits on every service, about 3.6 GB and 3 CPUs in all, so the stack can never
+# - memory and CPU limits on every service, about 3.9 GB and 3 CPUs in all, so the stack can never
 #   starve the other apps on the server;
 # - no company data: the app's /data is an empty folder; the road map (public OpenStreetMap data,
 #   made on the server by scripts/osrm-prepare.sh), the backups (kept 7 days) and every named
@@ -59,7 +59,7 @@ services:
     networks: [back]
     deploy:
       resources:
-        limits: {memory: 256M, cpus: "0.20"}
+        limits: {memory: 768M, cpus: "0.20"}
 
   web:
     networks: [back]
@@ -76,7 +76,7 @@ services:
     networks: [back]
     deploy:
       resources:
-        limits: {memory: 512M, cpus: "0.30"}
+        limits: {memory: 256M, cpus: "0.30"}
 
   backup:
     environment:

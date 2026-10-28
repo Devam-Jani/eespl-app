@@ -338,15 +338,15 @@ is laid over the production file:
 - every other service on an internal network (`eespl-test_back`): nothing published, no route out.
   The helper needs a route out: if `HELPER_AI_ENABLED` and `ANTHROPIC_API_KEY` are set, add `front`
   to the api's networks in the override;
-- limits on every service, 3.6 GB and 3 CPUs in all (api-training 640 MB: at 384 MB a burst of sign-ins killed it):
+- limits on every service, 3.9 GB and 3 CPUs in all (api-training 640 MB: at 384 MB a burst of sign-ins killed it; worker-training 768 MB: it rebuilds the training company every night, and at 256 MB the DEMO seed was killed and retried in a loop):
 
   | service | memory | CPUs | | service | memory | CPUs |
   |---|---|---|---|---|---|---|
-  | db | 512 MB | 0.50 | | worker-training | 256 MB | 0.20 |
-  | api (3 workers) | 1024 MB | 0.75 | | osrm (`--mmap`) | 512 MB | 0.30 |
+  | db | 512 MB | 0.50 | | worker-training | 768 MB | 0.20 |
+  | api (3 workers) | 1024 MB | 0.75 | | osrm (`--mmap`) | 256 MB | 0.30 |
   | worker | 320 MB | 0.25 | | backup | 256 MB | 0.25 |
   | api-training | 640 MB | 0.40 | | caddy | 128 MB | 0.25 |
-  | web | 64 MB | 0.10 | | **total** | **3712 MB** | **3.00** |
+  | web | 64 MB | 0.10 | | **total** | **3968 MB** | **3.00** |
 
 - no company data: the api's `/data` is the empty `deploy/behind-proxy/empty-data`. The main
   database gets the DEMO data, and the training company resets itself as usual. Real company data
