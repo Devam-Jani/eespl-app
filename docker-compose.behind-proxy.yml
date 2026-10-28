@@ -10,8 +10,8 @@
 # - memory and CPU limits on every service, about 3.6 GB and 3 CPUs in all, so the stack can never
 #   starve the other apps on the server;
 # - no company data: the app's /data is an empty folder; the road map (public OpenStreetMap data,
-#   made on the server by scripts/osrm-prepare.sh) and the backups live in EESPL_STORE, a folder of
-#   ours on the big disk, the backups kept 7 days;
+#   made on the server by scripts/osrm-prepare.sh), the backups (kept 7 days) and every named
+#   volume (the database, the media) live in EESPL_STORE, a folder of ours on the big disk;
 # - email, Kylas and the helper off (the helper only if HELPER_AI_ENABLED and a key are set in .env,
 #   and then the api needs the egress network: see docs/DEPLOY.md).
 #
@@ -113,3 +113,24 @@ networks:
   # everything else: no route out of the server, nothing published
   back:
     internal: true
+
+# the named volumes' data in our own folder (EESPL_STORE/<name>, made before the first start), not
+# in Docker's shared storage: the whole stack is one folder to back up, move or remove
+x-store: &store
+  driver: local
+volumes:
+  pgdata:
+    <<: *store
+    driver_opts: {type: none, o: bind, device: "${EESPL_STORE:?set EESPL_STORE in .env}/pgdata"}
+  media:
+    <<: *store
+    driver_opts: {type: none, o: bind, device: "${EESPL_STORE:?set EESPL_STORE in .env}/media"}
+  media-training:
+    <<: *store
+    driver_opts: {type: none, o: bind, device: "${EESPL_STORE:?set EESPL_STORE in .env}/media-training"}
+  caddy-data:
+    <<: *store
+    driver_opts: {type: none, o: bind, device: "${EESPL_STORE:?set EESPL_STORE in .env}/caddy-data"}
+  caddy-config:
+    <<: *store
+    driver_opts: {type: none, o: bind, device: "${EESPL_STORE:?set EESPL_STORE in .env}/caddy-config"}

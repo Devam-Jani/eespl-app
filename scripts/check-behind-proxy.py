@@ -8,6 +8,7 @@ docker compose resolves it:
 - every service has a memory and a CPU limit, about 4 GB and 3 CPUs in all at most;
 - no service mounts the repository's data/ folder (company drawings, BOQs, billing samples);
 - every service but Caddy is on internal networks only;
+- every named volume is a bind into EESPL_STORE (our folder, not Docker's shared storage);
 - the project, and so every container, network and volume, is named eespl-test;
 - its Caddyfile keeps the security headers and trusts the host's X-Forwarded-Proto.
 
@@ -69,6 +70,10 @@ def problems(cfg: dict) -> list[str]:
         nets = set(svc.get("networks", {}))
         if name != "caddy" and (not nets or nets - internal):
             bad.append(f"{name}: on a network that is not internal ({sorted(nets - internal) or ['default']})")
+    for vname, vol in sorted(cfg.get("volumes", {}).items()):
+        opts = vol.get("driver_opts") or {}
+        if opts.get("o") != "bind" or not str(opts.get("device", "")).startswith(DUMMY["EESPL_STORE"] + "/"):
+            bad.append(f"volume {vname}: not a bind into EESPL_STORE")
     caddy = (ROOT / "deploy/behind-proxy/Caddyfile").read_text(encoding="utf-8")
     for needed in ("Strict-Transport-Security", "Content-Security-Policy", "X-Frame-Options", "frame-ancestors 'none'", "trusted_proxies static private_ranges", ":9400", "{$TRAINING_DOMAIN}"):
         if needed not in caddy:
@@ -91,7 +96,7 @@ def main() -> int:
         services = cfg["services"]
         mem = sum(int(s["deploy"]["resources"]["limits"]["memory"]) for s in services.values())
         cpu = sum(float(s["deploy"]["resources"]["limits"]["cpus"]) for s in services.values())
-        print(f"ok: {len(services)} services, only {':'.join(PORT)} published, limits {mem / 2**30:.2f} GiB and {cpu:.2f} CPUs, no data/ mount, internal networks")
+        print(f"ok: {len(services)} services, only {':'.join(PORT)} published, limits {mem / 2**30:.2f} GiB and {cpu:.2f} CPUs, no data/ mount, internal networks, volumes in EESPL_STORE")
     return 1 if bad else 0
 
 

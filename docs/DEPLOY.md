@@ -351,8 +351,10 @@ is laid over the production file:
 - no company data: the api's `/data` is the empty `deploy/behind-proxy/empty-data`. The main
   database gets the DEMO data, and the training company resets itself as usual. Real company data
   goes there only when the director asks;
-- `EESPL_STORE` in `.env` (`/data/projects/eespl-test/store`): `osrm/` (the road map, made there)
-  and `backups/` (kept 7 days, no off-site copy);
+- `EESPL_STORE` in `.env` (`/data/projects/eespl-test/store`): `osrm/` (the road map, made there),
+  `backups/` (kept 7 days, no off-site copy) and every named volume (`pgdata/`, `media/`,
+  `media-training/`, `caddy-data/`, `caddy-config/`: binds, so make the folders before the first
+  start: `mkdir -p $S/pgdata $S/media $S/media-training $S/caddy-data $S/caddy-config`);
 - email, Kylas and the helper off.
 
 `python3 scripts/check-behind-proxy.py` checks all of this on the resolved configuration (CI runs
@@ -373,7 +375,7 @@ ssh devam@<server> 'umask 077; cat > /data/projects/eespl-test/.env' < .env.test
 # on the server, in /data/projects/eespl-test only
 cd /data/projects/eespl-test
 S=/data/projects/eespl-test/store
-mkdir -p $S/osrm $S/backups
+mkdir -p $S/osrm $S/backups $S/pgdata $S/media $S/media-training $S/caddy-data $S/caddy-config
 # the road map (public OpenStreetMap data, not company data): once, before the stack starts, in one
 # detached container (it survives the ssh session); osrm-extract needs about 8 GB for western
 # India (it is killed at 4 GB) and takes about 10 minutes
