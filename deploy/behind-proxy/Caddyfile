@@ -1,0 +1,72 @@
+# Behind an existing web server (docker-compose.behind-proxy.yml): the server's own nginx holds 80
+# and 443 and the certificates, and passes APP_DOMAIN and TRAINING_DOMAIN to 127.0.0.1:9400. Here
+# Caddy answers plain HTTP on 9400, routes by the Host header, and keeps our security headers.
+# X-Forwarded-Proto and X-Forwarded-For are trusted from the host (the docker bridge is a private
+# range), so the api sees https and the cookies stay Secure.
+{
+	auto_https off
+	admin 127.0.0.1:2019
+	servers {
+		trusted_proxies static private_ranges
+		client_ip_headers X-Forwarded-For
+	}
+}
+
+(common) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(self), geolocation=(self), microphone=(), payment=(), usb=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://{$TILE_HOST}; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; media-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		-Server
+	}
+	# the same limits as deploy/prod/Caddyfile (nginx's client_max_body_size must allow them too)
+	@ifc path /api/sites/*/building/ifc
+	@not_ifc not path /api/sites/*/building/ifc
+	request_body @not_ifc {
+		max_size 60MB
+	}
+	request_body @ifc {
+		max_size 600MB
+	}
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	@index path / /index.html
+	header @index Cache-Control "no-cache"
+}
+
+:9400 {
+	import common
+
+	# TRAINING_DOMAIN (and training.localhost, for a check through an ssh tunnel)
+	@training host {$TRAINING_DOMAIN} training.localhost
+	handle @training {
+		handle /api/* {
+			reverse_proxy api-training:8000
+		}
+		handle /health {
+			rewrite * /api/health/full
+			reverse_proxy api-training:8000
+		}
+		handle {
+			reverse_proxy web:80
+		}
+	}
+
+	# APP_DOMAIN (and anything else that reaches the port: only the host's nginx and a tunnel can)
+	handle {
+		handle /api/* {
+			reverse_proxy api:8000
+		}
+		handle /health {
+			rewrite * /api/health/full
+			reverse_proxy api:8000
+		}
+		handle {
+			reverse_proxy web:80
+		}
+	}
+}

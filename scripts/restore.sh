@@ -8,8 +8,10 @@
 # Restoring over the live database (and its media) is docs/DEPLOY.md section 10, not this script.
 # Prints the restored tables and rows, and any table whose count differs from the archive's
 # manifest (none means the restore is complete). No secret is printed.
+# Behind an existing nginx (the test server): COMPOSE="docker compose -p eespl-test -f
+# docker-compose.prod.yml -f docker-compose.behind-proxy.yml" sh scripts/restore.sh ...
 set -eu
-COMPOSE="docker compose -f docker-compose.prod.yml"
+COMPOSE="${COMPOSE:-docker compose -f docker-compose.prod.yml}"
 
 if [ $# -lt 2 ]; then
   echo "Archives in the backups volume:"
