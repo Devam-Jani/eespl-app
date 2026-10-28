@@ -343,10 +343,10 @@ is laid over the production file:
   | service | memory | CPUs | | service | memory | CPUs |
   |---|---|---|---|---|---|---|
   | db | 512 MB | 0.50 | | worker-training | 768 MB | 0.20 |
-  | api (3 workers) | 1024 MB | 0.75 | | osrm (`--mmap`) | 256 MB | 0.30 |
-  | worker | 320 MB | 0.25 | | backup | 256 MB | 0.25 |
-  | api-training | 640 MB | 0.40 | | caddy | 128 MB | 0.25 |
-  | web | 64 MB | 0.10 | | **total** | **3968 MB** | **3.00** |
+  | api (3 workers) | 1024 MB | 0.75 | | osrm (`--mmap`) | 512 MB | 0.30 |
+  | worker | 320 MB | 0.25 | | backup | 128 MB | 0.25 |
+  | api-training | 640 MB | 0.40 | | caddy | 64 MB | 0.25 |
+  | web | 64 MB | 0.10 | | **total** | **4032 MB** | **3.00** |
 
 - no company data: the api's `/data` is the empty `deploy/behind-proxy/empty-data`. The main
   database gets the DEMO data, and the training company resets itself as usual. Real company data

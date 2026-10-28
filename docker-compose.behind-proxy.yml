@@ -68,7 +68,8 @@ services:
         limits: {memory: 64M, cpus: "0.10"}
 
   # --mmap: the map files are read through the page cache, which the kernel can reclaim, instead of
-  # being copied into the container's memory (about 1.6 GB otherwise)
+  # being copied into the container's memory (about 1.6 GB otherwise); at 256 MB the cache thrashed
+  # (a route took 23 minutes), 512 MB is enough
   osrm:
     command: osrm-routed --algorithm mld --mmap --max-table-size 200 /data/western-zone-latest.osrm
     volumes: !override
@@ -76,7 +77,7 @@ services:
     networks: [back]
     deploy:
       resources:
-        limits: {memory: 256M, cpus: "0.30"}
+        limits: {memory: 512M, cpus: "0.30"}
 
   backup:
     environment:
@@ -90,7 +91,7 @@ services:
     networks: [back]
     deploy:
       resources:
-        limits: {memory: 256M, cpus: "0.25"}
+        limits: {memory: 128M, cpus: "0.25"}
 
   caddy:
     environment:
@@ -105,7 +106,7 @@ services:
     networks: [front, back]
     deploy:
       resources:
-        limits: {memory: 128M, cpus: "0.25"}
+        limits: {memory: 64M, cpus: "0.25"}
 
 networks:
   # Caddy's way in from the host's loopback port
