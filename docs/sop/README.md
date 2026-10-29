@@ -12,6 +12,9 @@ Each SOP is assembled from two kinds of source:
 `python -m app.cli sops` builds the SOPs:
 
 - `data/sop/EESPL SOP - <Role>.pdf` and `.docx`, in the gitignored data folder;
+- `data/sop/EESPL Quick start - <Role>.pdf`: 10-15 pages to hand over with the login (first login, the
+  quick card, the role's main pages with one picture each). The pages are the first of the role's day,
+  or the front matter's `quick: /a, /b, ...` (at most 8);
 - the in-app reader: Help > How to, and the "How to" link on each page.
 
 `scripts/sop-screens.mjs` takes the pictures on the training company. Each role logs in as its own

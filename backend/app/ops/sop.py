@@ -13,14 +13,15 @@ import json
 import os
 import re
 from dataclasses import dataclass
-from datetime import date
 from html import escape
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import branding
 from app.models import Role
+from app.timefmt import ist_today
 
 VERSION = "1.0"
 SEE_ALL = {"super_admin", "director"}
@@ -72,6 +73,7 @@ class RoleDoc:
     title: str
     width: int
     body: str
+    quick: list[str] | None = None  # front matter "quick: /a, /b": the quick start's pages
 
 
 def pages() -> dict[str, Page]:
@@ -89,7 +91,8 @@ def role_docs() -> dict[str, RoleDoc]:
     for f in sorted(sop_dir().glob("*.md")):
         meta, body = _front(f.read_text(encoding="utf-8"))
         if meta.get("role"):
-            out[meta["role"]] = RoleDoc(meta["role"], meta.get("title", meta["role"]), int(meta.get("width", 1600)), body)
+            quick = [x.strip() for x in meta.get("quick", "").split(",") if x.strip()] or None
+            out[meta["role"]] = RoleDoc(meta["role"], meta.get("title", meta["role"]), int(meta.get("width", 1600)), body, quick)
     return out
 
 
@@ -365,7 +368,7 @@ def for_app(db: Session, role: str) -> dict:
 
 
 def file_name(title: str, ext: str) -> str:
-    return f"EESPL SOP - {title}.{ext}"
+    return f"{branding.PRODUCT_NAME} SOP - {title}.{ext}"
 
 
 def _shot(screens: Path | None, role: str, page: str) -> Path | None:
@@ -376,11 +379,11 @@ def _shot(screens: Path | None, role: str, page: str) -> Path | None:
 
 def html(db: Session, role: str, screens: Path | None) -> str:
     doc = assemble(db, role)
-    title, today = doc["title"], date.today()
+    title, today = doc["title"], ist_today()
     narrow = doc["width"] < 800
     parts = [f"""<html><head><meta charset="utf-8"><style>
 @page {{ size: A4; margin: 14mm 14mm 18mm;
-  @bottom-left {{ content: "EESPL App · SOP: {escape(title)} · version {VERSION} · {today:%d.%m.%Y}"; font-size: 7.5pt; color: #64736f; }}
+  @bottom-left {{ content: "{escape(branding.PRODUCT_NAME)} · SOP: {escape(title)} · version {VERSION} · {today:%d.%m.%Y}"; font-size: 7.5pt; color: #64736f; }}
   @bottom-right {{ content: "Page " counter(page) " of " counter(pages); font-size: 7.5pt; color: #64736f; }} }}
 body {{ font-family: DejaVu Sans, sans-serif; font-size: 9.5pt; color: #1c2b28; line-height: 1.4; }}
 h1 {{ font-size: 24pt; margin: 50mm 0 4px; color: #0f6b5c; }}
@@ -394,7 +397,8 @@ img.wide {{ width: 100%; }} img.narrow {{ width: 62mm; float: right; margin: 0 0
 .card {{ border: 2px solid #0f6b5c; padding: 10px 14px; }} .toc li {{ margin: 1px 0; }}
 </style></head><body>
 <h1>{escape(title)}</h1>
-<p style="font-size:13pt">EESPL App: standard operating procedure</p>
+<p style="font-size:13pt">{escape(branding.app_title())}: standard operating procedure</p>
+<p style="font-size:9pt;color:#64736f">{escape(branding.COMPANY_LINE)}</p>
 <p class="muted">Version {VERSION}, {today:%d.%m.%Y}. Written from the app itself; the pictures come from the training company's
 DEMO data (names and numbers are invented). Practise in the training company first: it is reset every night.</p>
 <h3>Contents</h3><ol class="toc">"""]
@@ -463,7 +467,7 @@ def docx(db: Session, role: str, screens: Path | None) -> bytes:
     from docx.shared import Cm, Pt, RGBColor  # noqa: PLC0415
 
     doc = assemble(db, role)
-    title, today = doc["title"], date.today()
+    title, today = doc["title"], ist_today()
     d = Document()
     sec = d.sections[0]
     sec.page_width, sec.page_height = Cm(21), Cm(29.7)
@@ -471,12 +475,13 @@ def docx(db: Session, role: str, screens: Path | None) -> bytes:
     d.styles["Normal"].font.name = "Calibri"
     d.styles["Normal"].font.size = Pt(10)
     foot = sec.footer.paragraphs[0]
-    foot.text = f"EESPL App · SOP: {title} · version {VERSION} · {today:%d.%m.%Y} · Page "
+    foot.text = f"{branding.PRODUCT_NAME} · SOP: {title} · version {VERSION} · {today:%d.%m.%Y} · Page "
     foot.runs[0].font.size = Pt(8)
     _page_field(foot)
     h = d.add_heading(title, 0)
     h.runs[0].font.color.rgb = RGBColor(0x0F, 0x6B, 0x5C)
-    d.add_paragraph("EESPL App: standard operating procedure")
+    d.add_paragraph(f"{branding.app_title()}: standard operating procedure")
+    d.add_paragraph(branding.COMPANY_LINE)
     d.add_paragraph(f"Version {VERSION}, {today:%d.%m.%Y}. Written from the app itself; the pictures come from the training company's DEMO data "
                     "(names and numbers are invented). Practise in the training company first: it is reset every night.")
     narrow = doc["width"] < 800
@@ -510,6 +515,71 @@ def docx(db: Session, role: str, screens: Path | None) -> bytes:
     return buf.getvalue()
 
 
+# --- the quick start: 10-15 pages to hand over with the login ---------------------------------------------
+
+QUICK_SKIP = {"/notifications", "/my-notifications", "/account", "/my-reports", "/help/sop", "/alerts", "/help/how-it-works"}
+QUICK_MAX = 8
+
+
+def quick_pages(role: str) -> list[str]:
+    """The role's main pages: its front matter's `quick:` list, else the first pages of its day."""
+    doc = role_docs()[role]
+    if doc.quick:
+        return doc.quick[:QUICK_MAX]
+    day = doc.body.split("## Your day", 1)[-1].split("\n## ", 1)[0]
+    found = [ln.strip()[6:].strip() for ln in day.splitlines() if ln.strip().startswith("@page ")]
+    return [p for p in found if p not in QUICK_SKIP][:QUICK_MAX]
+
+
+def _short(md: str, lines: int = 8) -> str:
+    """A page section cut to what a first week needs: what the page shows and its main buttons."""
+    parts = re.split(r"\n(?=\*\*[^*]+\*\*\s*$)", md, flags=re.M)
+    intro = parts[0].strip()
+    on = next((x for x in parts[1:] if x.startswith("**On the page**")), "")
+    items = [ln for ln in on.splitlines()[1:] if _ITEM.match(ln) and not ln.startswith(" ")][:lines]
+    return intro + ("\n\n**The main buttons**\n" + "\n".join(items) if items else "")
+
+
+def quick_html(db: Session, role: str, screens: Path | None) -> str:
+    doc, have, all_pages = role_docs()[role], perms_of(db, role), pages()
+    narrow = doc.width < 800
+    full = assemble(db, role)
+    card = next((x["markdown"] for x in full["sections"] if x["id"] == "quick-card"), "")
+    first = keep(all_pages["_first-login"].body, have)
+    today = ist_today()
+    css = html(db, role, screens).split("<style>", 1)[1].split("</style>", 1)[0].replace("SOP: ", "Quick start: ")
+    parts = [f"""<html><head><meta charset="utf-8"><style>{css}
+img.narrow {{ width: 70mm; float: none; display: block; margin: 4px auto 8px; }} img.wide {{ width: 100%; }}
+</style></head><body>
+<h1>{escape(doc.title)}: quick start</h1>
+<p style="font-size:13pt">{escape(branding.app_title())}</p>
+<p style="font-size:9pt;color:#64736f">{escape(branding.COMPANY_LINE)}</p>
+<p class="muted">Version {VERSION}, {today:%d.%m.%Y}. The first days in the app: how to sign in, your daily card and your main tasks, one picture
+each. The full SOP for your role has every button: Help &gt; How to in the app. Pictures from the training company's DEMO data (invented).</p>
+<div class="sec"><h2>{escape(all_pages["_first-login"].title)}</h2>{to_html(first, shift=1)}</div>
+<div class="sec"><h2>Your daily card</h2><div class="card">{to_html(card, shift=1)}</div></div>"""]
+    for n, page in enumerate(quick_pages(role), start=1):
+        p = all_pages.get(page)
+        if p is None:
+            continue
+        shot = _shot(screens, role, page)
+        img = f'<img class="shot {"narrow" if narrow else "wide"}" src="{shot.resolve().as_uri()}">' if shot else ""
+        parts.append(f'<div class="sec"><h2>Task {n}: {escape(p.title)}</h2><p class="muted">Page: {escape(page)}</p>{img}{to_html(_short(keep(p.body, have)), shift=1)}</div>')
+    parts.append("</body></html>")
+    return "".join(parts)
+
+
+def quick_pdf(db: Session, role: str, screens: Path | None) -> tuple[bytes, int]:
+    from weasyprint import HTML  # noqa: PLC0415
+
+    rendered = HTML(string=quick_html(db, role, screens)).render()
+    return rendered.write_pdf(), len(rendered.pages)
+
+
+def quick_file_name(title: str) -> str:
+    return f"{branding.PRODUCT_NAME} Quick start - {title}.pdf"
+
+
 def build_all(db: Session, screens: Path | None, out: Path, only: list[str] | None = None) -> list[dict]:
     out.mkdir(parents=True, exist_ok=True)
     made = []
@@ -520,5 +590,8 @@ def build_all(db: Session, screens: Path | None, out: Path, only: list[str] | No
         (out / file_name(doc.title, "pdf")).write_bytes(data)
         (out / file_name(doc.title, "docx")).write_bytes(docx(db, role, screens))
         shots = sum(1 for p in included(role) if _shot(screens, role, p))
-        made.append({"role": role, "title": doc.title, "pages": n, "sections": len(included(role)), "screenshots": shots})
+        quick, qn = quick_pdf(db, role, screens) if role != INDEX else (None, 0)
+        if quick:
+            (out / quick_file_name(doc.title)).write_bytes(quick)
+        made.append({"role": role, "title": doc.title, "pages": n, "sections": len(included(role)), "screenshots": shots, "quick_start_pages": qn})
     return made
