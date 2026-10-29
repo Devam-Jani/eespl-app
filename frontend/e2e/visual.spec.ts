@@ -102,6 +102,9 @@ const SCREENS: { name: string; who: string; path: string | ((page: Page) => Prom
   { name: "deliveries", who: "demo-director@demo.invalid", path: "/deliveries" },
   // the phone's material request over the estimate, scrolled to the bottom: nothing under the tabs
   { name: "phone-ask-material", who: "demo-site-engineer@demo.invalid", path: askPath, then: askOver, phoneOnly: true },
+  // Prompt 39: the sidebar's new name and tag, Users with the invite status, Issues with Raise an issue
+  { name: "users", who: "demo-office-admin@demo.invalid", path: "/admin/users" },
+  { name: "issues", who: "demo-director@demo.invalid", path: "/issues" },
 ];
 
 for (const s of SCREENS) {
@@ -114,4 +117,14 @@ for (const s of SCREENS) {
       await expect(page).toHaveScreenshot(`${s.name}-${theme}.png`, { mask: masks(page), fullPage: false });
     });
   }
+}
+
+// signed out: the login page with the product name, its tag and the company line; never "ERP"
+for (const theme of ["dark", "light"] as const) {
+  test(`login (${theme})`, async ({ page }) => {
+    await settle(page, "/login", theme);
+    await expect(page.locator(".login-brand small")).toHaveText(/Site & Tender app/);
+    await expect(page.locator("body")).not.toContainText(/\bERP\b/);
+    await expect(page).toHaveScreenshot(`login-${theme}.png`, { fullPage: false });
+  });
 }

@@ -20,6 +20,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from app.timefmt import ist_today
+
 SITE_CODE = "DEMO-X-001"
 SITE_NAME = "DEMO Chripal House (X-ray)"
 SAMPLE = Path("/data/samples/dwg/CHRIPAL HOUSE R1_ALL FLOOR WORKING GFC AT 30-09-24.dwg")
@@ -135,7 +137,7 @@ def _stages(db: Session, site_id: int, node_id: int, template: str, start: date 
     db.flush()
     first_hold = next((i for i, s in enumerate(steps) if s.hold_point), len(steps) - 1)
     upto = {"done": len(steps), "hold": first_hold + 1, "progress": max(1, len(steps) // 2), "late": max(1, len(steps) // 2), "blocked": max(1, len(steps) // 3), "not_started": 0}[state]
-    today = date.today()
+    today = ist_today()
     day = start or today + timedelta(days=10)  # not started: planned from next week
     pct = Decimal(0)
     for i, st in enumerate(steps):
@@ -313,8 +315,73 @@ def run(db: Session) -> dict:
         if not db.get(ClientUserSite, (cu.user_id, site.id)):
             db.add(ClientUserSite(user_id=cu.user_id, site_id=site.id))
     db.commit()
+    # 6. billing: the contract's lines, the finished areas in the book, RA bill 01 with real amounts
+    out["billing"] = billing(db, site.id)
     m = current(db, site.id)
     payload = bsvc.payload(db, site.id)
     out["model"] = {"version": m.version, "floors": len(payload["floors"]) if payload else 0, "rooms": len(payload["rooms"]) if payload else 0,
                     "types": {k: {"outline_sqm": v["area_sqm"], "columns": len(v["columns"]), "cores": len(v["cores"]), "walls": len(v["walls"])} for k, v in (payload or {}).get("types", {}).items()}}  # fmt: skip
     return out
+
+
+# the DEMO rates of the site's work (₹ per sqm), one contract line per stage system
+RATES = {"Toilet / wet area (coating)": Decimal("520.00"), "Terrace (APP membrane)": Decimal("680.00"), "Water tank (UG / OH)": Decimal("610.00")}
+
+
+def billing(db: Session, site_id: int | None = None) -> dict:
+    """The contract's lines (one per system, the scopes' quantities at DEMO rates), the finished
+    areas in the measurement book (approved), and RA bill 01 filled from the book through the real
+    billing rules: so RA-DEMO-X-001-01 shows real amounts. Also on its own for a server that has the
+    site but not the drawing (python -m app.cli demo-xray --bill-only): fills an empty bill, adds
+    nothing twice."""
+    import app.main  # noqa: F401  (every model registered: run on its own from the CLI)
+    from app.closeout import measure
+    from app.finance import service as fsvc
+    from app.finance.billing import _set_lines
+    from app.finance.models import ClientContract, ContractLine, RaBill
+    from app.models import User
+    from app.sites.models import AreaScope, Site, StageTemplate
+    from app.team.demo import email_for
+    from app.team.models import Measurement
+
+    site = db.get(Site, site_id) if site_id else db.scalar(select(Site).where(Site.code == SITE_CODE, Site.is_demo))
+    if site is None or not site.is_demo:
+        raise SystemExit(f"No DEMO site {SITE_CODE}: run demo-xray first")
+    by = db.scalar(select(User.id).where(User.email == email_for("billing")))
+    c = db.scalar(select(ClientContract).where(ClientContract.site_id == site.id))
+    if c is None:
+        c = ClientContract(site_id=site.id, client_id=site.client_id, contract_value=Decimal(0), retention_percent=Decimal(5), place_of_supply="Gujarat", created_by=by)
+        db.add(c)
+        db.flush()
+    scopes = db.execute(select(AreaScope, StageTemplate.name).join(StageTemplate, StageTemplate.id == AreaScope.stage_template_id).where(AreaScope.site_id == site.id)).all()
+    if not c.lines:
+        qty: dict[str, Decimal] = {}
+        for sc, name in scopes:
+            qty[name] = qty.get(name, Decimal(0)) + Decimal(sc.qty)
+        for i, (name, q) in enumerate(sorted(qty.items())):
+            c.lines.append(ContractLine(sort_order=i, item_no=str(i + 1), description=f"DEMO {name}", unit="sqm", qty=q, rate=RATES.get(name, Decimal("500.00"))))
+        c.contract_value = sum((Decimal(ln.qty) * Decimal(ln.rate) for ln in c.lines), Decimal(0)).quantize(Decimal("0.01"))
+        db.flush()
+    line_of = {ln.description.removeprefix("DEMO "): ln for ln in c.lines}
+    booked = 0
+    for sc, name in scopes:
+        ln = line_of.get(name)
+        if ln is None or Decimal(sc.progress_percent or 0) < 100:
+            continue
+        if db.scalar(select(Measurement.id).where(Measurement.site_id == site.id, Measurement.node_id == sc.node_id, Measurement.contract_line_id == ln.id)):
+            continue
+        db.add(Measurement(site_id=site.id, contract_line_id=ln.id, node_id=sc.node_id, description=ln.description, qty=sc.qty, unit=sc.unit or "sqm", source="manual",
+                           measured_on=ist_today(), measured_by=by, note="DEMO: the finished area", status="approved", created_by=by))  # fmt: skip
+        booked += 1
+    db.flush()
+    b = db.scalar(select(RaBill).where(RaBill.contract_id == c.id, RaBill.seq == 1))
+    if b is None:
+        b = RaBill(code=f"RA-{site.code}-01", contract_id=c.id, site_id=site.id, seq=1, status="draft", period_from=START, period_to=ist_today(), created_by=by)
+        db.add(b)
+    if b.status == "draft" and not any(ln.qty for ln in b.lines):
+        _set_lines(db, b, c, None)
+        fsvc.ra_totals(db, b, c)
+        db.flush()
+        measure.stamp_billed(db, b)
+    db.commit()
+    return {"bill": b.code, "lines": len([ln for ln in b.lines if ln.qty]), "gross": str(b.gross), "net": str(b.net), "measurements_added": booked}

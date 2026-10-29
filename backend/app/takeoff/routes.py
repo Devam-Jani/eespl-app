@@ -360,10 +360,18 @@ def areas(
         .where(CadArea.cad_file_id == f.id)
         .order_by(CadArea.plan, CadArea.y.desc(), CadArea.x)
     ).all()
-    out = [area_out(db, a, f) for a in rows]
-    if show == "waterproofing":
-        out = [a for a in out if a["waterproofing"] or a["status"] != "candidate"]
-    out = group_repeats(out)
+    if show == "waterproofing":  # the same test as area_out's "waterproofing", before the costly rows
+        rows = [a for a in rows if a.area_type_id or a.notes or a.sunk_m or a.status != "candidate"]
+    # what area_out looks up per row (area types, systems, the site's places), loaded once and held
+    # here: the session's identity map keeps objects only while referenced, so each db.get went back
+    # to the database (about 470 queries for the 172 areas of the X-ray drawing)
+    from app.masters.models import System  # noqa: PLC0415
+    from app.sites.models import SiteNode  # noqa: PLC0415
+    from app.survey.models import AreaType  # noqa: PLC0415
+
+    held = [*db.scalars(select(AreaType)), *db.scalars(select(System)), *db.scalars(select(SiteNode).where(SiteNode.site_id == f.site_id))]
+    out = group_repeats([area_out(db, a, f) for a in rows])
+    del held
     return jsonable_encoder(
         {
             "file": file_out(db, f),
