@@ -492,6 +492,16 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--dry-run", action="store_true")
     sub.add_parser("demo-xray", help="DEMO: the X-ray 3D building from the sample drawing")
     p = sub.add_parser(
+        "demo-copy", help="Copy the DEMO company to another database (count, export, import)"
+    )
+    p.add_argument("action", choices=["count", "export", "import"])
+    p.add_argument("--out", help="export: the JSON file to write")
+    p.add_argument("--in", dest="infile", help="import: the JSON file to read")
+    p.add_argument(
+        "--exclude-site", action="append", default=[], help="a DEMO site's code to leave out"
+    )
+    p.add_argument("--dry-run", action="store_true", help="import: report the plan, keep nothing")
+    p = sub.add_parser(
         "training-guides", help="The training PDF per role from the help texts and DEMO screenshots"
     )
     p.add_argument("--screens", default="/data/training/screens")
@@ -662,6 +672,30 @@ def main(argv: list[str] | None = None) -> None:
 
         with SessionLocal() as db:
             print(json.dumps(xray_demo.run(db), indent=1, default=str))
+    elif args.command == "demo-copy":
+        import json  # noqa: PLC0415
+
+        import app.main  # noqa: F401, PLC0415  (every model registered)
+        from app.auth.security import hash_password  # noqa: PLC0415
+        from app.config import settings  # noqa: PLC0415
+        from app.ops import democopy  # noqa: PLC0415
+
+        excluded = tuple(args.exclude_site)
+        with SessionLocal() as db:
+            if args.action == "count":
+                print(json.dumps(democopy.counts(db, excluded), indent=1))
+            elif args.action == "export":
+                data = democopy.export(db, excluded)
+                Path(args.out).write_text(json.dumps(data), encoding="utf-8")
+                n = sum(len(v) for v in data["tables"].values())
+                files = len(data["media_files"])
+                print(f"{args.out}: {n} DEMO rows in {len(data['tables'])} tables, {files} files")
+            else:
+                data = json.loads(Path(args.infile).read_text(encoding="utf-8"))
+                secret = settings.demo_user_password
+                pw = hash_password(secret.get_secret_value()) if secret else None
+                out = democopy.import_(db, data, pw, dry_run=args.dry_run)
+                print(json.dumps(out, indent=1, default=str))
     elif args.command == "training-guides":
         from app.ops import training_guide  # noqa: PLC0415
 
