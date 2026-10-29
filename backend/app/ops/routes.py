@@ -191,6 +191,39 @@ def help_reset(page: str, request: Request, db: DbSession, principal: CurrentPri
     return {"help": _help_for(db, page, [role] if role else [])}
 
 
+# --- the role SOPs: Help > How to, and the "How to" link of each page ---------------------------------------
+
+
+@router.get("/api/sop")
+def sop_list(db: DbSession, principal: CurrentPrincipal, page: str = "") -> dict:
+    """The SOPs this person may read (their roles'; all for the super admin and the director) and,
+    with ?page=, the section of their own role's SOP that explains that page."""
+    from app.ops import sop  # noqa: PLC0415
+
+    mine = [r.code for r in principal.user.roles]
+    docs = sop.role_docs()
+    may = sop.readable(mine)
+    found = None
+    if page:
+        owner = sop.route_pages().get(page, page)
+        for role in [r for r in mine if r in docs] + [r for r in may if r not in mine]:
+            if owner in sop.included(role):
+                found = {"role": role, "id": sop.slug(owner)}
+                break
+    return {"sops": [{"role": r, "title": docs[r].title, "mine": r in mine} for r in may], "open": found}
+
+
+@router.get("/api/sop/{role}")
+def sop_read(role: str, db: DbSession, principal: CurrentPrincipal) -> dict:
+    from app.ops import sop  # noqa: PLC0415
+
+    if role not in sop.role_docs():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No SOP for that role")
+    if role not in sop.readable([r.code for r in principal.user.roles]):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "This SOP belongs to another role")
+    return sop.for_app(db, role)
+
+
 # --- the real company or the training one ----------------------------------------------------------------
 
 

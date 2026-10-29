@@ -4,6 +4,7 @@ import { AuthProvider } from "./auth";
 import { RequireAuth, RequirePermission } from "./components/Guards";
 import Layout from "./components/Layout";
 import { MENU } from "./menu";
+import { routePerms } from "./routes";
 import Login from "./pages/Login";
 import Placeholder from "./pages/Placeholder";
 import { HelperCard } from "./helper/Helper";
@@ -156,6 +157,7 @@ const Dashboard = lazyPage(() => import("./analytics/Dashboard"));
 const Home = lazyPage(() => import("./home/Home"));
 const TodayReport = lazyPage(() => import("./field/TodayReport"));
 const HowItWorks = lazyPage(() => import("./help/HowItWorks"));
+const SopPage = lazyPage(() => import("./help/Sop"));
 // the component page: in the development build only (the production build leaves it out)
 const UiGallery = import.meta.env.DEV ? lazyPage(() => import("./dev/UiGallery")) : null;
 const an = () => import("./analytics/Pages");
@@ -309,9 +311,6 @@ const PAGES: Record<string, JSX.Element> = {
   "/my-reports": <MyReports />,
 };
 
-// every staff role holds one of these (as menu.ts's My work)
-const STAFF_ANY = ["dashboard.view", "site.view", "leads.view", "tender.view", "billing.view", "payables.view", "po.view", "admin.users", "store.view", "delivery.view"];
-
 registerPages(PAGES);
 
 export default function App() {
@@ -337,6 +336,7 @@ export default function App() {
               <Route index element={<PortalHome />} />
               <Route path="sites/:id" element={<PortalSitePage />} />
               <Route path="reports" element={<MyReports />} />
+              <Route path="sop" element={<SopPage />} />
               <Route path="*" element={<Navigate to="/portal" replace />} />
             </Route>
             <Route
@@ -347,11 +347,11 @@ export default function App() {
               }
             >
               <Route index element={<MyWork />} />
-              <Route path="/drill" element={<DrillPage />} />
+              <Route path="/drill" element={<RequirePermission perms={routePerms("/drill")}><DrillPage /></RequirePermission>} />
               <Route
                 path="/surveys/pilot"
                 element={
-                  <RequirePermission perms={["survey.view"]}>
+                  <RequirePermission perms={routePerms("/surveys/pilot")}>
                     <PilotReport />
                   </RequirePermission>
                 }
@@ -359,7 +359,7 @@ export default function App() {
               <Route
                 path="/deliveries/:id"
                 element={
-                  <RequirePermission perms={["delivery.view"]}>
+                  <RequirePermission perms={routePerms("/deliveries/:id")}>
                     <DeliveryDetail />
                   </RequirePermission>
                 }
@@ -367,7 +367,7 @@ export default function App() {
               <Route
                 path="/sites/:id/new-area"
                 element={
-                  <RequirePermission perms={["site.update", "site.edit"]}>
+                  <RequirePermission perms={routePerms("/sites/:id/new-area")}>
                     <NewAreaForm />
                   </RequirePermission>
                 }
@@ -375,7 +375,7 @@ export default function App() {
               <Route
                 path="/sites/:id/fronts"
                 element={
-                  <RequirePermission perms={["site.view"]}>
+                  <RequirePermission perms={routePerms("/sites/:id/fronts")}>
                     <WorkFronts />
                   </RequirePermission>
                 }
@@ -383,7 +383,7 @@ export default function App() {
               <Route
                 path="/quotations/:id"
                 element={
-                  <RequirePermission perms={["quotation.view"]}>
+                  <RequirePermission perms={routePerms("/quotations/:id")}>
                     <QuotationEditor />
                   </RequirePermission>
                 }
@@ -391,7 +391,7 @@ export default function App() {
               <Route
                 path="/surveys/:id"
                 element={
-                  <RequirePermission perms={["survey.view"]}>
+                  <RequirePermission perms={routePerms("/surveys/:id")}>
                     <SurveyDetail />
                   </RequirePermission>
                 }
@@ -402,7 +402,7 @@ export default function App() {
               <Route
                 path="/systems/:id"
                 element={
-                  <RequirePermission perms={["library.view"]}>
+                  <RequirePermission perms={routePerms("/systems/:id")}>
                     <SystemDetail />
                   </RequirePermission>
                 }
@@ -410,7 +410,7 @@ export default function App() {
               <Route
                 path="/tenders/:id"
                 element={
-                  <RequirePermission perms={["tender.view"]}>
+                  <RequirePermission perms={routePerms("/tenders/:id")}>
                     <TenderDetail />
                   </RequirePermission>
                 }
@@ -418,7 +418,7 @@ export default function App() {
               <Route
                 path="/sites/:id"
                 element={
-                  <RequirePermission perms={["site.view"]}>
+                  <RequirePermission perms={routePerms("/sites/:id")}>
                     <SiteDetail />
                   </RequirePermission>
                 }
@@ -426,49 +426,50 @@ export default function App() {
               <Route
                 path="/leads/:id"
                 element={
-                  <RequirePermission perms={["leads.view"]}>
+                  <RequirePermission perms={routePerms("/leads/:id")}>
                     <LeadDetail />
                   </RequirePermission>
                 }
               />
               {(
                 [
-                  ["/rfqs/:id", ["po.view"], <RfqDetail />],
-                  ["/quotations/:id/working", ["quotation.view"], <QuotationWorking />],
-                  ["/prices/:id", ["tender.margin"], <ProductPrices />],
-                  ["/sites/:id/takeoff", ["takeoff.view"], <TakeoffPage />],
-                  ["/sites/:id/measure", ["billing.view"], <MeasurePage />],
-                  ["/sites/:id/building", ["building.edit", "site.view"], <BuildingBuilder />],
-                  ["/field/days/:id", ["field.track", "field.claims"], <DayMap />],
-                  ["/knowledge/templates/:id", ["knowledge.view"], <TemplatePage />],
-                  ["/methodology/systems/:id", ["methodology.view"], <MethodSystemPage />],
-                  ["/methodology/standards/:id", ["methodology.view"], <StandardPage />],
-                  ["/methodology/m/:id", ["methodology.view"], <MethodologyPage />],
-                  ["/sites/:id/methodology", ["methodology.site"], <SiteMethodology />],
-                  ["/knowledge/match/tender/:id", ["knowledge.view"], <MatchPage />],
-                  ["/field/claims/:id", ["field.track", "field.claims"], <ClaimDetail />],
-                  ["/assignments/:id", ["jobs.assign", "planning.view"], <AssignmentPage />],
-                  ["/sites/:id/material-plan", ["planning.view", "indent.view"], <MaterialPlan />],
-                  ["/my-site/:id", ["site.view"], <SupervisorDay />],
-                  ["/my-site/:id/report", ["dpr.edit"], <TodayReport />],
-                  ["/my-site/:id/material", ["material_request.create"], <AskMaterial />],
-                  ["/estimates/:id", ["estimate.view"], <EstimatePage />],
-                  ["/estimates/:id/drawing", ["estimate.view"], <EstimateDrawing />],
-                  ["/help/how-it-works", STAFF_ANY, <HowItWorks />],
+                  ["/rfqs/:id", routePerms("/rfqs/:id"), <RfqDetail />],
+                  ["/quotations/:id/working", routePerms("/quotations/:id/working"), <QuotationWorking />],
+                  ["/prices/:id", routePerms("/prices/:id"), <ProductPrices />],
+                  ["/sites/:id/takeoff", routePerms("/sites/:id/takeoff"), <TakeoffPage />],
+                  ["/sites/:id/measure", routePerms("/sites/:id/measure"), <MeasurePage />],
+                  ["/sites/:id/building", routePerms("/sites/:id/building"), <BuildingBuilder />],
+                  ["/field/days/:id", routePerms("/field/days/:id"), <DayMap />],
+                  ["/knowledge/templates/:id", routePerms("/knowledge/templates/:id"), <TemplatePage />],
+                  ["/methodology/systems/:id", routePerms("/methodology/systems/:id"), <MethodSystemPage />],
+                  ["/methodology/standards/:id", routePerms("/methodology/standards/:id"), <StandardPage />],
+                  ["/methodology/m/:id", routePerms("/methodology/m/:id"), <MethodologyPage />],
+                  ["/sites/:id/methodology", routePerms("/sites/:id/methodology"), <SiteMethodology />],
+                  ["/knowledge/match/tender/:id", routePerms("/knowledge/match/tender/:id"), <MatchPage />],
+                  ["/field/claims/:id", routePerms("/field/claims/:id"), <ClaimDetail />],
+                  ["/assignments/:id", routePerms("/assignments/:id"), <AssignmentPage />],
+                  ["/sites/:id/material-plan", routePerms("/sites/:id/material-plan"), <MaterialPlan />],
+                  ["/my-site/:id", routePerms("/my-site/:id"), <SupervisorDay />],
+                  ["/my-site/:id/report", routePerms("/my-site/:id/report"), <TodayReport />],
+                  ["/my-site/:id/material", routePerms("/my-site/:id/material"), <AskMaterial />],
+                  ["/estimates/:id", routePerms("/estimates/:id"), <EstimatePage />],
+                  ["/estimates/:id/drawing", routePerms("/estimates/:id/drawing"), <EstimateDrawing />],
+                  ["/help/how-it-works", routePerms("/help/how-it-works"), <HowItWorks />],
+                  ["/help/sop", routePerms("/help/sop"), <SopPage />],
                   ...(UiGallery ? ([["/dev/ui", ["admin.users"], <UiGallery />]] as [string, string[], JSX.Element][]) : []),
-                  ["/purchase-orders/new", ["po.edit"], <NewPo />],
-                  ["/purchase-orders/:id", ["po.view"], <PoDetail />],
-                  ["/stores/:id", ["store.view"], <StoreDetail />],
-                  ["/work-orders/:id", ["wo.view"], <WorkOrderPage />],
-                  ["/sites/:id/measurements", ["closeout.billing"], <MeasureEntry />],
-                  ["/sites/:id/reconciliation", ["closeout.billing"], <Reconciliation />],
-                  ["/sites/:id/labour-claims", ["closeout.billing", "closeout.claim_approve"], <LabourClaims />],
-                  ["/bills/:id", ["billing.view", "closeout.billing", "closeout.payments"], <BillPage />],
-                  ["/sites/:id/zones", ["closeout.site", "closeout.billing"], <SiteZones />],
-                  ["/sites/:id/billing-checklist", ["closeout.billing"], <BillingChecklist />],
-                  ["/sites/:id/work-completions", ["closeout.billing"], <SiteWorkCompletions />],
-                  ["/settings/issue-log/:id", ["issuelog.view"], <IssuePage />],
-                  ["/dashboard/details", ["dashboard.company", "dashboard.sales", "dashboard.site", "dashboard.finance", "dashboard.purchase"], <Dashboard />],
+                  ["/purchase-orders/new", routePerms("/purchase-orders/new"), <NewPo />],
+                  ["/purchase-orders/:id", routePerms("/purchase-orders/:id"), <PoDetail />],
+                  ["/stores/:id", routePerms("/stores/:id"), <StoreDetail />],
+                  ["/work-orders/:id", routePerms("/work-orders/:id"), <WorkOrderPage />],
+                  ["/sites/:id/measurements", routePerms("/sites/:id/measurements"), <MeasureEntry />],
+                  ["/sites/:id/reconciliation", routePerms("/sites/:id/reconciliation"), <Reconciliation />],
+                  ["/sites/:id/labour-claims", routePerms("/sites/:id/labour-claims"), <LabourClaims />],
+                  ["/bills/:id", routePerms("/bills/:id"), <BillPage />],
+                  ["/sites/:id/zones", routePerms("/sites/:id/zones"), <SiteZones />],
+                  ["/sites/:id/billing-checklist", routePerms("/sites/:id/billing-checklist"), <BillingChecklist />],
+                  ["/sites/:id/work-completions", routePerms("/sites/:id/work-completions"), <SiteWorkCompletions />],
+                  ["/settings/issue-log/:id", routePerms("/settings/issue-log/:id"), <IssuePage />],
+                  ["/dashboard/details", routePerms("/dashboard/details"), <Dashboard />],
                 ] as [string, string[], JSX.Element][]
               ).map(([path, perms, page]) => (
                 <Route key={path} path={path} element={<RequirePermission perms={perms}>{page}</RequirePermission>} />

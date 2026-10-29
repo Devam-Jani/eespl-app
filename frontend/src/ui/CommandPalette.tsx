@@ -23,6 +23,7 @@ export const ACTIONS: { title: string; to: string; perms: string[] }[] = [
   { title: "Check in for the day", to: "/field", perms: ["field.track"] },
   { title: "Report a problem", to: "/my-reports", perms: [] },
   { title: "How the app works", to: "/help/how-it-works", perms: [] },
+  { title: "How to: my role's SOP", to: "/help/sop", perms: [] },
 ];
 
 function shows(item: MenuItem, can: Can): boolean {

@@ -157,6 +157,9 @@
   "section": "Sales",
   "perms": [
    "leads.edit"
+  ],
+  "view": [
+   "leads.view"
   ]
  },
  {
@@ -165,6 +168,9 @@
   "section": "Sales",
   "perms": [
    "quotation.edit"
+  ],
+  "view": [
+   "quotation.view"
   ]
  },
  {
@@ -173,6 +179,9 @@
   "section": "Sales",
   "perms": [
    "tender.edit"
+  ],
+  "view": [
+   "tender.view"
   ]
  },
  {
@@ -195,6 +204,10 @@
   ],
   "all": [
    "leads.edit"
+  ],
+  "none": [
+   "closeout.billing",
+   "billing.edit"
   ]
  },
  {
@@ -206,6 +219,9 @@
   ],
   "all": [
    "leads.edit"
+  ],
+  "none": [
+   "closeout.billing"
   ]
  },
  {
@@ -222,6 +238,10 @@
   "section": "Planning",
   "perms": [
    "planning.view"
+  ],
+  "view": [
+   "planning.view",
+   "site.view"
   ]
  },
  {
@@ -238,6 +258,9 @@
   "section": "Planning",
   "perms": [
    "coverage.edit"
+  ],
+  "view": [
+   "estimate.view"
   ]
  },
  {
@@ -246,6 +269,9 @@
   "section": "Planning",
   "perms": [
    "estimate.edit"
+  ],
+  "view": [
+   "estimate.view"
   ]
  },
  {
@@ -266,6 +292,9 @@
    "closeout.site",
    "planning.view"
   ],
+  "view": [
+   "site.view"
+  ],
   "all": [
    "site.view"
   ]
@@ -276,6 +305,9 @@
   "section": "Site",
   "perms": [
    "survey.edit"
+  ],
+  "view": [
+   "survey.view"
   ]
  },
  {
@@ -285,6 +317,9 @@
   "perms": [
    "dpr.edit",
    "dpr.approve"
+  ],
+  "view": [
+   "dpr.view"
   ]
  },
  {
@@ -293,6 +328,9 @@
   "section": "Site",
   "perms": [
    "attendance.manage"
+  ],
+  "view": [
+   "labour.view"
   ],
   "all": [
    "site.update"
@@ -304,6 +342,9 @@
   "section": "Site",
   "perms": [
    "labour.edit"
+  ],
+  "view": [
+   "labour.view"
   ]
  },
  {
@@ -312,6 +353,9 @@
   "section": "Site",
   "perms": [
    "delivery.confirm"
+  ],
+  "view": [
+   "delivery.view"
   ]
  },
  {
@@ -321,6 +365,9 @@
   "perms": [
    "site.update",
    "closeout.site"
+  ],
+  "view": [
+   "site.view"
   ],
   "all": [
    "site.view"
@@ -336,6 +383,9 @@
    "closeout.billing",
    "planning.view"
   ],
+  "view": [
+   "issues.view"
+  ],
   "all": [
    "issues.view"
   ]
@@ -346,6 +396,9 @@
   "section": "Site",
   "perms": [
    "field.team"
+  ],
+  "view": [
+   "field.track"
   ]
  },
  {
@@ -354,6 +407,9 @@
   "section": "Billing",
   "perms": [
    "closeout.billing"
+  ],
+  "view": [
+   "measurement.view"
   ]
  },
  {
@@ -363,6 +419,11 @@
   "perms": [
    "billing.edit",
    "closeout.billing"
+  ],
+  "view": [
+   "billing.view",
+   "closeout.billing",
+   "closeout.payments"
   ]
  },
  {
@@ -371,6 +432,9 @@
   "section": "Billing",
   "perms": [
    "billing.edit"
+  ],
+  "view": [
+   "billing.view"
   ]
  },
  {
@@ -379,6 +443,9 @@
   "section": "Billing",
   "perms": [
    "billing.edit"
+  ],
+  "view": [
+   "billing.view"
   ],
   "all": [
    "closeout.billing"
@@ -398,6 +465,9 @@
   "section": "Billing",
   "perms": [
    "variation.approve"
+  ],
+  "view": [
+   "variation.request"
   ]
  },
  {
@@ -417,6 +487,10 @@
   "section": "Billing",
   "perms": [
    "closeout.billing"
+  ],
+  "view": [
+   "closeout.billing",
+   "closeout.payments"
   ]
  },
  {
@@ -434,6 +508,10 @@
   "perms": [
    "subcon.view"
   ],
+  "view": [
+   "subcon.view",
+   "payables.view"
+  ],
   "all": [
    "billing.edit"
   ]
@@ -445,6 +523,11 @@
   "perms": [
    "indent.approve",
    "po.edit"
+  ],
+  "view": [
+   "indent.view",
+   "indent.create",
+   "indent.approve"
   ]
  },
  {
@@ -453,6 +536,9 @@
   "section": "Stores",
   "perms": [
    "po.edit"
+  ],
+  "view": [
+   "po.view"
   ]
  },
  {
@@ -461,6 +547,9 @@
   "section": "Stores",
   "perms": [
    "po.edit"
+  ],
+  "view": [
+   "po.view"
   ]
  },
  {
@@ -469,6 +558,9 @@
   "section": "Stores",
   "perms": [
    "grn.approve"
+  ],
+  "view": [
+   "grn.view"
   ]
  },
  {
@@ -477,6 +569,9 @@
   "section": "Stores",
   "perms": [
    "grn.approve"
+  ],
+  "view": [
+   "store.view"
   ]
  },
  {
@@ -485,6 +580,9 @@
   "section": "Stores",
   "perms": [
    "grn.approve"
+  ],
+  "view": [
+   "store.view"
   ]
  },
  {
@@ -493,6 +591,10 @@
   "section": "Stores",
   "perms": [
    "po.edit"
+  ],
+  "view": [
+   "po.view",
+   "store.view"
   ]
  },
  {
@@ -501,6 +603,9 @@
   "section": "Stores",
   "perms": [
    "ratecontract.edit"
+  ],
+  "view": [
+   "ratecontract.view"
   ]
  },
  {
@@ -509,6 +614,9 @@
   "section": "Stores",
   "perms": [
    "asset.edit"
+  ],
+  "view": [
+   "asset.view"
   ]
  },
  {
@@ -528,6 +636,9 @@
   "section": "Accounts",
   "perms": [
    "payables.edit"
+  ],
+  "view": [
+   "payables.view"
   ]
  },
  {
@@ -536,6 +647,10 @@
   "section": "Accounts",
   "perms": [
    "payroll.edit"
+  ],
+  "view": [
+   "payroll.view",
+   "payables.view"
   ]
  },
  {
@@ -564,6 +679,10 @@
   "perms": [
    "dashboard.company",
    "planning.view"
+  ],
+  "view": [
+   "dashboard.company",
+   "dashboard.site"
   ]
  },
  {
@@ -603,6 +722,10 @@
   "perms": [
    "dashboard.company",
    "planning.view"
+  ],
+  "view": [
+   "dashboard.company",
+   "dashboard.site"
   ]
  },
  {
@@ -611,6 +734,10 @@
   "section": "Analytics",
   "perms": [
    "dashboard.company"
+  ],
+  "view": [
+   "dashboard.company",
+   "dashboard.sales"
   ]
  },
  {
@@ -620,6 +747,9 @@
   "perms": [
    "dashboard.company",
    "planning.view"
+  ],
+  "view": [
+   "site.view"
   ]
  },
  {
@@ -629,6 +759,9 @@
   "perms": [
    "dashboard.company",
    "planning.view"
+  ],
+  "view": [
+   "site.view"
   ]
  },
  {
@@ -645,6 +778,9 @@
   "section": "Masters",
   "perms": [
    "clients.edit"
+  ],
+  "view": [
+   "clients.view"
   ]
  },
  {
@@ -653,6 +789,9 @@
   "section": "Masters",
   "perms": [
    "clients.edit"
+  ],
+  "view": [
+   "clients.view"
   ],
   "all": [
    "leads.allocate"
@@ -664,6 +803,9 @@
   "section": "Masters",
   "perms": [
    "library.edit"
+  ],
+  "view": [
+   "library.view"
   ]
  },
  {
@@ -672,6 +814,9 @@
   "section": "Masters",
   "perms": [
    "library.edit"
+  ],
+  "view": [
+   "library.view"
   ]
  },
  {
@@ -680,6 +825,9 @@
   "section": "Masters",
   "perms": [
    "library.edit"
+  ],
+  "view": [
+   "library.view"
   ]
  },
  {
@@ -688,6 +836,9 @@
   "section": "Masters",
   "perms": [
    "knowledge.edit"
+  ],
+  "view": [
+   "knowledge.view"
   ]
  },
  {
@@ -696,6 +847,9 @@
   "section": "Masters",
   "perms": [
    "methodology.edit"
+  ],
+  "view": [
+   "methodology.view"
   ]
  },
  {
@@ -704,6 +858,9 @@
   "section": "Masters",
   "perms": [
    "library.edit"
+  ],
+  "view": [
+   "library.view"
   ]
  },
  {
@@ -712,6 +869,9 @@
   "section": "Masters",
   "perms": [
    "vendors.edit"
+  ],
+  "view": [
+   "vendors.view"
   ]
  },
  {
@@ -720,6 +880,9 @@
   "section": "Masters",
   "perms": [
    "subcon.edit"
+  ],
+  "view": [
+   "subcon.view"
   ]
  },
  {
@@ -744,6 +907,10 @@
   "section": "Settings",
   "perms": [
    "settings.company"
+  ],
+  "view": [
+   "settings.company",
+   "finance.view"
   ]
  },
  {
@@ -793,6 +960,10 @@
   "section": "Settings",
   "perms": [
    "process.rules"
+  ],
+  "view": [
+   "settings.company",
+   "po.edit"
   ]
  },
  {
@@ -802,6 +973,9 @@
   "perms": [
    "planning.edit",
    "process.rules"
+  ],
+  "view": [
+   "site.view"
   ]
  },
  {
@@ -811,6 +985,9 @@
   "perms": [
    "planning.edit",
    "process.rules"
+  ],
+  "view": [
+   "inspection.view"
   ]
  },
  {
@@ -830,6 +1007,9 @@
   "section": "Settings",
   "perms": [
    "process.rules"
+  ],
+  "view": [
+   "settings.company"
   ]
  },
  {
@@ -849,6 +1029,11 @@
   "section": "Settings",
   "perms": [
    "finance.edit"
+  ],
+  "view": [
+   "billing.view",
+   "payables.view",
+   "payroll.view"
   ]
  },
  {
@@ -867,6 +1052,11 @@
    "planning.edit",
    "grants.manage",
    "process.rules"
+  ],
+  "view": [
+   "planning.edit",
+   "settings.company",
+   "grants.manage"
   ]
  },
  {
@@ -956,6 +1146,9 @@
   "section": "Settings",
   "perms": [
    "issuelog.edit"
+  ],
+  "view": [
+   "issuelog.view"
   ]
  }
 ]

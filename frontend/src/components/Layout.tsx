@@ -11,6 +11,7 @@ import { PageErrorBoundary } from "../helper/Helper";
 import type { Group } from "../menu";
 import { groupOf, MENU, visibleGroups } from "../menu";
 import { GoLiveBanner, HelpButton, TrainingBanner, useMode } from "../ops/Pages";
+import { HowToLink } from "../help/HowTo";
 import { Button, Icon, initials, NavItem } from "../ui/components";
 import { GROUP_ICON, NavIcon, PAGE_ICON } from "../ui/navIcons";
 import { prefetch } from "../ui/prefetch";
@@ -225,6 +226,7 @@ export default function Layout() {
             <span className="app-search-text">Search sites, bills, people, or type an action…</span>
             <kbd>Ctrl K</kbd>
           </button>
+          <HowToLink />
           <HelpButton />
           <Bell allLink="/notifications" />
           <div className="app-me-wrap">
@@ -260,6 +262,9 @@ export default function Layout() {
                 </button>
                 <button role="menuitem" className="app-menu-item" onClick={() => navigate("/help/how-it-works")}>
                   How the app works
+                </button>
+                <button role="menuitem" className="app-menu-item" onClick={() => navigate("/help/sop")}>
+                  How to (my SOP)
                 </button>
                 <button role="menuitem" className="app-menu-item" onClick={() => void logout()}>
                   Sign out

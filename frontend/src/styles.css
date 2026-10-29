@@ -3936,6 +3936,59 @@ td.indent {
   border-radius: 50%;
   padding: 0;
 }
+/* "How to": the page's section of the role SOP (help/Sop.tsx) */
+.howto-link {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: var(--primary);
+  text-decoration: none;
+}
+.howto-link:hover,
+.howto-link:focus-visible {
+  background: var(--surface-2);
+}
+.sop {
+  max-width: 900px;
+}
+.sop-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+.sop-toc ol {
+  columns: 2 240px;
+  margin: 8px 0 16px;
+  padding-left: 20px;
+}
+.sop-section {
+  scroll-margin-top: 72px;
+  border-top: 1px solid var(--border);
+  padding: 8px 0 4px;
+}
+.sop-here {
+  outline: 2px solid var(--primary);
+  outline-offset: 6px;
+  border-radius: 4px;
+}
+.sop-body table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.sop-body td,
+.sop-body th {
+  border: 1px solid var(--border);
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+.sop-body li {
+  margin: 2px 0;
+}
 .help-panel {
   position: fixed;
   top: 64px;
@@ -4590,4 +4643,11 @@ label.field-wrong textarea,
 
 .m-register-tools > * {
   flex: 1 1 260px;
+}
+.sop-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 8px 0 0;
+  padding-left: 18px;
 }
