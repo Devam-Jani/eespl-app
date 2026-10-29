@@ -506,6 +506,10 @@ def main(argv: list[str] | None = None) -> None:
     )
     p.add_argument("--screens", default="/data/training/screens")
     p.add_argument("--out", required=True)
+    p = sub.add_parser("sops", help="The role SOPs (docs/sop) to PDF and Word, DEMO screenshots")
+    p.add_argument("--screens", default="/data/sop/screens")
+    p.add_argument("--out", required=True)
+    p.add_argument("--role", action="append", default=[], help="only this role (repeatable)")
     p = sub.add_parser(
         "training-reset",
         help="Rebuild the training company (TRAINING_MODE only): DEMO data and the users' logins",
@@ -702,6 +706,15 @@ def main(argv: list[str] | None = None) -> None:
         with SessionLocal() as db:
             for row in training_guide.build_all(db, Path(args.screens), Path(args.out)):
                 print(f"{row['file']}: {row['pages']} pages, {row['screens']} screenshots")
+    elif args.command == "sops":
+        from app.ops import sop  # noqa: PLC0415
+
+        with SessionLocal() as db:
+            for row in sop.build_all(db, Path(args.screens), Path(args.out), args.role or None):
+                print(
+                    f"{row['role']}: {row['pages']} pages, {row['sections']} app pages, "
+                    f"{row['screenshots']} screenshots"
+                )
     elif args.command == "training-reset":
         import json  # noqa: PLC0415
 

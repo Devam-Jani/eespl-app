@@ -8,6 +8,7 @@ import { HandoverTab, MeasurementsTab, OverdueList } from "./CloseoutTabs";
 import { api, downloadFile, fetchObjectUrl } from "../api";
 import { useAuth } from "../auth";
 import Bell from "../components/Bell";
+import { HowToLink } from "../help/HowTo";
 import { PageErrorBoundary } from "../helper/Helper";
 import { Button, buttonClass, Card, Field, FilePicker, initials } from "../ui/components";
 import { useTheme } from "../ui/theme";
@@ -123,6 +124,7 @@ export function PortalLayout() {
           <Button variant="ghost" size="small" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label={`Use the ${theme === "dark" ? "light" : "dark"} look`}>
             {theme === "dark" ? "Light" : "Dark"}
           </Button>
+          <HowToLink base="/portal/sop" />
           <Link to="/portal/reports" className={buttonClass({ variant: "ghost", size: "small" })}>
             My reports
           </Link>

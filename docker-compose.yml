@@ -34,6 +34,7 @@ services:
       - ./docker-compose.prod.yml:/repo/docker-compose.prod.yml:ro
       - ./deploy:/repo/deploy:ro
       - ./scripts:/repo/scripts:ro
+      - ./docs:/repo/docs:ro
       - ./.env.prod.example:/repo/.env.prod.example:ro
     depends_on:
       db:

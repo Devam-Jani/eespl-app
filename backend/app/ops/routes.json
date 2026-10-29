@@ -1,0 +1,352 @@
+{
+ "detail": [
+  {
+   "path": "/drill",
+   "perms": [
+    "dashboard.company",
+    "dashboard.sales",
+    "dashboard.site",
+    "dashboard.finance",
+    "dashboard.purchase"
+   ]
+  },
+  {
+   "path": "/dashboard/details",
+   "perms": [
+    "dashboard.company",
+    "dashboard.sales",
+    "dashboard.site",
+    "dashboard.finance",
+    "dashboard.purchase"
+   ]
+  },
+  {
+   "path": "/surveys/pilot",
+   "perms": [
+    "survey.view"
+   ]
+  },
+  {
+   "path": "/surveys/:id",
+   "perms": [
+    "survey.view"
+   ]
+  },
+  {
+   "path": "/deliveries/:id",
+   "perms": [
+    "delivery.view"
+   ]
+  },
+  {
+   "path": "/sites/:id",
+   "perms": [
+    "site.view"
+   ]
+  },
+  {
+   "path": "/sites/:id/new-area",
+   "perms": [
+    "site.update",
+    "site.edit"
+   ]
+  },
+  {
+   "path": "/sites/:id/fronts",
+   "perms": [
+    "site.view"
+   ]
+  },
+  {
+   "path": "/sites/:id/takeoff",
+   "perms": [
+    "takeoff.view"
+   ]
+  },
+  {
+   "path": "/sites/:id/measure",
+   "perms": [
+    "billing.view"
+   ]
+  },
+  {
+   "path": "/sites/:id/building",
+   "perms": [
+    "building.edit",
+    "site.view"
+   ]
+  },
+  {
+   "path": "/sites/:id/methodology",
+   "perms": [
+    "methodology.site"
+   ]
+  },
+  {
+   "path": "/sites/:id/material-plan",
+   "perms": [
+    "planning.view",
+    "indent.view"
+   ]
+  },
+  {
+   "path": "/sites/:id/measurements",
+   "perms": [
+    "closeout.billing"
+   ]
+  },
+  {
+   "path": "/sites/:id/reconciliation",
+   "perms": [
+    "closeout.billing"
+   ]
+  },
+  {
+   "path": "/sites/:id/labour-claims",
+   "perms": [
+    "closeout.billing",
+    "closeout.claim_approve"
+   ]
+  },
+  {
+   "path": "/sites/:id/zones",
+   "perms": [
+    "closeout.site",
+    "closeout.billing"
+   ]
+  },
+  {
+   "path": "/sites/:id/billing-checklist",
+   "perms": [
+    "closeout.billing"
+   ]
+  },
+  {
+   "path": "/sites/:id/work-completions",
+   "perms": [
+    "closeout.billing"
+   ]
+  },
+  {
+   "path": "/quotations/:id",
+   "perms": [
+    "quotation.view"
+   ]
+  },
+  {
+   "path": "/quotations/:id/working",
+   "perms": [
+    "quotation.view"
+   ]
+  },
+  {
+   "path": "/systems/:id",
+   "perms": [
+    "library.view"
+   ]
+  },
+  {
+   "path": "/tenders/:id",
+   "perms": [
+    "tender.view"
+   ]
+  },
+  {
+   "path": "/leads/:id",
+   "perms": [
+    "leads.view"
+   ]
+  },
+  {
+   "path": "/rfqs/:id",
+   "perms": [
+    "po.view"
+   ]
+  },
+  {
+   "path": "/prices/:id",
+   "perms": [
+    "tender.margin"
+   ]
+  },
+  {
+   "path": "/field/days/:id",
+   "perms": [
+    "field.track",
+    "field.claims"
+   ]
+  },
+  {
+   "path": "/field/claims/:id",
+   "perms": [
+    "field.track",
+    "field.claims"
+   ]
+  },
+  {
+   "path": "/knowledge/templates/:id",
+   "perms": [
+    "knowledge.view"
+   ]
+  },
+  {
+   "path": "/knowledge/match/tender/:id",
+   "perms": [
+    "knowledge.view"
+   ]
+  },
+  {
+   "path": "/methodology/systems/:id",
+   "perms": [
+    "methodology.view"
+   ]
+  },
+  {
+   "path": "/methodology/standards/:id",
+   "perms": [
+    "methodology.view"
+   ]
+  },
+  {
+   "path": "/methodology/m/:id",
+   "perms": [
+    "methodology.view"
+   ]
+  },
+  {
+   "path": "/assignments/:id",
+   "perms": [
+    "jobs.assign",
+    "planning.view"
+   ]
+  },
+  {
+   "path": "/my-site/:id",
+   "perms": [
+    "site.view"
+   ]
+  },
+  {
+   "path": "/my-site/:id/report",
+   "perms": [
+    "dpr.edit"
+   ]
+  },
+  {
+   "path": "/my-site/:id/material",
+   "perms": [
+    "material_request.create"
+   ]
+  },
+  {
+   "path": "/estimates/:id",
+   "perms": [
+    "estimate.view"
+   ]
+  },
+  {
+   "path": "/estimates/:id/drawing",
+   "perms": [
+    "estimate.view"
+   ]
+  },
+  {
+   "path": "/help/how-it-works",
+   "perms": [
+    "dashboard.view",
+    "site.view",
+    "leads.view",
+    "tender.view",
+    "billing.view",
+    "payables.view",
+    "po.view",
+    "admin.users",
+    "store.view",
+    "delivery.view"
+   ]
+  },
+  {
+   "path": "/help/sop",
+   "perms": [
+    "dashboard.view",
+    "site.view",
+    "leads.view",
+    "tender.view",
+    "billing.view",
+    "payables.view",
+    "po.view",
+    "admin.users",
+    "store.view",
+    "delivery.view"
+   ]
+  },
+  {
+   "path": "/purchase-orders/new",
+   "perms": [
+    "po.edit"
+   ]
+  },
+  {
+   "path": "/purchase-orders/:id",
+   "perms": [
+    "po.view"
+   ]
+  },
+  {
+   "path": "/stores/:id",
+   "perms": [
+    "store.view"
+   ]
+  },
+  {
+   "path": "/work-orders/:id",
+   "perms": [
+    "wo.view"
+   ]
+  },
+  {
+   "path": "/bills/:id",
+   "perms": [
+    "billing.view",
+    "closeout.billing",
+    "closeout.payments"
+   ]
+  },
+  {
+   "path": "/settings/issue-log/:id",
+   "perms": [
+    "issuelog.view"
+   ]
+  },
+  {
+   "path": "/portal",
+   "perms": [
+    "portal.view"
+   ]
+  },
+  {
+   "path": "/portal/sites/:id",
+   "perms": [
+    "portal.view"
+   ]
+  },
+  {
+   "path": "/portal/reports",
+   "perms": [
+    "portal.view"
+   ]
+  },
+  {
+   "path": "/portal/sop",
+   "perms": [
+    "portal.view"
+   ]
+  }
+ ],
+ "public": [
+  "/login",
+  "/set-password/:token",
+  "/portal/invite/:token",
+  "/r/:token"
+ ]
+}

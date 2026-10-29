@@ -723,6 +723,27 @@ type HelpRow = {
   updated_by: string | null;
 };
 
+/** The role SOPs (docs/sop): written in the repository, read here; the "How to" of each page opens them. */
+function RoleSops() {
+  const { data } = useLoad<{ sops: { role: string; title: string; mine: boolean }[] }>("/api/sop");
+  if (!data?.sops.length) return null;
+  return (
+    <Card title="Role SOPs (How to)">
+      <p className="small muted">
+        The full guide per role, page by page. Each person reads their own role's; the super admin and the director read all of them. The text is kept in the
+        repository (docs/sop) with the app's code, so it changes with the pages; the "?" steps below are the short version you edit here.
+      </p>
+      <ul className="sop-list">
+        {data.sops.map((s) => (
+          <li key={s.role}>
+            <Link to={`/help/sop?role=${encodeURIComponent(s.role)}`}>{s.title}</Link>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
 export function HelpSettings() {
   const { data, error, setError, load } = useLoad<{ pages: HelpRow[] }>("/api/help/all");
   const [edit, setEdit] = useState<HelpRow | null>(null);
@@ -737,6 +758,7 @@ export function HelpSettings() {
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
+      <RoleSops />
       <Card as="div" className="table-wrap">
         <table className="table compact">
           <thead>
