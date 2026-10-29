@@ -5,7 +5,7 @@ import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
 import { errorText, inr } from "../format";
 import { MENU } from "../menu";
-import { Button, Card, Field, FilePicker } from "../ui/components";
+import { Button, Card, CopyButton, Field, FilePicker } from "../ui/components";
 
 const when = (v: string | null | undefined) =>
   v
@@ -612,9 +612,7 @@ export function UserImport() {
                   <td className="small">{u.link ? <code className="secret">{base + u.link}</code> : <span className="muted">{u.status}</span>}</td>
                   <td>
                     {u.link && (
-                      <Button size="small" onClick={() => void navigator.clipboard?.writeText(base + u.link)}>
-                        Copy
-                      </Button>
+                      <CopyButton text={base + u.link} />
                     )}
                   </td>
                 </tr>

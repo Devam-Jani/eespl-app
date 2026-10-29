@@ -395,3 +395,25 @@ export function initials(text: string): string {
   const w = text.trim().split(/\s+/).filter(Boolean);
   return ((w[0]?.[0] ?? "") + (w.length > 1 ? w[w.length - 1][0] : (w[0]?.[1] ?? ""))).toUpperCase();
 }
+
+/** Copy to the clipboard and say whether it happened (a plain http address has no clipboard: then copy it by hand). */
+export function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+  const [state, setState] = useState<"" | "ok" | "no">("");
+  async function copy() {
+    let ok = false;
+    try {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(text);
+        ok = true;
+      }
+    } catch {
+      ok = false;
+    }
+    setState(ok ? "ok" : "no");
+  }
+  return (
+    <Button size="small" onClick={() => void copy()} title={state === "no" ? "This browser gave no clipboard: select the link and copy it by hand" : undefined}>
+      {state === "ok" ? "Copied" : state === "no" ? "Copy it by hand" : label}
+    </Button>
+  );
+}

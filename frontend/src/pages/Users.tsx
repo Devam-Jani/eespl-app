@@ -6,13 +6,20 @@ import ExportButton from "../components/ExportButton";
 import { Modal } from "../ui/Overlay";
 import { canGrant } from "../scopes";
 import type { Role, User } from "../types";
-import { errorText } from "../format";
+import { copyText, errorText } from "../format";
 import { Button, Card, Field } from "../ui/components";
 
 type Dialog = { kind: "create" } | { kind: "edit"; user: User } | { kind: "password"; user: User } | null;
 
 function formatDate(value: string | null) {
   return value ? new Date(value).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : "—";
+}
+
+/** The Status column: anyone who never set a password is "Not set up" (imported or invited), active or not. */
+export function userStatus(u: Pick<User, "is_active" | "has_password" | "locked_by_failures" | "locked_until">): "not_set_up" | "inactive" | "locked" | "active" {
+  if (!u.has_password) return "not_set_up";
+  if (!u.is_active) return "inactive";
+  return u.locked_by_failures || (u.locked_until && new Date(u.locked_until) > new Date()) ? "locked" : "active";
 }
 
 export default function Users() {
@@ -54,9 +61,9 @@ export default function Users() {
         { method: "POST" },
       );
       const url = window.location.origin + r.link;
-      void navigator.clipboard?.writeText(url);
+      const copied = await copyText(url);
       setNotice(
-        `One-time link for ${u.full_name} (copied; works once, ${r.expires_in_days} days): ${url}`,
+        `One-time link for ${u.full_name} (${copied ? "copied" : "copy it from here"}; works once, ${r.expires_in_days} days): ${url}`,
       );
     } catch (err) {
       setNotice(errorText(err));
@@ -131,8 +138,8 @@ export default function Users() {
                     ))}
                   </td>
                   <td>
-                    {!u.is_active && !u.has_password ? (
-                      <span className="badge badge-warn" title="Imported or invited: add an email and a password, then activate">
+                    {userStatus(u) === "not_set_up" ? (
+                      <span className="badge badge-warn" title="Imported or invited: they have not set a password yet (send a set-password link)">
                         Not set up
                       </span>
                     ) : !u.is_active ? (
@@ -149,6 +156,12 @@ export default function Users() {
                   </td>
                   <td className="nowrap">{formatDate(u.last_login_at)}</td>
                   <td className="row-actions">
+                    {u.can_manage === false ? (
+                      <span className="muted small" title="Only a higher role manages this person">
+                        Managed by a higher role
+                      </span>
+                    ) : (
+                    <>
                     <Button size="small" onClick={() => setDialog({ kind: "edit", user: u })}>
                       Edit
                     </Button>
@@ -195,6 +208,8 @@ export default function Users() {
                       <Button size="small" onClick={() => void toggleActive(u)}>
                         {u.is_active ? "Deactivate" : "Activate"}
                       </Button>
+                    )}
+                    </>
                     )}
                   </td>
                 </tr>
@@ -320,9 +335,9 @@ function UserForm({ user, roles, onClose, onSaved }: { user: User | null; roles:
         <Field as="fieldset" label="Roles">
           <div className="checks">
             {roles.map((r) => {
-              const allowed = !!me && canGrant(me.permissions, r.permissions);
+              const allowed = r.can_assign ?? (!!me && canGrant(me.permissions, r.permissions));
               return (
-                <label key={r.id} className={`check ${allowed ? "" : "disabled"}`} title={allowed ? (r.description ?? "") : "This role has permissions you do not hold"}>
+                <label key={r.id} className={`check ${allowed ? "" : "disabled"}`} title={allowed ? (r.description ?? "") : "Only a higher role can give this role"}>
                   <input type="checkbox" checked={roleIds.includes(r.id)} disabled={!allowed && !roleIds.includes(r.id)} onChange={() => toggleRole(r.id)} />
                   {r.name}
                 </label>

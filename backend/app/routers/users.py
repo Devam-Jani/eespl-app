@@ -5,11 +5,17 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import audit
+from app.auth.account import end_links
 from app.auth.deps import CurrentPrincipal, Principal, require_permission
 from app.auth.passwords import set_password
-from app.auth.rbac import CLIENT_ROLE_CODE, client_forbidden, effective_permissions, ungrantable
+from app.auth.rbac import (
+    CLIENT_ROLE_CODE,
+    assign_refusal,
+    client_forbidden,
+    effective_permissions,
+    manage_refusal,
+)
 from app.auth.router import revoke_all_refresh_tokens
-from app.auth.security import hash_password
 from app.db import DbSession
 from app.export import xlsx_response
 from app.models import Role, User
@@ -48,24 +54,19 @@ def check_role_set(roles: list[Role]) -> None:
             )
 
 
-def _check_can_assign(principal: Principal, roles: list[Role]) -> None:
-    missing = ungrantable(principal.permissions, effective_permissions(roles))
-    if missing:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            f"You cannot assign roles that grant permissions you do not hold: {', '.join(missing)}",
-        )
+def check_can_assign(principal: Principal, roles: list[Role]) -> None:
+    refusal = assign_refusal(principal.user.roles, principal.permissions, roles)
+    if refusal:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, refusal)
     check_role_set(roles)
 
 
-def _check_can_manage(principal: Principal, target: User) -> None:
-    # Managing someone with more power than yourself (e.g. resetting their password) would be
-    # a way to gain that power.
-    if ungrantable(principal.permissions, effective_permissions(target.roles)):
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            "You cannot manage a user who has permissions you do not hold",
-        )
+def check_can_manage(principal: Principal, target: User) -> None:
+    # Managing someone with the same power or more (e.g. getting a set-password link for them)
+    # would be a way to take over their account (rbac.manage_refusal).
+    refusal = manage_refusal(principal.user.roles, principal.permissions, target.roles)
+    if refusal:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, refusal)
 
 
 def _email_taken(db: Session, email: str, exclude: uuid.UUID | None = None) -> bool:
@@ -76,9 +77,14 @@ def _email_taken(db: Session, email: str, exclude: uuid.UUID | None = None) -> b
 
 
 @router.get("")
-def list_users(db: DbSession) -> list[UserOut]:
+def list_users(db: DbSession, principal: CurrentPrincipal) -> list[UserOut]:
     users = db.scalars(select(User).order_by(User.full_name, User.email))
-    return [UserOut.model_validate(u) for u in users]
+    out = []
+    for u in users:
+        o = UserOut.model_validate(u)
+        o.can_manage = manage_refusal(principal.user.roles, principal.permissions, u.roles) is None
+        out.append(o)
+    return out
 
 
 @router.get("/export")
@@ -97,16 +103,18 @@ def create_user(
     body: UserCreate, request: Request, db: DbSession, principal: CurrentPrincipal
 ) -> UserOut:
     roles = _resolve_roles(db, body.role_ids)
-    _check_can_assign(principal, roles)
+    check_can_assign(principal, roles)
     if _email_taken(db, body.email):
         raise HTTPException(status.HTTP_409_CONFLICT, "A user with this email already exists")
     user = User(
         email=body.email,
         full_name=body.full_name.strip(),
         phone=body.phone,
-        password_hash=hash_password(body.password),
         roles=roles,
     )
+    set_password(
+        db, user, body.password
+    )  # the same rules as Reset password (not common, not the name)
     db.add(user)
     db.flush()
     audit.record(
@@ -131,7 +139,7 @@ def update_user(
     principal: CurrentPrincipal,
 ) -> UserOut:
     user = _get_user(db, user_id)
-    _check_can_manage(principal, user)
+    check_can_manage(principal, user)
     changes = body.model_dump(exclude_unset=True)
     if "kylas_user_id" in changes and "admin.settings" not in principal.permissions:
         raise HTTPException(
@@ -157,6 +165,7 @@ def update_user(
         setattr(user, field, value.strip() if field == "full_name" else value)
     if changes.get("is_active") is False:
         revoke_all_refresh_tokens(db, user)
+        end_links(db, user)
     after = audit.user_snapshot(user)
     if after != before:
         audit.record(
@@ -178,13 +187,14 @@ def deactivate_user(
     user_id: uuid.UUID, request: Request, db: DbSession, principal: CurrentPrincipal
 ) -> UserOut:
     user = _get_user(db, user_id)
-    _check_can_manage(principal, user)
+    check_can_manage(principal, user)
     if user.id == principal.user.id:
         raise HTTPException(status.HTTP_409_CONFLICT, "You cannot deactivate yourself")
     if user.is_active:
         before = audit.user_snapshot(user)
         user.is_active = False
         revoke_all_refresh_tokens(db, user)
+        end_links(db, user)
         audit.record(
             db,
             "user.deactivate",
@@ -208,7 +218,7 @@ def reset_password(
     principal: CurrentPrincipal,
 ) -> None:
     user = _get_user(db, user_id)
-    _check_can_manage(principal, user)
+    check_can_manage(principal, user)
     set_password(db, user, body.password)
     audit.record(
         db,
@@ -230,9 +240,9 @@ def set_user_roles(
     principal: CurrentPrincipal,
 ) -> UserOut:
     user = _get_user(db, user_id)
-    _check_can_manage(principal, user)
+    check_can_manage(principal, user)
     roles = _resolve_roles(db, body.role_ids)
-    _check_can_assign(principal, roles)
+    check_can_assign(principal, roles)
     before = audit.user_snapshot(user)
     user.roles = roles
     after = audit.user_snapshot(user)

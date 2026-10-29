@@ -8,6 +8,7 @@ from app.auth.rbac import (
     CLIENT_ROLE_CODE,
     FLOOR_ROLES,
     SCOPE_RANK,
+    assign_refusal,
     client_forbidden,
     permissions_locked,
     ungrantable,
@@ -91,12 +92,17 @@ def _validate_grants(
 @router.get(
     "", dependencies=[Depends(require_any_permission("admin.roles", "admin.users", "system.ops"))]
 )
-def list_roles(db: DbSession) -> list[RoleOut]:
+def list_roles(db: DbSession, principal: CurrentPrincipal) -> list[RoleOut]:
     counts = dict(
         db.execute(select(UserRole.role_id, func.count()).group_by(UserRole.role_id)).all()
     )
     roles = db.scalars(select(Role).order_by(Role.is_system.desc(), Role.id))
-    return [_role_out(r, counts.get(r.id, 0)) for r in roles]
+    out = []
+    for r in roles:
+        o = _role_out(r, counts.get(r.id, 0))
+        o.can_assign = assign_refusal(principal.user.roles, principal.permissions, [r]) is None
+        out.append(o)
+    return out
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, dependencies=manage_roles)

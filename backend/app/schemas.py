@@ -71,6 +71,7 @@ class UserOut(BaseModel):
     bank_account_masked: str | None = None
     bank_ifsc: str | None = None
     has_password: bool = False
+    can_manage: bool = True  # the caller may edit / reset / link this person (rbac.manage_refusal)
     is_active: bool
     locked_until: datetime | None
     # after repeated failed sign-ins: waits for the office admin's unlock
@@ -135,6 +136,7 @@ class RoleOut(BaseModel):
     permissions_locked: bool
     permissions: dict[str, Scope]
     user_count: int
+    can_assign: bool = True  # the caller may hand this role out (rbac.assign_refusal)
 
 
 class RoleCreate(BaseModel):

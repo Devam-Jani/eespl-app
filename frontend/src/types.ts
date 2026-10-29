@@ -16,6 +16,7 @@ export type User = {
   job_title: string | null;
   kylas_user_id: number | null;
   has_password: boolean;
+  can_manage?: boolean;
   is_active: boolean;
   locked_until: string | null;
   locked_by_failures?: boolean;
@@ -34,6 +35,7 @@ export type Role = {
   permissions_locked: boolean;
   permissions: Record<string, Scope>;
   user_count: number;
+  can_assign?: boolean;
 };
 
 export type Permission = { code: string; module: string; description: string | null };
