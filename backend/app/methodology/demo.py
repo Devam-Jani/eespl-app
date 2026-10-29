@@ -18,6 +18,7 @@ from app.config import settings as app_settings
 from app.methodology import build as bld
 from app.methodology import export, sop
 from app.methodology.models import ClientStandard, Methodology, MethodSystem
+from app.timefmt import ist_today
 
 GODREJ = Path(app_settings.data_dir) / "methodology" / "godrej" / "Waterproofing Works"
 DRAWINGS = GODREJ / "3_Drawing"
@@ -208,7 +209,6 @@ def run(db: Session, user_id=None) -> dict:
 def _site(db: Session, t, m: Methodology, user_id=None) -> dict:
     """The DEMO tender won: a DEMO site, the methodology handed over (stage templates, pond and
     material tests), the toilets' tasks on one floor, and the hold point blocking the next stage."""
-    from datetime import date
 
     from fastapi import HTTPException
 
@@ -227,7 +227,7 @@ def _site(db: Session, t, m: Methodology, user_id=None) -> dict:
         db.delete(old)  # an earlier run's DEMO site
     db.flush()
     site = Site(code=site_service.next_code(db), name="DEMO Godrej Phase-11 (B1-B3)", client_id=t.client_id, tender_id=t.id, city="Ahmedabad", state="Gujarat",
-                status="active", start_date=date.today(), is_demo=True, created_by=user_id)  # fmt: skip
+                status="active", start_date=ist_today(), is_demo=True, created_by=user_id)  # fmt: skip
     db.add(site)
     db.flush()
     material.site_store(db, site, user_id)

@@ -67,14 +67,13 @@ You open these less often, or only through a link from another page.
 
 ## Handoffs
 
-**Lead to order.** Planning allocates the enquiry to you → you work the lead (visit, survey) → the quotation; the estimator prices the tender and its BOQ → the send checklist (margin, terms) → to the client → won → the client's work order → billing locks the units and rates → planning makes the site.
+**Lead to order.** Planning allocates the enquiry to you → you work the lead (visit, survey) → the quotation; the estimator prices the tender and its BOQ → the send checklist (margin, terms) → to the client → won → you enter the client's work order (**Client work orders** > **New work order**) → billing locks the units and rates → planning makes the site.
 
 **After the order.** Billing sends the RA bills → you follow up with the client → accounts enter the receipt.
 
 ## Common mistakes
 
-- "Pick why the lead was lost": dropping a card on **Lost** on the board does not ask for the reason (see the bugs list). Open the lead and use **Mark lost**.
-- The lost reason "Main job lost by the contractor" is refused (see the bugs list). Pick the nearest other reason and write the detail in the note.
+- Dropping a card on **Lost** on the board opens **Mark the lead lost**: pick the reason there. Cancel leaves the lead where it was.
 - **Send the rates to the lines** is refused for sales: only the roles that see the margin can use it. Ask the estimator.
 - The send checklist stops a quotation below the margin floor or without its terms. Fix it, or ask the director: only the director can send past it, with a reason.
 

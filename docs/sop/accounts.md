@@ -92,8 +92,8 @@ You open these less often, or only through a link from another page.
 
 - "Bill GRNs, or give the lines of a direct bill": a material bill needs at least one ticked GRN.
 - "... 's bill ... is already entered": this vendor bill number is already in the app.
-- Pressing **Cancel** on "Accept the differences flagged on this bill?" still sends the approval, which then fails (see the bugs list). Read the error, and accept only when you mean it.
-- **Release** or **Override** with a reason under 5 characters does nothing and shows no message (see the bugs list). Write a full reason.
+- Pressing **Cancel** on "Accept the differences flagged on this bill?" leaves the bill as it was. Accept only when you mean it.
+- **Release** needs a reason of at least 3 characters and **Override** a note of at least 5; a shorter one shows "The reason is too short". Write a full reason.
 - "... is locked (paid)": the payroll month is paid and locked.
 
 ## Quick card

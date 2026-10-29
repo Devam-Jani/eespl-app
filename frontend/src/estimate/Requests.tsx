@@ -2,15 +2,16 @@
 // by area and thickness and sees the working as it is typed ("280 sqm × 10.7639 × 2.77 kg/sqft =
 // 8,349 kg = 334 bags of 25 kg") against what the estimate has left; planning approves (or changes,
 // with a note) and it becomes an indent.
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { errorText, num } from "../format";
 import { BackButton, Button, Card, EmptyState, Field, PageSkeleton } from "../ui/components";
 import { Modal, useToast } from "../ui/Overlay";
 import { Table } from "../ui/Table";
+import type { Filter } from "../ui/Table";
 import { E, REQUEST_BADGE, REQUEST_STATUS, when } from "./common";
 import type { MaterialRequest } from "./common";
 import "./estimate.css";
@@ -75,7 +76,7 @@ export function AskMaterial() {
     setBusy(true);
     setError("");
     try {
-      const r = await api<MaterialRequest>(`${E}/requests`, { method: "POST", json: { ...body, reason: f.reason || null } });
+      const r = await api<MaterialRequest>(`${E}/requests`, { method: "POST", json: { ...body, reason: preview?.over ? f.reason || null : null } });
       toast.show({ text: `${r.code} sent to planning: ${r.formula}` });
       setF({ product_id: "", estimate_area_id: "", area_sqm: "", thickness_mm: "", reason: "" });
       void load();
@@ -190,8 +191,20 @@ export function AskMaterial() {
 
 // --- planning: the requests ---------------------------------------------------------------------
 
+/** The filter chips; a link from My work (?request=<id>) opens on that one request first. */
+export function requestFilters(picked: number | null): Filter<MaterialRequest>[] {
+  return [
+    ...(picked ? [{ key: "picked", label: "This request", test: (r: MaterialRequest) => r.id === picked }] : []),
+    { key: "open", label: "Waiting", test: (r) => r.status === "requested" },
+    { key: "over", label: "Over the estimate", test: (r) => !!r.over_reason },
+    { key: "all", label: "All", test: () => true },
+  ];
+}
+
 export default function MaterialRequests() {
   const { can } = useAuth();
+  const [params] = useSearchParams();
+  const filters = useMemo(() => requestFilters(Number(params.get("request")) || null), [params]);
   const [rows, setRows] = useState<MaterialRequest[] | null>(null);
   const [error, setError] = useState("");
   const [deciding, setDeciding] = useState<{ r: MaterialRequest; approve: boolean } | null>(null);
@@ -215,11 +228,7 @@ export default function MaterialRequests() {
             rowKey={(r) => r.id}
             cards
             label="Material requests"
-            filters={[
-              { key: "open", label: "Waiting", test: (r) => r.status === "requested" },
-              { key: "over", label: "Over the estimate", test: (r) => !!r.over_reason },
-              { key: "all", label: "All", test: () => true },
-            ]}
+            filters={filters}
             empty={{ title: "Nothing here", hint: "The sites ask from their phone: My site → Ask for material." }}
             columns={[
               {

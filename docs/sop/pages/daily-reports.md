@@ -34,9 +34,10 @@ place from **Today's report**.
   into the site store in the last 3 days and nothing was issued to the areas since.
 - **4. Work done, with photos**: opens **Today's report**. It is "To do" while today's report is
   not submitted, and also for each report the site engineer returned.
-- **5. Snags**: opens **Snags** for this site.
-- The counts come from your own My work list. A step whose items are not on your list (for a
-  site supervisor, the snags) always shows **Done**: open the step to check.
+- **5. Snags**: opens **Snags** for this site. It is "To do" while a snag of the site is open or
+  in progress.
+- The counts come from your own My work list, and only this site's items are counted (not those of
+  your other sites).
 - **Ask for material**: opens the material request form for this site ("By area and thickness:
   the app works out the kg and the bags."). {perm: material_request.create}
 
@@ -64,8 +65,9 @@ place from **Today's report**.
 - A report can be written for today or an earlier day, never for a future day.
 - A report can be changed while it is a draft or returned. Once submitted or approved it is locked.
 - Photos can only be added while the report is a draft.
-- Submitting needs the "Work done today" text, which is typed on the site's daily report tab. The phone screen has no box for it (see "When it goes wrong"). {perm: dpr.edit}
-- Each send from the phone also blanks the weather, work done, hindrances and plan for tomorrow typed on the site's daily report tab. Type those last, on the tab, just before **Submit DPR**. {perm: dpr.edit}
+- Submitting needs the "Work done today" text. On the site's daily report tab it is typed; from the phone, when nobody typed one, the last place writes it from the day's lines (one line per place). {perm: dpr.edit}
+- A send from the phone changes only the lines (and adds the photos): the weather, work done, hindrances and plan for tomorrow typed on the site's daily report tab stay as they are. {perm: dpr.edit}
+- A line's length counts on its place's scope only in the scope's unit: a length in metres never adds to a scope measured in sqm.
 - Only the site engineer of the site approves or returns. The office can too when it holds daily reports for every site. {perm: dpr.approve, dpr.edit}
 - No signal: the report is kept on the phone with its photos ("Saved on the phone; it sends when the signal is back") and sent, oldest first, when the phone is back online or the page is opened again. Do not clear the browser data before it has gone. {perm: dpr.edit}
 
@@ -87,7 +89,7 @@ place from **Today's report**.
   progress, the ready-to-bill list, the client portal and planning.
 
 **When it goes wrong**
-- "Write the work done before submitting": the report has no "Work done today" text. On the phone this happens on the last place of the day, because the phone screen has no box for it. Open the site's daily report tab, type **Work done today**, add the line for the last place if it is missing, and press **Submit DPR**. {perm: dpr.edit}
+- "Write the work done before submitting": the report has no "Work done today" text. On the site's daily report tab, type **Work done today** and press **Submit DPR**. {perm: dpr.edit}
 - "A DPR cannot be written for a future day": check the phone's date.
 - "The DPR of <date> is already submitted" (or "already acknowledged"): the report is locked. Ask
   the site engineer to return it if it must change.
@@ -97,5 +99,7 @@ place from **Today's report**.
 - "The DPR is <status>": someone already approved or returned it. Reload the page.
 - "That survey area is not on this site": the line names an area from another site's survey.
 - "Saved on the phone; it sends when the signal is back" stays on screen: the report is still
-  waiting on the phone. Open the page again with signal. If it still does not go, tell the site
-  engineer; a refusal reason is not shown on this screen.
+  waiting on the phone. Open the page again with signal.
+- A red "Not sent: <place line>" box with a reason: the server refused a report kept on the phone.
+  It is not sent again by itself. Fix what the reason says (or ask the site engineer), then press
+  **Try again**; **Discard** drops it from the phone (its line and photos are lost). {perm: dpr.edit}

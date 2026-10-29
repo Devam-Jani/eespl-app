@@ -27,7 +27,7 @@ export default function Freight() {
   const load = useCallback(async () => {
     try {
       setReport(await api<FreightReportRow[]>(`/api/material/freight/report${queryString({ site_id: siteId, year })}`));
-      setEntries((await api<Page<FreightRow>>(`/api/material/freight${queryString({ site_id: siteId, limit: 200 })}`)).items);
+      setEntries((await api<Page<FreightRow>>(`/api/material/freight${queryString({ site_id: siteId, year: /^\d{4}$/.test(year) ? year : "", limit: 200 })}`)).items);
     } catch (err) {
       setError(errorText(err));
     }

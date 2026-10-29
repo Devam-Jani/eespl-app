@@ -7,7 +7,7 @@ mark: File this week's now
 **Reports** holds the weekly management summaries and the PDF reports to download. The management summary is filed every Monday at 8 am (IST) and announced in the bell. Nothing is emailed yet.
 
 **On the page**
-- **File this week's now**: files this week's management summary at once, without waiting for Monday. A week is filed only once: if this week's summary is already there, nothing new is made, no message shows and the list stays the same.
+- **File this week's now**: files this week's management summary at once, without waiting for Monday. A week is filed only once: if this week's summary is already there, nothing new is made and the page says "This week's summary is already filed: it is in the list below."
 - **Download** (card): the PDF reports. The whole card is shown only to roles that may export. {perm: reports.export}
 - **Management summary (PDF)**: today's management figures, the open alerts and the delayed sites. Written to the audit log. {perm: reports.export}
 - **Receivables (PDF)**: who owes what, today. Written to the audit log. {perm: reports.export}

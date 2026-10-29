@@ -179,7 +179,13 @@ export default function Payroll() {
                         <b>{inr(p.net)}</b>
                       </td>
                       <td>
-                        <Button size="small" onClick={() => void downloadFile(`/api/finance/payslips/${p.id}/pdf`)}>
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            setError(null);
+                            downloadFile(`/api/finance/payslips/${p.id}/pdf`).catch((err) => setError(errorText(err)));
+                          }}
+                        >
                           Payslip
                         </Button>
                       </td>

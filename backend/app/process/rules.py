@@ -114,7 +114,7 @@ DEFAULT_RULES: list[dict] = [
         "short": "Indent approved, place the PO", "ref": "{indent}",
         "title": "Indent approved",
         "recipients": [{"role": "store_purchase", "message": "Indent {indent} for {site} approved: place the PO at the contract rate.", "action": "Place the PO"}],
-        "link": "/indents/{indent_id}", "closed_by": ["po_created"],
+        "link": "/indents?open={indent_id}", "closed_by": ["po_created"],
         "escalations": [{"after_hours": 24 * H, "to": ["planning"]}],
     },
     {

@@ -159,7 +159,7 @@ Send anyway? Give the reason:`);
 
   return (
     <>
-      <UnsentRates unsent={unsent} canSend={canEdit && draft} onSend={() => void sendRates()} />
+      <UnsentRates unsent={unsent} canSend={canEdit && draft && can("tender.margin")} onSend={() => void sendRates()} />
       <p className="breadcrumb">
         <Link to="/tenders">Tenders</Link> / <code>{tender.code}</code> · {tender.revision_label}
       </p>

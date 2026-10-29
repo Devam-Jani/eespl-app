@@ -189,6 +189,7 @@ const Checklists = lazyPage(() => ex().then((m) => ({ default: m.Checklists })))
 const Freight = lazyPage(() => import("./pages/material/Freight"));
 const Grns = lazyPage(() => import("./pages/material/Grns"));
 const Indents = lazyPage(() => import("./pages/material/Indents"));
+const OldIndentRedirect = lazyPage(() => import("./pages/material/Indents").then((m) => ({ default: m.OldIndentRedirect })));
 const Pos = lazyPage(() => import("./pages/material/Pos"));
 const NewPo = lazyPage(() => import("./pages/material/Pos").then((m) => ({ default: m.NewPo })));
 const PoDetail = lazyPage(() => import("./pages/material/Pos").then((m) => ({ default: m.PoDetail })));
@@ -477,6 +478,8 @@ export default function App() {
               {/* the two old bill pages are one now: their links open it */}
               <Route path="/bill-tracking" element={<OldBillRedirect />} />
               <Route path="/billing/tracking" element={<OldBillRedirect />} />
+              {/* indent links sent before ?open= was used */}
+              <Route path="/indents/:id" element={<OldIndentRedirect />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

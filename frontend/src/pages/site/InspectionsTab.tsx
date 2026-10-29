@@ -136,6 +136,8 @@ export function InspectionForm({ site, onClose, onSaved }: { site: Site; onClose
   const task = tasks.find((t) => t.id === taskId);
   const template = checklists.find((c) => c.id === templateId);
   const failed = template?.items.some((i) => i.type === "pass_fail" && values[i.id] === "fail");
+  // certifying needs site.edit and a done step; otherwise the inspection is saved and certified later
+  const mayCertify = !!task?.hold_point && task.status === "done" && can("site.edit");
 
   function pickTask(id: number | "") {
     setTaskId(id);
@@ -157,7 +159,7 @@ export function InspectionForm({ site, onClose, onSaved }: { site: Site; onClose
       remark: form.remark || null,
       client_rep: form.client_rep || null,
       signature,
-      certify: !!task && task.hold_point && certify,
+      certify: mayCertify && certify,
     };
     const body = new FormData();
     body.append("data", JSON.stringify(data));
@@ -263,10 +265,13 @@ export function InspectionForm({ site, onClose, onSaved }: { site: Site; onClose
             <Field as="div" label="Signature (client representative)">
               <SignaturePad onChange={setSignature} />
             </Field>
-            {task?.hold_point && can("site.edit") && (
+            {mayCertify && (
               <label className="check">
                 <input type="checkbox" checked={certify} onChange={(e) => setCertify(e.target.checked)} /> Certify the hold point "{task.name}" if it passes
               </label>
+            )}
+            {task?.hold_point && task.status !== "done" && can("site.edit") && (
+              <p className="muted small">The step is not done yet: the inspection is saved without certifying. Once the step is done, certify it with &quot;Certify hold point&quot; in Stages.</p>
             )}
           </>
         )}

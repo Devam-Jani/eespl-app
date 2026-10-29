@@ -596,6 +596,26 @@ def choose_basis(db: Session, day: FieldDay, basis: str, reason: str | None, by)
     day.km_basis, day.km_basis_reason, day.km_basis_by = basis, (reason or "").strip() or None, by
 
 
+def basis_locked(db: Session, day: FieldDay) -> str | None:
+    """Why the day map's Use road / tracked km would no longer reach the claim, else None:
+    build_claim leaves a claim past ready, and a claim day the manager edited, as they are."""
+    c = db.scalar(
+        select(TravelClaim).where(
+            TravelClaim.user_id == day.user_id, TravelClaim.month == f"{day.on_date:%Y-%m}"
+        )
+    )
+    if c is None:
+        return None
+    if c.status not in ("draft", "ready"):
+        return (
+            "The month's travel claim is already approved by the manager: its km stay as they are"
+        )
+    row = next((r for r in c.days if r.on_date == day.on_date), None)
+    if row is not None and row.edited_by:
+        return "The manager changed this day on the travel claim: change its km there (Edit)"
+    return None
+
+
 # --- who sees whom -------------------------------------------------------------------------------
 
 

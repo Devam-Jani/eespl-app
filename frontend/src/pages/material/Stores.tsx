@@ -13,7 +13,9 @@ import { Button, buttonClass, Card, Field } from "../../ui/components";
 
 export default function Stores() {
   const navigate = useNavigate();
-  const { can } = useAuth();
+  const { me } = useAuth();
+  // a godown is added with store.edit at scope all only (the API refuses a site-scoped role)
+  const allStores = me?.permissions["store.edit"] === "all";
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -44,7 +46,7 @@ export default function Stores() {
           <Link className={buttonClass()} to="/transfers">
             Transfers
           </Link>
-          {can("store.edit") && (
+          {allStores && (
             <Button onClick={() => setAdding(true)}>
               Add godown
             </Button>
@@ -147,7 +149,7 @@ const REF_LABEL: Record<string, string> = {
 
 export function StoreDetail() {
   const { id } = useParams();
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   const lookups = useMaterialLookups();
   const [store, setStore] = useState<StoreRow | null>(null);
   const [tab, setTab] = useState<"stock" | "ledger" | "transfers" | "issues">("stock");
@@ -181,6 +183,8 @@ export function StoreDetail() {
 
   if (!store) return error ? <div className="alert alert-error">{error}</div> : <p className="muted">Loading…</p>;
   const edit = can("store.edit");
+  // opening stock / count corrections are for store.edit at scope all (the API refuses others)
+  const adjust = me?.permissions["store.edit"] === "all";
 
   return (
     <>
@@ -215,9 +219,11 @@ export function StoreDetail() {
                 </Button>
               </>
             )}
-            <Button onClick={() => setDialog("adjust")}>
-              Adjust / opening
-            </Button>
+            {adjust && (
+              <Button onClick={() => setDialog("adjust")}>
+                Adjust / opening
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -611,6 +617,11 @@ export function ReceiveForm({ transfer, onClose, onSaved }: { transfer: Transfer
   );
 }
 
+/** The area picked for general site use ("n:<node id>" or "a:<new area id>") as the issue's node_id / new_area_id. */
+export function issuePlace(place: string): { node_id: number | null; new_area_id: number | null } {
+  return { node_id: place.startsWith("n:") ? Number(place.slice(2)) : null, new_area_id: place.startsWith("a:") ? Number(place.slice(2)) : null };
+}
+
 /** Mobile-friendly issue / return form for the site. */
 export function IssueForm({
   lookups,
@@ -628,12 +639,23 @@ export function IssueForm({
   onSaved: () => void | Promise<void>;
 }) {
   const [tasks, setTasks] = useState<{ id: number; name: string; node_path: string | null }[]>([]);
-  const [form, setForm] = useState({ task_id: "" as number | "", issued_on: today(), remark: "" });
+  const [form, setForm] = useState({ task_id: "" as number | "", place: "", issued_on: today(), remark: "" });
   const [lines, setLines] = useState<QtyLine[]>([{ product_id: "", qty: "", unit: "" }]);
   const [error, setError] = useState<string | null>(null);
+  // general site use is booked on an area of the site's list (or a new area waiting for planning), as the API requires
+  const [places, setPlaces] = useState<{ value: string; label: string }[]>([]);
 
   useEffect(() => {
     api<{ id: number; name: string; node_path: string | null }[]>(`/api/sites/${siteId}/tasks`).then(setTasks, () => setTasks([]));
+    void Promise.all([
+      api<{ id: number; path: string }[]>(`/api/sites/${siteId}/nodes`).catch(() => []),
+      api<{ id: number; site_id: number; name: string }[]>("/api/sitecontrol/new-areas?state=pending").catch(() => []),
+    ]).then(([nodes, areas]) =>
+      setPlaces([
+        ...nodes.map((n) => ({ value: `n:${n.id}`, label: n.path })),
+        ...areas.filter((a) => a.site_id === siteId).map((a) => ({ value: `a:${a.id}`, label: `${a.name} (new area, waiting)` })),
+      ]),
+    );
   }, [siteId]);
 
   async function submit(e: FormEvent) {
@@ -642,7 +664,16 @@ export function IssueForm({
     try {
       await api("/api/material/issues", {
         method: "POST",
-        json: { kind, site_id: siteId, store_id: storeId ?? null, task_id: form.task_id || null, issued_on: form.issued_on, remark: form.remark || null, lines: cleanLines(lines) },
+        json: {
+          kind,
+          site_id: siteId,
+          store_id: storeId ?? null,
+          task_id: form.task_id || null,
+          ...issuePlace(form.task_id ? "" : form.place),
+          issued_on: form.issued_on,
+          remark: form.remark || null,
+          lines: cleanLines(lines),
+        },
       });
       await onSaved();
     } catch (err) {
@@ -662,6 +693,18 @@ export function IssueForm({
                 <option key={t.id} value={t.id}>
                   {t.node_path ? `${t.node_path} · ` : ""}
                   {t.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        {kind === "issue" && !form.task_id && places.length > 0 && (
+          <Field label="Area used on">
+            <select required value={form.place} onChange={(e) => setForm({ ...form, place: e.target.value })}>
+              <option value="">— pick the area —</option>
+              {places.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
                 </option>
               ))}
             </select>

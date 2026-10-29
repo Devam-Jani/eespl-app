@@ -44,6 +44,7 @@ from app.tenders import pricing
 from app.tenders.models import BoqLine, Tender
 from app.tenders.service import check_edit
 from app.tenders.service import get_visible as tender_visible
+from app.timefmt import ist_today
 
 router = APIRouter(prefix="/api/surveys", tags=["survey"])
 View = Annotated[str, Depends(require_permission("survey.view"))]
@@ -607,7 +608,7 @@ def create_survey(
         code=material.next_code(db, "SUR"), **body.model_dump(), surveyed_by=me, created_by=me
     )
     if s.surveyed_on is None:
-        s.surveyed_on = date.today()
+        s.surveyed_on = ist_today()
     db.add(s)
     db.flush()
     record(
@@ -702,6 +703,8 @@ def reopen(
     s = svc.get_visible(db, sid, scope, principal)
     if s.status == "approved" and "survey.approve" not in principal.permissions:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Missing permission: survey.approve")
+    if s.status == "submitted" and "survey.approve" not in principal.permissions:
+        _edit(db, s, principal)  # the surveyor / an editor of this survey, or an approver; not a view-only role
     if s.status == "draft":
         raise HTTPException(status.HTTP_409_CONFLICT, f"{s.code} is a draft")
     s.status, s.approved_by, s.approved_at = "draft", None, None
@@ -733,7 +736,8 @@ class AreaIn(BaseModel):
     count: int = Field(default=1, ge=1, le=10000)
     system_id: int | None = None
     wastage_override_percent: Decimal | None = Field(default=None, ge=0, le=100)
-    method: Literal["laser", "manual", "cad", "label"] = "manual"
+    # ar / marker only to keep a camera-measured area's method on Edit (set by POST .../camera)
+    method: Literal["laser", "manual", "cad", "label", "ar", "marker"] = "manual"
     accuracy_note: str | None = Field(default=None, max_length=300)
     remarks: str | None = None
 
@@ -765,6 +769,10 @@ def _apply(db, a: SurveyArea, body: AreaIn, survey: Survey) -> None:
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_ENTITY, "That place is not on this survey's site"
             )
+    if body.method in CAMERA_METHODS and a.method != body.method:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "Measure it with the camera to mark it camera measured"
+        )
     if data["upturn_mm"] is None:
         data["upturn_mm"] = t.default_upturn_mm if t else Decimal(0)
     for k, v in data.items():

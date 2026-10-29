@@ -55,4 +55,4 @@ never escalate. Every change is saved at once and written to the audit log ("Sav
 - "Unknown role: <role>": pick a role from the list.
 - "Wastage for <application>: 0 <= min <= max <= 100": fix the minimum or maximum.
 - "Rule not found": reload the page.
-- Choosing **The office admin** or **Everyone holding the role** again after a person was set is refused; the person stays set.
+- Choosing **The office admin** or **Everyone holding the role** again after a person was set clears the person; "Saved (logged)." shows.

@@ -139,6 +139,10 @@ export default function Vendors() {
         <VendorForm
           vendor={editing === "new" ? null : editing}
           onClose={() => setEditing(null)}
+          onDeleted={async () => {
+            setEditing(null);
+            await load();
+          }}
           onSaved={async (v) => {
             setEditing(null);
             await load();
@@ -168,10 +172,13 @@ const EMPTY_CONTACT: Contact = { name: "", designation: null, phone: null, email
 function VendorForm({
   vendor,
   onClose,
+  onDeleted,
   onSaved,
 }: {
   vendor: Vendor | null;
   onClose: () => void;
+  /** after a delete: the list reloads so the vendor is gone */
+  onDeleted: () => Promise<void>;
   onSaved: (v: Vendor) => Promise<void>;
 }) {
   const [form, setForm] = useState({
@@ -205,7 +212,7 @@ function VendorForm({
     if (!vendor || !confirm(`Delete vendor "${vendor.name}" with its contacts and bank accounts?`)) return;
     try {
       await api(`/api/vendors/${vendor.id}`, { method: "DELETE" });
-      onClose();
+      await onDeleted();
     } catch (err) {
       setError(errorText(err));
     }

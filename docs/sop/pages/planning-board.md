@@ -12,22 +12,22 @@ only the sites their site access allows.
 - Each column heading shows the column name and a count of its sites. An empty column says "None."
 - A site card shows the site code and name (a link to the site), then **Sales**, **Engineer** and **Supervisor** (the site's members), then "n% done · updated <date>".
 - "Updated" is the latest of: the last board move, the last daily report change, the last task change.
-- **Move to…** (list on each card): moves the site to another column. The page reloads with the site in its new column.
-- **⤓ Allocation list (PDF)**: downloads the site allocation list as a PDF (A4 landscape). One row per site on the board: Status, Site, Name, Salesperson, Site engineer, Supervisor, Last update. {perm: planning.view}
+- **Move to…** (list on a card): moves the site to another column. The page reloads with the site in its new column. Shown only to planning and to the site's own engineer.
+- **⤓ Allocation list (PDF)**: downloads the site allocation list as a PDF (A4 landscape). One row per site on the board: Status, Site, Name, Salesperson, Site engineer, Supervisor, Last update. Also shown to the list's recipients when they come from its notification. {perm: planning.view}
 - **⤓ Excel**: the same list as an Excel file. {perm: planning.view}
 - **Send to recipients**: sends the allocation list to the people chosen in the team settings, as an in-app notification. Nothing is emailed. The page says "Sent to n person(s) in the app." {perm: planning.edit}
 - **Not on the board** (yellow note and section): planned or active sites that are in no column yet. Each has its own card with **Move to…**. Place them in a column.
 
 **Rules**
 - Planning moves any site. A site engineer (or another role allowed to post updates on that site) moves only their own sites, usually from the phone.
-- The **Move to…** list is shown on every card, but the move is refused when you are not planning and the site is not yours.
+- The **Move to…** list shows only on the cards you may move.
 - Closed sites and DEMO sites are never on the board.
 - A completed or on-hold site that was never placed in a column does not appear anywhere on the board.
 - A won job that is assigned goes on the board as **Upcoming** by itself (see "Won job" below).
 - Every move is written to the audit log with the old and the new column.
 
 **What happens next**
-- The recipients of **Send to recipients** get a notification "Site allocation list of <date>". It opens this board. {perm: planning.edit}
+- The recipients of **Send to recipients** get a notification "Site allocation list of <date>". It opens this board and downloads the list (PDF). {perm: planning.edit}
 - The time of the last send is kept in the team settings. {perm: planning.edit}
 
 **Hands off**

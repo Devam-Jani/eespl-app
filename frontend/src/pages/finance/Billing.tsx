@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../../api";
 import { useAuth } from "../../auth";
 import { Modal } from "../../ui/Overlay";
@@ -28,8 +29,13 @@ export function useFinanceLookups() {
 
 const pdf = (path: string, onError: (e: string) => void) => void downloadFile(path).catch((err) => onError(errorText(err)));
 
-/** A site's contract, RA bills and invoices (also the site page's Finance tab). */
-export function SiteBilling({ siteId }: { siteId: number }) {
+/** The Client billing page with one RA bill open (its site picked): where "Raise RA bill" lands. */
+export function raBillPath(siteId: number, raId: number): string {
+  return `/billing?site=${siteId}&ra=${raId}`;
+}
+
+/** A site's contract, RA bills and invoices (also the site page's Finance tab); `openRa` opens that bill once the bills are loaded. */
+export function SiteBilling({ siteId, openRa }: { siteId: number; openRa?: number }) {
   const { can } = useAuth();
   const edit = can("billing.edit");
   const [contract, setContract] = useState<Contract | null | undefined>(undefined);
@@ -51,6 +57,15 @@ export function SiteBilling({ siteId }: { siteId: number }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const [opened, setOpened] = useState(false);
+  useEffect(() => {
+    if (opened || !openRa) return;
+    const b = bills.find((x) => x.id === openRa);
+    if (!b) return;
+    setOpen(b);
+    setOpened(true);
+  }, [bills, openRa, opened]);
 
   async function run<T>(p: Promise<T>): Promise<T | null> {
     setError(null);
@@ -102,7 +117,7 @@ export function SiteBilling({ siteId }: { siteId: number }) {
             {edit && (
               <Button variant="primary" type="submit" onClick={() => void run(api<RaBill>(`/api/finance/contracts/${contract.id}/ra-bills`, { method: "POST", json: {} })).then((b) => b && setOpen(b))}
               >
-                New RA bill (from progress)
+                New RA bill (from the approved measurements)
               </Button>
             )}
             {edit && <ExtraItem contract={contract} onSaved={load} />}
@@ -643,8 +658,10 @@ function ReceiptForm({ lookups, onClose, onSaved }: { lookups: FinanceLookups; o
 export default function Billing() {
   const { can } = useAuth();
   const lookups = useFinanceLookups();
+  const [params] = useSearchParams();
+  const openRa = Number(params.get("ra")) || undefined;
   const [tab, setTab] = useState<"sites" | "invoices" | "receipts" | "ageing">("sites");
-  const [siteId, setSiteId] = useState<number | "">("");
+  const [siteId, setSiteId] = useState<number | "">(Number(params.get("site")) || "");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [ageing, setAgeing] = useState<{ rows: AgeingRow[]; totals: Record<string, string> } | null>(null);
@@ -704,7 +721,7 @@ export default function Billing() {
               ))}
             </select>
           </Field>
-          <div className="top-gap">{siteId && <SiteBilling key={siteId} siteId={siteId} />}</div>
+          <div className="top-gap">{siteId && <SiteBilling key={siteId} siteId={siteId} openRa={siteId === Number(params.get("site")) ? openRa : undefined} />}</div>
         </>
       )}
       {tab === "invoices" && <InvoiceTable invoices={invoices} onChange={load} />}

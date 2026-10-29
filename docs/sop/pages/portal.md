@@ -93,7 +93,7 @@ team at once.
 
 **Rules**
 - The client role decides what each contact may do. As set by default: Project manager does everything; Planning sees progress, documents and sets handover dates; Site sees progress, signs inspections and raises snags; Billing approves measurements and certifies bills; Accounts sees bills and payments. EESPL can change these in Settings > Client roles.
-- A button the client role does not allow may still show. Pressing it gives "Your client role does not allow this (...)": ask a colleague with that role.
+- A button the client role does not allow is not shown: **Acknowledge** and **Sign off** need the right to sign inspections, **Certify** / **Reject** the right to certify bills, **Raise a snag** / **Verify fixed** / **Reopen** the right to raise snags. An inspection waiting for someone else shows "waiting for sign-off". Ask a colleague with that role.
 - A certification is not final until EESPL confirms it. Only bills in "submitted" can be certified or rejected.
 - You cannot certify more than was billed on a line.
 - A measurement with a correction waiting for EESPL cannot be approved until EESPL answers.

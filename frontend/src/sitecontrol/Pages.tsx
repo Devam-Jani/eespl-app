@@ -9,6 +9,7 @@ import { useAuth } from "../auth";
 import { Modal } from "../ui/Overlay";
 import { errorText, inr } from "../format";
 import { Button, buttonClass, Card, Field, FilePicker } from "../ui/components";
+import { raBillPath } from "../pages/finance/Billing";
 
 const fmt = (d: string | null | undefined, time = true) =>
   d
@@ -343,7 +344,15 @@ export function DeliveryDetail() {
         <EditDriver
           d={d}
           onClose={() => setEdit(false)}
-          onSaved={(x) => (setD(x), setEdit(false), setMsg("Printed again with a new receipt link: the old link no longer works."))}
+          onSaved={(x) => {
+            setD(x);
+            setEdit(false);
+            // "Save and print again": the new delivery note (new receipt link) is downloaded for printing
+            void downloadFile(`/api/sitecontrol/deliveries/${x.id}/pdf`).then(
+              () => setMsg("Saved. The new delivery note is downloaded to print: the old receipt link no longer works."),
+              (e) => setError(`Saved, but the new delivery note did not download: ${errorText(e)}. Press ⤓ Delivery note (QR).`),
+            );
+          }}
         />
       )}
     </>
@@ -727,7 +736,7 @@ export function ReadyToBill() {
   async function raise(siteId: number) {
     try {
       const r = await api<{ ra_bill_id: number; code: string }>("/api/sitecontrol/ready-to-bill/raise", { method: "POST", json: { site_id: siteId } });
-      navigate(`/billing/ra/${r.ra_bill_id}`);
+      navigate(raBillPath(siteId, r.ra_bill_id)); // Client billing, the site picked and the new draft open
     } catch (e) {
       setError(errorText(e));
     }
@@ -738,8 +747,8 @@ export function ReadyToBill() {
         <h1>Work done, not billed</h1>
       </div>
       <p className="muted small">
-        A stage whose last task is done on a place comes here with its measured quantity and the contract line it maps to. Not billed within 7 days: billing and the site in-charge
-        are alerted.
+        A stage whose last task is done on a place comes here with its measured quantity and the contract line it maps to. Billing and the salesperson are told when the stage
+        is done; not billed within 7 days, the director is alerted.
       </p>
       {error && <div className="alert alert-error">{error}</div>}
       {!rows ? (
@@ -1161,6 +1170,7 @@ export function Consumption() {
   const [data, setData] = useState<{ site: string; tolerance_percent: string; rows: ConsRow[] } | null>(null);
   const [learned, setLearned] = useState<Learned[]>([]);
   const [error, setError] = useState("");
+  const [reviewed, setReviewed] = useState("");
   useEffect(() => {
     if (!site) return;
     api<typeof data>(`/api/sitecontrol/reports/consumption?site_id=${site}`).then(setData, (e) => setError(errorText(e)));
@@ -1190,8 +1200,23 @@ export function Consumption() {
               ⤓ Excel
             </Button>
           )}
+          {site && data?.rows.some((r) => r.flag) && (
+            <Button
+              size="small"
+              title={`Closes the site's "Consumption off the range" to-do`}
+              onClick={() =>
+                void api(`/api/sitecontrol/reports/consumption/reviewed?site_id=${site}`, { method: "POST" }).then(
+                  () => (setError(""), setReviewed("Marked reviewed: the site's \"Consumption off the range\" to-do is closed.")),
+                  (e) => setError(errorText(e)),
+                )
+              }
+            >
+              Mark reviewed
+            </Button>
+          )}
         </div>
       </div>
+      {reviewed && <div className="alert alert-ok">{reviewed}</div>}
       <p className="muted small">
         Material issued to each place against the treated area done × the system's consumption per sqm (with its wastage). Outside ±{data ? n(data.tolerance_percent, 0) : 15} % is
         flagged; planning gets a weekly alert.
@@ -1293,6 +1318,7 @@ export function SiteControlSettings() {
   const [s, setS] = useState<ScSettings | null>(null);
   const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
   const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
   useEffect(() => {
     void api<ScSettings>("/api/sitecontrol/settings").then(setS);
     void api<{ items: { id: string; full_name: string }[] } | { id: string; full_name: string }[]>("/api/users?limit=200").then(
@@ -1312,6 +1338,7 @@ export function SiteControlSettings() {
         <h1>Site control</h1>
       </div>
       {msg && <div className="alert alert-ok">{msg}</div>}
+      {error && <div className="alert alert-error">{error}</div>}
       <Card as="div" className="settings-card">
         <div className="form-grid two">
           {field("escalate_first_hours", "Delivery not confirmed: alert the site in-charge after (hours)")}
@@ -1336,8 +1363,8 @@ export function SiteControlSettings() {
           variant="primary"
           onClick={() =>
             void api<ScSettings>("/api/sitecontrol/settings", { method: "PUT", json: s }).then(
-              (r) => (setS(r), setMsg("Saved.")),
-              (e) => setMsg(errorText(e)),
+              (r) => (setS(r), setError(""), setMsg("Saved.")),
+              (e) => (setMsg(""), setError(errorText(e))),
             )
           }
         >
@@ -1358,6 +1385,7 @@ export function SiteControlStrip({ siteId }: { siteId: number }) {
   const [f, setF] = useState<Flags | null>(null);
   const [edit, setEdit] = useState(false);
   const [r, setR] = useState({ receiver_name: "", receiver_phone: "" });
+  const [saveError, setSaveError] = useState("");
   const load = useCallback(() => api<Flags>(`/api/sitecontrol/sites/${siteId}/flags`).then(setF, () => setF(null)), [siteId]);
   useEffect(() => {
     void load();
@@ -1380,9 +1408,11 @@ export function SiteControlStrip({ siteId }: { siteId: number }) {
           {f.consumption_flags} consumption off the system
         </Link>
       )}
-      <Link className={buttonClass({ variant: "ghost", size: "small" })} to={`/sites/${siteId}/new-area`}>
-        + New area
-      </Link>
+      {can("site.update", "site.edit") && (
+        <Link className={buttonClass({ variant: "ghost", size: "small" })} to={`/sites/${siteId}/new-area`}>
+          + New area
+        </Link>
+      )}
       <span className="small muted">
         Receiver when the supervisor is away: <b>{f.receiver_name ?? "none named"}</b> {f.receiver_phone ?? ""}
       </span>
@@ -1392,7 +1422,8 @@ export function SiteControlStrip({ siteId }: { siteId: number }) {
         </Button>
       )}
       {edit && (
-        <Modal title="Named receiver" onClose={() => setEdit(false)}>
+        <Modal title="Named receiver" onClose={() => (setEdit(false), setSaveError(""))}>
+          {saveError && <div className="alert alert-error">{saveError}</div>}
           <p className="small muted">Who may confirm deliveries when the supervisor is away (labour leader, applicator). Anyone else who confirms is flagged for review.</p>
           <div className="form-grid two">
             <Field label="Name">
@@ -1405,7 +1436,12 @@ export function SiteControlStrip({ siteId }: { siteId: number }) {
           <div className="form-actions">
             <Button
               variant="primary"
-              onClick={() => void api(`/api/sitecontrol/sites/${siteId}/receiver`, { method: "PUT", json: r }).then(() => (setEdit(false), void load()))}
+              onClick={() =>
+                void api(`/api/sitecontrol/sites/${siteId}/receiver`, { method: "PUT", json: r }).then(
+                  () => (setEdit(false), setSaveError(""), void load()),
+                  (e) => setSaveError(errorText(e)),
+                )
+              }
             >
               Save
             </Button>

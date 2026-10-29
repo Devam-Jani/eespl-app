@@ -100,6 +100,7 @@ export type Indent = {
   lines: IndentLine[];
   can_edit: boolean;
   can_approve: boolean;
+  can_cancel: boolean;
 };
 
 export type QuoteCell = {

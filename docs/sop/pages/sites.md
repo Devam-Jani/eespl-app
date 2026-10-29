@@ -61,7 +61,7 @@ the tender it came from (a link) and the target date (red when late).
 - The status chip: "<n>% done · " then **late**, **on hold**, **not started** (a planned site), **done** (100 %) or **in progress**.
 - **Update work**: opens **My site today** for this site, where the day's work, material and report are posted. {perm: site.update}
 - The section tabs. The first seven sections you may open are tabs. The rest are in the **More** list, under "Sections".
-- The sections and who sees them: **Overview**, **3D building**, **Stages**, **Drawings**, **Site visits**, **Process**, **Handover**, **Location & visits**, **Structure** and **Scope** are shown to everyone who opens the site. **Daily reports**, **Materials**, **Measurements & bills**, **Plan & lots**, **Labour**, **Inspections**, **Work orders**, **MOM**, **Assets**, **Budget** and **Portal** need their own rights (see each section below).
+- The sections and who sees them: **Overview**, **3D building**, **Stages**, **Drawings**, **Process**, **Handover**, **Location & visits**, **Structure** and **Scope** are shown to everyone who opens the site. **Site visits**, **Daily reports**, **Materials**, **Measurements & bills**, **Plan & lots**, **Labour**, **Inspections**, **Work orders**, **MOM**, **Assets**, **Budget** and **Portal** need their own rights (see each section below).
 - The **More** list also has an "Open" group with the site's other pages. Each shows only with its right: **Surveys**, **Work fronts**, **Material plan**, **Measurement book**, **AutoCAD takeoff**, **Measure and bill**, **Methodology**, **RFI zones**, **Measure**, **Billing checklist**, **Material reconciliation**, **Labour claims**, **Bills**, **Work completion** and **Issues**.
 - On a phone, the tabs are one list called **Section**. The other pages are in it as "Open: <page>".
 
@@ -101,7 +101,7 @@ A row of warnings and one setting at the top of the **Overview** tab. Each badge
 - **n delivery not confirmed** (amber badge): delivery notes for this site that nobody has confirmed yet. Opens Deliveries filtered to this site and to the unconfirmed ones.
 - **n new area waiting** (blue badge): areas the site asked for that are still pending. Opens the New areas page.
 - **n consumption off the system** (red badge): products used outside the learned range on this site's areas. Opens Consumption for this site.
-- **+ New area**: opens the form to ask for an area that is not in the scope (the New area page of this site). It is shown to everyone, but the form only opens for roles that may update or edit the site; others see "No access".
+- **+ New area**: opens the form to ask for an area that is not in the scope (the New area page of this site). Shown to roles that may update or edit the site. {perm: site.update, site.edit}
 - **Receiver when the supervisor is away**: the named person (and phone) who may confirm deliveries when the supervisor is not on site. Shows "none named" when nobody is set.
 - **Change**: opens the **Named receiver** box. {perm: site.edit}
 - **Name** and **Phone** (fields in the box): the receiver's name (up to 100 characters) and phone (up to 20). Leave both empty to remove the receiver. {perm: site.edit}
@@ -116,8 +116,8 @@ A row of warnings and one setting at the top of the **Overview** tab. Each badge
 - The badges clear by themselves when the deliveries are confirmed, the new areas are decided and the consumption is back in range.
 
 **When it goes wrong**
-- "No access" after **+ New area**: your role cannot ask for new areas. Ask the site engineer or the supervisor of the site.
-- The **Named receiver** box stays open after **Save**: the save was refused (for example "You cannot change this site" when the site is not one you may edit). The app shows no message. Close the box and ask a director or the office admin. {perm: site.edit}
+- No **+ New area** button: your role cannot ask for new areas. Ask the site engineer or the supervisor of the site.
+- "You cannot change this site" in the **Named receiver** box after **Save**: the site is not one you may edit. Close the box and ask a director or the office admin. {perm: site.edit}
 
 ### 3D building
 
@@ -251,7 +251,7 @@ Below the stages, per area: each stage's start and end, our sign and the client'
 The tab is shown with the permission to view daily reports (dpr.view). It holds one daily progress report (DPR) per site per day. What was recorded on site that day (labour, task updates, material in and out, equipment) is pulled in by itself; the supervisor adds the story and submits it, and the site engineer approves or returns it.
 
 **On the page**
-- **Day** (field): the day of the report. It opens on today. A future day cannot be picked.
+- **Day** (field): the day of the report. It opens on today, or on the report's day when you come from a to-do or notification. A future day cannot be picked.
 - The status badge next to the day: **Not started**, **draft**, **submitted**, **approved** or **returned**.
 - **PDF**: downloads the report as a PDF. Shown once the report is past draft.
 - **Recorded today**: the day's labour (present, half days), **Task updates**, **Material in**, **Issued** and **Equipment**, taken from what was entered on site. It is live while the report is a draft and frozen when it is submitted.
@@ -273,8 +273,8 @@ The tab is shown with the permission to view daily reports (dpr.view). It holds 
 - Every line of **Work by place** must name a place when the site has a list of places.
 - **Approve** and **Return** show only on a submitted report, and only to the site engineer of the site, or to an office role that can write reports for every site.
 - Approving moves progress: each line's quantity is added once to the open scope of its place (same unit). A scope that reaches 100 % becomes ready to bill, as a finished stage does.
-- Photos can be added only while the report is a draft.
-- A to-do or notification about a report opens this tab on today's date: pick the report's day in **Day** or in **Last 31 days**.
+- Photos can be added while the report is a draft or returned.
+- A to-do or notification about a report opens this tab on that report's day.
 
 **What happens next**
 - Submit: the site engineer gets the to-do "Daily report of <date> for <site>: approve or return." After 24 hours without an answer it goes up to planning. Client users who see daily reports in the portal are told a new report is in.
@@ -292,7 +292,7 @@ The tab is shown with the permission to view daily reports (dpr.view). It holds 
 - "Write the work done before submitting": fill **Work done today**.
 - "Pick the area it was used on (from the site's list), or ask for a new area": a line has no **Place**. Pick one, or ask for a new area first.
 - "That area is not on this site's list: ask for a new area" / "That new area is not open on this site": the place was removed or the new area was rejected. Pick another place.
-- "The DPR is already submitted": photos were added to a report that is not a draft. This also happens on a returned report: correct and submit it without new photos, or note them in the text.
+- "The DPR is already submitted": photos were added to a report that is submitted or approved. Ask the site engineer to return it first.
 - "The site engineer approves daily reports" / "The site engineer returns daily reports": you cannot approve or return on this site.
 - "The DPR is acknowledged" (or returned): someone else already acted on it. Pick the day again to reload it.
 
@@ -306,7 +306,7 @@ The site's material in one place: stock in the site store, indents, transfers, i
 - **Freight charged** (tile): freight charged to the site, split into inbound and godown → site.
 - **New indent**: opens the **New indent** form for this site. **Save draft** keeps it as a draft. **Submit for approval** sends it for approval. {perm: indent.create}
 - **Receive material (GRN)**: opens the **New GRN** form for the site store. Shown only when the site has a store. **Save draft** or **Submit for approval**; the stock goes in only when the GRN is approved. {perm: grn.edit}
-- **Issue to work**: opens **Issue material to work**. Pick **For task** (or "— general site use —"), **Date**, **Remark** and the lines, then **Issue**. The stock leaves the site store at its average rate. {perm: store.edit}
+- **Issue to work**: opens **Issue material to work**. Pick **For task** (or "— general site use —" with the **Area used on**), **Date**, **Remark** and the lines, then **Issue**. The stock leaves the site store at its average rate. {perm: store.edit}
 - **Return to store**: opens **Return unused material to the store**. Fill **Date**, **Remark** and the lines, then **Return**. The stock goes back at the average rate. {perm: store.edit}
 - **Request / send transfer**: opens **Transfer material** into this site's store. Fill **From**, **To**, **Transporter**, **Vehicle no**, **Freight (₹, charged to the receiving site)**, **Remark** and the lines. Tick **Dispatch now (stock leaves the sending store)** to send at once (button **Dispatch**); leave it to only ask (button **Save request**). {perm: store.edit}
 - **Stock** (table): every product in the site store with its quantity. {perm: store.view}
@@ -337,7 +337,7 @@ The tab is shown with the permission to view client billing (billing.view). It h
 - **Billing** and **Cost to date** cards: billed, certified, received, advance, retention, contract value; cost by head, **Total cost**, **Gross profit** with margin %, and the projected profit. "Cost to date is more than what is billed." shows in red when it is. {perm: tender.margin}
 - When there is no contract: "No client contract yet." and **Make the contract from the won tender**, which makes the contract from the won tender's priced BOQ. {perm: billing.edit}
 - **Contract value** and **Terms** tiles: GST, SAC, retention, TDS, advance and its recovery.
-- **New RA bill (from progress)**: makes a draft RA bill with the quantities suggested from the measurement book, and opens it. {perm: billing.edit}
+- **New RA bill (from the approved measurements)**: makes a draft RA bill with the quantities suggested from the measurement book, and opens it. {perm: billing.edit}
 - **Extra item**: opens **Extra item beyond the BOQ** with **Description**, **Unit**, **Qty**, **Rate**; **Add** saves it. It is billable once approved. {perm: billing.edit}
 - **Approve extra: <item>**: approves a waiting extra item. {perm: billing.approve}
 - The RA bills list: **RA bill**, **Period to**, **Submitted**, **Certified**, **Net**, **Status**, and **PDF**. Click a row to open it.
@@ -383,7 +383,7 @@ approved or rejected. The AutoCAD takeoff and the building model read the .dwg d
 - **Drawings (<n>)**: each drawing with its title, discipline and place, then **Approved: R<n>** or **No approved revision**, and **Latest: R<n> (<status>)** when a newer revision is not approved yet.
 - **Upload drawing**: opens **Upload a drawing**. {perm: site.update, site.edit}
 - **Title \***, **Discipline** (**architectural**, **structural**, **waterproofing** or **other**) and **Place (optional)** (**Whole site** or one place). {perm: site.update, site.edit}
-- **Choose the drawing**: PDF, PNG, JPG or DWG, up to 50 MB. It is saved as R0. **Upload** saves it. {perm: site.update, site.edit}
+- **Choose the drawing**: PDF, PNG, JPG, DWG or DXF, up to 50 MB. It is saved as R0. **Upload** saves it. {perm: site.update, site.edit}
 - **New revision** (on a drawing): pick the new file. It is saved as the next revision, as a draft. Older revisions stay as they were. {perm: site.update, site.edit}
 - **Share with client** (tick): shows the drawing in the client portal. {perm: site.update, portal.manage}
 - The revision rows: the revision, the file name (click to download it), size, who uploaded it and when, and its status (**draft**, **submitted**, **approved**, **rejected**) with the approver and remark.
@@ -406,7 +406,7 @@ approved or rejected. The AutoCAD takeoff and the building model read the .dwg d
 
 ### Site visits
 
-The visits logged at this site: date, who went, notes, photos and whether the phone's location was saved. The list and the button show only for roles that log site visits; other roles see an empty tab.
+The visits logged at this site: date, who went, notes, photos and whether the phone's location was saved. The tab shows only for roles that log site visits.
 
 **On the page**
 - **+ Log a visit**: opens **Log a site visit**. {perm: sitevisit.log}
@@ -491,7 +491,7 @@ The site's pin on the map and who checked in at the site in the last 30 days. Th
 - "Location missing: pin the site so check-ins can be checked." (warning): the site has no pin.
 - The map: the site pin and its check-in circle. Tap the map to pick a new place. {perm: site.location}
 - **Use my location**: picks where you stand now ("Finding…" while it looks). It is greyed out, with the reason, when the browser blocks location. {perm: site.location}
-- **Radius in metres** (field): the check-in radius, 20 to 5000 m. Empty uses the company default. {perm: site.location}
+- **Radius in metres** (field): the check-in radius, 20 to 5000 m. Empty keeps the site's radius as it is (the company default when none was set). {perm: site.location}
 - **Save the pin**: saves the picked place (or the current pin) and the radius. The app shows "Saved (the change is logged)." {perm: site.location}
 - **Go to site (Google Maps)**: opens directions to the pin.
 - **Who checked in (30 days)**: **Person**, **Date**, **In – out**, **Time on site** ("on site" while still there). Amber rows were checked in or out outside the circle.
@@ -555,7 +555,7 @@ The tab is shown with the permission to view labour (labour.view). It is where t
 - **OT hrs** (field): overtime hours; not on an absent day. {perm: labour.edit}
 - **📷 Group photo**: adds one photo to everyone marked that day. Mark first. {perm: labour.edit}
 - **Save attendance (n)**: saves the n marks. Your phone's location is saved with them when the phone allows it. The message "Saved n mark(s)." shows. {perm: labour.edit}
-- When no worker is on the site, "No workers posted to this site. Add them below." shows: add them in the **Workers** view.
+- When no worker is on the site, "No workers posted to this site." shows, with an **Add worker** button (the same form as in the **Workers** view). {perm: labour.edit}
 
 **Workers**
 - **Add worker**: opens **Add a worker** with **Name \***, **Phone**, **Trade**, **Type** (**Own labour** or **From a subcontractor**), **Subcontractor \*** (for a subcontractor's worker), **Daily wage (₹)**, **OT rate per hour (₹)** and **Aadhaar (last 4 digits)**. **Save** adds the worker to this site. {perm: labour.edit}
@@ -596,14 +596,14 @@ The tab is shown with the permission to view inspections (inspection.view). An i
 - **More photos**: extra photos.
 - **Result** (field): "Pass (from the answers)", **Pass with remarks** or **Fail**. When an item failed, it is locked at **Fail**.
 - **Date**, **Remarks**, **Client representative** (name) and **Signature (client representative)** (drawn on the screen).
-- **Certify the hold point "<step>" if it passes** (tick box, on by default): certifies the step when the inspection passes. {perm: site.edit}
+- **Certify the hold point "<step>" if it passes** (tick box, on by default): certifies the step when the inspection passes. Shown only once the step is done; before that the form says the inspection is saved without certifying. {perm: site.edit}
 - **Save inspection**: saves it with a new INS code.
 
 **Rules**
 - A failed pass/fail item makes the result Fail; it cannot be saved as a pass.
 - Every required item must be answered, and every required photo taken.
 - A hold point is certified only when the step is done and has a passed inspection with its checklist. Certifying needs the site edit permission.
-- When a hold-point step is picked, the app always tries to certify it on save (the tick box is on by default, and roles without the site edit permission do not see it). If the certification is refused, the whole inspection is not saved.
+- Roles without the site edit permission, and anyone while the step is not done, save the inspection without certifying. Once the step is done, the office certifies it with **Certify hold point** in **Stages** (a passed inspection counts).
 
 **What happens next**
 - **Ask client to sign**: client users who see inspections in the portal are told "<code> is waiting for your sign-off".
@@ -612,8 +612,7 @@ The tab is shown with the permission to view inspections (inspection.view). An i
 **When it goes wrong**
 - "'<item>' is required" / "'<item>': add the photo" / "'<item>': answer pass, fail or n/a" / "'<item>': give a number": fill that item.
 - "A checklist item failed: the result is fail": set **Result** to **Fail** or correct the answer.
-- "Certifying a hold point needs site.edit": the inspection was not saved. Pick "— none: a general inspection —" in **Step (hold point)**, or ask a role with the site edit permission to do it.
-- "The step must be done first": the hold-point step is not done yet, and the inspection was not saved. Finish the step first, or pick "— none: a general inspection —" until it is done.
+- The inspection is saved but the step is not **Certified**: the step was not done yet, or your role cannot certify. Once the step is done, ask a role with the site edit permission to certify it with **Certify hold point** in **Stages**.
 - "This hold point needs a passed inspection with its checklist first": the step's own checklist must pass first.
 - "The signature must be a PNG drawn on screen" / "The signature image is too large": draw the signature again.
 - "<code> is already signed by the client": nothing more to ask.
@@ -780,9 +779,10 @@ the stage template (the steps) to follow. Then **Generate tasks** makes the step
 - Under each line, its places: **Place**, **Stage template**, **Qty**, **Tasks** ("<n> (<n> started)") and **Progress**.
 - **Qty** (on a place): asks for the new **Quantity**. {perm: site.edit}
 - **Remove** (on a place): asks "Remove <place>?" and takes the place off the line. Grey once a task there has started. {perm: site.edit}
-- **Other scopes**: scopes not tied to a BOQ line.
+- **Other scopes**: scopes not tied to a BOQ line (on a site without a tender, every scope is here).
+- **Add a scope** (under **Other scopes**): opens **Add a scope** with **Place**, **Stage template**, **Quantity** and **Unit**. **Add the scope** saves it. Grey while the site has no places (add them in **Structure**). {perm: site.edit}
 - **Generate tasks**: makes one task per step of the stage template for every scope that lacks it. It then says "<n> tasks added, <n> kept; <n> tasks in all, planned to finish <date>." {perm: site.edit}
-- "No priced BOQ lines." when the tender has none, or the site has no tender.
+- "No priced BOQ lines." when the tender has none.
 
 **The Assign box** {perm: site.edit}
 - **Stage template**: the steps to follow. The app picks one from the line's words and marks it **suggested**. {perm: site.edit}
@@ -809,7 +809,7 @@ the stage template (the steps) to follow. Then **Generate tasks** makes the step
 - "<n> tasks of this assignment have started; it cannot be replaced. Change the quantities instead.": use **Qty** on each place. {perm: site.edit}
 - "Tasks exist for this scope; its template cannot change": remove the scope before work starts, then assign it again. {perm: site.edit}
 - "That BOQ line is not from this site's tender" or "Unknown stage template": reload the page and try again. {perm: site.edit}
-- A site without a tender has no BOQ lines, so this section has no **Assign to areas** button. There is no other way in the app to add a scope to it.
+- A site without a tender has no BOQ lines, so there is no **Assign to areas** button: use **Add a scope** for each place. {perm: site.edit}
 
 ### Portal
 
@@ -887,7 +887,7 @@ post site progress or edit sites can open it.
 - **Where (under)**: "the site", or the place it is in (for example the floor).
 - **Take the photo**: a photo of the place. Required.
 - **Note**: anything planning should know.
-- **Send to planning**: sends the request and goes to the **Work fronts** page.
+- **Send to planning**: sends the request and goes to the **Work fronts** page, which says "Sent to planning".
 
 **Rules**
 - A photo is required. Without it the form says "Take a photo of the place".
@@ -900,8 +900,6 @@ post site progress or edit sites can open it.
 **When it goes wrong**
 - "You cannot ask for areas on this site": you are not in this site's team. Ask the site engineer.
 - "That place is not on this site": the place in **Where (under)** was removed. Pick another.
-- After **Send to planning**, the Work fronts page shows no message that it was sent. Check **New areas** on the Overview: the waiting count goes up by one.
-
 ### AutoCAD takeoff (/sites/:id/takeoff)
 
 Opened from **AutoCAD takeoff** in the site's **More** list. The app reads the site's .dwg
@@ -916,9 +914,10 @@ these drawings are loose lines, so no outline is drawn on its own.
 - **Open**: opens a read drawing. The first read drawing opens by itself.
 - "No AutoCAD drawings on this site yet: add the .dwg (or .dxf) in the site's Drawings." when there is nothing to read.
 - The facts line: the units, layers, dimensions, the texts found ("All texts" and "On the mapped layers"), and warnings: "(unitless: set the unit before tracing)", "<n> areas on an unknown sheet", "<n> sheets guessed (no frame): confirm them".
+- **Set the unit…** / **Change the unit…** (on the facts line): pick **millimetres**, **centimetres**, **metres**, **inches** or **feet**, then **Save the unit**. Areas already traced are measured again in the new unit. {perm: takeoff.edit}
 - **Search the texts…**: finds texts on the drawing. Click one to move the view there.
 - The drawing: drag to move, wheel to zoom, **Zoom in**, **Zoom out** and **Fit**. Click an area to select it.
-- **Trace a new area** (or **Trace <area>** when an area is selected): starts tracing. Click the corners; each click snaps to the walls. Double-click inside a room to get an outline proposed from the walls. {perm: takeoff.edit}
+- **Trace a new area** (or **Trace <area>** when an area is selected): starts tracing. Click the corners; each click snaps to the walls. Or, before the first corner, click inside the room away from the lines to get an outline proposed from the walls. {perm: takeoff.edit}
 - **Undo corner**, **Finish** (3 corners or more) and **Cancel** while tracing. A new area asks for its "Name of the area (for example TERRACE, LADIES TOILET)". {perm: takeoff.edit}
 - **Use this outline** takes the proposed outline. **Correct its corners** lets you move them first. {perm: takeoff.edit}
 
@@ -951,7 +950,7 @@ these drawings are loose lines, so no outline is drawn on its own.
 - "Only AutoCAD drawings (.dwg or .dxf) can be read for areas": the revision is a PDF or an image. {perm: takeoff.edit}
 - "It is being read now": wait for the read to finish. {perm: takeoff.edit}
 - "The drawing's geometry is missing on the server: read the drawing again": press **Read again**. {perm: takeoff.edit}
-- "Set the drawing's unit first: it says unitless": the drawing has no unit, and this page has no control to set one. Ask the architect for the drawing saved with its units and upload it as a new revision. {perm: takeoff.edit}
+- "Set the drawing's unit first: it says unitless": the drawing has no unit. Pick it in **Set the unit…** on the facts line (ask the architect when unsure). {perm: takeoff.edit}
 - "An outline needs at least three corners": click at least three corners. {perm: takeoff.edit}
 - "No wall found in every direction from that point: click the corners instead": the walls have gaps. Click the corners. {perm: takeoff.edit}
 - "<area> is accepted into the survey; change it there" or "<area> is accepted; its trace is kept as it was": change it in the survey. {perm: takeoff.edit}
@@ -1054,19 +1053,23 @@ Which zones of the site the client handed to us, and which went to another appli
 **On the page**
 - One block per tower or wing, with a tile per flat and its areas. Green: ours, with the zone name. Grey: another applicator, by name. Plain: "not marked".
 - The key under the blocks: ours, another applicator, not marked.
+- **Mark a zone** (box): **Zone name \*** (for example Flat 101), **Place** (picking one fills an empty name), **Handed to** (**us** or **another applicator**) and **Applicator \*** (for another applicator). **Add the zone** saves it. {perm: closeout.site}
 - **Zones and RFI signatures** (table): **Zone**, **Place**, **Handed to** ("us" or the applicator) and **RFI signed** (name and date, "(in the portal)" or "(recorded by staff)", or "not yet").
+- **Record signature** (on our zone not signed yet): opens a box for **Signed by \*** and **Choose the signed copy** (PDF or picture of the paper RFI). **Record the signature** saves it as "(recorded by staff)". {perm: closeout.site}
+- **Remove** (on a zone not signed yet): asks "Remove the zone <name>?" and removes it. {perm: closeout.site}
 - **Site** (link at the top): back to the site.
 
 **Rules**
-- The page only shows the zones. It has no button to add a zone, record a signature or remove a zone.
 - A flat takes the zone of the nearest place above it that has one.
 - Measurements and bills outside our zones need a reason.
-- The client signs the RFI in the portal. A signed zone is locked.
+- The client signs the RFI in the portal, or on paper and the site team records it. A signed zone is locked: it cannot be removed.
 
 **What happens next**
 - The billing checklist uses the zones to tell which flats are ours.
 
 **When it goes wrong**
-- Every flat says "not marked": no zones are set for the site. They cannot be added on this page; report it to the office admin.
+- Every flat says "not marked": no zones are set for the site. Mark them in **Mark a zone**, or ask the site team. {perm: closeout.site}
+- "Name the applicator the zone went to": fill **Applicator**. {perm: closeout.site}
+- "RFI <zone> (signed) is locked: it cannot be changed or deleted.": the zone is signed and can no longer change. {perm: closeout.site}
 - No blocks at all: the site has no towers or wings. Add them in the site's **Structure** tab.
 - "Missing permission: closeout.site": your role cannot see the zones.

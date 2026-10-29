@@ -23,7 +23,7 @@ them. Every save is written to the audit log.
 
 **Rules**
 - The invoice number must stay within 16 characters.
-- A JSON box is read when you leave it. If the JSON is not valid, the box is not taken and the old rules are saved; nothing warns you. Check the text carefully. {perm: settings.company}
+- A JSON box is read when you leave it. If the JSON is not valid, a red line at the top names the box ("... this is not valid JSON ..."), and **Save** refuses until it is corrected. {perm: settings.company}
 
 **What happens next**
 - New invoices use the new prefix. New vendor bills, payments, petty-cash expenses and payroll runs use the new limits and rates. Documents already made keep theirs.

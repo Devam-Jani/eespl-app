@@ -11,7 +11,7 @@ Site roles see only the stores of their own sites.
 
 **On the page (the list)**
 - **Transfers**: opens the Transfers page.
-- **Add godown**: opens **Add a godown**. Type the **Name** and press **Add**. A site store is never added here: it is made with its site. {perm: store.edit}
+- **Add godown**: opens **Add a godown**. Type the **Name** and press **Add**. A site store is never added here: it is made with its site. Shown only to roles that edit every store (not to a role that edits only its sites' stores). {perm: store.edit}
 - **Store**, **Kind**, **Items in stock**, **Stock value** (columns): click a row to open that store.
 
 **On the page (one store)**
@@ -19,7 +19,7 @@ Site roles see only the stores of their own sites.
 - **Transfer out**: opens **Transfer material** with this store as **From**. See the Transfers page for the fields. {perm: store.edit}
 - **Issue to work**: only on a site store. Opens **Issue material to work**: material used on the site leaves the store at its average rate. {perm: store.edit}
 - **Return to store**: only on a site store. Opens **Return unused material to the store**: unused material comes back in at the store's average rate. {perm: store.edit}
-- **Adjust / opening**: opens **Opening stock or count correction**. {perm: store.edit}
+- **Adjust / opening**: opens **Opening stock or count correction**. Shown only to roles that edit every store. {perm: store.edit}
 - **Stock** (tab): each product with its **Stock**, **Avg rate (landed)** and **Value**. A row below zero is shown flagged.
 - **Ledger** (tab): every movement, newest first: **When**, **Product**, **Movement** (GRN, Transfer out, Transfer in, Issued to site, Returned, Adjustment, Opening, or shortage), **Ref**, **Qty**, **Rate**, **Value** and the running **Balance** of that product. Pick a product in the box above the table to see only its rows.
 - **Transfers** (tab): the transfers into and out of this store, with **Dispatch** and **Receive** as on the Transfers page.
@@ -27,6 +27,7 @@ Site roles see only the stores of their own sites.
 
 **Issue material to work / Return unused material to the store**
 - **For task** (issue only): the task of the site the material was used on. The first choice is **— general site use —**.
+- **Area used on** (issue only, with **— general site use —** on a site with a list): the place on the site's list the material was used on, or a new area waiting for planning ("(new area, waiting)"). Required.
 - **Date**: today unless you change it. **Remark**: free text.
 - Product lines: **Product**, **Qty**, **Unit**, **×** removes a line, **+ Item** adds one. Lines with no product or a zero quantity are dropped.
 - **Issue** / **Return**: saves it and gives it an ISS code. Stock moves at once. **Cancel** closes the form.
@@ -57,11 +58,11 @@ Site roles see only the stores of their own sites.
 **When it goes wrong**
 - "Store not found": the store is not one of your sites' stores, or it was removed. Open it from the list.
 - "A store named ... exists": pick another name for the godown.
-- "You cannot add a godown" / "You cannot adjust stock": your role edits only your sites' stores. Ask store and purchase. {perm: store.edit}
+- "You cannot add a godown" / "You cannot adjust stock": your role edits only your sites' stores (the buttons are hidden for it). Ask store and purchase. {perm: store.edit}
 - "Give a quantity": the quantity is zero.
 - "Give the rate of the stock added": a plus quantity needs a rate.
 - "Only ... of ... in ...; ... asked": there is not enough stock. Check the ledger, receive the GRN or transfer first, or correct the count.
-- "Pick the area it was used on (from the site's list), or ask for a new area": on a site with a list, **— general site use —** is refused. Pick the task in **For task**.
+- "Pick the area it was used on (from the site's list), or ask for a new area": on a site with a list, **— general site use —** needs the place. Pick it in **Area used on**, or pick the task in **For task**.
 - "That task is not on this site": pick a task of this site.
 - "...: ... cannot be converted to ... (add a unit conversion for this product first)": use the product's own unit, or have the conversion added.
 - "You cannot issue material in ...": the store is not on one of your sites.

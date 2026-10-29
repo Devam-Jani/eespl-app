@@ -32,8 +32,9 @@ site's stock follows the count, not what was sent.
 - **Driver / vehicle**: opens the driver and vehicle form, with **vehicle no**, **driver name**,
   **driver phone** and **Expected at site**. Only while the delivery is not confirmed. {perm: store.edit, po.edit}
 - **Save and print again** (in that form): saves the changes, makes a new delivery note PDF with a
-  new receipt link and sends the new link to the site again. The old link stops working at once. It
-  does not print or download anything: press **⤓ Delivery note (QR)** to get the new PDF. {perm: store.edit, po.edit}
+  new receipt link and sends the new link to the site again, then downloads the new PDF to print.
+  The old link stops working at once. If the download fails, the error says so: press
+  **⤓ Delivery note (QR)**. {perm: store.edit, po.edit}
 - **Cancel** (in that form): closes it without saving. {perm: store.edit, po.edit}
 - **Driver's drop-off photo**: attach the driver's photo of the material left at site, when no one
   at site confirmed it. It proves drop-off, not quantity: the delivery stays "not confirmed". Only

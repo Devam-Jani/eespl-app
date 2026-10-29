@@ -203,7 +203,12 @@ export function Tally() {
         <Button variant="primary" disabled={!preview?.count} onClick={() => void exportXml()}>
           Export {preview?.count ?? 0} voucher(s) as XML
         </Button>
-        <Button onClick={() => void downloadFile(`/api/finance/tally/day-book${q}`)}>
+        <Button
+          onClick={() => {
+            setError(null);
+            downloadFile(`/api/finance/tally/day-book${q}`).catch((err) => setError(errorText(err)));
+          }}
+        >
           Day book (Excel)
         </Button>
       </Card>
@@ -257,16 +262,46 @@ export function Tally() {
   );
 }
 
+/** A JSON box's text, read: the value, or a plain error naming the box. */
+export function readJson(label: string, text: string): { value: unknown } | { error: string } {
+  try {
+    return { value: JSON.parse(text) };
+  } catch (err) {
+    return { error: `${label}: this is not valid JSON (${err instanceof Error ? err.message : String(err)}). Correct it before saving.` };
+  }
+}
+
 export function FinanceSettings() {
   const { can } = useAuth();
   const [s, setS] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [bad, setBad] = useState<Record<string, string>>({}); // JSON boxes that do not parse: Save refuses
   useEffect(() => {
     api<Record<string, unknown>>("/api/finance/settings").then(setS, (err) => setError(errorText(err)));
   }, []);
+  function blurJson(key: string, label: string, text: string) {
+    const r = readJson(label, text);
+    const rest = { ...bad };
+    delete rest[key];
+    if ("error" in r) {
+      setBad({ ...rest, [key]: r.error });
+      setError(r.error);
+      setMessage(null);
+      return;
+    }
+    setBad(rest);
+    setError(null);
+    if (s) setS({ ...s, [key]: r.value });
+  }
   async function save(e: FormEvent) {
     e.preventDefault();
+    const firstBad = Object.values(bad)[0];
+    if (firstBad) {
+      setError(firstBad);
+      setMessage(null);
+      return;
+    }
     try {
       setS(await api("/api/finance/settings", { method: "PUT", json: s }));
       setMessage("Saved.");
@@ -299,10 +334,10 @@ export function FinanceSettings() {
           {field("esi_employer_percent", "ESI employer %")}
         </div>
         <Field label="TDS by vendor type (JSON)">
-          <textarea rows={4} defaultValue={JSON.stringify(s.tds_rules, null, 1)} onBlur={(e) => setS({ ...s, tds_rules: JSON.parse(e.target.value) })} />
+          <textarea rows={4} defaultValue={JSON.stringify(s.tds_rules, null, 1)} onBlur={(e) => blurJson("tds_rules", "TDS by vendor type", e.target.value)} />
         </Field>
         <Field label="Professional tax slabs (JSON; default Gujarat)">
-          <textarea rows={3} defaultValue={JSON.stringify(s.pt_slabs)} onBlur={(e) => setS({ ...s, pt_slabs: JSON.parse(e.target.value) })} />
+          <textarea rows={3} defaultValue={JSON.stringify(s.pt_slabs)} onBlur={(e) => blurJson("pt_slabs", "Professional tax slabs", e.target.value)} />
         </Field>
         {can("settings.company") && (
           <div className="form-actions">

@@ -9,6 +9,8 @@ import { useNodes } from "./StructureTab";
 import { ShareTick } from "./TasksTab";
 import { Button, buttonClass, Card, Field, FilePicker } from "../../ui/components";
 
+// what the backend takes (DRAWING_TYPES in backend/app/sites/routers.py)
+export const DRAWING_ACCEPT = ".pdf,.png,.jpg,.jpeg,.dwg,.dxf";
 const REV_BADGE: Record<string, string> = { draft: "badge-muted", submitted: "badge-info", approved: "badge-ok", rejected: "badge-danger" };
 
 export default function DrawingsTab({ site }: { site: Site }) {
@@ -88,7 +90,7 @@ export default function DrawingsTab({ site }: { site: Site }) {
             {canUpload && (
               <label className={buttonClass({ size: "small" })}>
                 New revision
-                <input type="file" hidden accept=".pdf,.png,.jpg,.jpeg,.dwg" onChange={(e) => e.target.files?.[0] && newRevision(d, e.target.files[0])} />
+                <input type="file" hidden accept={DRAWING_ACCEPT} onChange={(e) => e.target.files?.[0] && newRevision(d, e.target.files[0])} />
               </label>
             )}
           </div>
@@ -189,7 +191,7 @@ function UploadDrawing({ nodes, onClose, onUpload }: { nodes: { id: number; path
           </select>
         </Field>
         <Field as="div" label="File (PDF, PNG, JPG or DWG, up to 50 MB) — saved as R0">
-          <FilePicker label="Choose the drawing" required accept=".pdf,.png,.jpg,.jpeg,.dwg" onFiles={(fs) => setFile(fs[0] ?? null)} />
+          <FilePicker label="Choose the drawing" required accept={DRAWING_ACCEPT} onFiles={(fs) => setFile(fs[0] ?? null)} />
         </Field>
         <div className="form-actions">
           <Button type="button" onClick={onClose}>

@@ -31,5 +31,5 @@ to the audit log.
 - Passes on: delivery alerts to the site in-charge and planning, billing alerts to the site in-charge, contract alerts to purchase.
 
 **When it goes wrong**
-- A number outside its range is refused next to the field. The error shows in the same green box as "Saved."; read the text.
+- A number outside its range is refused next to the field. The error shows in red at the top.
 - "User not found": the chosen planning person was removed. Pick another and save.

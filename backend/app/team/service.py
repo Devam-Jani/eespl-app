@@ -4,7 +4,7 @@ the measurement book, material plans, client bill tracking and the closure score
 
 import uuid
 from collections import defaultdict
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from fastapi import HTTPException, status
@@ -17,6 +17,7 @@ from app.models import Role, RolePermission, User, UserRole
 from app.sites.models import AreaScope, Site, SiteMember, SiteNode, Task
 from app.team.models import JobAssignment, Measurement, TeamSettings, UserGrant
 from app.tenders.models import BoqLine, Tender, TenderTc
+from app.timefmt import ist_today
 
 ZERO = Decimal(0)
 
@@ -322,7 +323,7 @@ def book_from_ready(db: Session, ready, user_id=None) -> Measurement | None:
         qty=ready.qty,
         unit=ready.unit,
         source=source,
-        measured_on=date.today(),
+        measured_on=ist_today(),
         measured_by=user_id,
         note="Stage done (ready to bill)",
         created_by=user_id,
@@ -556,7 +557,8 @@ def scorecard(db: Session, user_ids: list[uuid.UUID] | None = None) -> list[dict
             or q.status in ("sent", "negotiation", "won", "lost", "expired")
         ]
         won = [q for q in qs if q.status == "won"]
-        lost = [q for q in qs if q.status == "lost"]
+        # "main job lost by the contractor" is not our loss: out of Lost and the closure rate
+        lost = [q for q in qs if q.status == "lost" and q.lost_reason != "main_job_lost"]
         reasons: dict[str, int] = defaultdict(int)
         for q in lost:
             reasons[q.lost_reason or "not given"] += 1
@@ -565,7 +567,7 @@ def scorecard(db: Session, user_ids: list[uuid.UUID] | None = None) -> list[dict
         fus = db.scalars(
             select(QuotationFollowUp).where(QuotationFollowUp.salesperson_id == uid)
         ).all()
-        due = [f for f in fus if f.due_on <= date.today() and f.status != "cancelled"]
+        due = [f for f in fus if f.due_on <= ist_today() and f.status != "cancelled"]
         on_time = [
             f
             for f in due

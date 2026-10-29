@@ -45,7 +45,7 @@ from app.sitecontrol.models import (
     ReadyToBill,
 )
 from app.sites.models import Site, SiteNode
-from app.timefmt import label
+from app.timefmt import ist_today, label
 
 public = APIRouter(prefix="/api/receipt", tags=["receipt"])
 router = APIRouter(prefix="/api/sitecontrol", tags=["sitecontrol"])
@@ -75,7 +75,7 @@ def _book(name: str, sheets: list[tuple[str, list[str], list[list]]]):
         book,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
-            "Content-Disposition": f'attachment; filename="{name}-{date.today():%Y%m%d}.xlsx"'
+            "Content-Disposition": f'attachment; filename="{name}-{ist_today():%Y%m%d}.xlsx"'
         },
     )
 
@@ -627,7 +627,7 @@ def _rc_out(db, c: RateContract) -> dict:
         "attachment": bool(c.attachment_path),
         "is_active": c.is_active,
         "version": c.version,
-        "expires_in_days": (c.valid_till - date.today()).days,
+        "expires_in_days": (c.valid_till - ist_today()).days,
     }
 
 
@@ -647,8 +647,8 @@ def list_contracts(
     if current:
         q = q.where(
             RateContract.is_active,
-            RateContract.valid_from <= date.today(),
-            RateContract.valid_till >= date.today(),
+            RateContract.valid_from <= ist_today(),
+            RateContract.valid_till >= ist_today(),
         )
     return jsonable_encoder([_rc_out(db, c) for c in db.scalars(q.limit(500))])
 
@@ -788,7 +788,7 @@ def contract_lookup(
     """The agreed rate for a PO line (purchase and accounts see it on every PO)."""
     if not ({"po.view", "po.edit", "ratecontract.view"} & set(principal.permissions)):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Missing permission")
-    c = sc.active_contract(db, vendor_id, product_id, on or date.today())
+    c = sc.active_contract(db, vendor_id, product_id, on or ist_today())
     return jsonable_encoder(
         {
             "contract_id": c.id,
@@ -1054,7 +1054,11 @@ def approve_new_area(
 
     if body.kind not in NODE_KINDS:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unknown kind of place")
-    node = sc.approve_area(db, r, principal.user.id, body.parent_node_id, body.kind)
+    # an explicit null is "the site (top level)"; left out, it goes under the place the site gave
+    parent = body.parent_node_id if "parent_node_id" in body.model_fields_set else r.parent_node_id
+    if parent is not None and (p := db.get(SiteNode, parent)) is not None and p.site_id != r.site_id:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "That place is not on this site")
+    node = sc.approve_area(db, r, principal.user.id, parent, body.kind)
     record(db, request, principal, "new_area.approve", "new_area", r.id, after={"node": node.id})
     from app.process import hooks  # noqa: PLC0415
 
@@ -1228,9 +1232,14 @@ def subcon_productivity(sid: int, db: DbSession, _: SiteView) -> dict:
 
 @router.get("/reports/productivity")
 def productivity_report(
-    db: DbSession, _: SiteView, site_id: int | None = None, format: str | None = None
+    db: DbSession,
+    principal: CurrentPrincipal,
+    scope: SiteView,
+    site_id: int | None = None,
+    format: str | None = None,
 ):
-    rows = sc.productivity_report(db, site_id)
+    # site.view at scope assigned sees its own sites only (as /consumption)
+    rows = sc.productivity_report(db, site_id, _sites_for(db, scope, principal))
     if format == "xlsx":
         return _book(
             "labour-productivity",
@@ -1323,6 +1332,23 @@ def consumption_report(
             "rows": rows,
         }
     )
+
+
+@router.post("/reports/consumption/reviewed")
+def consumption_reviewed(
+    request: Request, db: DbSession, principal: CurrentPrincipal, scope: SiteView, site_id: int
+) -> dict:
+    """The flagged consumption of the site was looked at: closes the "Consumption off the range"
+    to-do of the site (planning's, the site engineer's and its escalation)."""
+    allowed = _sites_for(db, scope, principal)
+    if db.get(Site, site_id) is None or (allowed is not None and site_id not in allowed):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Site not found")
+    from app.process import hooks  # noqa: PLC0415
+
+    hooks.consumption_reviewed(db, site_id, principal.user.id)
+    record(db, request, principal, "consumption.reviewed", "site", site_id)
+    db.commit()
+    return {"reviewed": True}
 
 
 @router.get("/learned")

@@ -130,28 +130,34 @@ export function DayMap() {
           {day.can_choose_basis && day.ended_at && (
             <Card as="div">
               <h3>Km for the claim</h3>
-              <Field label="Reason (for tracked km: a detour the stops don't show)" bare>
-                <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (for tracked km: a detour the stops don't show)" />
-              </Field>
-              <div className="form-row">
-                {(["route", "tracked"] as const).map((b) => (
-                  <Button
-                    key={b}
-                    size="small"
-                    variant={day.km_basis === b ? "primary" : "secondary"}
-                    onClick={async () => {
-                      try {
-                        await api(`/api/field/days/${day.id}/basis`, { method: "PUT", json: { basis: b, reason: reason || null } });
-                        void load();
-                      } catch (e) {
-                        setError(errorText(e));
-                      }
-                    }}
-                  >
-                    Use {b === "route" ? "road" : "tracked"} km
-                  </Button>
-                ))}
-              </div>
+              {day.basis_locked ? (
+                <p className="muted small">{day.basis_locked}.</p>
+              ) : (
+                <>
+                  <Field label="Reason (for tracked km: a detour the stops don't show)" bare>
+                    <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (for tracked km: a detour the stops don't show)" />
+                  </Field>
+                  <div className="form-row">
+                    {(["route", "tracked"] as const).map((b) => (
+                      <Button
+                        key={b}
+                        size="small"
+                        variant={day.km_basis === b ? "primary" : "secondary"}
+                        onClick={async () => {
+                          try {
+                            await api(`/api/field/days/${day.id}/basis`, { method: "PUT", json: { basis: b, reason: reason || null } });
+                            void load();
+                          } catch (e) {
+                            setError(errorText(e));
+                          }
+                        }}
+                      >
+                        Use {b === "route" ? "road" : "tracked"} km
+                      </Button>
+                    ))}
+                  </div>
+                </>
+              )}
             </Card>
           )}
         </div>
@@ -330,7 +336,7 @@ export function SiteLocationTab({ siteId }: { siteId: number }) {
                 const at = picked ?? pin;
                 if (!at) return setMsg("Pick the place on the map first");
                 try {
-                  await api(`/api/field/sites/${siteId}/location`, { method: "PUT", json: { lat: at[0], lng: at[1], radius_m: radius ? Number(radius) : null } });
+                  await api(`/api/field/sites/${siteId}/location`, { method: "PUT", json: { lat: at[0], lng: at[1], ...(radius ? { radius_m: Number(radius) } : {}) } }); // empty: keep the site's radius
                   setPicked(null);
                   setMsg("Saved (the change is logged).");
                   load();

@@ -11,7 +11,7 @@ Transport costs charged to each site, per month. The top table splits each site 
 
 **On the page**
 - **Site** (filter): **All sites** or one site. Changes both tables.
-- **Year** (filter): the year of the top table. The **Entries** list below is not filtered by year: it shows the latest 200 entries.
+- **Year** (filter): the year of the top table and of the **Entries** list below (its latest 200 entries).
 - **Add transporter bill**: opens **Transporter bill**, for a transport bill that is not on a PO or a transfer. {perm: po.edit, store.edit}
 
 **Transporter bill (the form)**

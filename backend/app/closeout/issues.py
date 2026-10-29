@@ -88,6 +88,10 @@ def raise_issue(db: Session, *, site_id: int | None, category: str, title: str, 
 def set_status(db: Session, i: SiteIssueLog, status: str) -> None:
     if status not in ISSUE_STATUSES:
         raise unprocessable(f"Status is one of {', '.join(ISSUE_STATUSES)}")
+    if status == i.status:
+        return  # no second "resolved" event
+    if i.status == "closed" and status == "resolved":
+        raise unprocessable(f"{i.code} is closed")
     i.status = status
     i.resolved_at = now() if status in ("resolved", "closed") else None
     if status in ("resolved", "closed"):

@@ -6,7 +6,8 @@ mark: ↻ Refresh
 ---
 My work is the page the app opens after you sign in. It lists everything waiting for you, one
 section per role you hold, the most urgent first. In the side menu it is called **Approvals**, with
-the number waiting beside it. On a phone, site roles reach it from the **My day** tab at the bottom.
+the number waiting beside it. On a phone, site roles reach it from **Me** > **Approvals** (the **My day**
+tab at the bottom opens My day (check-in); a site role without check-in sees a **My work** tab there instead).
 
 **On the page**
 - The heading shows your name, your job title and "n waiting": the number of lines on the page.

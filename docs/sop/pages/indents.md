@@ -17,7 +17,7 @@ them if your role covers every site.
 - Tick box on a row: shown only on Approved and Partly ordered indents. Tick one or more to order them together. {perm: po.edit}
 - **Create RFQ (n)**: shown once you tick indents; n is how many. Opens **Request for quotation**. {perm: po.edit}
 - **Create PO**: shown once you tick indents. Opens **New purchase order** with the still-to-order product lines of the ticked indents. {perm: po.edit}
-- **New indent**: opens the indent form. {perm: indent.create}
+- **New indent**: opens the indent form. **Raise indent** in the search palette (Ctrl+K) opens this page with the form already open. {perm: indent.create}
 
 **The indent form (New indent / Edit)** {perm: indent.create}
 - **Site \***: the site the material is for. Only your sites are listed. It cannot be changed after the indent is saved. {perm: indent.create}
@@ -37,7 +37,7 @@ them if your role covers every site.
 - The table shows per material: **Asked** (as typed), **In stock unit**, **Ordered** and **Received**.
 - **Edit**: shown while the indent is Draft or Submitted, to whoever raised it or anyone who may raise indents for that site. Opens the same form. {perm: indent.create}
 - **Submit**: shown on a Draft. Moves it to Submitted. {perm: indent.create}
-- **Cancel indent**: asks "Cancel <code>?" and sets the indent to Cancelled. {perm: indent.create, indent.approve}
+- **Cancel indent**: shown on a Draft, Submitted or Approved indent to the person who raised it and to an indent approver of the site. Asks "Cancel <code>?" and sets the indent to Cancelled. {perm: indent.create, indent.approve}
 - **Reject**: asks "Why is it rejected?". With a reason the indent becomes Rejected and shows "Rejected: <reason>". Without a reason nothing happens. {perm: indent.approve}
 - **Approve**: sets the indent to Approved. The store / purchase person of the site is told to place the PO. {perm: indent.approve}
 - **Create PO**: on an Approved or Partly ordered indent. Opens **New purchase order** for this indent. {perm: po.edit}
@@ -70,7 +70,7 @@ them if your role covers every site.
 - "You cannot change <code>" / "You cannot submit <code>": the indent is no longer Draft or Submitted, or it is not yours.
 - "You cannot approve <code>": your role does not cover that site.
 - "<code> is approved" (or another status): someone already acted on it. Close and reopen the indent.
-- "You cannot cancel <code>": only the person who raised it, or an approver, may cancel it. The button can show for others who may raise indents on the site; ask the one who raised it.
+- "You cannot cancel <code>": only the person who raised it, or an approver, may cancel it; ask the one who raised it.
 - "<code> is <status>; only approved indents are ordered": one of the ticked indents is not approved (any more). Untick it. {perm: po.edit}
 - "Nothing left to order on these indents (lines not in the product master are bought with a direct PO)": everything is already ordered, or only typed lines are left. Add the product to the master and order it on a PO. {perm: po.edit}
-- An approved indent cannot be cancelled from this page: the **Cancel indent** button is not shown once it is approved.
+- An approved indent can still be cancelled (by the one who raised it or an approver) until it is ordered.

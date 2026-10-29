@@ -191,7 +191,11 @@ def apply_lines(db, d: Dpr) -> list[int]:
         if ln.applied or not ln.node_id or not ln.qty or Decimal(ln.qty) <= 0:
             continue
         scope = db.get(AreaScope, ln.area_scope_id) if ln.area_scope_id else None
-        if scope is None or scope.node_id != ln.node_id:
+        # a line in another unit (running m) never counts on a scope measured in sqm
+        unit_off = (
+            scope is not None and ln.unit and (scope.unit or "sqm").lower() != ln.unit.lower()
+        )
+        if scope is None or scope.node_id != ln.node_id or unit_off:
             candidates = db.scalars(
                 select(AreaScope)
                 .where(AreaScope.node_id == ln.node_id, AreaScope.site_id == d.site_id)
@@ -318,11 +322,12 @@ def save_dpr(
     elif d.status not in ("draft", "returned"):
         raise svc.conflict(f"The DPR of {day:%d %b} is already {d.status}")
     for k in ("weather", "work_done", "hindrances", "next_day_plan"):
-        setattr(d, k, getattr(body, k))
+        if k in body.model_fields_set:  # the phone sends only lines: the DPR tab's text stays
+            setattr(d, k, getattr(body, k))
     if body.lines is not None:
         _set_lines(db, site, d, body.lines)
     if body.submit:
-        if not (body.work_done or "").strip():
+        if not (d.work_done or "").strip():
             raise svc.unprocessable("Write the work done before submitting")
         d.status, d.submitted_by, d.submitted_at = "submitted", principal.user.id, svc.now()
         d.auto = svc.day_activity(db, site.id, day)
@@ -433,7 +438,7 @@ async def add_photo(
         d = Dpr(site_id=site.id, on_date=day, created_by=principal.user.id)
         db.add(d)
         db.flush()
-    elif d.status != "draft":
+    elif d.status not in ("draft", "returned"):  # a returned report is corrected, photos too
         raise svc.conflict("The DPR is already submitted")
     rel, name = await save_upload(file, f"dprs/{d.id}")
     d.photos.append(

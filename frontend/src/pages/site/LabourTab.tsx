@@ -20,7 +20,7 @@ export const TRADES = ["applicator", "helper", "mason", "supervisor", "other"];
 type Draft = Record<number, { status: AttendanceStatus | null; ot_hours: string; hours?: string }>;
 
 /** Quick mark: one tap per worker (P / ½ / A), "all present", then Save. Built for a phone. */
-export function QuickMark({ site, onSaved }: { site: Site; onSaved?: () => void }) {
+export function QuickMark({ site, onSaved, onAddWorker }: { site: Site; onSaved?: () => void; onAddWorker?: () => void }) {
   const { can } = useAuth();
   const [day, setDay] = useState(localToday());
   const [sheet, setSheet] = useState<DaySheet | null>(null);
@@ -28,7 +28,7 @@ export function QuickMark({ site, onSaved }: { site: Site; onSaved?: () => void 
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const canEdit = can("labour.edit");
+  const canEdit = can("labour.edit") || can("attendance.manage"); // marking: either, on the site (the server checks which sites)
 
   const show = (s: DaySheet) => {
     setSheet(s);
@@ -179,7 +179,16 @@ export function QuickMark({ site, onSaved }: { site: Site; onSaved?: () => void 
             </li>
           );
         })}
-        {sheet && rows.length === 0 && <li className="muted">No workers posted to this site. Add them below.</li>}
+        {sheet && rows.length === 0 && (
+          <li className="muted">
+            No workers posted to this site.{" "}
+            {onAddWorker && can("labour.edit") && (
+              <Button size="small" onClick={onAddWorker}>
+                Add worker
+              </Button>
+            )}
+          </li>
+        )}
       </ul>
       {canEdit && rows.length > 0 && (
         <div className="daily-actions sticky-actions">
@@ -212,9 +221,12 @@ export function WorkerForm({ worker, siteId, onClose, onSaved }: { worker?: Work
   });
   const [error, setError] = useState<string | null>(null);
 
+  // the Labour page has no site of its own: pick one of the caller's sites (a site supervisor must)
+  const [sites, setSites] = useState<{ id: number; code: string; name: string }[]>([]);
   useEffect(() => {
     api<Subcontractor[]>("/api/execution/subcontractors").then(setSubs, () => setSubs([]));
-  }, []);
+    if (siteId === undefined) api<{ id: number; code: string; name: string }[]>("/api/execution/labour/sites").then(setSites, () => setSites([]));
+  }, [siteId]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -269,6 +281,19 @@ export function WorkerForm({ worker, siteId, onClose, onSaved }: { worker?: Work
                 {subs.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+          {siteId === undefined && (
+            <Field label="Posted at" hint="The sites you can post a worker to">
+              <select value={form.site_id} onChange={(e) => setForm({ ...form, site_id: Number(e.target.value) || "" })}>
+                <option value="">— not posted —</option>
+                {worker?.site_id && !sites.some((s) => s.id === worker.site_id) && <option value={worker.site_id}>{worker.site_code ?? `Site ${worker.site_id}`}</option>}
+                {sites.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.code} {s.name}
                   </option>
                 ))}
               </select>
@@ -346,7 +371,7 @@ export function MusterTable({ siteId }: { siteId?: number }) {
             ))}
             {data && (
               <tr className="grand">
-                <td colSpan={siteId ? 5 : 6}>Wage due (payroll is M5)</td>
+                <td colSpan={siteId ? 5 : 6}>Wage due</td>
                 <td className="num">
                   <b>{inr(data.wage_due)}</b>
                 </td>
@@ -403,7 +428,7 @@ export default function LabourTab({ site }: { site: Site }) {
         </Button>
       </div>
       <div className="top-gap">
-        {view === "mark" && <QuickMark key={key} site={site} />}
+        {view === "mark" && <QuickMark key={key} site={site} onAddWorker={() => setEditing("new")} />}
         {view === "workers" && (
           <>
             {can("labour.edit") && (

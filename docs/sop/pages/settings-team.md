@@ -35,6 +35,6 @@ people extra rights here. Every change is written to the audit log.
 - Passes on: RA bill to-dos to billing, award reminders to the tender owner, the allocation list to the chosen people.
 
 **When it goes wrong**
-- A number out of range is refused. The error shows in the same green box as "Saved."; read the text.
+- A number out of range is refused. The error shows in red at the top.
 - "Choose who receives the allocation list (settings)": (on the planning board) nobody is chosen in **Site allocation list goes to**. Pick the people and press **Save**.
-- If a per-person tick does not stay, the change was refused; nothing else is shown. Reload the page and try again. {perm: grants.manage}
+- If a per-person tick does not stay, the change was refused; the reason shows in red at the top. {perm: grants.manage}

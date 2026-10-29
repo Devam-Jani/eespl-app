@@ -114,7 +114,15 @@ def rows_to_lines(rows: list[list]) -> list[dict]:
 
 
 def read_file(path: Path) -> tuple[list[dict], str]:
-    """The lines (when the file has a table) and the text (for the terms)."""
+    """The lines (when the file has a table) and the text (for the terms); a file that cannot be
+    read (damaged, a scan, password-protected) is kept with nothing read, never a server error."""
+    try:
+        return _read_file(path)
+    except Exception:  # noqa: BLE001  (any reader failure: the upload is kept, the lines stay "not yet")
+        return [], ""
+
+
+def _read_file(path: Path) -> tuple[list[dict], str]:
     text, lines = "", []
     if path.suffix.lower() in (".xlsx", ".xlsm"):
         import openpyxl  # noqa: PLC0415

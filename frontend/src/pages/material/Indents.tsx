@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, queryString } from "../../api";
 import { useAuth } from "../../auth";
 import { Modal } from "../../ui/Overlay";
@@ -14,6 +14,17 @@ import { Button, Card, Field } from "../../ui/components";
 
 const STATUSES = ["draft", "submitted", "approved", "partly_ordered", "ordered", "closed", "rejected", "cancelled"];
 const ORDERABLE = ["approved", "partly_ordered"];
+
+/** Old links (/indents/<id>, in notifications already sent) open the indent on the list page. */
+export function OldIndentRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/indents?open=${id ?? ""}`} replace />;
+}
+
+/** What the page's query string asks for: ?open=<id> opens an indent, ?new=1 (Raise indent) opens the New indent form. */
+export function indentLinkIntent(params: URLSearchParams): { openId: string | null; create: boolean } {
+  return { openId: params.get("open"), create: params.get("new") === "1" };
+}
 
 export default function Indents() {
   const { can } = useAuth();
@@ -42,10 +53,15 @@ export default function Indents() {
 
   // a link from another page (a material request's indent, the schedule) opens it: ?open=id
   const [params] = useSearchParams();
-  const openId = params.get("open");
+  const { openId, create } = indentLinkIntent(params);
   useEffect(() => {
     if (openId) void api<Indent>(`/api/material/indents/${openId}`).then(setOpen, (e) => setError(errorText(e)));
   }, [openId]);
+  // "Raise indent" (the command palette) lands here with ?new=1: the New indent form opens
+  const mayCreate = can("indent.create");
+  useEffect(() => {
+    if (create && mayCreate) setCreating(true);
+  }, [create, mayCreate]);
 
   const toggle = (id: number) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
@@ -407,7 +423,7 @@ export function IndentView({
             Submit
           </Button>
         )}
-        {["draft", "submitted", "approved"].includes(indent.status) && (indent.can_edit || indent.can_approve) && (
+        {indent.can_cancel && (
           <Button variant="danger" onClick={() => confirm(`Cancel ${indent.code}?`) && void act("cancel")}>
             Cancel indent
           </Button>

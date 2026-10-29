@@ -18,7 +18,7 @@ only their own row. The page has no buttons: it only reads.
 **Rules**
 - The target is the salesperson's own closure target if set, else the company target (65 % unless changed in the team settings).
 - Expired quotations count as sent, not as lost.
-- A quotation closed as "main job lost by the contractor" (the civil contractor we quoted lost the main contract) is counted in **Lost** and lowers the closure rate in this version, although the tender page says it is not our loss.
+- A quotation closed as "main job lost by the contractor" (the civil contractor we quoted lost the main contract) is not our loss: it is left out of **Lost** and of the closure rate.
 - Training (DEMO) users are left out of the director's view.
 
 **What happens next**

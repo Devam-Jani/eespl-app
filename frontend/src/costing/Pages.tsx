@@ -91,6 +91,7 @@ type SystemLite = { id: number; code: string; name: string };
 type Card = { id: number; contractor: string; job: string; unit: string; rate: string; in_force: boolean };
 
 export function RateWorkingView({ tenderId, quotationId }: { tenderId?: number; quotationId?: number }) {
+  const { can } = useAuth();
   const [params, setParams] = useSearchParams();
   const [w, setW] = useState<Working | null>(null);
   const [error, setError] = useState("");
@@ -170,6 +171,7 @@ export function RateWorkingView({ tenderId, quotationId }: { tenderId?: number; 
                   Match the client BOQ to the library
                 </Link>
               )}
+              {can("knowledge.edit") && (
               <Button
                 size="small"
                 title="Its workings are added to the BOQ knowledge as new evidence (a won BOQ is added by itself)"
@@ -182,6 +184,7 @@ export function RateWorkingView({ tenderId, quotationId }: { tenderId?: number; 
               >
                 Mark final: add to the library
               </Button>
+              )}
               <Button variant="primary" size="small" onClick={() => void apply()}>
                 Rates to the lines
               </Button>

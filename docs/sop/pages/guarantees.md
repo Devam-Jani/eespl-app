@@ -7,7 +7,7 @@ mark: Past projects (Excel)
 Every signed work completion certificate: what we guarantee, where, with which products, from when and until when. A leakage complaint logged on the site links to the guarantee of its area. A certificate shows here only once the client has signed it.
 
 **On the page**
-- **Past projects (Excel)** / **Past projects (PDF)**: download the list of our completed projects, for a pre-qualification. The buttons show for every role on the page, but only billing, planning, the director and the office admin get the file.
+- **Past projects (Excel)** / **Past projects (PDF)**: download the list of our completed projects, for a pre-qualification. {perm: closeout.billing}
 - The table, soonest expiry first: **Certificate** (an addendum is marked "addendum"), **Site**, **Client**, **Areas** (each with its quantity), **Products**, **From** (the completion date), **Until** (the expiry, with "n y, active" or "expired") and **Complaints**.
 - **leakage logged**: shown when an issue is linked to the certificate; opens the issue log on leakage issues.
 
@@ -25,4 +25,4 @@ Every signed work completion certificate: what we guarantee, where, with which p
 
 **When it goes wrong**
 - The list is empty: no certificate is signed yet. Check the site's **Work completion** page for drafts.
-- "Missing permission: closeout.billing" on **Past projects (Excel)** or **Past projects (PDF)**: the export is for billing. Ask billing for the file.
+- No **Past projects** buttons: the export is for billing. Ask billing for the file.

@@ -269,13 +269,23 @@ class WoIn(BaseModel):
 
 @router.post("/work-orders", status_code=status.HTTP_201_CREATED)
 def create_wo(
-    body: WoIn, request: Request, db: DbSession, principal: CurrentPrincipal, _: WoEdit
+    body: WoIn, request: Request, db: DbSession, principal: CurrentPrincipal, scope: WoEdit
 ) -> dict:
     from app.quotations.models import Quotation  # noqa: PLC0415
 
     q = db.get(Quotation, body.quotation_id)
-    if q is None:
+    if q is None or (
+        scope != "all"
+        and q.salesperson_id != principal.user.id
+        and not site_ok(db, scope, principal, q.site_id)
+    ):
         raise not_found("Quotation not found")
+    if q.status != "won":
+        raise unprocessable(
+            f"{q.code} is {q.status}: a work order is entered against a won quotation"
+        )
+    if body.site_id and db.get(Site, body.site_id) is None:
+        raise not_found("Site not found")
     wo = ClientWorkOrder(code=next_code(db, ClientWorkOrder, "CWO"), client_ref=body.client_ref, quotation_id=q.id, tender_id=body.tender_id or q.tender_id,
                          site_id=body.site_id or q.site_id, client_id=q.client_id, created_by=principal.user.id)  # fmt: skip
     db.add(wo)
@@ -1337,7 +1347,9 @@ def bills(
         q = q.where(RaBill.site_id.in_(allowed or [0]))
     day = today()
     out = []
-    for b in db.scalars(q.limit(300)):
+    # the overdue list (payment follow-up) looks at every open bill, not only the newest 300:
+    # the most overdue are the oldest ones
+    for b in db.scalars(q if overdue else q.limit(300)):
         row = bsvc.bill_out(db, b, day)
         if overdue and not row["overdue_days"]:
             continue
@@ -1348,6 +1360,9 @@ def bills(
         if "tender.margin" not in principal.permissions:
             row.pop("cost", None)
         out.append(row)
+    if overdue:  # the most overdue first, as the page's help says
+        out.sort(key=lambda r: r["overdue_days"], reverse=True)
+        out = out[:300]
     return out
 
 
@@ -1794,6 +1809,12 @@ def _issue(db: Session, iid: int, scope: str, principal: Principal) -> SiteIssue
     return i
 
 
+@router.get("/issue-categories")
+def issue_categories(_: IssueView) -> list[dict]:
+    """The categories for the "Raise an issue" form."""
+    return [{"code": k, "label": v} for k, v in isvc.CATEGORY_LABEL.items()]
+
+
 @router.get("/issues")
 def list_issues(
     db: DbSession,
@@ -1863,6 +1884,7 @@ class IssuePatch(BaseModel):
     assigned_to: str | None = None
     due_on: date | None = None
     title: str | None = None
+    note: str | None = Field(default=None, max_length=4000)  # what was done (kept as a comment)
 
 
 @router.put("/issues/{iid}")
@@ -1876,8 +1898,11 @@ def update_issue(
 ) -> dict:
     i = _issue(db, iid, scope, principal)
     ch = body.model_dump(exclude_unset=True)
+    note = (ch.pop("note", None) or "").strip()
     if "status" in ch:
         isvc.set_status(db, i, ch.pop("status"))
+    if note:
+        isvc.comment(db, i, f"What was done: {note}" if i.status == "resolved" else note, principal.user.id)
     for k, v in ch.items():
         setattr(i, k, v)
     record(

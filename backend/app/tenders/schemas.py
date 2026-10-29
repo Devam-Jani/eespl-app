@@ -14,7 +14,9 @@ from pydantic import BaseModel, Field, model_validator
 
 TenderStatus = Literal["draft", "submitted", "won", "lost", "dropped"]
 # why it was lost (app.tenders.models.LOST_REASONS)
-LostReason = Literal["price", "competitor", "timing", "spec", "relationship", "other"]
+LostReason = Literal[
+    "price", "competitor", "timing", "spec", "relationship", "other", "main_job_lost"
+]
 LineStatus = Literal["unpriced", "suggested", "priced", "not_quoted"]
 QtyNote = Literal["QRO", "NQ"]
 Percent = Annotated[Decimal, Field(ge=0, lt=1000, max_digits=6, decimal_places=2)]

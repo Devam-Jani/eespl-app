@@ -27,7 +27,7 @@ mark: Add product
 - **Active**: untick to stop the product being offered in new work. {perm: library.edit}
 - **Save** saves; **Cancel** closes without saving. {perm: library.edit}
 - **Delete** (edit only): asks "Delete <name>?" and removes the product. A product used in a system cannot be deleted. {perm: library.edit}
-- On an edit, emptying **Pack (bag, can, drum)**, **HSN / SAC code** or **Reorder level** and saving keeps the old value. To change them, type the new value. {perm: library.edit}
+- On an edit, emptying **Pack (bag, can, drum)**, **HSN / SAC code** or **Reorder level** and saving clears it. {perm: library.edit}
 
 **The Prices window (Prices: <product>)** {perm: tender.margin}
 - The table: **Effective from**, **Purchase rate / unit**, **Freight / unit**, **Landed** (rate + freight), **Note**. **Current** marks the price in force; **Future** marks a price dated after today. {perm: tender.margin}

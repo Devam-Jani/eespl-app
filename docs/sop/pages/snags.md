@@ -30,6 +30,8 @@ and closed, and the client follows it in the portal.
 **The snag window**
 - The title, status, area, who raised it and when, the details and the photos ("before" and
   "after"). A client snag that is fixed shows "waiting for the client to verify".
+- The photo, person, due date and status buttons below show only to roles that may change the
+  site; others see the snag and its comments only.
 - **Add "after" photo**: opens the camera to add a photo of the fixed work. {perm: site.update}
 - **Assigned to**: choose a staff member of the site (the in-charge and the members). They are
   notified "assigned to you". {perm: site.update}

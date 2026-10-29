@@ -10,7 +10,7 @@ const EMPTY_STEP: TemplateStep = { name: "", weight_percent: "0", needs_photo: t
 /** The steps of each kind of work, their weights (must add up to 100), flags and typical days. */
 export default function StageTemplates() {
   const { can } = useAuth();
-  const canEdit = can("site.edit");
+  const canEdit = can("site.edit") || can("planning.edit"); // as the API (sites/routers.py TemplateEditScope)
   const [templates, setTemplates] = useState<StageTemplate[]>([]);
   const [selected, setSelected] = useState<number | "new" | null>(null);
   const [draft, setDraft] = useState<StageTemplate | null>(null);

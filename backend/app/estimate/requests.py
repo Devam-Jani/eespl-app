@@ -115,8 +115,10 @@ def ask(db: Session, site, *, product_id: int, area_sqm: Decimal, thickness_mm: 
         system_id = line.system_id if line else None
     qty, formula, pk = work_out(db, product, D(area_sqm), D(thickness_mm) if thickness_mm is not None else None, mix, system_id)
     remaining = left(db, est, product_id, area) if est is not None else None
-    if over(qty, remaining) and not (reason or "").strip():
+    is_over = over(qty, remaining)
+    if is_over and not (reason or "").strip():
         raise Refused(f"{lib.grouped(qty)} {product.unit} is more than the estimate has left ({lib.grouped(max(remaining, ZERO), 3)} {product.unit}): say why")
+    reason = reason if is_over else None  # only an over request keeps a reason (not a hidden one)
     r = MaterialRequest(code=next_code(db, "MR"), site_id=site.id, estimate_id=est.id if est else None, estimate_area_id=area.id if area else None,
                         product_id=product.id, mix_design_id=mix.id if mix else None, area_sqm=D(area_sqm), thickness_mm=thickness_mm, qty=qty,
                         packs=pk.count if pk else None, formula=formula, left_before=remaining, over_reason=(reason or "").strip() or None, created_by=user_id)  # fmt: skip

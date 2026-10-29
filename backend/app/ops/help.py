@@ -8,13 +8,13 @@ DEFAULTS: dict[str, dict[str, tuple[str, list[str]]]] = {
     "/my-work": {"": ("My work", [
         "Everything waiting for you is here, the most urgent first: to-dos from the process rules, approvals, follow-ups.",
         "Open a line to go straight to the page where you act on it.",
-        "When you finish the step on that page, the line closes by itself; a done line moves to Done.",
-        "Late lines show in red; the escalation goes to your manager after the time in the process rules.",
+        "When you finish the step on that page, the line closes by itself and leaves the list.",
+        "Late lines show in red; after the time in the process rules it escalates to the roles the rule names (often the director).",
     ])},
     "/notifications": {"": ("Notifications", [
         "The bell shows what happened on your sites and jobs: new enquiries, approvals, bills, issues.",
         "Click a notification to open what it is about; it is marked read.",
-        "Mark all read when you have seen them; nothing is deleted.",
+        "Mark all read is in the bell's list at the top; nothing is deleted.",
         "Choose which ones also come by email in My notifications (only when the company has turned email on).",
     ])},
     "/dashboard": {"": ("Dashboard", [
@@ -31,13 +31,13 @@ DEFAULTS: dict[str, dict[str, tuple[str, list[str]]]] = {
     "/field/claims": {"": ("Travel claims", [
         "Your month's claim is made from your days: km per day times your rate, plus tolls and other bills.",
         "Add a bill (toll, parking) with its photo on the day it belongs to.",
-        "Submit the claim at the month's end; your manager checks it, accounts pay it.",
+        "Nothing to submit: on the 1st the app sends last month's claim to your manager, who checks it; accounts pay it.",
         "A changed km shows who changed it and why.",
     ])},
     "/petty-cash": {"": ("Petty cash", [
         "Record each site expense with its bill photo: what, how much, for which site.",
         "Your balance shows what you were given and what you spent.",
-        "Accounts approve the entries; a returned one tells you why.",
+        "Accounts approve the entries; a rejected one tells you why.",
     ])},
     "/leads": {"": ("Leads", [
         "Every enquiry is a lead: the client, the place, what they need, where it came from.",
@@ -64,8 +64,8 @@ DEFAULTS: dict[str, dict[str, tuple[str, list[str]]]] = {
     ])},
     "/planning/board": {"": ("Site status board", [
         "Every site's state at a glance: upcoming, running, stuck, finishing.",
-        "Drag a site to its new column, or open it to see why it is stuck.",
-        "Red sites are late against their plan; the reason is on the card.",
+        "Pick a site's new column in its \"Move to…\" list (planning, or the site's own engineer), or open it to see why it is stuck.",
+        "Each card shows the site's progress and when it was last updated.",
     ])},
     "/sites": {
         "": ("Sites", [
@@ -93,7 +93,7 @@ DEFAULTS: dict[str, dict[str, tuple[str, list[str]]]] = {
     ])},
     "/attendance": {"": ("Attendance", [
         "Mark each worker present, half day or absent for your site today.",
-        "Gang check-in hours fill in by themselves when the gang checks in with its photo.",
+        "A gang check-in (menu: Gang check-in) is a record with its photo; it does not mark attendance here.",
         "Attendance feeds the labour bills and payroll; a change after the day keeps who changed it.",
     ])},
     "/deliveries": {"": ("Deliveries at site", [
@@ -135,7 +135,8 @@ DEFAULTS: dict[str, dict[str, tuple[str, list[str]]]] = {
         "Export to Excel for the client's billing team.",
     ])},
     "/work-orders": {"": ("Client work orders", [
-        "Upload the client's work order (PDF or Excel) or copy the lines from our quotation.",
+        "New work order: pick the won quotation, the client's reference and the client's file (PDF or Excel).",
+        "Or copy the lines from our quotation; fill or correct the payment terms with Edit terms.",
         "Compare it with our offer: every deviation (unit, rate, scope, payment ...) is listed.",
         "Accept each deviation or ask the client to amend it (the salesperson gets the to-do).",
         "Accept the work order when none is open: it is locked and its units and rates rule the bills.",

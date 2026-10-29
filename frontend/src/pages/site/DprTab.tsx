@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../../api";
 import { errorText, inr } from "../../format";
 import type { Dpr, DprRow } from "../../execution/types";
@@ -11,6 +12,9 @@ export const localToday = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
+/** The day a link asks for (?day=YYYY-MM-DD), else today. */
+export const dayFromQuery = (q: string | null) => (q && /^\d{4}-\d{2}-\d{2}$/.test(q) && !Number.isNaN(Date.parse(q)) ? q : localToday());
+
 type Line = { description: string; qty: string; unit: string; labour_count: string; place: string };
 type Place = { value: string; label: string };
 const emptyLine = (): Line => ({ description: "", qty: "", unit: "sqm", labour_count: "", place: "" });
@@ -21,7 +25,12 @@ const STATUS_LABEL: Record<string, string> = { new: "Not started", acknowledged:
 
 /** The day's report: what was recorded on site is pulled in; the supervisor adds the story. */
 export default function DprTab({ site }: { site: Site }) {
-  const [day, setDay] = useState(localToday());
+  const [params] = useSearchParams();
+  const [day, setDay] = useState(() => dayFromQuery(params.get("day"))); // the to-do and notifications link to ?day=
+  const askedDay = params.get("day");
+  useEffect(() => {
+    if (askedDay) setDay(dayFromQuery(askedDay));
+  }, [askedDay]);
   const [dpr, setDpr] = useState<Dpr | null>(null);
   const [form, setForm] = useState({ weather: "", work_done: "", hindrances: "", next_day_plan: "" });
   const [recent, setRecent] = useState<DprRow[]>([]);

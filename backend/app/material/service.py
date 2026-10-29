@@ -36,6 +36,7 @@ from app.material.models import (
     Store,
 )
 from app.sites.models import Site, SiteMember
+from app.timefmt import ist_today
 
 CENT = Decimal("0.01")
 QTY = Decimal("0.001")
@@ -63,7 +64,7 @@ def financial_year(on: date) -> str:
 def next_code(db: Session, kind: str, on: date | None = None) -> str:
     """IND-2026-0001, RFQ-, GRN-, TO-, ISS-, FR- by calendar year; PO-2026-27-000001 by
     financial year. One atomic statement, so two users never get the same number."""
-    on = on or date.today()
+    on = on or ist_today()
     from app.numbering import next_value  # noqa: PLC0415
 
     period = financial_year(on) if kind == "PO" else str(on.year)
@@ -271,7 +272,7 @@ def receive_transfer(db: Session, t, received: dict, user_id) -> None:
     """Complete a dispatched transfer: {line id: (qty received, shortage reason)}. All that was
     sent comes into the receiving store; what did not arrive is written off there (a
     'shortage' entry), so its value is charged to the receiving site. The freight goes to it."""
-    from datetime import UTC, date, datetime  # noqa: PLC0415
+    from datetime import UTC, datetime  # noqa: PLC0415
 
     dst = db.get(Store, t.to_store_id)
     for ln in t.lines:
@@ -311,7 +312,7 @@ def receive_transfer(db: Session, t, received: dict, user_id) -> None:
                 transfer_id=t.id,
                 site_id=dst.site_id,
                 direction="godown_to_site" if dst.site_id else "other",
-                on_date=date.today(),
+                on_date=ist_today(),
                 amount=t.freight_amount,
                 transporter=t.transporter,
                 vehicle_no=t.vehicle_no,

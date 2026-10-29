@@ -961,7 +961,7 @@ def site_engineer(db: Session, p: Principal) -> list[Item]:
                 str(ind.id),
                 f"Indent {ind.code}",
                 "Draft: submit it" if ind.status == "draft" else "Waiting for approval",
-                f"/indents/{ind.id}",
+                f"/indents?open={ind.id}",
                 "Open",
                 ind.created_at,
                 "normal",
@@ -977,6 +977,7 @@ def site_engineer(db: Session, p: Principal) -> list[Item]:
 def site_supervisor(db: Session, p: Principal) -> list[Item]:
     from app.execution.models import Attendance, Dpr  # noqa: PLC0415
     from app.material.models import SiteIssue, StockLedger, Store  # noqa: PLC0415
+    from app.portal.models import Snag  # noqa: PLC0415
     from app.sitecontrol.models import DeliveryNote  # noqa: PLC0415
 
     sites = my_sites(db, p.user.id)
@@ -984,7 +985,25 @@ def site_supervisor(db: Session, p: Principal) -> list[Item]:
     out = []
     end_of_day = datetime(t.year, t.month, t.day, 23, 59, tzinfo=IST)
     for sid in sites:
+        first = len(out)  # every item of this site carries its site_id (My site today counts by it)
         site = db.get(Site, sid)
+        # the open snags of the site: step 5 of My site today
+        for sn in db.scalars(
+            select(Snag).where(Snag.site_id == sid, Snag.status.in_(("open", "in_progress")))
+        ):
+            out.append(
+                item(
+                    "snag",
+                    str(sn.id),
+                    sn.title,
+                    f"Snag {sn.status.replace('_', ' ')}",
+                    f"/snags?site={sid}",
+                    "Resolve",
+                    sn.created_at,
+                    "warn",
+                    "/snags",
+                )
+            )
         if not db.scalar(
             select(Attendance.id).where(Attendance.site_id == sid, Attendance.on_date == t).limit(1)
         ):
@@ -1080,6 +1099,8 @@ def site_supervisor(db: Session, p: Principal) -> list[Item]:
                     "/my-site",
                 )
             )
+        for it in out[first:]:
+            it["site_id"] = sid
     return out
 
 
@@ -1099,7 +1120,7 @@ def store_purchase(db: Session, p: Principal) -> list[Item]:
                 str(ind.id),
                 f"Indent {ind.code}",
                 "Approved: convert to a PO",
-                f"/indents/{ind.id}",
+                f"/indents?open={ind.id}",
                 "Make PO",
                 ind.approved_at or ind.created_at,
                 "normal",

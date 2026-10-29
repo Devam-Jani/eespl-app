@@ -410,6 +410,7 @@ def day(
         and service.can_see(db, principal, d.user_id)
         and "field.track" in principal.permissions
     )
+    out["basis_locked"] = service.basis_locked(db, d) if out["can_choose_basis"] else None
     return jsonable_encoder(out)
 
 
@@ -428,6 +429,8 @@ def basis(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Day not found")
     if principal.user.id == d.user_id or not service.can_see(db, principal, d.user_id):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "The manager chooses the km of a day")
+    if locked := service.basis_locked(db, d):
+        raise service.conflict(locked)
     service.choose_basis(db, d, body.basis, body.reason, principal.user.id)
     record(db, request, principal, "field.km_basis", "field_day", d.id, after=body.model_dump())
     db.commit()
@@ -649,7 +652,8 @@ def site_pin(
     }
     site.lat, site.lng = Decimal(str(round(body.lat, 6))), Decimal(str(round(body.lng, 6)))
     site.radius_m, site.location_set_by, site.location_set_at = (
-        body.radius_m,
+        # no radius sent: the site keeps its own (an explicit null goes back to the default)
+        body.radius_m if "radius_m" in body.model_fields_set else site.radius_m,
         principal.user.id,
         service.now(),
     )

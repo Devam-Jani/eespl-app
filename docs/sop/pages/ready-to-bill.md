@@ -21,7 +21,8 @@ The page is titled "Work done, not billed". It lists every stage finished on a p
 - Camera-only sizes can be billed in the draft, but the tax invoice waits for a laser or manual size, or the client's certification.
 
 **What happens next**
-- **Raise RA bill**: the draft RA bill is made and the site's items leave this list (marked billed). The page then moves to the home page; open the bill under Client billing (pick the site), where you check it, then **Submit to client**.
+- **Raise RA bill**: the draft RA bill is made and the site's items leave this list (marked billed). Client billing opens with the site picked and the new draft bill open: check it, then **Submit to client**.
+- **Cancel bill** on that draft (Client billing) puts the site's items back on this list, open again.
 - When a stage is done, billing gets "Work done on <date>: make the stage bill" and the salesperson is told. After 7 days not billed, the director is told. The to-do closes when the bill is submitted.
 
 **Hands off**
@@ -34,4 +35,4 @@ The page is titled "Work done, not billed". It lists every stage finished on a p
 - "Finish (submit or cancel) the draft RA bill first": a draft is already open for the site. Submit or cancel it under Client billing.
 - "'<item>': n sqm is more than the measurement book (m); add the measurement first": the approved book is short. Measure and get it approved, then raise again.
 - "'<item>': n sqm is beyond the BOQ qty m; ...": bill the excess as an extra item.
-- After **Raise RA bill** you land on the home page: the bill was made. Find it under Client billing, on the site.
+- After **Raise RA bill** Client billing opens without the bill: the bill was made. Pick the site and click the bill in the list.

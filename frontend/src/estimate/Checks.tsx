@@ -96,7 +96,7 @@ export function TermsLibraryFindings({ onFixed }: { onFixed?: () => void }) {
           key={f.clause_id}
           f={f}
           action={
-            can("tc.edit") &&
+            can("library.edit") &&
             f.clause_id && (
               <Button size="small" variant="primary" loading={busy === f.clause_id} onClick={() => void fix(f.clause_id!)}>
                 Use the corrected text

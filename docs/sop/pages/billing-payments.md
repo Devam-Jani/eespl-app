@@ -7,7 +7,7 @@ mark: Log a call
 The client bills that are past their due date and still not fully paid, with what each one is waiting for and every call made about it. The due date is the invoice date (or the certification date, when the client's work order says so) plus the work order's payment term. Each call is logged here; a promised date becomes the next reminder.
 
 **On the page**
-- The table lists each overdue bill:
+- The table lists each overdue bill, the most overdue first:
   - **Bill**: the RA bill code (with the tax invoice number under it). Click it to open the bill on its payment tab, where receipts and the bill's tracking steps are.
   - **Site**: the site code and name.
   - **Outstanding**: what is still to be received on the invoice.
@@ -45,4 +45,4 @@ The client bills that are past their due date and still not fully paid, with wha
 - A bill you expected is missing: check it is invoiced (a bill with no invoice has no due date) and that the receipt was not already entered in full.
 - **Due** looks wrong: the payment term comes from the client's work order, else from the client's billing cycle, else from the invoice's own due date. Fix the term there.
 - "Bill not found": the bill was cancelled or is on a site you may not see.
-- A **Save** that fails closes the call form and shows the reason above the table. Press **Log a call** again and type the call again.
+- A **Save** that fails shows the reason above the table and keeps the call form open with what you typed. Correct it and press **Save** again.

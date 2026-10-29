@@ -11,21 +11,21 @@ written to the audit log.
 
 **On the page**
 - One card per checklist: its name, an **inactive** badge when switched off, and its checks in order, each with its type and ", required" when it must be answered.
-- **New checklist**: opens the **New checklist** form. {perm: inspection.edit}
-- **Edit** (on a card): opens **Edit checklist**. {perm: inspection.edit}
+- **New checklist**: opens the **New checklist** form. {perm: inspection.edit, planning.edit}
+- **Edit** (on a card): opens **Edit checklist**. {perm: inspection.edit, planning.edit}
 
-**The form (New checklist / Edit checklist)** {perm: inspection.edit}
-- **Name**: the checklist's name. It must be unique. {perm: inspection.edit}
-- **Check**: the text of one check. {perm: inspection.edit}
-- **Check type**: **pass / fail**, **number**, **text** or **photo**. {perm: inspection.edit}
-- **required**: the inspector must answer it. {perm: inspection.edit}
-- **×**: removes that check. {perm: inspection.edit}
-- **+ Item**: adds another check. {perm: inspection.edit}
-- **Active**: untick it to stop the checklist being offered. {perm: inspection.edit}
-- **Save**: saves and closes the form. {perm: inspection.edit}
+**The form (New checklist / Edit checklist)** {perm: inspection.edit, planning.edit}
+- **Name**: the checklist's name. It must be unique. {perm: inspection.edit, planning.edit}
+- **Check**: the text of one check. {perm: inspection.edit, planning.edit}
+- **Check type**: **pass / fail**, **number**, **text** or **photo**. {perm: inspection.edit, planning.edit}
+- **required**: the inspector must answer it. {perm: inspection.edit, planning.edit}
+- **×**: removes that check. {perm: inspection.edit, planning.edit}
+- **+ Item**: adds another check. {perm: inspection.edit, planning.edit}
+- **Active**: untick it to stop the checklist being offered. {perm: inspection.edit, planning.edit}
+- **Save**: saves and closes the form. {perm: inspection.edit, planning.edit}
 
 **Rules**
-- Only office roles with the inspection edit right for all sites change checklists. Site roles only use them.
+- Only office roles with the inspection edit right for all sites, and the planning team, change checklists. Site roles only use them.
 - A checklist needs a name and at least one check.
 - Inspections already done keep their answers when a checklist changes.
 
@@ -37,5 +37,5 @@ written to the audit log.
 - Passes on: the checklists the site teams inspect with.
 
 **When it goes wrong**
-- "A checklist named <name> exists": choose another name and press **Save** again. The message shows on the page behind the form, so the form seems to do nothing; closing the form loses what you typed.
-- "Checklists are kept by the office (inspection.edit, all)": your role may not change checklists.
+- "A checklist named <name> exists": choose another name and press **Save** again. The message shows in red at the top of the form; what you typed stays.
+- "Checklists are kept by the office or planning (inspection.edit, all, or planning.edit)": your role may not change checklists.

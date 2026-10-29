@@ -512,10 +512,11 @@ type ItemForm = { id?: number; text: string; type: ChecklistItem["type"]; requir
 
 export function Checklists() {
   const { me } = useAuth();
-  const canEdit = me?.permissions["inspection.edit"] === "all";
+  const canEdit = me?.permissions["inspection.edit"] === "all" || !!me?.permissions["planning.edit"]; // as the API (_save_checklist)
   const [list, setList] = useState<Checklist[]>([]);
   const [editing, setEditing] = useState<{ id?: number; name: string; is_active: boolean; items: ItemForm[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null); // shown inside the modal
   const load = useCallback(() => api<Checklist[]>("/api/execution/checklists").then(setList, (err) => setError(errorText(err))), []);
   useEffect(() => {
     void load();
@@ -529,9 +530,10 @@ export function Checklists() {
       setEditing(null);
       await load();
     } catch (err) {
-      setError(errorText(err));
+      setFormError(errorText(err));
     }
   }
+  const startEdit = (next: NonNullable<typeof editing>) => (setFormError(null), setEditing(next));
 
   const setItem = (i: number, patch: Partial<ItemForm>) => editing && setEditing({ ...editing, items: editing.items.map((it, j) => (j === i ? { ...it, ...patch } : it)) });
   return (
@@ -539,7 +541,7 @@ export function Checklists() {
       <div className="page-header">
         <h1>Checklist templates</h1>
         {canEdit && (
-          <Button variant="primary" onClick={() => setEditing({ name: "", is_active: true, items: [{ text: "", type: "pass_fail", required: true }] })}>
+          <Button variant="primary" onClick={() => startEdit({ name: "", is_active: true, items: [{ text: "", type: "pass_fail", required: true }] })}>
             New checklist
           </Button>
         )}
@@ -553,7 +555,7 @@ export function Checklists() {
               {c.name} {!c.is_active && <span className="badge badge-muted">inactive</span>}
             </b>
             {canEdit && (
-              <Button size="small" onClick={() => setEditing({ ...c, items: c.items.map((i) => ({ ...i })) })}>
+              <Button size="small" onClick={() => startEdit({ ...c, items: c.items.map((i) => ({ ...i })) })}>
                 Edit
               </Button>
             )}
@@ -574,6 +576,7 @@ export function Checklists() {
       {editing && (
         <Modal title={editing.id ? "Edit checklist" : "New checklist"} onClose={() => setEditing(null)} wide>
           <form onSubmit={save}>
+            {formError && <div className="alert alert-error">{formError}</div>}
             <Field label="Name">
               <input required value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
             </Field>

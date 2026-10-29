@@ -12,7 +12,7 @@ A PO up to the approval limit is approved by its creator (po.edit); above it nee
 
 import uuid
 from collections import defaultdict
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Annotated
@@ -112,6 +112,7 @@ from app.material.schemas import (
 )
 from app.models import User
 from app.sites.models import AreaScope, Site, Task
+from app.timefmt import ist_today
 
 router = APIRouter(prefix="/api/material", tags=["material"])
 
@@ -564,6 +565,10 @@ def _indent_out(db: Session, ind: Indent, principal: Principal) -> IndentOut:
         ind.created_by == principal.user.id or svc.covers_site(db, create, principal, ind.site_id)
     )
     can_approve = ind.status == "submitted" and svc.covers_site(db, approve, principal, ind.site_id)
+    # the same rule as cancel_indent: the creator or an indent approver, up to approved
+    can_cancel = ind.status in ("draft", "submitted", "approved") and (
+        ind.created_by == principal.user.id or svc.covers_site(db, approve, principal, ind.site_id)
+    )
     return IndentOut(
         id=ind.id,
         code=ind.code,
@@ -599,6 +604,7 @@ def _indent_out(db: Session, ind: Indent, principal: Principal) -> IndentOut:
         ],
         can_edit=can_edit,
         can_approve=can_approve,
+        can_cancel=can_cancel,
     )
 
 
@@ -1159,6 +1165,11 @@ def rfq_to_po(
             po.id,
             after={"code": po.code, "rfq": rfq.code},
         )
+    from app.process import hooks  # noqa: PLC0415
+
+    # the RFQ's indents now have their POs: closes "Indent approved, place the PO" (as create_po)
+    for po in pos:
+        hooks.po_created(db, po, list(out.indent_ids), principal.user.id)
     db.commit()
     return [_po_out(db, db.get(PurchaseOrder, po.id), principal) for po in pos]
 
@@ -1330,7 +1341,7 @@ def _fill_po(db: Session, po: PurchaseOrder, body: PoIn, principal: Principal) -
             base_qty,
             ln.rate,
             ln.rate_reason,
-            po.po_date or date.today(),
+            po.po_date or ist_today(),
         )
         lines.append(
             PoLine(
@@ -1383,7 +1394,7 @@ def _link_indents(db: Session, po: PurchaseOrder, body: PoIn) -> None:
 
 
 def _new_po(db: Session, body: PoIn, principal: Principal) -> PurchaseOrder:
-    on = body.po_date or date.today()
+    on = body.po_date or ist_today()
     po = PurchaseOrder(
         code=svc.next_code(db, "PO", on), po_date=on, status="draft", created_by=principal.user.id
     )
@@ -1871,7 +1882,7 @@ def _grn_header(db: Session, g: Grn, body: GrnIn, principal: Principal) -> Purch
     g.po_id, g.store_id = po.id if po else None, store.id
     for k in ("challan_no", "invoice_no", "invoice_date", "invoice_amount", "vehicle_no", "remark"):
         setattr(g, k, getattr(body, k))
-    g.received_at = body.received_at or date.today()
+    g.received_at = body.received_at or ist_today()
     return po
 
 
@@ -2486,7 +2497,7 @@ def create_issue(
         node_id=body.node_id,
         new_area_id=body.new_area_id,
         subcontractor_id=body.subcontractor_id,
-        issued_on=body.issued_on or date.today(),
+        issued_on=body.issued_on or ist_today(),
         remark=body.remark,
         created_by=principal.user.id,
     )
@@ -2572,10 +2583,13 @@ def list_freight(
     offset: Offset = 0,
     site_id: int | None = None,
     month: Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}$")] = None,
+    year: Annotated[int | None, Query(ge=2000, le=2100)] = None,
 ) -> Page[FreightOut]:
     query = select(FreightEntry).where(_freight_cond(scope, principal))
     if site_id is not None:
         query = query.where(FreightEntry.site_id == site_id)
+    if year is not None:  # the page's Year filter (the summary above uses the same year)
+        query = query.where(extract("year", FreightEntry.on_date) == year)
     if month:
         y, m = (int(x) for x in month.split("-"))
         query = query.where(

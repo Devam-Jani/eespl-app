@@ -84,7 +84,7 @@ export function SetPassword() {
     <div className="login-page">
       <form className="login-card" onSubmit={(e) => void submit(e)}>
         <div className="login-brand">
-          <span className="brand-mark">E</span>
+          <span className="app-mark" aria-hidden="true">E</span>
           <div>
             <h1>Set your password</h1>
             {who && (
@@ -108,6 +108,11 @@ export function SetPassword() {
               Set the password
             </Button>
           </>
+        )}
+        {!who && error && (
+          <p className="small muted top-gap">
+            Each link works once, for 7 days. Ask your admin to resend the invite, or use <Link to="/login?forgot=1">Forgot password</Link> on the sign-in page if you have signed in before.
+          </p>
         )}
       </form>
     </div>

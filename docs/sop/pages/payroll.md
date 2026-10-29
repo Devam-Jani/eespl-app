@@ -52,4 +52,4 @@ to the roles that may see salaries; the others see only **Labour wages**.
 - "The period ends before it starts": fix **From** and **To**.
 - "...'s wages for part of this period are already made": wages for these dates already exist for that worker. Pick dates after the last period.
 - "Already paid": the wage was marked paid already. Reload the page.
-- **Payslip** does nothing: the download failed and no message is shown. Reload the page and try again.
+- **Payslip** shows an error above the page: the download failed. Read the message, reload the page and try again.

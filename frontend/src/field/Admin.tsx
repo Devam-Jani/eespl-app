@@ -220,13 +220,15 @@ export function FieldSettings() {
   useEffect(() => {
     load();
   }, [load]);
-  async function run(p: Promise<unknown>) {
+  async function run(p: Promise<unknown>): Promise<boolean> {
     setError(null);
     try {
       await p;
       load();
+      return true;
     } catch (e) {
       setError(errorText(e));
+      return false;
     }
   }
   const put = (p: Person, json: Record<string, unknown>) => void run(api(`/api/field/admin/people/${p.user_id}`, { method: "PUT", json }));
@@ -354,8 +356,8 @@ export function FieldSettings() {
                             variant="primary" size="small"
                             disabled={!rate.rate_per_km || !rate.valid_from}
                             onClick={() =>
-                              void run(api(`/api/field/admin/people/${p.user_id}/rates`, { method: "POST", json: rate })).then(() =>
-                                setRate({ rate_per_km: "", valid_from: "", vehicle: "bike" }),
+                              void run(api(`/api/field/admin/people/${p.user_id}/rates`, { method: "POST", json: rate })).then(
+                                (ok) => ok && setRate({ rate_per_km: "", valid_from: "", vehicle: "bike" }), // a refused rate stays to be corrected
                               )
                             }
                           >

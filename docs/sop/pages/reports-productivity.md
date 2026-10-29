@@ -18,7 +18,7 @@ mark: ⤓ Excel
 - A row is "productivity low" when the sqm per man-day is more than the productivity drop % (20 % by default, in the site control settings) below the expected figure.
 - A subcontractor bill flagged "productivity low" needs an override with a note (at least 5 characters) before it can be approved. Billing is asked to check the bill; the director is asked to decide when it is flagged.
 - Rejected measurements are not counted.
-- The table lists the measured work of every site, not only the sites you are a member of.
+- The table lists the measured work of the sites you may open: every site for roles that see all sites, your own sites otherwise.
 
 **What happens next**
 - A figure set here is used for every later check of that system, on this page and on the subcontractor bills.

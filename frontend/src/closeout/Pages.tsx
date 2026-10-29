@@ -4,7 +4,9 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
 import { errorText, inr } from "../format";
-import { Button, buttonClass, Card, Field } from "../ui/components";
+import { Button, buttonClass, Card, Field, FilePicker } from "../ui/components";
+import { Modal } from "../ui/Overlay";
+import { NewWorkOrder, WorkOrderTerms, woListPath } from "./Entry";
 
 const d = (v: string | null | undefined) =>
   v ? new Date(v.length === 10 ? `${v}T00:00:00` : v).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
@@ -51,8 +53,9 @@ export function TenderCustomers({ tenderId }: { tenderId: number }) {
   const [pick, setPick] = useState("");
   useEffect(() => {
     if (can("tender.edit"))
-      api<{ id: number; name: string }[]>("/api/clients?limit=500").then(
-        (r) => setClients(Array.isArray(r) ? r : []),
+      // the clients list is a page ({items, total}), not an array
+      api<{ items: { id: number; name: string }[] }>("/api/clients?limit=500").then(
+        (r) => setClients(r?.items ?? []),
         () => setClients([]),
       );
   }, [can]);
@@ -186,6 +189,7 @@ const KIND: Record<string, string> = {
 };
 
 export function WorkOrders() {
+  const { can } = useAuth();
   const [params] = useSearchParams();
   const q = params.get("tender") ? `?tender_id=${params.get("tender")}` : params.get("site") ? `?site_id=${params.get("site")}` : "";
   const { data, error } = useLoad<WO[]>(`/api/closeout/work-orders${q}`);
@@ -196,6 +200,11 @@ export function WorkOrders() {
           <h1>Client work orders</h1>
           <p className="muted">Each work order checked against our accepted quotation before we sign it.</p>
         </div>
+        {can("wo.edit") && (
+          <div className="page-actions">
+            <NewWorkOrder tenderId={Number(params.get("tender")) || undefined} siteId={Number(params.get("site")) || undefined} />
+          </div>
+        )}
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       <Card as="div">
@@ -210,6 +219,13 @@ export function WorkOrders() {
             </tr>
           </thead>
           <tbody>
+            {data && !data.length && (
+              <tr>
+                <td colSpan={5} className="muted">
+                  No work order yet.{can("wo.edit") ? " New work order enters the client's work order against our won quotation." : ""}
+                </td>
+              </tr>
+            )}
             {(data ?? []).map((w) => (
               <tr key={w.id}>
                 <td>
@@ -231,6 +247,8 @@ export function WorkOrders() {
 export function WorkOrderPage() {
   const { id } = useParams();
   const { can } = useAuth();
+  const [params] = useSearchParams();
+  const fileError = params.get("file_error");
   const { data: wo, setData, error, setError } = useLoad<WO>(`/api/closeout/work-orders/${id}`);
   const [busy, setBusy] = useState(false);
   const act = async (p: Promise<WO>) => {
@@ -258,7 +276,7 @@ export function WorkOrderPage() {
       <div className="page-header">
         <div>
           <p className="small muted">
-            <Link to="/work-orders">Work orders</Link> / <code>{wo.code}</code>
+            <Link to={woListPath(can("closeout.billing"))}>Work orders</Link> / <code>{wo.code}</code>
           </p>
           <h1>
             Work order {wo.client_ref ?? wo.code} {wo.locked ? <span className="badge badge-ok">accepted · locked</span> : <span className="badge badge-warn">checking</span>}
@@ -294,6 +312,7 @@ export function WorkOrderPage() {
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
+      {fileError && <div className="alert alert-error">The work order is made, but its file was not read: {fileError}</div>}
       <Card as="div">
         <h2 className="section-title">
           Deviations from our offer ({wo.deviations.length}, {wo.open} open)
@@ -348,7 +367,10 @@ export function WorkOrderPage() {
       </Card>
       <div className="grid-2 top-gap">
         <Card as="div">
-          <h2 className="section-title">Payment and terms (structured)</h2>
+          <div className="bill-head">
+            <h2 className="section-title">Payment and terms (structured)</h2>
+            {edit && <WorkOrderTerms<WO> woId={wo.id} clientRef={wo.client_ref} terms={t} onSaved={setData} />}
+          </div>
           <p className="small">
             Payment: <b>{t.payment_days ?? "—"} days</b> after the {String(t.payment_basis ?? "invoice").replace("_", " ")} · retention {num(t.retention_percent as string)} %
             {t.retention_release ? ` (released ${t.retention_release})` : ""} · advance {num(t.advance_percent as string)} % · guarantee {t.guarantee_years ?? "—"} years
@@ -397,7 +419,15 @@ type ZNode = { id: number; parent_id: number | null; kind: string; name: string;
 /** RFI zones marked on the site: handed to us (green) or to another applicator (grey), and the client's signature. */
 export function SiteZones() {
   const { id } = useParams();
-  const { data, error } = useLoad<{ zones: Zone[]; nodes: ZNode[] }>(`/api/closeout/sites/${id}/zones`);
+  const { can } = useAuth();
+  const canEdit = can("closeout.site"); // the zone routes need it
+  const { data, error, load } = useLoad<{ zones: Zone[]; nodes: ZNode[] }>(`/api/closeout/sites/${id}/zones`);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [signing, setSigning] = useState<Zone | null>(null);
+  async function remove(z: Zone) {
+    if (!confirm(`Remove the zone ${z.name}?`)) return;
+    if ((await run(api(`/api/closeout/zones/${z.id}`, { method: "DELETE" }).then(() => true), setActionError)) !== undefined) load();
+  }
   const plan = useMemo(() => {
     if (!data) return null;
     const kids: Record<string, ZNode[]> = {};
@@ -458,8 +488,11 @@ export function SiteZones() {
           <span className="zone-key ours" /> ours <span className="zone-key theirs" /> another applicator <span className="zone-key unmarked" /> not marked
         </div>
       </Card>
+      {canEdit && <AddZone siteId={Number(id)} nodes={data.nodes} onAdded={load} />}
       <Card as="div" className="top-gap">
         <h2 className="section-title">Zones and RFI signatures</h2>
+        {actionError && <div className="alert alert-error">{actionError}</div>}
+        {data.zones.length === 0 && <p className="muted small">No zone marked yet.</p>}
         <table className="table compact">
           <thead>
             <tr>
@@ -467,6 +500,7 @@ export function SiteZones() {
               <th>Place</th>
               <th>Handed to</th>
               <th>RFI signed</th>
+              {canEdit && <th />}
             </tr>
           </thead>
           <tbody>
@@ -476,12 +510,115 @@ export function SiteZones() {
                 <td>{z.place}</td>
                 <td>{z.ours ? <span className="badge badge-ok">us</span> : <span className="badge badge-muted">{z.other_applicator}</span>}</td>
                 <td className="small">{z.signed_at ? `${z.signed_name}, ${d(z.signed_at)}${z.recorded_by_staff ? " (recorded by staff)" : " (in the portal)"}` : "not yet"}</td>
+                {canEdit && (
+                  <td className="row-actions nowrap">
+                    {!z.signed_at && (
+                      <>
+                        {z.ours && (
+                          <Button variant="ghost" size="small" onClick={() => setSigning(z)}>
+                            Record signature
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="small" onClick={() => void remove(z)}>
+                          Remove
+                        </Button>
+                      </>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
       </Card>
+      {signing && <RecordZoneSignature zone={signing} onClose={() => setSigning(null)} onSaved={() => (setSigning(null), load())} />}
     </>
+  );
+}
+
+/** The body of POST /zones: handed to us, or to another applicator (named). */
+export function zoneBody(f: { name: string; node_id: string; ours: boolean; other_applicator: string }) {
+  return { name: f.name.trim(), node_id: f.node_id ? Number(f.node_id) : null, ours: f.ours, other_applicator: f.ours ? null : f.other_applicator.trim() || null };
+}
+
+function AddZone({ siteId, nodes, onAdded }: { siteId: number; nodes: ZNode[]; onAdded: () => void }) {
+  const empty = { name: "", node_id: "", ours: true, other_applicator: "" };
+  const [f, setF] = useState(empty);
+  const [error, setError] = useState<string | null>(null);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if ((await run(api(`/api/closeout/sites/${siteId}/zones`, { method: "POST", json: zoneBody(f) }), setError)) !== undefined) {
+      setF(empty);
+      onAdded();
+    }
+  }
+  return (
+    <Card as="form" className="top-gap" onSubmit={(e: FormEvent) => void submit(e)}>
+      <h2 className="section-title">Mark a zone</h2>
+      {error && <div className="alert alert-error">{error}</div>}
+      <div className="form-grid two">
+        <Field label="Zone name *">
+          <input required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Flat 101" />
+        </Field>
+        <Field label="Place">
+          <select value={f.node_id} onChange={(e) => setF({ ...f, node_id: e.target.value, name: f.name || (nodes.find((n) => String(n.id) === e.target.value)?.name ?? "") })}>
+            <option value="">— none —</option>
+            {nodes.map((n) => (
+              <option key={n.id} value={n.id}>
+                {n.path}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field as="div" label="Handed to">
+          <label className="check">
+            <input type="radio" checked={f.ours} onChange={() => setF({ ...f, ours: true })} /> us
+          </label>{" "}
+          <label className="check">
+            <input type="radio" checked={!f.ours} onChange={() => setF({ ...f, ours: false })} /> another applicator
+          </label>
+        </Field>
+        {!f.ours && (
+          <Field label="Applicator *">
+            <input required value={f.other_applicator} onChange={(e) => setF({ ...f, other_applicator: e.target.value })} />
+          </Field>
+        )}
+      </div>
+      <div className="form-actions">
+        <Button variant="primary" type="submit">
+          Add the zone
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function RecordZoneSignature({ zone, onClose, onSaved }: { zone: Zone; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  async function save() {
+    if (!file) return;
+    const form = new FormData();
+    form.append("signed_name", name.trim());
+    form.append("file", file);
+    if ((await run(api(`/api/closeout/zones/${zone.id}/record-signature`, { method: "POST", form }), setError)) !== undefined) onSaved();
+  }
+  return (
+    <Modal title={`RFI signature: ${zone.name}`} onClose={onClose}>
+      {error && <div className="alert alert-error">{error}</div>}
+      <p className="small muted">The client signed the RFI on paper: write who signed and attach the signed copy. Once recorded, the zone is locked.</p>
+      <Field label="Signed by *">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name of the client's representative" />
+      </Field>
+      <FilePicker label="Choose the signed copy" required accept=".pdf,.png,.jpg,.jpeg" onFiles={(fs) => setFile(fs[0] ?? null)} />
+      <div className="form-actions">
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="primary" disabled={name.trim().length < 2 || !file} onClick={() => void save()}>
+          Record the signature
+        </Button>
+      </div>
+    </Modal>
   );
 }
 
@@ -522,7 +659,7 @@ export function BillingChecklist() {
         </p>
         <h1>Billing checklist</h1>
         <div className="alert alert-warn">
-          This site has no towers or wings yet, so there is nothing to check. Add them under <Link to={`/sites/${id}/zones`}>Zones</Link>.
+          This site has no towers or wings yet, so there is nothing to check. Add them in the site&apos;s <Link to={`/sites/${id}?tab=structure`}>Structure</Link> tab.
         </div>
       </>
     );
@@ -705,7 +842,8 @@ export function Payments() {
             void run(
               api(`/api/closeout/bills/${form.id}/followups`, { method: "POST", json: { spoke_to: form.spoke_to, said: form.said, promised_on: form.promised_on || null } }),
               setError,
-            ).then(() => {
+            ).then((saved) => {
+              if (saved === undefined) return; // refused: the form stays open with what was typed
               setForm(null);
               load();
             });
@@ -851,7 +989,8 @@ type Guarantee = {
 };
 
 export function Guarantees() {
-  const { data, error } = useLoad<Guarantee[]>("/api/closeout/guarantees");
+  const { can } = useAuth();
+  const { data, error, setError } = useLoad<Guarantee[]>("/api/closeout/guarantees");
   return (
     <>
       <div className="page-header">
@@ -861,14 +1000,17 @@ export function Guarantees() {
             Every signed work completion: what we guarantee, where, with which products, until when. A leakage complaint links to the guarantee and the exact area.
           </p>
         </div>
-        <div className="page-actions">
-          <Button onClick={() => void downloadFile("/api/closeout/past-projects.xlsx")}>
-            Past projects (Excel)
-          </Button>
-          <Button onClick={() => void downloadFile("/api/closeout/past-projects.pdf")}>
-            Past projects (PDF)
-          </Button>
-        </div>
+        {/* the past-projects export is the billing team's (closeout.billing); accounts sees the register only */}
+        {can("closeout.billing") && (
+          <div className="page-actions">
+            <Button onClick={() => void downloadFile("/api/closeout/past-projects.xlsx").catch((e) => setError(errorText(e)))}>
+              Past projects (Excel)
+            </Button>
+            <Button onClick={() => void downloadFile("/api/closeout/past-projects.pdf").catch((e) => setError(errorText(e)))}>
+              Past projects (PDF)
+            </Button>
+          </div>
+        )}
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       <Card as="div">
@@ -922,9 +1064,11 @@ type Issue = {
   description: string | null;
   raised_by: string | null;
   assigned_to: string | null;
+  assigned_to_id: string | null;
   due_on: string | null;
   status: string;
   overdue: boolean;
+  photos: number;
   snag_id: number | null;
   work_completion_id: number | null;
   comments: { by: string; body: string; at: string }[];
@@ -937,7 +1081,15 @@ export function Issues() {
   const { data, error, setError, load } = useLoad<Issue[]>(`/api/closeout/issues${site ? `?site_id=${site}` : ""}`);
   const [open, setOpen] = useState<number | null>(Number(params.get("open")) || null);
   const [text, setText] = useState("");
+  const [raising, setRaising] = useState(false);
+  const [resolving, setResolving] = useState<Issue | null>(null);
+  const [people, setPeople] = useState<{ id: string; name: string }[]>([]);
+  const editor = can("issues.edit");
+  useEffect(() => {
+    if (editor) void api<{ id: string; name: string }[]>("/api/team/people").then(setPeople, () => setPeople([]));
+  }, [editor]);
   const rows = (data ?? []).filter((i) => !params.get("category") || i.category === params.get("category"));
+  const patch = (i: Issue, json: Record<string, unknown>) => void run(api(`/api/closeout/issues/${i.id}`, { method: "PUT", json }), setError).then(load);
   return (
     <>
       <div className="page-header">
@@ -945,6 +1097,13 @@ export function Issues() {
           <h1>Issue log</h1>
           <p className="muted">Per site, members from the site allocation. "Share with the client" makes it a portal snag.</p>
         </div>
+        {can("issues.edit") && (
+          <div className="page-actions">
+            <Button variant="primary" onClick={() => setRaising(true)}>
+              + Raise an issue
+            </Button>
+          </div>
+        )}
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       <Card as="div">
@@ -1009,14 +1168,35 @@ export function Issues() {
                               Share with the client
                             </Button>
                           )}
-                          {i.status !== "resolved" && (
-                            <Button
-                              size="small"
-                              onClick={() => void run(api(`/api/closeout/issues/${i.id}`, { method: "PUT", json: { status: "resolved" } }), setError).then(load)}
-                            >
-                              Resolved
+                          {i.status !== "resolved" && i.status !== "closed" && (
+                            <Button size="small" onClick={() => setResolving(i)}>
+                              Resolved…
                             </Button>
                           )}
+                        </div>
+                      )}
+                      {can("issues.edit") && i.status !== "closed" && (
+                        <div className="inline-form top-gap">
+                          <Field label="With" inline className="small">
+                            <select value={i.assigned_to_id ?? ""} onChange={(e) => e.target.value && patch(i, { assigned_to: e.target.value })}>
+                              <option value="">— choose —</option>
+                              {people.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                          <Field label="Due" inline className="small">
+                            <input type="date" value={i.due_on ?? ""} onChange={(e) => patch(i, { due_on: e.target.value || null })} />
+                          </Field>
+                          <FilePicker
+                            label={`Add photos${i.photos ? ` (${i.photos} now)` : ""}`}
+                            accept="image/*"
+                            capture="environment"
+                            multiple
+                            onFiles={(files) => void run(issuePhotos(i.id, files), setError).then(load)}
+                          />
                         </div>
                       )}
                     </td>
@@ -1027,6 +1207,140 @@ export function Issues() {
           </tbody>
         </table>
       </Card>
+      {raising && <RaiseIssue site={site} people={people} onClose={() => setRaising(false)} onSaved={() => (setRaising(false), load())} />}
+      {resolving && (
+        <Modal title={`Resolve ${resolving.code}`} onClose={() => setResolving(null)}>
+          <ResolveIssue issue={resolving} onClose={() => setResolving(null)} onSaved={() => (setResolving(null), load())} />
+        </Modal>
+      )}
     </>
+  );
+}
+
+async function issuePhotos(id: number, files: File[]) {
+  for (const f of files) {
+    const form = new FormData();
+    form.append("file", f);
+    await api(`/api/closeout/issues/${id}/photos`, { method: "POST", form });
+  }
+}
+
+/** "Resolved": with what was done (kept on the issue as a comment). */
+function ResolveIssue({ issue, onClose, onSaved }: { issue: Issue; onClose: () => void; onSaved: () => void }) {
+  const [what, setWhat] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    if (await run(api(`/api/closeout/issues/${issue.id}`, { method: "PUT", json: { status: "resolved", note: what } }), setError)) onSaved();
+  }
+  return (
+    <form onSubmit={(e) => void save(e)}>
+      <p>{issue.title}</p>
+      <Field label="What was done">
+        <textarea required rows={3} value={what} onChange={(e) => setWhat(e.target.value)} />
+      </Field>
+      {error && <div className="alert alert-error">{error}</div>}
+      <div className="form-actions">
+        <Button type="button" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button type="submit" variant="primary">
+          Resolved
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** "Raise an issue": the site, a category, the title, who has it and a due date, photos. */
+function RaiseIssue({ site, people, onClose, onSaved }: { site: string | null; people: { id: string; name: string }[]; onClose: () => void; onSaved: () => void }) {
+  const [sites, setSites] = useState<{ id: number; code: string; name: string }[]>([]);
+  const [cats, setCats] = useState<{ code: string; label: string }[]>([]);
+  const [f, setF] = useState({ site_id: site ?? "", category: "", title: "", description: "", assigned_to: "", due_on: "" });
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void api<{ items: { id: number; code: string; name: string }[] }>("/api/sites?limit=200").then((r) => setSites(r.items), () => setSites([]));
+    void api<{ code: string; label: string }[]>("/api/closeout/issue-categories").then(setCats, () => setCats([]));
+  }, []);
+  const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const i = await api<Issue>("/api/closeout/issues", {
+        method: "POST",
+        json: { site_id: Number(f.site_id), category: f.category, title: f.title, description: f.description || null, assigned_to: f.assigned_to || null, due_on: f.due_on || null },
+      });
+      await issuePhotos(i.id, photos);
+      onSaved();
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Modal title="Raise an issue" onClose={onClose}>
+      <form onSubmit={(e) => void save(e)}>
+        <div className="grid-2">
+          <Field label="Site *">
+            <select required value={f.site_id} onChange={set("site_id")}>
+              <option value="">— site —</option>
+              {sites.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.code} {s.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Category *">
+            <select required value={f.category} onChange={set("category")}>
+              <option value="">— category —</option>
+              {cats.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        <Field label="What is the issue *">
+          <input required minLength={3} maxLength={300} value={f.title} onChange={set("title")} />
+        </Field>
+        <Field label="Details">
+          <textarea rows={3} value={f.description} onChange={set("description")} />
+        </Field>
+        <div className="grid-2">
+          <Field label="Who has it">
+            <select value={f.assigned_to} onChange={set("assigned_to")}>
+              <option value="">— nobody yet —</option>
+              {people.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Due">
+            <input type="date" value={f.due_on} onChange={set("due_on")} />
+          </Field>
+        </div>
+        <Field as="div" label="Photos">
+          <FilePicker label="Choose photos" accept="image/*" capture="environment" multiple onFiles={setPhotos} />
+        </Field>
+        {error && <div className="alert alert-error">{error}</div>}
+        <div className="form-actions">
+          <Button type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" loading={busy}>
+            Raise the issue
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }

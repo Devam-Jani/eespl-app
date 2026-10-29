@@ -536,7 +536,8 @@ class PrefIn(BaseModel):
 
 @router.put("/preferences")
 def set_preferences(body: PrefIn, db: DbSession, principal: CurrentPrincipal) -> dict:
-    """App only, app and email, or the 9:00 daily summary; escalations always email."""
+    """App only, app and email, or the daily summary (at the summary hour of the process
+    settings); escalations always email."""
     for code, mode in body.modes.items():
         if mode not in EMAIL_MODES or db.get(ProcessRule, code) is None:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{code}: {mode}?")

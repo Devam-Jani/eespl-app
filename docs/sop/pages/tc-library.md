@@ -8,7 +8,7 @@ The **T&C library** holds the terms and conditions clauses we put in quotations,
 
 **On the page**
 - **Clauses** and **Templates** (tabs): switch between the clause list and the templates.
-- **Clauses that give free-issue materials away (n)** (card, only when there are any): clauses saying we supply free what the client supplies free of cost (cement, sand, water and the like). Each shows "Says:" and "Should read:". {perm: estimate.view}
+- **Clauses that give free-issue materials away (n)** (card, only when there are any): clauses saying we supply free what the client supplies free of cost (cement, sand, water and the like). Each shows "Says:" and "Should read:", and for library editors **Use the corrected text**, which replaces the clause's wording with the "Should read:" text. {perm: estimate.view}
 
 **Clauses tab**
 - **Filter clauses** (box): shows only clauses (or variants) containing the words.
@@ -61,4 +61,4 @@ The **T&C library** holds the terms and conditions clauses we put in quotations,
 - "A clause cannot be merged into itself", "This clause is already merged into another clause", "The target clause is itself merged; merge into its master": choose another clause.
 - "A template with this name already exists": choose another name.
 - "A clause can appear only once in a template" or "Hidden or merged clauses cannot be in a template: [...]": the clause is already in the template, or it was hidden or merged meanwhile. Reload.
-- The free-issue card shows no button to correct the text. Correct the clause by hand with **Edit**, using the "Should read:" text. {perm: library.edit}
+- No **Use the corrected text** on the free-issue card: your role does not edit the library. Ask a library editor. {perm: library.edit}

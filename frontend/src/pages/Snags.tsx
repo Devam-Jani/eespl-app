@@ -168,7 +168,7 @@ export default function Snags() {
 }
 
 function SnagDialog({ id, onClose, onChange }: { id: number; onClose: () => void; onChange: () => void }) {
-  const { me } = useAuth();
+  const { me, can } = useAuth(); // the photo, person, due date and status buttons need site.update (read-only roles only look)
   const [s, setS] = useState<Snag | null>(null);
   const [images, setImages] = useState<Record<number, string | null>>({});
   const [staff, setStaff] = useState<{ id: string; full_name: string }[]>([]);
@@ -240,7 +240,7 @@ function SnagDialog({ id, onClose, onChange }: { id: number; onClose: () => void
           </figure>
         ))}
       </div>
-      {s.status !== "closed" && (
+      {s.status !== "closed" && can("site.update") && (
         <div className="inline-form top-gap">
           <label className={buttonClass({ size: "small" })}>
             Add "after" photo

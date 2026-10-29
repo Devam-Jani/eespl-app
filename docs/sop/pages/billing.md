@@ -14,7 +14,8 @@ The client's side of the money, per site: the client contract, its RA bills (run
 - **Site** (field): pick the site. Its contract, RA bills and invoices show below.
 - "No client contract yet.": the site has none. **Make the contract from the won tender** makes it from the won tender's priced BOQ lines, then takes the accepted work order's units, rates and quantities. {perm: billing.edit}
 - **Contract value** and **Terms** tiles: the client, GST %, SAC, retention %, TDS %, GST TDS %, the advance, what is left of it, and the recovery % per bill.
-- **New RA bill (from progress)**: makes the next draft RA bill (RA-<site>-01, 02 ...) and opens it. Each line's quantity is suggested from the approved measurement book less what earlier bills took (not from progress). {perm: billing.edit}
+- **New RA bill (from the approved measurements)**: makes the next draft RA bill (RA-<site>-01, 02 ...) and opens it. Each line's quantity is suggested from the approved measurement book less what earlier bills took (never straight from progress); a quantity above the book is refused. {perm: billing.edit}
+- Opened from **Raise RA bill** (Ready to bill), the page shows the site picked and the new draft bill open.
 - **Extra item**: opens "Extra item beyond the BOQ" with **Description**, **Unit**, **Qty**, **Rate** and **Add**. The item is billable once approved. {perm: billing.edit}
 - **Approve extra: <item>**: one button per extra item waiting; approves it. {perm: billing.approve}
 - The bills table: **RA bill**, **Period to**, **Submitted**, **Certified**, **Net**, **Status** (draft, submitted, certified_by_client, rejected_by_client, certified, invoiced, cancelled) with the invoice number, and **PDF**. Click a row to open the bill.
@@ -33,7 +34,7 @@ The client's side of the money, per site: the client contract, its RA bills (run
 - **Confirm client certification**: on a bill the client certified in the portal. Their quantity per line becomes the certified figure. Until this, their certification changes nothing in the books. {perm: billing.edit}
 - **Back to draft**: on a bill the client rejected or certified in the portal and we disagree. It goes back to draft and the client's quantities are cleared. {perm: billing.edit}
 - **Raise tax invoice**: on a certified bill. Makes the tax invoice from the certified lines (due in 30 days) and the bill becomes invoiced. {perm: billing.edit}
-- **Cancel bill**: asks "Cancel <bill>? It keeps its number." The bill is cancelled and keeps its number. Not possible once invoiced. {perm: billing.edit}
+- **Cancel bill**: asks "Cancel <bill>? It keeps its number." The bill is cancelled and keeps its number. It gives back what it took: its approved measurements are free for the next bill (the billing checklist no longer shows "billed in" it), its measurement sheet can be billed again, and its Ready-to-bill items are open again. Not possible once invoiced. {perm: billing.edit}
 
 **Invoices**
 - Every tax invoice and credit note: **Number**, **Date**, **Client**, **Taxable**, **GST** (IGST, or CGST + SGST), **Total**, **Outstanding** (with the retention held), **PDF**.

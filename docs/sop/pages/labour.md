@@ -22,16 +22,16 @@ wages are worked out from these details.
 - **Trade**: applicator, helper, mason, supervisor or other. {perm: labour.edit}
 - **Type**: **Own labour** or **From a subcontractor**. {perm: labour.edit}
 - **Subcontractor \***: shown for **From a subcontractor**; pick the subcontractor. {perm: labour.edit}
+- **Posted at**: the site the worker works at, from the sites you keep labour for, or "— not posted —". {perm: labour.edit}
 - **Daily wage (₹)** and **OT rate per hour (₹)**: empty counts as 0. {perm: labour.edit}
 - **Aadhaar (last 4 digits)**: type the number or its last 4 digits; only the last 4 are kept. When editing, the label shows the ones kept now; leave it empty to keep them. {perm: labour.edit}
 - **Save**: saves the worker. **Cancel**: closes without saving. {perm: labour.edit}
 
 **Rules**
-- This form has no site field. A worker added here is posted to no site ("Posted at" shows "—");
-  editing keeps the site the worker already has. To add a worker to a site, use **Add worker** on
-  the site's labour tab (**Workers** view).
-- Roles that keep labour only for their own sites must add workers from the site's labour tab:
-  here the save is refused with "Post the worker to one of your sites". {perm: labour.edit}
+- A worker saved with "— not posted —" is posted to no site ("Posted at" shows "—"). On the site's
+  labour tab (**Workers** view) the form has no site field: the worker goes to that site.
+- Roles that keep labour only for their own sites must pick one of their sites in **Posted at**:
+  without it the save is refused with "Post the worker to one of your sites". {perm: labour.edit}
 - The full Aadhaar number is never stored, not even in the audit log.
 - A wage change counts from the next day marked; days already marked keep their wage.
 - Changes are kept in the audit log.
