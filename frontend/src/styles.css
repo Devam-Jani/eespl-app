@@ -1519,8 +1519,19 @@ input.full {
 }
 .portal-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 4px;
+}
+/* a phone: the brand on its own line, the actions (bell, look, How to, reports, sign out) wrap under it */
+@media (max-width: 520px) {
+  .portal-top {
+    flex-wrap: wrap;
+  }
+  .portal-actions {
+    width: 100%;
+  }
 }
 .portal-main {
   max-width: 1100px;

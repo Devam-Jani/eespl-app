@@ -369,7 +369,8 @@ def file_name(title: str, ext: str) -> str:
 
 
 def _shot(screens: Path | None, role: str, page: str) -> Path | None:
-    f = screens / role / f"{slug(page)}.png" if screens and page else None
+    who = "super_admin" if role == INDEX else role  # the index shows the super admin's pages
+    f = screens / who / f"{slug(page)}.png" if screens and page else None
     return f if f and f.exists() else None
 
 
