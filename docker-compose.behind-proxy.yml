@@ -14,14 +14,14 @@
 #   volume (the database, the media) live in EESPL_STORE, a folder of ours on the big disk;
 # - Kylas and the helper off (the helper only if HELPER_AI_ENABLED and a key are set in .env, and
 #   then the api needs the egress network: see docs/DEPLOY.md); email only when EMAIL_ENABLED=true and
-#   the SMTP settings are in .env (the worker sends, on its own mail network).
+#   the SMTP settings are in .env (the worker sends; it is on the front network for that).
 #
 # Every container, network and volume carries the project name (eespl-test) as its prefix.
 name: eespl-test
 
 x-off: &off
   # staff email (invites, password links, notifications): off until the SMTP settings and
-  # EMAIL_ENABLED=true are in the server's .env; only the worker sends (through the mail network)
+  # EMAIL_ENABLED=true are in the server's .env; only the worker sends (through the front network)
   EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
   KYLAS_ENABLED: "false"
 
@@ -48,7 +48,9 @@ services:
   worker:
     environment:
       <<: *off
-    networks: [back, mail]
+    # front: the worker's way out to the SMTP server (port 587) when email is on (the shared server has
+    # no address pool left for a network of its own)
+    networks: [back, front]
     deploy:
       resources:
         limits: {memory: 320M, cpus: "0.25"}
@@ -118,8 +120,6 @@ networks:
   # everything else: no route out of the server, nothing published
   back:
     internal: true
-  # the worker's only way out: the SMTP server (port 587) when email is on
-  mail: {}
 
 # the named volumes' data in our own folder (EESPL_STORE/<name>, made before the first start), not
 # in Docker's shared storage: the whole stack is one folder to back up, move or remove

@@ -357,8 +357,8 @@ is laid over the production file:
   start: `mkdir -p $S/pgdata $S/media $S/media-training $S/caddy-data $S/caddy-config`);
 - Kylas and the helper off; staff email off until `EMAIL_ENABLED=true` and the SMTP settings
   (`SMTP_HOST`, `SMTP_PORT` 587 STARTTLS, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`) are in the
-  server's `.env` (never in git or a chat). Only the worker sends, on its own `mail` network (its
-  one way out). Microsoft 365: whoever manages the company email turns on SMTP AUTH for the
+  server's `.env` (never in git or a chat). Only the worker sends; it also joins the `front` network
+  for that (its one way out; the shared server has no address pool left for a new network). Microsoft 365: whoever manages the company email turns on SMTP AUTH for the
   sending mailbox. Until then the Users page says "Email is off: copy the link".
 
 `python3 scripts/check-behind-proxy.py` checks all of this on the resolved configuration (CI runs

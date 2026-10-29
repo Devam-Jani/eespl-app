@@ -8,7 +8,7 @@ docker compose resolves it:
 - every service has a memory and a CPU limit, about 4 GB and 3 CPUs in all at most;
 - no service mounts the repository's data/ folder (company drawings, BOQs, billing samples);
 - every service but Caddy is on internal networks only; the one exception is the main worker on the
-  `mail` network, its way out to the SMTP server for staff email (never the training worker);
+  `front` network, its way out to the SMTP server for staff email (never the training worker);
 - every named volume is a bind into EESPL_STORE (our folder, not Docker's shared storage);
 - the project, and so every container, network and volume, is named eespl-test;
 - its Caddyfile keeps the security headers and trusts the host's X-Forwarded-Proto.
@@ -29,7 +29,7 @@ PORT = ("127.0.0.1", "9400")
 MAX_MEMORY = 4 * 2**30
 MAX_CPUS = 3.0
 # the only non-internal network a service besides Caddy may join: the worker sends the staff email
-EGRESS = {"worker": {"mail"}}
+EGRESS = {"worker": {"front"}}
 DUMMY = {
     "APP_DOMAIN": "eespl.example.com",
     "EESPL_STORE": "/srv/eespl-test-store",
