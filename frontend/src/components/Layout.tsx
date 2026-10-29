@@ -7,6 +7,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
+import { useBranding } from "../branding";
 import { PageErrorBoundary } from "../helper/Helper";
 import type { Group } from "../menu";
 import { groupOf, MENU, visibleGroups } from "../menu";
@@ -68,6 +69,7 @@ export default function Layout() {
   const { me, can, logout } = useAuth();
   const groups = visibleGroups(can);
   const mode = useMode();
+  const brand = useBranding();
   const location = useLocation();
   const navigate = useNavigate();
   const width = useWidth();
@@ -122,7 +124,7 @@ export default function Layout() {
       () => setCounts({}),
     );
   }, [me, location.pathname]);
-  const approvals = Object.values(counts).reduce((a, b) => a + b, 0);
+  const approvals = counts["/my-work"] ?? 0; // the API's grand total (the other keys are per menu item and add up to it)
 
   const myWork = groups.find((g) => g.group === "My work")?.items.filter((i) => !TOP.has(i.to)) ?? [];
   const company = groups.filter((g) => g.group !== "My work");
@@ -131,12 +133,12 @@ export default function Layout() {
 
   const sidebar = (
     <aside className={`app-sidebar ${folded ? "folded" : ""} ${phone ? (drawer ? "drawer-open" : "drawer-shut") : ""}`} aria-label="Menu">
-      <NavLink to="/" className="app-logo" aria-label="EESPL home">
-        <span className="app-mark">E</span>
+      <NavLink to="/" className="app-logo" aria-label={`${brand?.product_name ?? ""} home`}>
+        <span className="app-mark">{brand?.product_name.slice(0, 1)}</span>
         {!folded && (
           <span className="app-name">
-            <b>EESPL</b>
-            <small>Waterproofing ERP</small>
+            <b>{brand?.product_name}</b>
+            <small>{brand?.product_tag}</small>
           </span>
         )}
       </NavLink>
@@ -283,9 +285,10 @@ export default function Layout() {
       </div>
       {phone && siteRole && (
         <nav className="app-tabs" aria-label="Main">
-          <NavLink to="/my-work" className="app-tab">
+          {/* "My day" is the check-in page (menu: My day (check-in)); a role without it gets My work under its own name */}
+          <NavLink to={can("field.track") ? "/field" : "/my-work"} className="app-tab">
             <Icon name="day" size={22} />
-            My day
+            {can("field.track") ? "My day" : "My work"}
           </NavLink>
           <NavLink to="/sites" className="app-tab">
             <Icon name="sites" size={22} />

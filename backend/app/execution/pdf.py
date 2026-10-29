@@ -9,6 +9,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app import branding
 from app.execution.common import media
 from app.execution.models import Dpr, Inspection, WorkOrder
 from app.masters.models import TcTemplate
@@ -45,7 +46,7 @@ tr { page-break-inside: avoid; }
 .totals { width: 50%; margin-left: auto; margin-top: 6px; }
 .totals td { border: none; padding: 2px 4px; }
 .tc { display: flex; gap: 6px; margin-bottom: 2px; }
-"""
+""" + branding.pdf_footer_css()
 
 IMAGE_TYPES = {
     ".png": "image/png",

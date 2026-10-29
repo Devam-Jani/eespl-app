@@ -240,6 +240,33 @@ def sop_read(role: str, db: DbSession, principal: CurrentPrincipal) -> dict:
 @router.get("/api/ops/mode")
 def mode() -> dict:
     """For the banner and the menu's switch: is this the training company, and where the other is."""
+    from app import branding  # noqa: PLC0415
     from app.config import settings  # noqa: PLC0415
 
-    return {"training": settings.training_mode, "main_url": settings.main_url or None, "training_url": settings.training_url or None}
+    return {"training": settings.training_mode, "main_url": settings.main_url or None, "training_url": settings.training_url or None, **branding.as_dict()}
+
+
+# --- the phone's home-screen app: name and tag from app.branding (one place) ---------------------------
+
+
+@router.get("/api/manifest.webmanifest")
+def manifest() -> JSONResponse:
+    from app import branding  # noqa: PLC0415
+
+    return JSONResponse(
+        {"name": branding.app_title(), "short_name": branding.PRODUCT_NAME, "description": branding.PRODUCT_TAG, "start_url": "/", "scope": "/", "display": "standalone",
+         "background_color": "#0F6B5C", "theme_color": "#0F6B5C", "icons": [{"src": "/api/app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]},
+        media_type="application/manifest+json",
+    )  # fmt: skip
+
+
+@router.get("/api/app-icon.svg")
+def app_icon() -> Response:
+    """A plain mark until the company's logo arrives (the first letter of the product name)."""
+    from html import escape  # noqa: PLC0415
+
+    from app import branding  # noqa: PLC0415
+
+    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="#0F6B5C"/>'
+           f'<text x="256" y="340" font-family="Arial, sans-serif" font-size="280" font-weight="700" fill="#fff" text-anchor="middle">{escape(branding.PRODUCT_NAME[:1])}</text></svg>')  # fmt: skip
+    return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=86400"})

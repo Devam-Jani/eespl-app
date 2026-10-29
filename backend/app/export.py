@@ -17,6 +17,8 @@ from openpyxl import Workbook
 from openpyxl.cell import WriteOnlyCell
 from openpyxl.styles import Font, PatternFill
 
+from app import branding
+
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 EXPORT_ROW_LIMIT = 20000
 LOCAL_TZ = ZoneInfo("Asia/Kolkata")  # Excel has no time zones; show Indian time
@@ -49,6 +51,9 @@ def xlsx_bytes(sheet_title: str, columns: Sequence[str], rows: Iterable[Sequence
     wb = Workbook(write_only=True)
     ws = wb.create_sheet(title=sheet_title[:31] or "Export")
     ws.freeze_panes = "A2"
+    ws.oddFooter.left.text = f"{branding.PRODUCT_NAME} · {branding.COMPANY_LINE}"
+    ws.oddFooter.left.size = 7
+    ws.oddFooter.right.text = "Page &P of &N"
     widths = [len(c) + 2 for c in columns]
     header = []
     for title in columns:

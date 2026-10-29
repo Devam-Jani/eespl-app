@@ -9,7 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DataError, IntegrityError, SQLAlchemyError
 
-from app import search
+from app import branding, search
 from app.analytics import home
 from app.analytics import routers as analytics
 from app.auth import account as account_routes
@@ -68,7 +68,7 @@ from app.takeoff import routes as takeoff
 from app.team import routers as team
 from app.tenders import routers as tenders
 
-app = FastAPI(title="EESPL App")
+app = FastAPI(title=branding.app_title())
 
 # every download (Excel, PDF ...) in the audit log
 

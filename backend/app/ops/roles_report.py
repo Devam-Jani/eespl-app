@@ -6,14 +6,15 @@ sign off before go-live. The pages come from the app's menu (menu.json, kept equ
 frontend's menu by its test)."""
 
 import json
-from datetime import date
 from html import escape
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import branding
 from app.models import Permission, Role
+from app.timefmt import ist_today
 
 MENU = Path(__file__).with_name("menu.json")
 SCOPE = {"all": "all sites / everyone", "assigned": "their own sites", "own": "only their own"}
@@ -72,7 +73,7 @@ td {{ border-bottom: 1px solid #e1e6e4; padding: 2px 4px; vertical-align: top; }
 .role {{ page-break-inside: auto; }} .sign {{ margin-top: 30px; }} .sign td {{ border: 0; padding-top: 34px; }}
 </style></head><body>
 <h1>Who sees what: roles for go-live</h1>
-<p class="muted">Every role's pages and actions in the EESPL App, and what each role never sees. Prepared {date.today():%d.%m.%Y} for the director's sign-off.
+<p class="muted">Every role's pages and actions in the {escape(branding.app_title())}, and what each role never sees. Prepared {ist_today():%d.%m.%Y} for the director's sign-off.
 People get roles in Users; one person may hold more than one role (they then see what each role gives). A client login sees only the client portal of its own sites.</p>"""]
     for r in rows:
         parts.append(f'<div class="role"><h2>{escape(r["name"])} <span class="muted">({escape(r["code"])}, {r["count"]} permissions)</span></h2>')
