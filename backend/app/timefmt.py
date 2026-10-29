@@ -1,7 +1,7 @@
 """Times are stored in UTC and shown in Indian time everywhere (pages, PDFs, Excel, alerts).
 One place for the conversion so a delivery shows the same time on every page."""
 
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -22,3 +22,9 @@ def label(dt: datetime | None, fmt: str = "%d %b %Y, %H:%M") -> str:
     """'09 Oct 2026, 17:31' in Indian time; '' for no value."""
     value = local(dt)
     return value.strftime(fmt) if value else ""
+
+
+def ist_today() -> date:
+    """Today in India. The containers run on UTC: date.today() there is yesterday until 05:30 IST
+    (a GRN, PO or follow-up dated the day before), so the app uses this instead."""
+    return datetime.now(IST).date()

@@ -31,6 +31,7 @@ from app.db import DbSession
 from app.execution.common import names, record
 from app.masters.models import Vendor
 from app.masters.rate import SQFT_PER_SQM
+from app.timefmt import ist_today
 
 router = APIRouter(prefix="/api/labour", tags=["labour rates"])
 ZERO = Decimal(0)
@@ -90,8 +91,8 @@ def card_out(db: Session, c: LabourRateCard) -> dict:
         "rate_max": c.rate_max,
         "valid_from": c.valid_from,
         "valid_to": c.valid_to,
-        "in_force": c.valid_from <= date.today()
-        and (c.valid_to is None or c.valid_to >= date.today()),
+        "in_force": c.valid_from <= ist_today()
+        and (c.valid_to is None or c.valid_to >= ist_today()),
     }
 
 
@@ -480,7 +481,7 @@ def piece_bill(
         contractor,
         body.period_from,
         body.period_to,
-        body.bill_date or date.today(),
+        body.bill_date or ist_today(),
         rows,
         principal.user.id,
         body.remark,
@@ -530,7 +531,7 @@ def attendance_bill(
         contractor,
         start,
         end,
-        body.bill_date or min(end, date.today()),
+        body.bill_date or min(end, ist_today()),
         rows,
         principal.user.id,
         body.remark,

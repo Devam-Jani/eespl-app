@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.auth.deps import Principal
 from app.masters.models import TcClause, TcTemplate
 from app.tenders.models import Tender, TenderMember, TenderTc
+from app.timefmt import ist_today
 
 
 def scope_condition(scope: str, principal: Principal) -> ColumnElement[bool]:
@@ -55,7 +56,7 @@ def check_edit(tender: Tender, edit_scope: str, principal: Principal) -> None:
 def next_code(db: Session, on: date | None = None) -> str:
     """T-2026-0001, T-2026-0002 ... per year. One atomic statement, so concurrent creations
     never get the same number."""
-    year = (on or date.today()).year
+    year = (on or ist_today()).year
     value = db.execute(
         text(
             "INSERT INTO tender_sequences (year, last_value) VALUES (:y, 1) "

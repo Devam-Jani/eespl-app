@@ -24,6 +24,7 @@ from app.sites.models import AreaScope, Site, SiteMember, Task
 from app.team import mywork
 from app.team.models import JobAssignment, Measurement, UserGrant
 from app.tenders.models import BoqLine, Tender, TenderTc
+from app.timefmt import ist_today
 from tests.conftest import login
 from tests.test_finance import boss, contract, world  # noqa: F401  (fixtures)
 
@@ -545,7 +546,7 @@ def test_the_engineer_approves_or_returns_the_supervisors_daily_report(world, pe
     e, eh, _ = person(
         "eng@example.com", "site_engineer", site_id=world["site"], role_on_site="incharge"
     )
-    day = date.today().isoformat()
+    day = ist_today().isoformat()
     url = f"/api/execution/sites/{world['site']}/dprs/{day}"
     terrace = db.scalar(select(AreaScope).where(AreaScope.id == world["scopes"][0])).node_id
     body = {
@@ -613,7 +614,7 @@ def test_the_quality_checklist_comes_before_the_stage_is_done(boss, world, db):
                 template_id=tpl.id,
                 answers=[],
                 result="pass",
-                on_date=date.today(),
+                on_date=ist_today(),
             )
         )
         db.commit()

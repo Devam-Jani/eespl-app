@@ -8,7 +8,7 @@ check, the pre-bid sheet, the internal export), methodology.site (the site's met
 pond tests and material tests: site engineers on their sites). Clients get only the exported
 methodology shared with them in the portal."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -1247,7 +1247,7 @@ async def pond_photo(
         raise _404("Pond test not found")
     _site(db, p.site_id, scope, principal)
     rel, name = await save_upload(file, f"methodology/pond/{p.site_id}")
-    p.photos = (p.photos or []) + [{"path": rel, "name": name, "at": datetime.now().isoformat()}]
+    p.photos = (p.photos or []) + [{"path": rel, "name": name, "at": datetime.now(UTC).isoformat()}]
     db.commit()
     return pond_out(p)
 

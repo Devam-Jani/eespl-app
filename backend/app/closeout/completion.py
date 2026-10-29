@@ -21,6 +21,7 @@ from app.closeout.common import locked, next_code, now, unprocessable
 from app.closeout.models import RfiZone, SiteIssueLog, WorkCompletion
 from app.sites.models import Site, SiteNode
 from app.team.models import Measurement
+from app.timefmt import ist_today
 
 
 def guard(w: WorkCompletion) -> None:
@@ -591,7 +592,7 @@ def register(db: Session, site_ids=None, today: date | None = None) -> list[dict
         out.append({"id": w.id, "code": w.code, "addendum_of": w.addendum_of_id, "site_id": w.site_id, "site": f"{site.code} {site.name}" if site else None,
                     "client": client.name if client else None, "areas": [f"{a['area']}: {qty_text(a['qty'], a['unit'])}" for a in w.areas],
                     "products": w.products, "systems": w.systems, "start": w.completion_date, "expiry": w.guarantee_expiry, "years": w.guarantee_years,
-                    "active": (today or date.today()) <= w.guarantee_expiry, "has_complaints": issues, "is_demo": w.is_demo})  # fmt: skip
+                    "active": (today or ist_today()) <= w.guarantee_expiry, "has_complaints": issues, "is_demo": w.is_demo})  # fmt: skip
     return out
 
 

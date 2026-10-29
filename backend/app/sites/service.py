@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.deps import Principal
 from app.sites.models import Site, SiteMember, SiteNode
+from app.timefmt import ist_today
 
 
 def scope_condition(scope: str, principal: Principal) -> ColumnElement[bool]:
@@ -51,7 +52,7 @@ def check(site: Site, scope: str | None, principal: Principal, what: str) -> Non
 
 def next_code(db: Session, on: date | None = None) -> str:
     """S-2026-0001 ... per year, from one atomic statement."""
-    year = (on or date.today()).year
+    year = (on or ist_today()).year
     value = db.execute(
         text(
             "INSERT INTO site_sequences (year, last_value) VALUES (:y, 1) "

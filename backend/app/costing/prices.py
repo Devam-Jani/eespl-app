@@ -22,6 +22,7 @@ from app.db import DbSession
 from app.execution.common import record
 from app.masters.models import PRICE_SOURCES, Product, ProductPrice, Vendor
 from app.models import User
+from app.timefmt import ist_today
 
 router = APIRouter(prefix="/api/prices", tags=["prices"])
 HUNDRED = Decimal(100)
@@ -64,7 +65,7 @@ def current(db: Session, product_id: int, on: date | None = None) -> ProductPric
         select(ProductPrice)
         .where(
             ProductPrice.product_id == product_id,
-            ProductPrice.effective_from <= (on or date.today()),
+            ProductPrice.effective_from <= (on or ist_today()),
         )
         .order_by(ProductPrice.effective_from.desc(), ProductPrice.id.desc())
         .limit(1)
@@ -106,7 +107,7 @@ def check(db: Session, product_id: int, rate: Decimal | None, exclude_id: int | 
     if exclude_id:
         q = q.where(ProductPrice.id != exclude_id)
     last = db.scalar(
-        q.where(ProductPrice.effective_from <= date.today())
+        q.where(ProductPrice.effective_from <= ist_today())
         .order_by(ProductPrice.effective_from.desc(), ProductPrice.id.desc())
         .limit(1)
     )
@@ -153,7 +154,7 @@ def record_price(
         product_id=product_id,
         purchase_rate=rate,
         freight_per_unit=freight,
-        effective_from=on or date.today(),
+        effective_from=on or ist_today(),
         source=source,
         ref=ref,
         vendor_id=vendor_id,
@@ -174,7 +175,7 @@ def freight_for(
     on: date | None = None,
 ) -> FreightRate | None:
     """The freight per unit in force: vendor + godown, then vendor, then the product alone."""
-    on = on or date.today()
+    on = on or ist_today()
     rows = db.scalars(
         select(FreightRate)
         .where(
@@ -298,7 +299,7 @@ def add_price(
         product_id=product_id,
         purchase_rate=body.rate,
         unit=body.unit,
-        effective_from=body.effective_from or date.today(),
+        effective_from=body.effective_from or ist_today(),
         source=body.source,
         vendor_id=body.vendor_id,
         ref=body.ref,
@@ -339,7 +340,7 @@ def add_freight(
         per_unit=body.per_unit,
         vendor_id=body.vendor_id,
         store_id=body.store_id,
-        effective_from=body.effective_from or date.today(),
+        effective_from=body.effective_from or ist_today(),
         note=body.note,
         created_by=principal.user.id,
     )

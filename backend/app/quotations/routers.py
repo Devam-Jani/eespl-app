@@ -67,6 +67,7 @@ from app.quotations.models import (
 from app.survey import service as survey_svc
 from app.survey.models import AreaType, Survey
 from app.tenders.models import LOST_REASONS
+from app.timefmt import ist_today
 
 router = APIRouter(prefix="/api/quotations", tags=["quotations"])
 View = Annotated[str, Depends(require_permission("quotation.view"))]
@@ -939,7 +940,7 @@ def _preview_quotation(db, kind: str, row) -> Quotation:
     q = Quotation(
         code="PREVIEW",
         revision=0,
-        quote_date=date.today(),
+        quote_date=ist_today(),
         validity_days=30,
         letterhead_id=head.id if head else None,
         client_firm="Sample Builders Pvt. Ltd.",
@@ -1126,7 +1127,7 @@ def create_quotation(
         or (lead.contact_name if lead else None),
         project=project,
         brand=body.brand or (head.brand if head else None),
-        quote_date=body.quote_date or date.today(),
+        quote_date=body.quote_date or ist_today(),
         validity_days=body.validity_days or s.default_validity_days,
         show_amounts=body.show_amounts,
         letter_template_id=letter.id if letter else None,

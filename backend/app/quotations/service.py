@@ -39,6 +39,7 @@ from app.sites.models import AreaScope, Site, StageTemplate
 from app.tenders import pricing
 from app.tenders import service as tender_service
 from app.tenders.models import BoqLine, Tender
+from app.timefmt import ist_today
 
 CENT = Decimal("0.01")
 TERMINAL = ("won", "lost", "expired")
@@ -408,7 +409,7 @@ def copy_quotation(db: Session, q: Quotation, user_id) -> Quotation:
         **cols,
         revision=q.revision + 1,
         previous_id=q.id,
-        quote_date=date.today(),
+        quote_date=ist_today(),
         status="draft",
         is_latest=True,
         created_by=user_id,
@@ -548,7 +549,7 @@ def mark_sent(db: Session, q: Quotation, user_id) -> None:
     first = q.status == "draft"
     q.status = "sent" if first else q.status
     q.sent_at = datetime.now(UTC)
-    schedule_followups(db, q, date.today())
+    schedule_followups(db, q, ist_today())
     if q.lead_id:
         lead = db.get(Lead, q.lead_id)
         if lead and lead.status in ("new", "contacted", "site_visit"):
@@ -688,7 +689,7 @@ def mark_won(
 
 def expire_due(db: Session, today: date | None = None) -> int:
     """Sent or in negotiation past the validity: expired (follow-ups stop)."""
-    today = today or date.today()
+    today = today or ist_today()
     n = 0
     for q in db.scalars(
         select(Quotation).where(Quotation.status.in_(OPEN_STATUSES), Quotation.is_latest)
@@ -731,7 +732,7 @@ def followup_rows(
         q = q.where(QuotationFollowUp.salesperson_id == user_id)
     if upto is not None:
         q = q.where(QuotationFollowUp.due_on <= upto)
-    today = date.today()
+    today = ist_today()
     return [
         {
             "id": f.id,

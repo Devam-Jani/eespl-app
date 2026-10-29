@@ -21,7 +21,7 @@ Every measuring and billing step goes through the API as the DEMO user of the ro
 """
 
 import math
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 
 from app.closeout.demo import Step, _login, _ok, _password, _purge
 from app.measure import geom
+from app.timefmt import ist_today
 
 SITE_CODE = "DEMO-POOL"
 SITE_NAME = "DEMO Club house swimming pool"
@@ -179,7 +180,7 @@ def _masters(db: Session, users: dict, code: str = SITE_CODE, name: str = SITE_N
     site = db.scalar(select(Site).where(Site.code == code))
     removed = 0
     if site is None:
-        site = Site(code=code, name=name, city="Ahmedabad", state="Gujarat", status="active", is_demo=True, start_date=date.today() - timedelta(days=60))
+        site = Site(code=code, name=name, city="Ahmedabad", state="Gujarat", status="active", is_demo=True, start_date=ist_today() - timedelta(days=60))
         db.add(site)
         db.flush()
     else:
@@ -189,7 +190,7 @@ def _masters(db: Session, users: dict, code: str = SITE_CODE, name: str = SITE_N
         if not db.scalar(select(SiteMember.site_id).where(SiteMember.site_id == site.id, SiteMember.user_id == uid)):
             db.add(SiteMember(site_id=site.id, user_id=uid, role_on_site="office"))
     wo = ClientWorkOrder(code=f"CWO-{code}", client_ref=f"DEMO/{code}/WO/01", site_id=site.id, client_id=cl.id, lines_from="typed", status="accepted",
-                         accepted_by=users["billing"], accepted_at=date.today() - timedelta(days=50), payment_basis="invoice", payment_days=30)  # fmt: skip
+                         accepted_by=users["billing"], accepted_at=ist_today() - timedelta(days=50), payment_basis="invoice", payment_days=30)  # fmt: skip
     items = [("1", "Waterproofing coating, two coats, on floors, side walls, wall tops and slopes", "sqft", "3000", "85", False, 1),
              ("2", "Pipe sleeve with puddle flange, fixed in the wall", "nos", "10", "1250", False, 1),
              ("3", "Brick bat coba, per layer", "sqft", "1700", "42", True, 2)]  # fmt: skip
@@ -305,7 +306,7 @@ def run(db: Session) -> dict:
         return logged
 
     # 4. sheet 1: A and Q (R, and brick bat's second layer, not done yet) --------------------------------
-    d1 = date.today() - timedelta(days=30)
+    d1 = ist_today() - timedelta(days=30)
     s1 = _ok(c.post(f"{base}/sheets", json={"measured_on": d1.isoformat(), "title": "Pool and slope"}, headers=hb), "sheet 1", 201)
     for wid, layer in ((wl["1"], 1), (wl["2"], 1), (wl["3"], 1), (wl["3"], 2)):
         _ok(c.post(f"/api/measure/sheets/{s1['id']}/not-done", json={"area_id": areas["R"]["id"], "wo_line_id": wid, "layer": layer}, headers=hb), "not done")
@@ -318,7 +319,7 @@ def run(db: Session) -> dict:
     inv = _ok(c.post(f"/api/measure/bills/{b1['id']}/tax-invoice", json={"invoice_date": (d1 + timedelta(days=5)).isoformat()}, headers=hb), "tax invoice", 201)
 
     # 5. sheet 2: the rest; the client corrects the sleeves (one was not fixed yet) ---------------------
-    d2 = date.today() - timedelta(days=3)
+    d2 = ist_today() - timedelta(days=3)
     s2 = _ok(c.post(f"{base}/sheets", json={"measured_on": d2.isoformat(), "title": "Balancing tank, second layer"}, headers=hb), "sheet 2", 201)
     s2 = _ok(c.post(f"/api/measure/sheets/{s2['id']}/send", headers=hb), "send 2")
     corr = approve_all(s2, ("Pipe sleeve", "1", "One sleeve in the tank is not fixed yet: 1 No this bill"))

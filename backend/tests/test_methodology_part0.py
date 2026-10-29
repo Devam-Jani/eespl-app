@@ -6,7 +6,7 @@ one main item, each priced from its own part of the build-up; unknown products g
 list, not the master; the review queue hides single-line templates."""
 
 import io
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 
 import ezdxf
@@ -17,6 +17,7 @@ from app.knowledge.models import KnowledgeFile, KnowledgeLine, KnowledgeTemplate
 from app.masters.models import Product, System, SystemComponent
 from app.takeoff.reader import read, repair
 from app.tenders.models import BoqLine, BoqSection, Tender
+from app.timefmt import ist_today
 from tests.test_finance import boss  # noqa: F401  (fixtures)
 
 
@@ -65,7 +66,7 @@ def _line(db, desc, city, rate, unit="sqm", unit_raw="Sqm", working=None, on=Non
                        rate_sqm=d(rate) if unit == "sqm" else (d(rate) * d("10.7639")).quantize(d("0.01")),
                        area_type=req.area_type, surface=req.surface, coats=req.coats, min_kg_sqm=req.min_kg_sqm,
                        requirements=req.as_dict(), city=city, region="Ahmedabad" if city in ("Ahmedabad", "Bopal") else "Saurashtra",
-                       on_date=on or date.today() - timedelta(days=30), working=working)  # fmt: skip
+                       on_date=on or ist_today() - timedelta(days=30), working=working)  # fmt: skip
     db.add(ln)
     db.flush()
     return ln

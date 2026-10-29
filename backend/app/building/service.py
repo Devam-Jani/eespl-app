@@ -16,7 +16,7 @@ data (stored, drawing units unless _m):
 
 import math
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -498,5 +498,5 @@ def rebuild(db: Session, site: Site, model: BuildingModel, cad: CadFile) -> tupl
     ch = takeoff.changes(db, cad)
     changes["rooms"] = {"kept": sum(1 for a in rooms if not a.change), "added": [r["name"] for r in ch.get("added", [])],
                         "resized": [r["name"] for r in ch.get("resized", [])], "removed": [r["name"] for r in ch.get("removed", [])]}  # fmt: skip
-    changes["at"] = datetime.now().isoformat(timespec="minutes")
+    changes["at"] = datetime.now(UTC).isoformat(timespec="minutes")  # stored in UTC (shown in IST)
     return data, changes

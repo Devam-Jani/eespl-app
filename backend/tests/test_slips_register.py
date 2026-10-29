@@ -16,6 +16,7 @@ from app.finance.models import RaBill
 from app.measure import register, slip
 from app.measure.models import BillRevision, MeasureSheet
 from app.team.models import Measurement
+from app.timefmt import ist_today
 from tests.test_finance import boss  # noqa: F401  (fixture)
 from tests.test_measure_billing import (
     pool,  # noqa: F401  (fixture: a site, its work order and contract)
@@ -87,13 +88,13 @@ def test_ra_numbers_are_never_reused_or_renamed(pool, db):  # noqa: F811
     from app.measure import bill as mb
 
     k = db.get(ClientContract, pool["contract"].id)
-    nxt = RaBill(code="x", contract_id=k.id, site_id=k.site_id, seq=0, period_to=date.today())
+    nxt = RaBill(code="x", contract_id=k.id, site_id=k.site_id, seq=0, period_to=ist_today())
     seq = (db.scalar(select(RaBill.seq).where(RaBill.contract_id == k.id).order_by(RaBill.seq.desc()).limit(1)) or 0) + 1
     assert seq == bill.seq + 1
     del nxt
     # an old bill cannot come in under a number the app has given
     with pytest.raises(mb.Clash):
-        importer.run(db, db.get(type(pool["site"]), pool["site"].id), sheet_file=None, proforma_file=("p.xlsx", b"x"), measured_on=date.today(), user=pool["me"], ra_no=bill.seq)
+        importer.run(db, db.get(type(pool["site"]), pool["site"].id), sheet_file=None, proforma_file=("p.xlsx", b"x"), measured_on=ist_today(), user=pool["me"], ra_no=bill.seq)
 
 
 def pool_edge_answers(pool):  # noqa: F811
@@ -109,7 +110,7 @@ def test_revisions_one_sent_and_what_changed(pool, db):  # noqa: F811
     b = c.post(f"/api/measure/sheets/{s['id']}/bill", json={}, headers=h).json()
     revs = c.post(f"/api/measure/bills/{b['id']}/revisions", json={"label": "first"}, headers=h).json()
     bill = db.get(RaBill, b["id"])
-    register.add_revision(db, bill, label="revised", source="an old file", made_on=date.today(), lines=[{"item_no": "1", "description": "Coating", "unit": "sqft", "qty": "10", "rate": "85", "amount": "850"}],
+    register.add_revision(db, bill, label="revised", source="an old file", made_on=ist_today(), lines=[{"item_no": "1", "description": "Coating", "unit": "sqft", "qty": "10", "rate": "85", "amount": "850"}],
                           basic=D(850), gst=D(153), total=D(1003))  # fmt: skip
     db.commit()
     revs = c.get(f"/api/measure/bills/{b['id']}/revisions", headers=h).json()

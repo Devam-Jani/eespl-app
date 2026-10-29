@@ -16,7 +16,7 @@ site: the survey (method "cad"), the measurement book (source "autocad"), the ma
 
 import re
 from collections import defaultdict
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.takeoff import geometry
 from app.takeoff.models import CadArea, CadFile, CadLayerMap, TakeoffSettings
 from app.takeoff.sizes import dec, depths, is_waterproofing_note, label_name, parse_size
+from app.timefmt import ist_today
 
 ROOM_WORDS = (
     "TOILET", "BATH", "W.C", "WC", "WASH", "TERRACE", "KITCHEN", "BALCONY", "VERANDAH", "OHT", "O.H.W.T", "UG TANK", "UGT", "U.G.", "LIFT PIT", "LIFT WELL", "PLANTER",
@@ -615,7 +616,7 @@ def survey_for(db: Session, f: CadFile, user_id):
     title = f"AutoCAD takeoff: {drawing.title}"[:300]
     s = db.scalar(select(Survey).where(Survey.site_id == f.site_id, Survey.title == title))
     if s is None:
-        s = Survey(code=next_code(db, "SUR"), site_id=f.site_id, title=title, status="draft", surveyed_on=date.today(),
+        s = Survey(code=next_code(db, "SUR"), site_id=f.site_id, title=title, status="draft", surveyed_on=ist_today(),
                    surveyed_by=user_id, notes="Areas taken off the AutoCAD drawing (method: cad).", created_by=user_id)  # fmt: skip
         db.add(s)
         db.flush()
@@ -675,7 +676,7 @@ def accept(
         place = a.floor_label or a.plan or ""
         m = Measurement(site_id=f.site_id, contract_line_id=contract_line_id, node_id=a.node_id,
                         survey_area_id=a.survey_area_id, description=f"{a.name} {('(' + place + ')') if place else ''}"[:500].strip(),
-                        qty=qty, unit="sqm", source="autocad", measured_on=date.today(), measured_by=user_id,
+                        qty=qty, unit="sqm", source="autocad", measured_on=ist_today(), measured_by=user_id,
                         note=ref, created_by=user_id)  # fmt: skip
         db.add(m)
         db.flush()
@@ -683,7 +684,7 @@ def accept(
         if a.side_wall_sqm:
             sw = Measurement(site_id=f.site_id, contract_line_id=contract_line_id, node_id=a.node_id,
                              survey_area_id=a.survey_area_id, description=f"{a.name}: sunken side walls (perimeter × {a.sunk_m} m)"[:500],
-                             qty=a.side_wall_sqm, unit="sqm", source="autocad", measured_on=date.today(),
+                             qty=a.side_wall_sqm, unit="sqm", source="autocad", measured_on=ist_today(),
                              measured_by=user_id, note=ref, created_by=user_id)  # fmt: skip
             db.add(sw)
             db.flush()

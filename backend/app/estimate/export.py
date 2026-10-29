@@ -5,7 +5,6 @@ periphery × upturn, coverage, wastage, quantity), then the materials per area, 
 the app's own (the same numbers as the page), at 3 decimals; packs are rounded up on the total."""
 
 import io
-from datetime import date
 from decimal import Decimal
 from html import escape
 
@@ -17,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.estimate import library as lib
 from app.estimate import service as svc
 from app.estimate.models import Estimate
+from app.timefmt import ist_today
 
 D = Decimal
 BOLD = Font(bold=True)
@@ -85,7 +85,7 @@ def workbook(db: Session, est: Estimate, site_name: str | None) -> bytes:
     _widths(ws, [40, 22, *[18] * len(lines)])
     ws = wb.create_sheet("Summary")
     ws.append([f"{est.code} {est.title}" + (f": {site_name}" if site_name else "")])
-    ws.append([f"Material estimate, {date.today():%d.%m.%Y}"])
+    ws.append([f"Material estimate, {ist_today():%d.%m.%Y}"])
     ws.append([])
     ws.append(["Material", "Quantity", "Unit", "Packs"])
     for c in ws[4]:
@@ -121,7 +121,7 @@ table {{ width: 100%; border-collapse: collapse; }} th {{ background: #ddebe7; t
 td {{ border-bottom: 1px solid #e1e6e4; padding: 2px 4px; vertical-align: top; }} td.n {{ text-align: right; white-space: nowrap; }}
 tr.total td {{ font-weight: bold; border-top: 1px solid #1c2b28; }} .warn {{ background: #fff4d6; padding: 4px 6px; margin: 6px 0; }}
 </style></head><body><h1>{escape(est.code)} {escape(est.title)}</h1>
-<p class="muted">{escape(site_name or '')} · Material estimate, {date.today():%d.%m.%Y} · quantities = area × coverage × (1 + wastage), packs rounded up</p>"""]
+<p class="muted">{escape(site_name or '')} · Material estimate, {ist_today():%d.%m.%Y} · quantities = area × coverage × (1 + wastage), packs rounded up</p>"""]
     if missed:
         parts.append(f'<div class="warn"><b>{len(missed)} measured area(s) not in this estimate and not excluded:</b> ' + escape("; ".join(f"{m.name} {lib.n(m.floor_sqm)} sqm" for m in missed)) + "</div>")
     for lo in lines:

@@ -4,7 +4,6 @@ Invented data only (the DEMO pool's shapes, drawn here)."""
 
 import io
 import math
-from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -23,6 +22,7 @@ from app.models import User
 from app.sites.models import Drawing, DrawingRevision, Site
 from app.takeoff import pipeline
 from app.takeoff.models import CadFile
+from app.timefmt import ist_today
 from tests.test_finance import boss  # noqa: F401  (fixture)
 
 D = Decimal
@@ -397,7 +397,7 @@ def test_a_billed_area_is_locked(pool, db):
     a = pool["areas"]["A"]
     assert pool["c"].post(f"/api/measure/areas/{a}/height", json={"section": "Y", "top": "+1900", "bottom": "+600"}, headers=pool["h"]).status_code == 409
     assert pool["c"].delete(f"/api/measure/areas/{a}", headers=pool["h"]).status_code == 409
-    assert db.get(MeasureArea, a) is not None and date.today()
+    assert db.get(MeasureArea, a) is not None and ist_today()
 
 
 def test_an_old_row_without_an_item_is_listed_never_silently_added():

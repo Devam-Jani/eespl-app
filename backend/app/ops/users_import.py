@@ -10,7 +10,6 @@ EMAIL_ENABLED)."""
 import io
 import re
 from dataclasses import dataclass, field
-from datetime import date
 from decimal import Decimal, InvalidOperation
 
 import openpyxl
@@ -19,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Role, User
+from app.timefmt import ist_today
 
 COLUMNS = ["Name", "Email", "Phone", "Roles", "Manager (email)", "Sites (codes)", "Tracked (yes/no)", "Travel eligible (yes/no)", "Rate per km"]
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -178,7 +178,7 @@ def save(db: Session, rows: list[Row], by_user) -> list[dict]:
             mgr = made.get(r.manager) or (db.scalar(select(User).where(func.lower(User.email) == r.manager)) if r.manager else None)
             db.add(TrackingProfile(user_id=u.id, tracked=r.tracked, reimbursable=r.travel, manager_id=mgr.id if mgr else None, created_by=by_user))
         if r.rate is not None:
-            db.add(TravelRate(user_id=u.id, rate_per_km=r.rate, valid_from=date.today(), created_by=by_user))
+            db.add(TravelRate(user_id=u.id, rate_per_km=r.rate, valid_from=ist_today(), created_by=by_user))
         out.append({"row": r.row, "name": r.name, "email": r.email, "status": "new", "link": make_link(db, u, by_user)})
     db.flush()
     return out

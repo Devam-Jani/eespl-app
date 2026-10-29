@@ -10,6 +10,7 @@ from sqlalchemy import select, text
 from app.masters.models import CompanyGstin, Product, UnitConversion, Vendor
 from app.material import service as svc
 from app.models import User
+from app.timefmt import ist_today
 from tests.conftest import login
 
 D = Decimal
@@ -141,7 +142,7 @@ def test_full_flow_indent_rfq_po_grn_transfer_issue(boss, masters, db):
     )
     assert r.status_code == 201, r.text
     indent = r.json()
-    assert indent["code"] == f"IND-{date.today().year}-0001"
+    assert indent["code"] == f"IND-{ist_today().year}-0001"
     assert indent["status"] == "submitted"
     assert [D(ln["base_qty"]) for ln in indent["lines"]] == [200, 40, 100, 5]
     r = client.post(f"/api/material/indents/{indent['id']}/approve", headers=h)
@@ -254,7 +255,7 @@ def test_full_flow_indent_rfq_po_grn_transfer_issue(boss, masters, db):
     )
     assert r.status_code == 201, r.text
     t = r.json()
-    assert t["code"] == f"TO-{date.today().year}-0001" and t["status"] == "dispatched"
+    assert t["code"] == f"TO-{ist_today().year}-0001" and t["status"] == "dispatched"
     assert stock(client, h, gd["id"])[products["T-CRYS"]][0] == 50
     r = client.post(
         f"/api/material/transfers/{t['id']}/receive",

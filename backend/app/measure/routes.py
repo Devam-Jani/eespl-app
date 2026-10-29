@@ -46,6 +46,7 @@ from app.measure.models import (
 from app.sites.models import Drawing, DrawingRevision, Site
 from app.takeoff.models import CadFile
 from app.tenders.export import company
+from app.timefmt import ist_today
 
 router = APIRouter(prefix="/api/measure", tags=["measure"])
 View = Annotated[str, Depends(require_permission("billing.view"))]
@@ -869,7 +870,7 @@ def new_revision(rid: int, body: RevisionIn, request: Request, db: DbSession, pr
 
     b = _bill(db, rid, principal, scope)
     _edit(db, principal, b.site_id)
-    r = register.add_revision(db, b, label=body.label, source="the app", made_on=date.today(), user_id=principal.user.id)
+    r = register.add_revision(db, b, label=body.label, source="the app", made_on=ist_today(), user_id=principal.user.id)
     record(db, request, principal, "ra.revision", "ra_bill", b.id, after={"rev": r.rev_no, "basic": str(r.basic)})
     db.commit()
     return _plain(register.revisions(db, b))

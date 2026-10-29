@@ -16,7 +16,7 @@ Progress (stored when a task changes, see refresh_scope):
 """
 
 import re
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import func, select
@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.sites import service
 from app.sites.models import AreaScope, Site, SiteNode, StageTemplate, Task
 from app.tenders.models import BoqLine
+from app.timefmt import ist_today
 
 QTY = Decimal("0.001")
 PCT = Decimal("0.01")
@@ -144,7 +145,7 @@ def qty_check(db: Session, site: Site, lines: list[BoqLine]) -> dict[int, dict]:
 
 def generate_tasks(db: Session, site: Site, user_id) -> dict[str, int]:
     """Add the missing (scope × step) tasks. Existing tasks are kept as they are."""
-    start = site.start_date or date.today()
+    start = site.start_date or ist_today()
     scopes = list(db.scalars(select(AreaScope).where(AreaScope.site_id == site.id)))
     existing = {
         (t.area_scope_id, t.step_id): t

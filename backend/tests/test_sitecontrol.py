@@ -4,7 +4,7 @@ new areas, the labour check and consumption variance. Invented data only."""
 
 import io
 import json
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -34,6 +34,7 @@ from app.sitecontrol.models import (
 from app.sites import work
 from app.sites.models import AreaScope, Site, SiteNode, Task
 from app.tenders.models import BoqLine
+from app.timefmt import ist_today
 from tests.test_finance import contract, world  # noqa: F401  (fixtures)
 from tests.test_material import approved_po, godown, masters, site, stock, store_of  # noqa: F401
 
@@ -359,7 +360,7 @@ def test_over_quantity_and_over_rate_block_until_released(boss, po_site, db, cli
         json={
             "vendor_id": po_site["vendors"][0],
             "bill_no": "INV-1",
-            "bill_date": date.today().isoformat(),
+            "bill_date": ist_today().isoformat(),
             "grn_ids": [g.id],
             "grn_lines": [
                 {
@@ -435,8 +436,8 @@ def test_rate_contract_fills_po_rate_needs_a_reason_above_one_per_date_and_expir
         "vendor_id": vendors[0],
         "product_id": products["T-PU"],
         "rate": "300",
-        "valid_from": date.today().isoformat(),
-        "valid_till": (date.today() + timedelta(days=10)).isoformat(),
+        "valid_from": ist_today().isoformat(),
+        "valid_till": (ist_today() + timedelta(days=10)).isoformat(),
         "agreed_by": "Invented Purchase Head",
     }
     r = c.post("/api/sitecontrol/rate-contracts", json=body, headers=h)
@@ -690,7 +691,7 @@ def _subcon_bill(c, h, db, w, sqm: str, people: int) -> dict:
         db.add(lab)
         db.flush()
         db.add(
-            Attendance(labour_id=lab.id, site_id=w["site"], on_date=date.today(), status="present")
+            Attendance(labour_id=lab.id, site_id=w["site"], on_date=ist_today(), status="present")
         )
     db.commit()
     r = c.post(f"/api/finance/work-orders/{wo['id']}/subcon-bills", json={}, headers=h)

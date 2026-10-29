@@ -24,7 +24,7 @@ sand free issue; one T&C clause with the wrong "by us at free of cost" wording);
     docker compose exec api python -m app.cli demo-estimate
 """
 
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -33,6 +33,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.closeout.demo import _login, _ok, _password, _purge
+from app.timefmt import ist_today
 
 D = Decimal
 SITE_CODE = "DEMO-TERRACE"
@@ -207,7 +208,7 @@ def run(db: Session) -> dict:
     for name, rate in PRICES.items():
         for old in db.scalars(select(ProductPrice).where(ProductPrice.product_id == ids[name], ProductPrice.note == "DEMO price")):
             db.delete(old)
-        db.add(ProductPrice(product_id=ids[name], purchase_rate=D(rate), effective_from=date.today() - timedelta(days=30), source="manual", note="DEMO price"))
+        db.add(ProductPrice(product_id=ids[name], purchase_rate=D(rate), effective_from=ist_today() - timedelta(days=30), source="manual", note="DEMO price"))
     cl = db.scalar(select(Client).where(Client.name == CLIENT))
     if cl is None:
         cl = Client(name=CLIENT, type="other", notes="DEMO: invented")
@@ -217,7 +218,7 @@ def run(db: Session) -> dict:
     site = db.scalar(select(Site).where(Site.code == SITE_CODE))
     removed = 0
     if site is None:
-        site = Site(code=SITE_CODE, name=SITE_NAME, city="Ahmedabad", state="Gujarat", status="active", is_demo=True, start_date=date.today() - timedelta(days=20))
+        site = Site(code=SITE_CODE, name=SITE_NAME, city="Ahmedabad", state="Gujarat", status="active", is_demo=True, start_date=ist_today() - timedelta(days=20))
         db.add(site)
         db.flush()
     else:

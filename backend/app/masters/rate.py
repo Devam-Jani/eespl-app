@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.masters.models import ProductPrice, System
+from app.timefmt import ist_today
 
 SQFT_PER_SQM = Decimal("10.7639")
 HUNDRED = Decimal(100)
@@ -139,7 +140,7 @@ def current_prices(
     """The price row in force on `on` (default today) for each product that has one."""
     if not product_ids:
         return {}
-    on = on or date.today()
+    on = on or ist_today()
     rows = db.scalars(
         select(ProductPrice)
         .where(ProductPrice.product_id.in_(product_ids), ProductPrice.effective_from <= on)

@@ -15,6 +15,7 @@ from app.masters.units import load_aliases
 from app.models import AuditLog, Role, RolePermission
 from app.tenders import boq_import, pricing
 from app.tenders.service import next_code
+from app.timefmt import ist_today
 
 FIXTURES = Path(__file__).parent / "fixtures"
 XLSX = FIXTURES / "client_boq.xlsx"
@@ -281,7 +282,7 @@ def membrane_system(client, headers):
         f"/api/products/{pid}/prices",
         json={
             "purchase_rate": "300",
-            "effective_from": (date.today() - timedelta(days=1)).isoformat(),
+            "effective_from": (ist_today() - timedelta(days=1)).isoformat(),
         },
         headers=headers,
     )
@@ -556,8 +557,8 @@ def test_one_audit_row_per_save(boss, db):
 def test_lost_needs_a_reason_and_overdue_flag(boss):
     client, headers = boss
     cid = new_client(client, headers)
-    tender = new_tender(client, headers, cid, due_on=(date.today() - timedelta(days=2)).isoformat())
-    assert tender["code"] == f"T-{date.today().year}-0001" and tender["overdue"] is True
+    tender = new_tender(client, headers, cid, due_on=(ist_today() - timedelta(days=2)).isoformat())
+    assert tender["code"] == f"T-{ist_today().year}-0001" and tender["overdue"] is True
     r = client.patch(f"/api/tenders/{tender['id']}", json={"status": "lost"}, headers=headers)
     assert r.status_code == 422
     r = client.patch(
