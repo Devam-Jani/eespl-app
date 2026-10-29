@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import audit
+from app.auth import invites
 from app.auth.account import end_links
 from app.auth.deps import CurrentPrincipal, Principal, require_permission
 from app.auth.passwords import set_password
@@ -78,10 +79,12 @@ def _email_taken(db: Session, email: str, exclude: uuid.UUID | None = None) -> b
 
 @router.get("")
 def list_users(db: DbSession, principal: CurrentPrincipal) -> list[UserOut]:
-    users = db.scalars(select(User).order_by(User.full_name, User.email))
+    users = list(db.scalars(select(User).order_by(User.full_name, User.email)))
+    mails = invites.last_mail(db, [u.id for u in users])
     out = []
     for u in users:
         o = UserOut.model_validate(u)
+        o.invite = mails.get(u.id)
         o.can_manage = manage_refusal(principal.user.roles, principal.permissions, u.roles) is None
         out.append(o)
     return out
@@ -112,11 +115,12 @@ def create_user(
         phone=body.phone,
         roles=roles,
     )
-    set_password(
-        db, user, body.password
-    )  # the same rules as Reset password (not common, not the name)
+    if body.password:  # the same rules as Reset password (not common, not the name)
+        set_password(db, user, body.password)
     db.add(user)
     db.flush()
+    # no password typed: the invite email (or, with email off, the admin copies the link)
+    mail = None if body.password else invites.queue(db, user, "invite", principal.user.id)
     audit.record(
         db,
         "user.create",
@@ -127,7 +131,9 @@ def create_user(
         ip=audit.client_ip(request),
     )
     db.commit()
-    return UserOut.model_validate(user)
+    out = UserOut.model_validate(user)
+    out.invite = invites.last_mail(db, [user.id]).get(user.id) if mail else None
+    return out
 
 
 @router.patch("/{user_id}")

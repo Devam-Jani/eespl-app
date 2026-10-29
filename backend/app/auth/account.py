@@ -95,7 +95,7 @@ def make_link(db, user: User, by: uuid.UUID | None) -> str:
 def _link(db, token: str) -> PasswordLink:
     link = db.scalar(select(PasswordLink).where(PasswordLink.token_hash == _hash(token)))
     if link is None or link.used_at is not None or link.expires_at <= _now() or not db.get(User, link.user_id).is_active:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "This link was used already or has expired: ask the office admin for a new one")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This link was used already or has expired. Ask your admin to resend the invite.")
     return link
 
 
@@ -146,6 +146,51 @@ def admin_link(user_id: uuid.UUID, request: Request, db: DbSession, principal: C
     audit.record(db, "user.password_link", "user", user.id, user_id=principal.user.id, ip=_ip(request))
     db.commit()
     return {"link": path, "expires_in_days": LINK_DAYS}
+
+
+@router.get("/api/admin/email-mode")
+def email_mode(_: Admin) -> dict:
+    """For the Users page: 'on', 'mailpit' (development) or 'off' (copy the link instead)."""
+    from app.auth import invites  # noqa: PLC0415
+
+    return {"mode": invites.email_mode()}
+
+
+@router.post("/api/admin/users/{user_id}/invite")
+def resend_invite(user_id: uuid.UUID, request: Request, db: DbSession, principal: CurrentPrincipal, _: Admin) -> dict:
+    """A new invite email: a new link, and the old one stops working at once."""
+    from app.auth import invites  # noqa: PLC0415
+
+    user = _managed(db, principal, user_id)
+    if user.is_demo or not user.is_active:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This user is deactivated: activate them first")
+    if invites.email_mode() == "off":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Email is off: copy the link")
+    if invites.queue(db, user, "invite", principal.user.id) is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Only staff with an email address get an invite email: copy the link instead")
+    audit.record(db, "user.invite", "user", user.id, user_id=principal.user.id, ip=_ip(request))
+    db.commit()
+    return invites.last_mail(db, [user.id])[user.id]
+
+
+class ForgotIn(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+
+
+FORGOT_REPLY = "If that email belongs to a staff login, a link to set a new password is on its way. It works once, for 7 days."
+
+
+@router.post("/api/auth/forgot-password", status_code=status.HTTP_202_ACCEPTED)
+def forgot_password(body: ForgotIn, request: Request, db: DbSession) -> dict:
+    """The same answer whether the email exists or not; at most one email per person in 5 minutes."""
+    from app.auth import invites  # noqa: PLC0415
+
+    user = db.scalar(select(User).where(User.email == body.email.strip().lower()))
+    if user is not None and user.is_active and not user.is_demo and not invites.recent_reset(db, user, _now()):
+        if invites.queue(db, user, "reset", None) is not None:
+            audit.record(db, "auth.forgot_password", "user", user.id, user_id=user.id, ip=_ip(request))
+            db.commit()
+    return {"message": FORGOT_REPLY}
 
 
 @router.post("/api/admin/users/{user_id}/unlock")

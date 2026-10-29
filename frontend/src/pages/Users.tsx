@@ -22,6 +22,14 @@ export function userStatus(u: Pick<User, "is_active" | "has_password" | "locked_
   return u.locked_by_failures || (u.locked_until && new Date(u.locked_until) > new Date()) ? "locked" : "active";
 }
 
+/** "Invite sent 29 Oct, 11:30" / "Invite queued" / "Invite failed: …" under the status. */
+export function inviteText(i: NonNullable<User["invite"]>): string {
+  const what = i.kind === "reset" ? "Reset link" : "Invite";
+  if (i.status === "sent") return `${what} sent ${formatDate(i.at)}`;
+  if (i.status === "queued") return `${what} queued`;
+  return `${what} failed${i.error ? `: ${i.error}` : ""}`;
+}
+
 export default function Users() {
   const { me } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
@@ -30,12 +38,14 @@ export default function Users() {
   const [notice, setNotice] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [filter, setFilter] = useState("");
+  const [emailMode, setEmailMode] = useState<"on" | "mailpit" | "off" | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [u, r] = await Promise.all([api<User[]>("/api/users"), api<Role[]>("/api/roles")]);
+      const [u, r, m] = await Promise.all([api<User[]>("/api/users"), api<Role[]>("/api/roles"), api<{ mode: "on" | "mailpit" | "off" }>("/api/admin/email-mode")]);
       setUsers(u);
       setRoles(r);
+      setEmailMode(m.mode);
     } catch (err) {
       setError(errorText(err));
     }
@@ -65,6 +75,15 @@ export default function Users() {
       setNotice(
         `One-time link for ${u.full_name} (${copied ? "copied" : "copy it from here"}; works once, ${r.expires_in_days} days): ${url}`,
       );
+    } catch (err) {
+      setNotice(errorText(err));
+    }
+  }
+  async function resendInvite(u: User) {
+    try {
+      await api(`/api/admin/users/${u.id}/invite`, { method: "POST" });
+      setNotice(`Invite to ${u.full_name} queued: it is emailed within a minute (the old link no longer works).`);
+      void load();
     } catch (err) {
       setNotice(errorText(err));
     }
@@ -104,6 +123,9 @@ export default function Users() {
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
+      {emailMode === "off" && (
+        <div className="alert alert-warn">Email is off: copy the link. New people get no invite email until the server's email settings are in place; press Copy link and send it yourself (e.g. on WhatsApp).</div>
+      )}
       {notice && <div className="alert alert-ok link-notice">{notice}</div>}
 
       <Card as="div" className="table-wrap">
@@ -153,13 +175,18 @@ export default function Users() {
                     ) : (
                       <span className="badge badge-ok">Active</span>
                     )}
+                    {u.invite && <div className="muted small">{inviteText(u.invite)}</div>}
                   </td>
                   <td className="nowrap">{formatDate(u.last_login_at)}</td>
                   <td className="row-actions">
                     {u.can_manage === false ? (
-                      <span className="muted small" title="Only a higher role manages this person">
-                        Managed by a higher role
-                      </span>
+                      u.id === me?.user.id ? (
+                        <span className="muted small">You: change your own password in My account</span>
+                      ) : (
+                        <span className="muted small" title="Only a higher role manages this person">
+                          Managed by a higher role
+                        </span>
+                      )
                     ) : (
                     <>
                     <Button size="small" onClick={() => setDialog({ kind: "edit", user: u })}>
@@ -171,10 +198,15 @@ export default function Users() {
                     <Button
                       size="small"
                       onClick={() => void passwordLink(u)}
-                      title="A one-time link for the person to set their own password"
+                      title="A one-time link for the person to set their own password (an emailed one stops working): send it yourself, e.g. on WhatsApp"
                     >
-                      Set-password link
+                      Copy link
                     </Button>
+                    {emailMode !== "off" && emailMode !== null && u.is_active && !u.has_password && (
+                      <Button size="small" onClick={() => void resendInvite(u)} title="A new invite email; the old link stops working">
+                        Resend invite
+                      </Button>
+                    )}
                     {locked && (
                       <Button
                         size="small"
@@ -231,9 +263,10 @@ export default function Users() {
           user={dialog.kind === "edit" ? dialog.user : null}
           roles={roles}
           onClose={() => setDialog(null)}
-          onSaved={async (message) => {
+          onSaved={async (message, created) => {
             setDialog(null);
             setNotice(message);
+            if (created && !created.invite && !created.has_password) await passwordLink(created);
             await load();
           }}
         />
@@ -253,7 +286,7 @@ export default function Users() {
   );
 }
 
-function UserForm({ user, roles, onClose, onSaved }: { user: User | null; roles: Role[]; onClose: () => void; onSaved: (message: string) => Promise<void> }) {
+function UserForm({ user, roles, onClose, onSaved }: { user: User | null; roles: Role[]; onClose: () => void; onSaved: (message: string, created?: User) => Promise<void> }) {
   const { me } = useAuth();
   const [email, setEmail] = useState(user?.email ?? "");
   const [fullName, setFullName] = useState(user?.full_name ?? "");
@@ -261,7 +294,6 @@ function UserForm({ user, roles, onClose, onSaved }: { user: User | null; roles:
   const [jobTitle, setJobTitle] = useState(user?.job_title ?? "");
   const [kylasUserId, setKylasUserId] = useState(user?.kylas_user_id?.toString() ?? "");
   const canKylas = !!me && "admin.settings" in me.permissions;
-  const [password, setPassword] = useState("");
   const [roleIds, setRoleIds] = useState<number[]>(user?.roles.map((r) => r.id) ?? []);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -292,12 +324,12 @@ function UserForm({ user, roles, onClose, onSaved }: { user: User | null; roles:
         }
         await onSaved(`${fullName} updated.`);
       } else {
-        const created = await api<{ id: string }>("/api/users", {
+        const created = await api<User>("/api/users", {
           method: "POST",
-          json: { email, full_name: fullName, phone: phone || null, password, role_ids: roleIds },
+          json: { email, full_name: fullName, phone: phone || null, role_ids: roleIds },
         });
         if (jobTitle) await api(`/api/users/${created.id}`, { method: "PATCH", json: { job_title: jobTitle } });
-        await onSaved(`${fullName} added.`);
+        await onSaved(created.invite ? `${fullName} added. Invite sent to ${email}: it is emailed within a minute.` : `${fullName} added.`, created);
       }
     } catch (err) {
       setError(errorText(err));
@@ -327,11 +359,7 @@ function UserForm({ user, roles, onClose, onSaved }: { user: User | null; roles:
             <input value={kylasUserId} inputMode="numeric" onChange={(e) => setKylasUserId(e.target.value.replace(/\D/g, ""))} placeholder="see python -m app.cli kylas-discover" />
           </Field>
         )}
-        {!user && (
-          <Field label="Password (at least 10 characters)">
-            <input type="password" autoComplete="new-password" minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} required />
-          </Field>
-        )}
+        {!user && <p className="small muted">They get an email to set their own password (a link that works once, for 7 days). No password is ever emailed.</p>}
         <Field as="fieldset" label="Roles">
           <div className="checks">
             {roles.map((r) => {

@@ -17,6 +17,7 @@ export type User = {
   kylas_user_id: number | null;
   has_password: boolean;
   can_manage?: boolean;
+  invite?: { kind: "invite" | "reset"; status: "queued" | "sent" | "failed"; at: string | null; error: string | null } | null;
   is_active: boolean;
   locked_until: string | null;
   locked_by_failures?: boolean;

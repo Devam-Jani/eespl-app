@@ -7,7 +7,8 @@ docker compose resolves it:
 - the only published port is 127.0.0.1:9400 (Caddy); nothing on 0.0.0.0;
 - every service has a memory and a CPU limit, about 4 GB and 3 CPUs in all at most;
 - no service mounts the repository's data/ folder (company drawings, BOQs, billing samples);
-- every service but Caddy is on internal networks only;
+- every service but Caddy is on internal networks only; the one exception is the main worker on the
+  `mail` network, its way out to the SMTP server for staff email (never the training worker);
 - every named volume is a bind into EESPL_STORE (our folder, not Docker's shared storage);
 - the project, and so every container, network and volume, is named eespl-test;
 - its Caddyfile keeps the security headers and trusts the host's X-Forwarded-Proto.
@@ -27,6 +28,8 @@ PROJECT = "eespl-test"
 PORT = ("127.0.0.1", "9400")
 MAX_MEMORY = 4 * 2**30
 MAX_CPUS = 3.0
+# the only non-internal network a service besides Caddy may join: the worker sends the staff email
+EGRESS = {"worker": {"mail"}}
 DUMMY = {
     "APP_DOMAIN": "eespl.example.com",
     "EESPL_STORE": "/srv/eespl-test-store",
@@ -68,8 +71,9 @@ def problems(cfg: dict) -> list[str]:
                 if src == data or data in src.parents:
                     bad.append(f"{name}: mounts the repository's data/ folder ({v['target']})")
         nets = set(svc.get("networks", {}))
-        if name != "caddy" and (not nets or nets - internal):
-            bad.append(f"{name}: on a network that is not internal ({sorted(nets - internal) or ['default']})")
+        outside = nets - internal - EGRESS.get(name, set())
+        if name != "caddy" and (not nets or outside):
+            bad.append(f"{name}: on a network that is not internal ({sorted(outside) or ['default']})")
     for vname, vol in sorted(cfg.get("volumes", {}).items()):
         opts = vol.get("driver_opts") or {}
         if opts.get("o") != "bind" or not str(opts.get("device", "")).startswith(DUMMY["EESPL_STORE"] + "/"):

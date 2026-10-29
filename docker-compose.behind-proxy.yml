@@ -12,14 +12,17 @@
 # - no company data: the app's /data is an empty folder; the road map (public OpenStreetMap data,
 #   made on the server by scripts/osrm-prepare.sh), the backups (kept 7 days) and every named
 #   volume (the database, the media) live in EESPL_STORE, a folder of ours on the big disk;
-# - email, Kylas and the helper off (the helper only if HELPER_AI_ENABLED and a key are set in .env,
-#   and then the api needs the egress network: see docs/DEPLOY.md).
+# - Kylas and the helper off (the helper only if HELPER_AI_ENABLED and a key are set in .env, and
+#   then the api needs the egress network: see docs/DEPLOY.md); email only when EMAIL_ENABLED=true and
+#   the SMTP settings are in .env (the worker sends, on its own mail network).
 #
 # Every container, network and volume carries the project name (eespl-test) as its prefix.
 name: eespl-test
 
 x-off: &off
-  EMAIL_ENABLED: "false"
+  # staff email (invites, password links, notifications): off until the SMTP settings and
+  # EMAIL_ENABLED=true are in the server's .env; only the worker sends (through the mail network)
+  EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
   KYLAS_ENABLED: "false"
 
 services:
@@ -45,7 +48,7 @@ services:
   worker:
     environment:
       <<: *off
-    networks: [back]
+    networks: [back, mail]
     deploy:
       resources:
         limits: {memory: 320M, cpus: "0.25"}
@@ -115,6 +118,8 @@ networks:
   # everything else: no route out of the server, nothing published
   back:
     internal: true
+  # the worker's only way out: the SMTP server (port 587) when email is on
+  mail: {}
 
 # the named volumes' data in our own folder (EESPL_STORE/<name>, made before the first start), not
 # in Docker's shared storage: the whole stack is one folder to back up, move or remove

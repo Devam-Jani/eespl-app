@@ -71,7 +71,10 @@ class UserOut(BaseModel):
     bank_account_masked: str | None = None
     bank_ifsc: str | None = None
     has_password: bool = False
-    can_manage: bool = True  # the caller may edit / reset / link this person (rbac.manage_refusal)
+    # the caller may edit / reset / link this person (rbac.manage_refusal)
+    can_manage: bool = True
+    # the latest account email: kind, status (queued / sent / failed), at, error
+    invite: dict | None = None
     is_active: bool
     locked_until: datetime | None
     # after repeated failed sign-ins: waits for the office admin's unlock
@@ -86,7 +89,8 @@ class UserCreate(BaseModel):
     email: EmailStr
     full_name: str = Field(min_length=1, max_length=200)
     phone: str | None = Field(default=None, max_length=50)
-    password: PasswordStr
+    # none: the person gets the invite email (or the admin copies the link) and sets their own
+    password: PasswordStr | None = None
     role_ids: list[int] = []
 
     _email = field_validator("email")(_lower)
