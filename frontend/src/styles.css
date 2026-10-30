@@ -3961,6 +3961,19 @@ td.indent {
 .howto-link:focus-visible {
   background: var(--surface-2);
 }
+/* the "?" panel's copy of it: only on a phone, where the top bar keeps its room for the page title */
+.help-howto {
+  display: none;
+  margin: 8px 0 0;
+}
+@media (max-width: 600px) {
+  .app-header > .howto-link {
+    display: none;
+  }
+  .help-howto {
+    display: block;
+  }
+}
 .sop {
   max-width: 900px;
 }

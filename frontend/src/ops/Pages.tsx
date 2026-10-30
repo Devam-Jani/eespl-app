@@ -4,6 +4,7 @@ import { Link, matchPath, useLocation, useNavigate, useParams } from "react-rout
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
 import { errorText, inr } from "../format";
+import { HowToLink } from "../help/HowTo";
 import { MENU } from "../menu";
 import { Button, Card, CopyButton, Field, FilePicker } from "../ui/components";
 
@@ -997,6 +998,10 @@ export function HelpButton() {
             ))}
           </ol>
           {help.role && <p className="small muted">For your role.</p>}
+          {/* on a phone the top bar has no room for "How to": it is here instead */}
+          <p className="help-howto">
+            <HowToLink />
+          </p>
         </div>
       )}
     </>

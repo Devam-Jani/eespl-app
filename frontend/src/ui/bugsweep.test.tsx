@@ -39,3 +39,22 @@ describe("the invite status on Users (Prompt 39, Part 5)", () => {
     expect(inviteText({ kind: "reset", status: "failed", at: null, error: "SMTP refused the login" })).toBe("Reset link failed: SMTP refused the login");
   });
 });
+
+describe("the phone and production sweep (Prompt 39, Part 3)", () => {
+  it("serves /assets as the Assets page, not as the build's assets folder", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const conf = readFileSync(resolve(__dirname, "../../deploy/nginx.conf"), "utf8");
+    const app = readFileSync(resolve(__dirname, "../App.tsx"), "utf8");
+    expect(app).toContain('"/assets"');
+    expect(conf).toMatch(/location \/ \{\s*try_files \$uri \/index\.html;/);
+    expect(conf).not.toMatch(/try_files \$uri \$uri\//);
+  });
+  it("the records page asks for a number to drill into instead of loading for ever", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const src = readFileSync(resolve(__dirname, "../analytics/Pages.tsx"), "utf8");
+    expect(src).toContain('kind ? `/api/analytics/drill?${q}` : null');
+    expect(src).toContain("No list chosen");
+  });
+});

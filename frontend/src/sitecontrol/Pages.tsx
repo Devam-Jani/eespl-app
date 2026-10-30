@@ -20,13 +20,16 @@ const n = (v: string | number | null | undefined, digits = 2) =>
 
 type SiteOpt = { id: number; code: string; name: string };
 function useSites(): SiteOpt[] {
+  const { can } = useAuth();
   const [sites, setSites] = useState<SiteOpt[]>([]);
+  const mayList = can("site.view"); // a site receiver has no site list (their deliveries say the site)
   useEffect(() => {
+    if (!mayList) return;
     void api<{ items: SiteOpt[] }>("/api/sites?limit=200").then(
       (r) => setSites(r.items),
       () => setSites([]),
     );
-  }, []);
+  }, [mayList]);
   return sites;
 }
 
@@ -1321,8 +1324,9 @@ export function SiteControlSettings() {
   const [error, setError] = useState("");
   useEffect(() => {
     void api<ScSettings>("/api/sitecontrol/settings").then(setS);
-    void api<{ items: { id: string; full_name: string }[] } | { id: string; full_name: string }[]>("/api/users?limit=200").then(
-      (r) => setUsers(Array.isArray(r) ? r : r.items),
+    // the staff picker everyone may read (Users needs admin.users, which the director does not hold)
+    void api<{ id: string; name: string }[]>("/api/team/people").then(
+      (r) => setUsers(r.map((u) => ({ id: u.id, full_name: u.name }))),
       () => setUsers([]),
     );
   }, []);

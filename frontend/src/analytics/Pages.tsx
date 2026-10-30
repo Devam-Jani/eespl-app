@@ -7,7 +7,7 @@ import { BarChart, FunnelChart, HBarChart, LineChart, PALETTE, ScatterChart } fr
 import type { Row } from "./charts";
 import type { Column, Drill, Table } from "./ui";
 import { asOf, DataTable, drillHref, ExportButton, FilterBar, fmtValue, useData, useFilters } from "./ui";
-import { Button, Card, Field } from "../ui/components";
+import { Button, Card, EmptyState, Field } from "../ui/components";
 
 type PageData = { as_of: string | null; tables: Record<string, Table>; summary?: Record<string, number | null>; cost_shown?: boolean; salary_included?: boolean };
 
@@ -588,7 +588,9 @@ export function DrillPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const q = params.toString();
-  const { data, error } = useData<{ title: string; columns: Column[]; rows: Record<string, unknown>[]; total: number }>(`/api/analytics/drill?${q}`);
+  const kind = params.get("kind");
+  // opened without a number to drill into (a bookmark, the menu): say so instead of loading for ever
+  const { data, error } = useData<{ title: string; columns: Column[]; rows: Record<string, unknown>[]; total: number }>(kind ? `/api/analytics/drill?${q}` : null);
   const demo = params.get("demo") === "1" || params.get("demo") === "true";
   return (
     <>
@@ -610,7 +612,13 @@ export function DrillPage() {
           <ExportButton path={`/api/analytics/drill?${q}&format=xlsx`} />
         </div>
       </div>
-      {!data ? <Loading error={error} /> : <DataTable table={{ title: data.title, columns: data.columns, rows: data.rows, note: null }} demo={demo} />}
+      {!kind ? (
+        <EmptyState title="No list chosen" hint="Press a number on a dashboard or an analytics page to see the records behind it." />
+      ) : !data ? (
+        <Loading error={error} />
+      ) : (
+        <DataTable table={{ title: data.title, columns: data.columns, rows: data.rows, note: null }} demo={demo} />
+      )}
     </>
   );
 }

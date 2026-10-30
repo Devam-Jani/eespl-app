@@ -1102,6 +1102,41 @@ a.kpi:hover {
   h1 {
     font-size: 1.5rem;
   }
+
+  /* nothing wider than the phone (the Prompt 39 phone pass): the header's actions and tabs shrink and
+     wrap, a long select or field fits the screen, and a table outside .table-wrap scrolls on its own */
+  .page-header > *,
+  .page-actions > *,
+  .page-actions .tabs {
+    min-width: 0;
+    max-width: 100%;
+  }
+  select,
+  input,
+  textarea {
+    max-width: 100%;
+  }
+  :not(.table-wrap) > table.table {
+    display: block;
+    overflow-x: auto;
+    max-width: 100%;
+  }
+  .split > *,
+  .grid-2 > *,
+  .grid-4 > * {
+    min-width: 0;
+  }
+  /* a notification's buttons go under its text */
+  .note-row {
+    flex-wrap: wrap;
+  }
+  .note-actions {
+    flex-wrap: wrap;
+  }
+  .note-row .done-reason input {
+    min-width: 0;
+    width: 100%;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
