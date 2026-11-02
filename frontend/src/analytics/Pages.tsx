@@ -43,8 +43,10 @@ function ChartCard({ title, children, extra }: { title: string; children: React.
   );
 }
 
-function Loading({ error }: { error: string | null }) {
-  return error ? <div className="alert alert-error">{error}</div> : <p className="muted">Loading…</p>;
+export function Loading({ error }: { error: string | null }) {
+  // "" is an error the helper has already shown (errorText): the page failed, it is not still loading
+  if (error === null) return <p className="muted">Loading…</p>;
+  return <div className="alert alert-error">{error || "This could not be loaded. Reload the page to try again."}</div>;
 }
 
 // --- sites ---------------------------------------------------------------------------------------

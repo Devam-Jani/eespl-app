@@ -58,3 +58,15 @@ describe("the phone and production sweep (Prompt 39, Part 3)", () => {
     expect(src).toContain("No list chosen");
   });
 });
+
+describe("a failed analytics page (Prompt 39, Part 3)", () => {
+  it("never stays on Loading when the helper has already shown the error", async () => {
+    const { Loading } = await import("../analytics/Pages");
+    const { container, rerender } = render(<Loading error={null} />);
+    expect(container.textContent).toBe("Loading…");
+    rerender(<Loading error="" />);
+    expect(container.textContent).toContain("could not be loaded");
+    rerender(<Loading error="Missing permission" />);
+    expect(container.textContent).toBe("Missing permission");
+  });
+});
