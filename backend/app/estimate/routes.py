@@ -333,7 +333,11 @@ def _est_out(db, e: Estimate, principal: Principal) -> dict:
     site = db.get(Site, e.site_id) if e.site_id else None
     missed = svc.missed(db, e)
     lines = svc.worked(db, e)
-    return {"id": e.id, "code": e.code, "title": e.title, "status": e.status, "site_id": e.site_id, "tender_id": e.tender_id, "upturn_mm": e.upturn_mm, "note": e.note,
+    later = svc.next_version(db, e)
+    older = db.get(Estimate, e.revises_id) if e.revises_id else None
+    return {"version": e.version, "replaces": {"id": older.id, "code": older.code} if older else None, "next_version": {"id": later.id, "code": later.code, "status": later.status} if later else None,
+            "library_changes": svc.library_changes(db, e) if later is None else [], "can_revise": "estimate.edit" in principal.permissions and e.status == "issued" and later is None,
+            "id": e.id, "code": e.code, "title": e.title, "status": e.status, "site_id": e.site_id, "tender_id": e.tender_id, "upturn_mm": e.upturn_mm, "note": e.note,
             "site": {"id": site.id, "code": site.code, "name": site.name} if site else None, "issued_at": e.issued_at,
             "areas": [_area_out(a) for a in svc.areas_of(db, e)], "lines": [_line_out(lo) for lo in lines], "summary": svc.summary(db, e),
             "missed": [{"key": m.key, "source": m.source, "code": m.code, "name": m.name, "floor_sqm": m.floor_sqm, "periphery_m": m.periphery_m} for m in missed],
@@ -353,7 +357,7 @@ def list_estimates(db: DbSession, principal: CurrentPrincipal, scope: View, site
             continue
         site = db.get(Site, e.site_id) if e.site_id else None
         out.append({"id": e.id, "code": e.code, "title": e.title, "status": e.status, "site": f"{site.code} {site.name}" if site else None, "site_id": e.site_id,
-                    "missed": len(svc.missed(db, e))})  # fmt: skip
+                    "version": e.version, "missed": len(svc.missed(db, e))})  # fmt: skip
     return _j(out)
 
 
@@ -390,7 +394,7 @@ def get_estimate(eid: int, db: DbSession, principal: CurrentPrincipal, scope: Vi
 def _draft(db, eid: int, scope: str, principal: Principal) -> Estimate:
     e = _estimate(db, eid, scope, principal)
     if e.status != "draft":
-        raise HTTPException(status.HTTP_409_CONFLICT, f"{e.code} is issued: make a new one to change it")
+        raise HTTPException(status.HTTP_409_CONFLICT, f"{e.code} is issued: press Revise to make the next version")
     return e
 
 
@@ -513,10 +517,25 @@ def issue(eid: int, request: Request, db: DbSession, principal: CurrentPrincipal
         raise HTTPException(status.HTTP_409_CONFLICT, "Put these measured areas in the estimate or exclude them with a reason first: " + "; ".join(f"{m.name} ({lib.n(m.floor_sqm, 2)} sqm)" for m in missed))
     if not svc.lines_of(db, e):
         raise _422("Add the materials first")
+    e.snapshot = svc.freeze(db, e)  # from here on it reads these figures, not the library
     e.status, e.issued_at, e.issued_by = "issued", datetime.now(UTC), principal.user.id
     record(db, request, principal, "estimate.issue", "estimate", e.id, after={"code": e.code})
     db.commit()
     return _j(_est_out(db, e, principal))
+
+
+@router.post("/estimates/{eid}/revise", status_code=status.HTTP_201_CREATED)
+def revise(eid: int, request: Request, db: DbSession, principal: CurrentPrincipal, scope: Edit) -> dict:
+    """The next version as a draft; the issued one stays read-only and in force until that is issued."""
+    e = _estimate(db, eid, scope, principal)
+    db.execute(select(Estimate.id).where(Estimate.id == e.id).with_for_update())  # two presses: one version
+    try:
+        new = svc.revise(db, e, principal.user.id)
+    except svc.Refused as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    record(db, request, principal, "estimate.revise", "estimate", new.id, after={"code": new.code, "revises": e.code})
+    db.commit()
+    return _j(_est_out(db, new, principal))
 
 
 @router.get("/estimates/{eid}/balance")

@@ -490,6 +490,7 @@ def main(argv: list[str] | None = None) -> None:
         help="comma-separated: products,vendors,clients,library,knowledge,methodology,sites",
     )
     p.add_argument("--dry-run", action="store_true")
+    sub.add_parser("estimate-snapshots", help="Freeze estimates issued before snapshots existed")
     xr = sub.add_parser("demo-xray", help="DEMO: the X-ray 3D building from the sample drawing")
     xr.add_argument(
         "--bill-only", action="store_true", help="only fill RA bill 01 (the site there, no drawing)"
@@ -672,6 +673,18 @@ def main(argv: list[str] | None = None) -> None:
             done = issues_svc.released(db, commits)
             db.commit()
         print(f"released: {', '.join(f'#{i}' for i in done) or 'none'}")
+    elif args.command == "estimate-snapshots":
+        import app.main  # noqa: F401, PLC0415  (every model registered)
+        from app.estimate import service as est_svc  # noqa: PLC0415
+        from app.estimate.models import Estimate  # noqa: PLC0415
+
+        with SessionLocal() as db:
+            q = select(Estimate).where(Estimate.status == "issued", Estimate.snapshot.is_(None))
+            rows = db.scalars(q).all()
+            for e in rows:
+                e.snapshot = est_svc.freeze(db, e)
+            db.commit()
+        print(f"estimates frozen at today's library figures: {len(rows)}")
     elif args.command == "demo-xray":
         import json  # noqa: PLC0415
 
