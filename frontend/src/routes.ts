@@ -67,7 +67,7 @@ export const DETAIL_ROUTES: PageRoute[] = [
 export const PUBLIC_ROUTES = ["/login", "/set-password/:token", "/portal/invite/:token", "/r/:token"];
 
 /** Old links that only move on to a page above. */
-export const REDIRECTS = ["/bill-tracking", "/billing/tracking"];
+export const REDIRECTS = ["/bill-tracking", "/billing/tracking", "/indents/:id"];
 
 export function routePerms(path: string): string[] {
   const hit = DETAIL_ROUTES.find((r) => r.path === path);

@@ -10,7 +10,7 @@ typical days. Sites get their tasks from these templates. Every save is written 
 
 **On the page**
 - The list on the left: each template with its number of steps, total days, work category and "inactive" when switched off. Click one to open it.
-- **New template**: opens an empty template with one step at 100 %. {perm: site.edit}
+- **New template**: opens an empty template with one step at 100 %. {perm: site.edit, planning.edit}
 - **Name**: the template's name. It must be unique.
 - **Keywords (suggest this template for BOQ lines with these words)**: words that make the app suggest this template for a BOQ line.
 - Under the name: the template's **Work category** and **system** (read only).
@@ -20,17 +20,17 @@ typical days. Sites get their tasks from these templates. Every save is written 
 - **Hold point**: the next work waits until this step is certified.
 - **Hold-point checklist**: shown on a hold point. Pick a checklist (from Checklist templates) and the step is certified only after a passed inspection with it; or **— none —**.
 - **Days**: the typical days for the step, 1 or more.
-- **↑** / **↓**: move the step up or down. {perm: site.edit}
-- **×**: remove the step. {perm: site.edit}
+- **↑** / **↓**: move the step up or down. {perm: site.edit, planning.edit}
+- **×**: remove the step. {perm: site.edit, planning.edit}
 - "Weights add up to <n>% ✓" or "(must be 100)" in red under the table.
-- **Add step**: adds an empty step at the end. {perm: site.edit}
-- **Active**: untick it to stop the template being offered. {perm: site.edit}
-- **Save template**: saves; "Template saved." shows. It stays greyed until the weights add up to 100 and there is a name. {perm: site.edit}
-- Without the site edit right the fields are greyed and there are no buttons.
+- **Add step**: adds an empty step at the end. {perm: site.edit, planning.edit}
+- **Active**: untick it to stop the template being offered. {perm: site.edit, planning.edit}
+- **Save template**: saves; "Template saved." shows. It stays greyed until the weights add up to 100 and there is a name. {perm: site.edit, planning.edit}
+- Without the site edit right or the planning edit right the fields are greyed and there are no buttons.
 
 **Rules**
 - The step weights must add up to exactly 100.
-- A step that already has tasks on a site cannot be removed. Set its weight to 0 instead. {perm: site.edit}
+- A step that already has tasks on a site cannot be removed. Set its weight to 0 instead. {perm: site.edit, planning.edit}
 - A changed weight of an existing step applies on every site using it at once.
 - A new step reaches a site only when the site's tasks are generated again.
 

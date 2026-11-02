@@ -6,11 +6,13 @@ page, taken fresh before each print. Roles, never names.
     python -m app.cli training-guides --screens data/training/screens --out data/training
 """
 
-from datetime import date
 from html import escape
 from pathlib import Path
 
 from sqlalchemy.orm import Session
+
+from app import branding
+from app.timefmt import ist_today
 
 # role -> (title, what the job does in the app, its pages in the order of a working day)
 GUIDES: dict[str, tuple[str, str, list[str]]] = {
@@ -47,7 +49,7 @@ def _help(db: Session, page: str, role: str) -> dict | None:
 def html(db: Session, role: str, screens: Path | None) -> str:
     title, job, pages = GUIDES[role]
     parts = [f"""<html><head><meta charset="utf-8"><style>
-@page {{ size: A4; margin: 14mm 14mm 16mm; @bottom-left {{ content: "EESPL App: {escape(title)}"; font-size: 8pt; color: #64736f; }}
+@page {{ size: A4; margin: 14mm 14mm 16mm; @bottom-left {{ content: "{escape(branding.PRODUCT_NAME)}: {escape(title)}"; font-size: 8pt; color: #64736f; }}
         @bottom-right {{ content: "Page " counter(page) " of " counter(pages); font-size: 8pt; color: #64736f; }} }}
 body {{ font-family: DejaVu Sans, sans-serif; font-size: 10pt; color: #1c2b28; line-height: 1.4; }}
 h1 {{ font-size: 22pt; margin: 40mm 0 4px; color: #0f6b5c; }} h2 {{ font-size: 14pt; margin: 0 0 6px; border-bottom: 2px solid #0f6b5c; padding-bottom: 3px; }}
@@ -56,9 +58,9 @@ img {{ width: 100%; border: 1px solid #d5dcda; margin-top: 6px; }} .box {{ backg
 .toc li {{ margin: 2px 0; }}
 </style></head><body>
 <h1>{escape(title)}</h1>
-<p style="font-size:12pt">How to use the EESPL App in your job</p>
+<p style="font-size:12pt">How to use the {escape(branding.app_title())} in your job</p>
 <p>{escape(job)}</p>
-<p class="muted">Prepared {date.today():%d.%m.%Y} from the app's own help texts (the "?" at the top of each page) and the DEMO company.
+<p class="muted">Prepared {ist_today():%d.%m.%Y} from the app's own help texts (the "?" at the top of each page) and the DEMO company.
 Names and numbers in the pictures are invented.</p>
 <h3>In this guide</h3><ol class="toc"><li>Your first day: signing in</li>"""]
     shown = [(p, _help(db, p, role)) for p in pages]

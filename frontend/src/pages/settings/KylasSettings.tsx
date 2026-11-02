@@ -10,7 +10,7 @@ import { Button, Card, Field } from "../../ui/components";
 export default function KylasSettingsPage() {
   const [data, setData] = useState<KylasSettings | null>(null);
   const [form, setForm] = useState<Record<string, string>>({});
-  const [test, setTest] = useState<string | null>(null);
+  const [test, setTest] = useState<{ ok: boolean | null; text: string } | null>(null); // ok null: still testing
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -63,12 +63,12 @@ export default function KylasSettingsPage() {
   }
 
   async function testConnection() {
-    setTest("Testing…");
+    setTest({ ok: null, text: "Testing…" });
     try {
       const r = await api<{ ok: boolean; message: string }>("/api/settings/kylas/test", { method: "POST" });
-      setTest(`${r.ok ? "✓" : "✗"} ${r.message}`);
+      setTest({ ok: r.ok, text: `${r.ok ? "✓" : "✗"} ${r.message}` });
     } catch (err) {
-      setTest(errorText(err));
+      setTest({ ok: false, text: errorText(err) });
     }
   }
 
@@ -88,7 +88,7 @@ export default function KylasSettingsPage() {
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {notice && <div className="alert alert-ok">{notice}</div>}
-      {test && <div className="alert alert-ok">{test}</div>}
+      {test && (test.ok === null ? <p className="muted">{test.text}</p> : <div className={`alert ${test.ok ? "alert-ok" : "alert-error"}`}>{test.text}</div>)}
       {data && (
         <div className="split">
           <Card as="form" onSubmit={save}>

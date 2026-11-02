@@ -5,7 +5,7 @@ import { useAuth } from "../../auth";
 import { errorText } from "../../format";
 import { day, Framed, PortalSite } from "../../portal/Portal";
 import type { Site } from "../../types";
-import { Button, Card, Field, FilePicker } from "../../ui/components";
+import { Button, Card, CopyButton, Field, FilePicker } from "../../ui/components";
 
 type PortalUser = {
   id: string;
@@ -127,9 +127,7 @@ export default function PortalTab({ site }: { site: Site }) {
                 <Field label="Invite link" bare>
                   <input className="grow" readOnly value={link.url} onFocus={(e) => e.target.select()} />
                 </Field>
-                <Button size="small" onClick={() => void navigator.clipboard?.writeText(link.url)}>
-                  Copy
-                </Button>
+                <CopyButton text={link.url} />
               </div>
             </div>
           )}

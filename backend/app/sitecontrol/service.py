@@ -395,7 +395,7 @@ def approve_area(
 
     node = SiteNode(
         site_id=r.site_id,
-        parent_id=parent_id if parent_id is not None else r.parent_node_id,
+        parent_id=parent_id,  # None: the top level (the caller falls back to the asked place)
         kind=kind,
         name=r.name,
         area_sqm=r.approx_sqm,
@@ -615,14 +615,19 @@ def productivity_gate(db: Session, bill: SubconBill) -> None:
         )
 
 
-def productivity_report(db: Session, site_id: int | None = None) -> list[dict]:
-    """Per site, contractor and month: man-days, sqm, actual vs expected."""
+def productivity_report(
+    db: Session, site_id: int | None = None, site_ids: list[int] | None = None
+) -> list[dict]:
+    """Per site, contractor and month: man-days, sqm, actual vs expected. site_ids (None: every
+    site) limits it to the caller's sites."""
     rows = db.execute(
         select(WorkOrder, WoLine, WoMeasurement)
         .join(WoLine, WoLine.wo_id == WorkOrder.id)
         .join(WoMeasurement, WoMeasurement.line_id == WoLine.id)
         .where(
-            WoMeasurement.status != "rejected", *([WorkOrder.site_id == site_id] if site_id else [])
+            WoMeasurement.status != "rejected",
+            *([WorkOrder.site_id == site_id] if site_id else []),
+            *([WorkOrder.site_id.in_(site_ids or [0])] if site_ids is not None else []),
         )
     ).all()
     groups: dict[tuple, dict] = {}

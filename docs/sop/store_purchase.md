@@ -72,7 +72,6 @@ You open these less often, or only through a link from another page.
 - "<item>: above agreed rate by n% (contract ₹x per unit): give the reason": the PO rate is above the rate contract.
 - "<PO code> is <status>; material is received against an approved PO": the PO is not approved yet, or is closed.
 - "<item>: n unit accepted but only m pending on <PO code>": you are accepting more than is still due. Put the extra under **Rejected**.
-- Links to an indent from a notification land on the home page (see the bugs list). Open **Indents** and find the code.
 - **Mark sent** does not e-mail the vendor: send the PO yourself.
 
 ## Quick card

@@ -12,7 +12,8 @@ and by email, or in one summary email a day. It is opened from your name's menu 
 - The choice for each step:
   - **App only**: the bell and Notifications only.
   - **App and email**: also an email at once.
-  - **Daily summary email (9:00)**: in the app at once, and by email in one summary each morning.
+  - **Daily summary email (9:00 am)**: in the app at once, and by email in one summary a day, at the
+    hour set in Settings > Process rules (shown in brackets; 9:00 am unless changed).
   - "(default)" marks the company's default for that step.
 - A change is saved as soon as you pick it; "Saved." shows at the top.
 
@@ -32,6 +33,6 @@ and by email, or in one summary email a day. It is opened from your name's menu 
 - Passes on: nothing.
 
 **When it goes wrong**
-- "<step>: <choice>?": the choice was not accepted. Reload the page and pick again.
+- "<step>: <choice>?" (in red at the top): the choice was not accepted. Reload the page and pick again.
 - No emails come: email may not be switched on for the company yet, or your user has no email
   address. Ask the office admin.

@@ -84,4 +84,4 @@ audit log.
 - "Unknown or repeated specification block" or "Unknown offer line": a block or line was removed or added twice. Remove it and add it again.
 - "Follow-up days run from 1 to 365": correct the follow-up days.
 - "That is not a Word .docx file": upload the template saved as .docx from Word.
-- On the **Settings** tab an error shows in the same green box as "Saved."; read the text.
+- On the **Settings** tab an error shows in red above the fields.

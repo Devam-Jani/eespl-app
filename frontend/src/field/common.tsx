@@ -63,6 +63,7 @@ export type Day = {
   road?: [number, number][] | null;
   settings?: MapSettings;
   can_choose_basis?: boolean;
+  basis_locked?: string | null; // why Use road / tracked km no longer reach the claim
 };
 export type MySite = { id: number; code: string; name: string; lat: number | null; lng: number | null; radius_m: number; maps_link: string | null };
 

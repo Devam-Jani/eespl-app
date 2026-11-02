@@ -596,6 +596,15 @@ def labour_decided(db: Session, b, actor_id) -> None:
     emit(db, "labour_decided", subject=f"subcon:{b.id}", actor_id=actor_id, data={})
 
 
+def consumption_reviewed(db: Session, site_id: int, actor_id) -> None:
+    """The site's consumption variance was reviewed on /consumption: closes "Consumption off
+    the range" for the site."""
+    emit(
+        db, "consumption_reviewed", subject=f"consumption:{site_id}", site_id=site_id,
+        actor_id=actor_id, data={},
+    )  # fmt: skip
+
+
 # --- the clock ------------------------------------------------------------------------------------
 
 

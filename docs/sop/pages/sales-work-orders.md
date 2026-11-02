@@ -13,7 +13,11 @@ they made. Click the code to open the work order and work through its deviations
 - **Quotation**: our quotation and revision it is checked against.
 - **Open deviations**: how many differences are still to be decided.
 - **Status**: **checking** (yellow) or **accepted · locked** (green).
-- The list has no button to add a work order in this version; ask the administrator when a new one has to be entered.
+- **New work order**: enters the client's work order when it comes. {perm: wo.edit}
+  - **Our won quotation**: pick your won quotation (only won quotations are listed). {perm: wo.edit}
+  - **Client's work order number**: the client's own reference. {perm: wo.edit}
+  - **The client's work order file (optional)**: the client's PDF or Excel, read at once into the lines and the terms. {perm: wo.edit}
+  - **Make the work order**: makes it and opens it. {perm: wo.edit}
 
 **On a work order**
 - The header: the client's ref, the status, our quotation, and where the lines came from ("read from" the file, or copied from our quotation, or "not yet").
@@ -25,7 +29,9 @@ they made. Click the code to open the work order and work through its deviations
 - **Ask the client to amend**: asks "What to ask the client (note)". The deviation turns "asked to amend" and the text to send shows under it ("To send: ..."). The salesperson gets a to-do: "Work order ...: ... Send the client: ...". {perm: wo.edit}
 - **Work order accepted**: enabled only when no deviation is open ("Resolve every deviation first"). It locks the work order, and its lines then set the unit, rate and quantity of the site's contract lines, which the measurement book, the RA bills and the certificate use. {perm: wo.edit}
 - **Payment and terms (structured)**: payment days and basis, retention, advance, guarantee, penalty, time limit, and the scope on us and on the client, as read from the work order.
+- **Edit terms**: types or corrects those terms (payment days and what they count from, retention and its release, advance, guarantee years, time limit, penalty, scope on us and on the client). An empty box clears the term. **Save the terms**, then **Compare with our offer** again. {perm: wo.edit}
 - **Lines (n)**: the work order's lines with unit, qty and rate.
+- **Work orders** (the link at the top): back to this list.
 
 **Rules**
 - Every deviation must be accepted or sent back for amendment before the work order can be accepted.
@@ -48,3 +54,5 @@ they made. Click the code to open the work order and work through its deviations
 - "The work order has no lines": upload the file or **Copy lines from our quotation** first.
 - "Work order ... (accepted) is locked: it cannot be changed or deleted. Make a new revision or an addendum."
 - "Missing permission: wo.edit": you may see the work order but not work it.
+- "QTN-... is sent: a work order is entered against a won quotation": mark the quotation won first.
+- "Quotation not found" on **Make the work order**: the quotation is not yours.

@@ -14,7 +14,7 @@ download only: nothing is sent anywhere. The table previews each voucher with **
 - **Export n voucher(s) as XML**: downloads the TallyPrime XML of the vouchers in the preview and marks them exported. It is greyed out when there are no vouchers. {perm: finance.export}
 - **Day book (Excel)**: downloads the same vouchers as an Excel day book (Date, Type, Number, Party, Ledger, Debit, Credit, Narration). It marks nothing exported.
 - **Ledger names in Tally**: one field for each ledger the vouchers use (sales, GST, TDS, bank, petty cash and so on). Type the name exactly as in Tally. Clients and vendors map to party ledgers of the same name.
-- **Save ledger names**: saves the ledger names. The message "Ledger names saved." appears.
+- **Save ledger names**: saves the ledger names (party ledger mappings already set are kept). The message "Ledger names saved." appears.
 
 **What goes in**
 - Sales and credit notes: tax invoices that are issued.
@@ -39,5 +39,5 @@ download only: nothing is sent anywhere. The table previews each voucher with **
 **When it goes wrong**
 - "The range ends before it starts": fix **From** and **To**.
 - "Vouchers that do not balance: ...": those vouchers have a rounding or tax error. Open them in the app, fix them, then export again.
-- **Day book (Excel)** does nothing: the download failed (for example a wrong range) and no message is shown. Check the dates and try again.
+- **Day book (Excel)** shows an error (for example "The range ends before it starts"): the download failed. Check the dates and try again.
 - Tally refuses a ledger on import: the ledger name differs from Tally. Fix it under **Ledger names in Tally**, tick **include exported** and export the range again.

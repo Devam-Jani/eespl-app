@@ -15,6 +15,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app import branding
 from app.auth.rbac import effective_permissions
 from app.models import Role, User, UserRole
 from app.process.models import ProcessEvent, ProcessPreference, ProcessRule, ProcessSettings
@@ -265,7 +266,7 @@ def email_subject(db: Session, n) -> str:
 
     meta = RULE_TEXT.get(n.rule_code or "")
     if meta is None:
-        out = "[EESPL] " + " ".join((n.title or "").split())
+        out = f"[{branding.PRODUCT_NAME}] " + " ".join((n.title or "").split())
         return out if len(out) <= SUBJECT_MAX else out[: SUBJECT_MAX - 1].rstrip() + "…"
     ev = db.get(ProcessEvent, n.event_id) if n.event_id else None
     data = (ev.data if ev else None) or {}
@@ -278,7 +279,7 @@ def email_subject(db: Session, n) -> str:
         ref = (meta.get("ref") or "").format_map(fields)
     except (ValueError, IndexError):
         ref = ""
-    head = f"[EESPL] {'Escalated: ' if n.escalated else ''}{meta['short']}"
+    head = f"[{branding.PRODUCT_NAME}] {'Escalated: ' if n.escalated else ''}{meta['short']}"
     tail = " ".join(x for x in (site_code, _short_place(ref)) if x)
     out = f"{head} · {tail}" if tail else head
     return out if len(out) <= SUBJECT_MAX else out[: SUBJECT_MAX - 1].rstrip() + "…"
@@ -547,17 +548,17 @@ def _email_body(db: Session, n, user: User) -> tuple[str, str, str]:
     text = (
         f"{n.title}\n"
         + "".join(f"- {x}\n" for x in lines)
-        + f"{('Site: ' + site.code + ' ' + site.name) if site else ''}\n{action}: {link}\n\nEESPL App, sent to {user.full_name}."
+        + f"{('Site: ' + site.code + ' ' + site.name) if site else ''}\n{action}: {link}\n\n{branding.app_title()}, sent to {user.full_name}."
     )
     html = (
         '<div style="font-family:Arial,sans-serif;max-width:560px">'
-        '<div style="background:#0F6B5C;color:#fff;padding:10px 14px;font-weight:bold">EESPL</div>'
+        '<div style="background:#0F6B5C;color:#fff;padding:10px 14px;font-weight:bold">' + branding.PRODUCT_NAME + '</div>'
         f'<p style="font-size:15px">{_esc(n.title)}</p>'
         + "".join(f'<p style="margin:4px 0;font-weight:bold">{_esc(x)}</p>' for x in lines)
         + (f'<p style="color:#555">Site: {_esc(site.code)} {_esc(site.name)}</p>' if site else "")
         + (f'<p style="color:#b42318">{_esc(n.note)}</p>' if n.note else "")
         + f'<p><a href="{_esc(link)}" style="background:#0F6B5C;color:#fff;padding:8px 14px;text-decoration:none;border-radius:4px">{_esc(action)}</a></p>'
-        f'<p style="color:#888;font-size:12px">{label(n.created_at)} IST · EESPL App</p></div>'
+        f'<p style="color:#888;font-size:12px">{label(n.created_at)} IST · {branding.app_title()}</p></div>'
     )
     return subject, text, html
 
@@ -583,6 +584,7 @@ def send_pending(db: Session, at: datetime | None = None, mailer=None) -> dict[s
         .where(
             NotificationOutbox.channel == "email",
             NotificationOutbox.status == "pending",
+            NotificationOutbox.kind.is_(None),  # account emails: app.auth.invites below
             or_(
                 NotificationOutbox.next_attempt_at.is_(None),
                 NotificationOutbox.next_attempt_at <= at,
@@ -610,6 +612,10 @@ def send_pending(db: Session, at: datetime | None = None, mailer=None) -> dict[s
             else:
                 row.next_attempt_at = at + timedelta(minutes=backoff[row.attempts - 1])
     db.flush()
+    from app.auth import invites  # noqa: PLC0415
+
+    for k, v in invites.send_pending(db, at, mailer).items():
+        out[k] += v
     return out
 
 
@@ -639,9 +645,9 @@ def daily_summary(db: Session, at: datetime | None = None, mailer=None, force: b
         if user is None or not user.email or not is_staff(db, user):
             continue
         lines = [f"- {n.title}" + (" (done)" if n.closed_at else "") for _row, n in items]
-        text = f"Your EESPL summary for {local:%d %b %Y}:\n" + "\n".join(lines)
+        text = f"Your {branding.PRODUCT_NAME} summary for {local:%d %b %Y}:\n" + "\n".join(lines)
         html = (
-            '<div style="font-family:Arial,sans-serif"><div style="background:#0F6B5C;color:#fff;padding:10px 14px;font-weight:bold">EESPL</div><p>Your summary for '
+            '<div style="font-family:Arial,sans-serif"><div style="background:#0F6B5C;color:#fff;padding:10px 14px;font-weight:bold">' + branding.PRODUCT_NAME + '</div><p>Your summary for '
             + f"{local:%d %b %Y}"
             + ":</p><ul>"
             + "".join(
@@ -652,7 +658,7 @@ def daily_summary(db: Session, at: datetime | None = None, mailer=None, force: b
         try:
             mailer.send(
                 user.email,
-                f"[EESPL] Your summary for {local:%d %b %Y} ({len(items)} items)",
+                f"[{branding.PRODUCT_NAME}] Your summary for {local:%d %b %Y} ({len(items)} items)",
                 text,
                 html,
             )

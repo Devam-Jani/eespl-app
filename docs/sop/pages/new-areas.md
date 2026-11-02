@@ -16,7 +16,7 @@ the work already booked on it to the right place. Only roles that approve new ar
 - "None pending." (or approved, or rejected) when the tab is empty.
 
 **The Approve box**
-- **Add it under**: "the site (top level)", or the place it belongs in. It starts at the place the site gave. If the site gave a place, choosing "the site (top level)" still puts it under that place: pick another place instead.
+- **Add it under**: "the site (top level)", or the place it belongs in. It starts at the place the site gave. Choosing "the site (top level)" puts it at the top level.
 - **Kind of place**: **other**, **terrace**, **toilet**, **kitchen**, **balcony**, **podium**, **lift pit**, **ug tank**, **oh tank**, **retaining wall**, **raft**, **stp**, **swimming pool**, **flat** or **floor**.
 - **Approve**: adds the place. **Cancel** closes the box.
 
@@ -43,4 +43,5 @@ the work already booked on it to the right place. Only roles that approve new ar
 **When it goes wrong**
 - "Not waiting for a decision": someone decided it first. Open the **approved** or **rejected** tab.
 - "Unknown kind of place": pick a kind from the list again.
+- "That place is not on this site": reload the page and pick the place again.
 - "Pick an area of this site to move the booked work to": choose a place in **Move the booked work to**.

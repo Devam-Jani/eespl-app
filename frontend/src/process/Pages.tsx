@@ -44,7 +44,15 @@ export function Notifications() {
     void load();
   }, [load]);
   async function open(n: Note) {
-    if (!n.read) await api(`/api/notifications/${n.id}/read`, { method: "POST" }).catch(() => undefined);
+    if (!n.read) {
+      try {
+        await api(`/api/notifications/${n.id}/read`, { method: "POST" });
+        // the row turns read at once (a row without a link goes nowhere, so this is what shows)
+        setData((d) => d && { ...d, items: d.items.map((x) => (x.id === n.id ? { ...x, read: true } : x)), counts: { ...d.counts, unread: Math.max(0, d.counts.unread - 1) } });
+      } catch (e) {
+        setError(errorText(e));
+      }
+    }
     if (n.link) navigate(n.link);
   }
   return (
@@ -281,7 +289,7 @@ type Rule = {
   email: boolean;
   is_active: boolean;
 };
-type PSettings = { default_users: Record<string, string>; wastage: Record<string, { min: number; max: number }>; summary_hour: number; stage_bill_days: number | null };
+type PSettings = { default_users: Record<string, string | null>; wastage: Record<string, { min: number; max: number }>; summary_hour: number; stage_bill_days: number | null };
 
 export function ProcessRules() {
   const { can } = useAuth();
@@ -338,7 +346,7 @@ export function ProcessRules() {
               <select
                 disabled={!edit}
                 value={s.default_users[role] ?? ""}
-                onChange={(e) => void saveSettings({ ...s, default_users: { ...s.default_users, [role]: e.target.value } })}
+                onChange={(e) => void saveSettings({ ...s, default_users: { ...s.default_users, [role]: e.target.value || null } })}
               >
                 <option value="">{role === "planning" ? "The office admin" : "Everyone holding the role"}</option>
                 {people.map((p) => (
@@ -501,24 +509,40 @@ export function ProcessRules() {
 
 // --- my channels per rule -------------------------------------------------------------------------
 
+/** The daily summary hour (Settings > Process rules, IST) as "9:00 am". */
+export function hourLabel(h: number): string {
+  return `${h % 12 === 0 ? 12 : h % 12}:00 ${h < 12 ? "am" : "pm"}`;
+}
+
 export function MyNotificationSettings() {
   const [rows, setRows] = useState<{ code: string; number: number; title: string; mode: string; default: string }[] | null>(null);
+  const [hour, setHour] = useState<number | null>(null);
   const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
   useEffect(() => {
-    void api<typeof rows>("/api/process/preferences").then(setRows);
+    void api<typeof rows>("/api/process/preferences").then(setRows, (e) => setError(errorText(e)));
+    void api<{ summary_hour: number }>("/api/process/settings").then((s) => setHour(s.summary_hour), () => setHour(null));
   }, []);
   async function set(code: string, mode: string) {
-    await api("/api/process/preferences", { method: "PUT", json: { modes: { [code]: mode } } });
-    setRows((rs) => rs?.map((r) => (r.code === code ? { ...r, mode } : r)) ?? null);
-    setMsg("Saved.");
+    try {
+      await api("/api/process/preferences", { method: "PUT", json: { modes: { [code]: mode } } });
+      setRows((rs) => rs?.map((r) => (r.code === code ? { ...r, mode } : r)) ?? null);
+      setError("");
+      setMsg("Saved.");
+    } catch (e) {
+      setMsg("");
+      setError(errorText(e));
+    }
   }
+  const at = hour === null ? "" : ` at ${hourLabel(hour)}`;
   return (
     <>
       <div className="page-header">
         <h1>My notifications</h1>
       </div>
-      <p className="muted small">Per step: in the app only, in the app and by email, or in one summary email at 9:00 am. Escalations always come by email.</p>
+      <p className="muted small">Per step: in the app only, in the app and by email, or in one summary email a day{at}. Escalations always come by email.</p>
       {msg && <div className="alert alert-ok">{msg}</div>}
+      {error && <div className="alert alert-error">{error}</div>}
       <Card as="div" className="table-wrap">
         <table className="table compact">
           <tbody>
@@ -531,7 +555,7 @@ export function MyNotificationSettings() {
                     <select value={r.mode} onChange={(e) => void set(r.code, e.target.value)} aria-label={r.title}>
                       <option value="app">App only{r.default === "app" ? " (default)" : ""}</option>
                       <option value="email">App and email{r.default === "email" ? " (default)" : ""}</option>
-                      <option value="summary">Daily summary email (9:00)</option>
+                      <option value="summary">Daily summary email{hour === null ? "" : ` (${hourLabel(hour)})`}</option>
                     </select>
                   </Field>
                 </td>

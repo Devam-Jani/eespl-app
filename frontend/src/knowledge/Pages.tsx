@@ -668,6 +668,7 @@ function ProductsToReview() {
 
 function MergeSuggestions({ id, canEdit, onMerged }: { id: number; canEdit: boolean; onMerged: (into: number) => void }) {
   const [rows, setRows] = useState<Brief[]>([]);
+  const [error, setError] = useState("");
   useEffect(() => {
     api<Brief[]>(`/api/knowledge/templates/${id}/merge-suggestions`).then(setRows, () => undefined);
   }, [id]);
@@ -675,6 +676,7 @@ function MergeSuggestions({ id, canEdit, onMerged }: { id: number; canEdit: bool
   return (
     <details className="top-gap">
       <summary className="small">{rows.length} near-duplicate(s): the same area and system, worded differently</summary>
+      {error && <div className="alert alert-error">{error}</div>}
       <table className="table compact">
         <tbody>
           {rows.map((x) => (
@@ -686,7 +688,13 @@ function MergeSuggestions({ id, canEdit, onMerged }: { id: number; canEdit: bool
                 {canEdit && (
                   <Button
                     size="small"
-                    onClick={() => void api(`/api/knowledge/templates/${id}/merge`, { method: "POST", json: { into_id: x.id } }).then(() => onMerged(x.id))}
+                    onClick={() => {
+                      setError("");
+                      void api(`/api/knowledge/templates/${id}/merge`, { method: "POST", json: { into_id: x.id } }).then(
+                        () => onMerged(x.id),
+                        (e) => setError(errorText(e)),
+                      );
+                    }}
                   >
                     Merge this into it
                   </Button>

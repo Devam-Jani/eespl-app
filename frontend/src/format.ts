@@ -66,3 +66,14 @@ export function showError(err: unknown): void {
   const text = errorText(err);
   if (text) window.alert(text);
 }
+
+/** Copies to the clipboard; false when the browser gave no clipboard (a plain http address) or refused. */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    if (!navigator.clipboard) return false;
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -15,6 +15,7 @@ from app.process import engine
 from app.process.models import ProcessEvent, ProcessPreference, ProcessRule
 from app.process.rules import DEFAULT_RULES
 from app.sites.models import AreaScope, Site, SiteMember, SiteNode
+from app.timefmt import ist_today
 from tests.test_finance import boss, contract, world  # noqa: F401  (fixtures)
 
 ROLE_ON_SITE = {"salesperson": "sales", "site_engineer": "incharge", "supervisor": "supervisor"}
@@ -237,7 +238,7 @@ def test_stage_done_tells_billing_then_the_director_after_7_days_until_the_bill_
         "submit": True,
     }
     d = c.put(
-        f"/api/execution/sites/{team['A']}/dprs/{date.today().isoformat()}", json=body, headers=h
+        f"/api/execution/sites/{team['A']}/dprs/{ist_today().isoformat()}", json=body, headers=h
     ).json()
     assert c.post(f"/api/execution/dprs/{d['id']}/acknowledge", headers=h).status_code == 200
     billing = team["people"]["A"]["billing"]

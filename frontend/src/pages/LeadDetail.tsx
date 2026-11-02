@@ -4,9 +4,8 @@ import { Link, useParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
 import { errorText, inr, LOST_REASONS } from "../format";
-import { Modal } from "../ui/Overlay";
 import type { LeadDetail as Detail, LeadLookups } from "../types";
-import { KylasBadge, LEAD_SOURCES, LEAD_STATUSES, LeadForm, LeadStatusBadge } from "./Leads";
+import { KylasBadge, LEAD_SOURCES, LEAD_STATUSES, LeadForm, LeadLostDialog as LostDialog, LeadStatusBadge } from "./Leads";
 import { shortDate } from "./Tenders";
 import { Button, buttonClass, Card, Field } from "../ui/components";
 
@@ -236,46 +235,5 @@ export default function LeadDetail() {
         />
       )}
     </>
-  );
-}
-
-function LostDialog({ onClose, onSave }: { onClose: () => void; onSave: (body: { lost_reason: string; lost_to: string | null; lost_note: string | null }) => void }) {
-  const [reason, setReason] = useState("");
-  const [to, setTo] = useState("");
-  const [note, setNote] = useState("");
-  return (
-    <Modal title="Mark the lead lost" onClose={onClose}>
-      <form
-        onSubmit={(e: FormEvent) => {
-          e.preventDefault();
-          onSave({ lost_reason: reason, lost_to: to.trim() || null, lost_note: note.trim() || null });
-        }}
-      >
-        <Field label="Reason *">
-          <select required value={reason} onChange={(e) => setReason(e.target.value)} autoFocus>
-            <option value="">Choose…</option>
-            {Object.entries(LOST_REASONS).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Lost to (competitor, if known)">
-          <input value={to} onChange={(e) => setTo(e.target.value)} maxLength={200} />
-        </Field>
-        <Field label="Details">
-          <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
-        </Field>
-        <div className="form-actions">
-          <Button type="button" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary" disabled={!reason}>
-            Mark lost
-          </Button>
-        </div>
-      </form>
-    </Modal>
   );
 }

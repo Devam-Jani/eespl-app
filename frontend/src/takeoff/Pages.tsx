@@ -104,6 +104,13 @@ type SiteNode = { id: number; parent_id: number | null; kind: string; name: stri
 // AutoCAD colour index, the common ones; the rest drawn in grey
 const ACI: Record<number, string> = { 1: ART.aci1, 2: ART.aci2, 3: ART.aci3, 4: ART.aci4, 5: ART.aci5, 6: ART.aci6, 7: ART.aci7, 8: ART.aci8, 9: ART.aci9 };
 const ROLES = ["walls", "rooms", "dimensions", "text", "hide"];
+// the drawing units a person may set ($INSUNITS codes the backend accepts)
+export const SETTABLE_UNITS: [number, string][] = [[4, "millimetres"], [5, "centimetres"], [6, "metres"], [1, "inches"], [2, "feet"]];
+
+/** While tracing, the first click that snaps to no line is a click inside the room (propose the outline). */
+export function firstClickProposes(cornersSoFar: number, snapKind: string) {
+  return cornersSoFar === 0 && snapKind === "none";
+}
 
 export function TakeoffPage() {
   const { id } = useParams();
@@ -172,7 +179,9 @@ export function TakeoffPage() {
               {r.file ? (
                 <>
                   <span className={`badge ${r.file.status === "ready" ? "badge-ok" : r.file.status === "failed" ? "badge-danger" : "badge-warn"}`}>{r.file.status}</span>
-                  {r.file.status === "ready" && (
+                  {/* the file already on screen has no Open (pressing it changed nothing) */}
+                  {r.file.status === "ready" && r.file.id === fileId && <span className="small muted">Open now</span>}
+                  {r.file.status === "ready" && r.file.id !== fileId && (
                     <Button size="small" onClick={() => setParam("file", String(r.file!.id))}>
                       Open
                     </Button>
@@ -296,6 +305,8 @@ function Workspace({
       const prev = trace.points[trace.points.length - 1];
       try {
         const s = await api<{ x: number; y: number; kind: string }>(`/api/takeoff/files/${fileId}/snap`, { method: "POST", json: { x, y, radius, previous: prev ?? null } });
+        // the first click away from every line is a click inside the room: propose its outline from the walls
+        if (firstClickProposes(trace.points.length, s.kind)) return void (await proposeAt(x, y));
         setTrace({ ...trace, points: [...trace.points, [s.x, s.y]], snaps: [...trace.snaps, s.kind] });
       } catch (e) {
         onError(errorText(e));
@@ -356,7 +367,8 @@ function Workspace({
           {file.drawing} {file.rev}
         </b>{" "}
         · {file.version} · units <b>{file.unit_name}</b>
-        {file.unit_m === null && <span className="text-danger"> (unitless: set the unit before tracing)</span>} · {file.layers.length} layers · {file.dimensions} dimensions
+        {file.unit_m === null && <span className="text-danger"> (unitless: set the unit before tracing)</span>}
+        {canEdit && <UnitPicker file={file} onSaved={() => (void loadFile(), void loadAreas())} onError={onError} />} · {file.layers.length} layers · {file.dimensions} dimensions
         {file.sheet_unknown ? <span className="text-warn"> · {file.sheet_unknown} areas on an unknown sheet</span> : null}
         {file.sheet_guessed ? <span className="text-warn"> · {file.sheet_guessed} sheets guessed (no frame): confirm them</span> : null}
         <CountSets file={file} />
@@ -378,8 +390,8 @@ function Workspace({
             {trace && (
               <>
                 <span className="small">
-                  Click the corners ({trace.points.length}){trace.snaps.length > 0 && ` · last snapped to ${trace.snaps[trace.snaps.length - 1]}`}; or click inside the room for an
-                  outline from the walls:
+                  Click the corners ({trace.points.length}){trace.snaps.length > 0 && ` · last snapped to ${trace.snaps[trace.snaps.length - 1]}`}
+                  {trace.points.length === 0 && "; or click inside the room, away from the lines, for an outline from the walls"}:
                 </span>
                 <Button
                   size="small"
@@ -432,7 +444,6 @@ function Workspace({
               tracePoints={traceOutline}
               proposed={proposed}
               onClick={(x, y, r) => void clickWorld(x, y, r)}
-              onDoubleClick={(x, y) => (trace ? void proposeAt(x, y) : undefined)}
               onPickArea={(a) => setArea(String(a.id))}
             />
           ) : (
@@ -501,7 +512,6 @@ function DrawingCanvas({
   tracePoints,
   proposed,
   onClick,
-  onDoubleClick,
   onPickArea,
 }: {
   geo: Geo;
@@ -512,7 +522,6 @@ function DrawingCanvas({
   tracePoints: [number, number][] | null;
   proposed: [number, number][] | null;
   onClick: (x: number, y: number, radius: number) => void;
-  onDoubleClick: (x: number, y: number) => void;
   onPickArea: (a: Area) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -694,7 +703,6 @@ function DrawingCanvas({
         onPointerMove={move}
         onPointerUp={up}
         onWheel={wheel}
-        onDoubleClick={(e) => onDoubleClick(...toWorld(e.clientX, e.clientY))}
         aria-label="The drawing"
       />
       <div className="takeoff-zoom">
@@ -715,6 +723,40 @@ function DrawingCanvas({
 // --- the areas ------------------------------------------------------------------------------------
 
 /** The counts both ways, each with what it means, so they match what people compare them with. */
+// the drawing's unit when it says "unitless" (or says it wrong): areas already traced are measured again
+function UnitPicker({ file, onSaved, onError }: { file: CadFile; onSaved: () => void; onError: (e: string) => void }) {
+  const [unit, setUnit] = useState("");
+  async function save() {
+    try {
+      await api(`/api/takeoff/files/${file.id}/units`, { method: "PUT", json: { units_code: Number(unit) } });
+      setUnit("");
+      onSaved();
+    } catch (e) {
+      onError(errorText(e));
+    }
+  }
+  return (
+    <>
+      {" "}
+      <Field label="Set the unit" bare>
+        <select value={unit} onChange={(e) => setUnit(e.target.value)} aria-label="Set the unit">
+          <option value="">{file.unit_m === null ? "Set the unit…" : "Change the unit…"}</option>
+          {SETTABLE_UNITS.map(([code, name]) => (
+            <option key={code} value={code}>
+              {name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {unit && (
+        <Button size="small" variant="primary" onClick={() => void save()}>
+          Save the unit
+        </Button>
+      )}
+    </>
+  );
+}
+
 function CountSets({ file }: { file: CadFile }) {
   const c = file.count_sets;
   if (!c)

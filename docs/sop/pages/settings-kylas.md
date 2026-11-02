@@ -9,7 +9,7 @@ and their outcomes are read back. The API key is never typed here: it lives only
 .env file, and this page only says whether it is set. Every save is written to the audit log.
 
 **On the page**
-- **Test connection**: asks Kylas for its lead sources. The answer shows at the top: "✓ Connected: <n> lead sources", with whether the saved source id is a real Kylas source; or "✗" and the reason.
+- **Test connection**: asks Kylas for its lead sources. The answer shows at the top: "✓ Connected: <n> lead sources", with whether the saved source id is a real Kylas source; or, in red, "✗" and the reason.
 - The status box: "Kylas sync is on: new leads are pushed, outcomes are polled." or "Kylas sync is off: <reason>."
 - **Lead source id (the "EESPL App" source)**: the Kylas source new leads are pushed under. Empty = push off.
 - **Owner rule**: **The Kylas user of whoever entered the lead, else the default owner**, or **Always the default owner**.

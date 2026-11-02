@@ -77,10 +77,15 @@ def _hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+def end_links(db, user: User) -> None:
+    """Every open set-password link of this person stops working (deactivated, or a new link)."""
+    db.execute(update(PasswordLink).where(PasswordLink.user_id == user.id, PasswordLink.used_at.is_(None)).values(used_at=_now()))
+
+
 def make_link(db, user: User, by: uuid.UUID | None) -> str:
     """A new link (earlier unused ones stop working); only its hash is kept. The path to add to
     the app's address: /set-password/<token>."""
-    db.execute(update(PasswordLink).where(PasswordLink.user_id == user.id, PasswordLink.used_at.is_(None)).values(used_at=_now()))
+    end_links(db, user)
     token = secrets.token_urlsafe(32)
     db.add(PasswordLink(user_id=user.id, token_hash=_hash(token), expires_at=_now() + timedelta(days=LINK_DAYS), created_by=by))
     db.flush()
@@ -89,8 +94,8 @@ def make_link(db, user: User, by: uuid.UUID | None) -> str:
 
 def _link(db, token: str) -> PasswordLink:
     link = db.scalar(select(PasswordLink).where(PasswordLink.token_hash == _hash(token)))
-    if link is None or link.used_at is not None or link.expires_at <= _now():
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "This link was used already or has expired: ask the office admin for a new one")
+    if link is None or link.used_at is not None or link.expires_at <= _now() or not db.get(User, link.user_id).is_active:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This link was used already or has expired. Ask your admin to resend the invite.")
     return link
 
 
@@ -110,31 +115,88 @@ def link_set(token: str, body: SetIn, request: Request, db: DbSession) -> None:
     link = _link(db, token)
     user = db.get(User, link.user_id)
     set_password(db, user, body.password)
-    user.is_active = True
     link.used_at = _now()
     audit.record(db, "auth.password_link_used", "user", user.id, user_id=user.id, ip=_ip(request))
     db.commit()
+
+
+def _managed(db, principal, user_id: uuid.UUID) -> User:
+    """The user, when the caller may manage them (same rule as Edit / Reset password)."""
+    from app.routers.users import check_can_manage  # noqa: PLC0415
+
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    check_can_manage(principal, user)
+    return user
 
 
 @router.post("/api/admin/users/{user_id}/password-link")
 def admin_link(user_id: uuid.UUID, request: Request, db: DbSession, principal: CurrentPrincipal, _: Admin) -> dict:
     """A one-time link for this person to set their password: copy it and send it yourself (the
     app sends no email until EMAIL_ENABLED). Shown once."""
-    user = db.get(User, user_id)
-    if user is None or user.is_demo:
+    user = _managed(db, principal, user_id)
+    if user.is_demo:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    if not user.is_active:
+        if user.password_hash is not None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "This user is deactivated: activate them first")
+        user.is_active = True  # never set up (e.g. from the PowerPlay import): the admin's link lets them in
     path = make_link(db, user, principal.user.id)
     audit.record(db, "user.password_link", "user", user.id, user_id=principal.user.id, ip=_ip(request))
     db.commit()
     return {"link": path, "expires_in_days": LINK_DAYS}
 
 
+@router.get("/api/admin/email-mode")
+def email_mode(_: Admin) -> dict:
+    """For the Users page: 'on', 'mailpit' (development) or 'off' (copy the link instead)."""
+    from app.auth import invites  # noqa: PLC0415
+
+    return {"mode": invites.email_mode()}
+
+
+@router.post("/api/admin/users/{user_id}/invite")
+def resend_invite(user_id: uuid.UUID, request: Request, db: DbSession, principal: CurrentPrincipal, _: Admin) -> dict:
+    """A new invite email: a new link, and the old one stops working at once."""
+    from app.auth import invites  # noqa: PLC0415
+
+    user = _managed(db, principal, user_id)
+    if user.is_demo or not user.is_active:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This user is deactivated: activate them first")
+    if invites.email_mode() == "off":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Email is off: copy the link")
+    if invites.queue(db, user, "invite", principal.user.id) is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Only staff with an email address get an invite email: copy the link instead")
+    audit.record(db, "user.invite", "user", user.id, user_id=principal.user.id, ip=_ip(request))
+    db.commit()
+    return invites.last_mail(db, [user.id])[user.id]
+
+
+class ForgotIn(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+
+
+FORGOT_REPLY = "If that email belongs to a staff login, a link to set a new password is on its way. It works once, for 7 days."
+
+
+@router.post("/api/auth/forgot-password", status_code=status.HTTP_202_ACCEPTED)
+def forgot_password(body: ForgotIn, request: Request, db: DbSession) -> dict:
+    """The same answer whether the email exists or not; at most one email per person in 5 minutes."""
+    from app.auth import invites  # noqa: PLC0415
+
+    user = db.scalar(select(User).where(User.email == body.email.strip().lower()))
+    if user is not None and user.is_active and not user.is_demo and not invites.recent_reset(db, user, _now()):
+        if invites.queue(db, user, "reset", None) is not None:
+            audit.record(db, "auth.forgot_password", "user", user.id, user_id=user.id, ip=_ip(request))
+            db.commit()
+    return {"message": FORGOT_REPLY}
+
+
 @router.post("/api/admin/users/{user_id}/unlock")
 def unlock(user_id: uuid.UUID, request: Request, db: DbSession, principal: CurrentPrincipal, _: Admin) -> dict:
     """After repeated failed sign-ins the account waits for the office admin."""
-    user = db.get(User, user_id)
-    if user is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    user = _managed(db, principal, user_id)
     before = {"locked_by_failures": user.locked_by_failures, "locked_until": user.locked_until, "lockouts": user.lockouts}
     user.failed_logins, user.locked_until, user.lockouts, user.locked_by_failures = 0, None, 0, False
     audit.record(db, "user.unlock", "user", user.id, user_id=principal.user.id, before=before, ip=_ip(request))
@@ -212,9 +274,7 @@ def two_step_off(body: OffIn, request: Request, db: DbSession, principal: Curren
 def two_step_reset(user_id: uuid.UUID, request: Request, db: DbSession, principal: CurrentPrincipal, _: Admin) -> dict:
     """A lost phone: two-step login off for this person (they set it up again at the next sign-in
     when their role requires it)."""
-    user = db.get(User, user_id)
-    if user is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    user = _managed(db, principal, user_id)
     user.totp_secret, user.totp_enabled_at = None, None
     audit.record(db, "user.two_step_reset", "user", user.id, user_id=principal.user.id, ip=_ip(request))
     db.commit()

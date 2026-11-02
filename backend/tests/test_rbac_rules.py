@@ -30,7 +30,7 @@ def test_office_admin_cannot_assign_super_admin(login_as, make_user, db):
 
     r = c.post("/api/users", json=_create_user_body("x@example.com", sa), headers=h)
     assert r.status_code == 403
-    assert "admin.settings" in r.json()["detail"]
+    assert "above your own" in r.json()["detail"]
 
     target = make_user("est@example.com", "estimator")
     r = c.put(f"/api/users/{target.id}/roles", json={"role_ids": [sa]}, headers=h)

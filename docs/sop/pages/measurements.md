@@ -22,6 +22,7 @@ The measurement book holds every billable quantity of a site: what was measured,
 
 **Measure (site page > Measure)** {perm: closeout.billing}
 - The line under the title says how the site works: "Each line goes to the client for approval; bills take only approved lines." or "Lines are approved when written on this site." {perm: closeout.billing}
+- **Client approval: on (switch off)** / **Client approval: off (switch on)**: switches whether the client approves each line on this site. It asks first. Lines written after the switch follow it; lines already sent stay with the client. {perm: closeout.billing}
 - **Item (its unit is the work order's)**: pick the contract line. The hint under it says how it is measured (per sqm: L x B or perimeter x height; per rmt: the running length; others: the quantity). {perm: closeout.billing}
 - **Tower / block**, **Floor or flat**, **Flat or area**, **Area**: pick the place, one level at a time. {perm: closeout.billing}
 - **Or the drawing's area**: shown when the site has a read drawing. Picks a traced area of the drawing (with its sqm on the drawing) and its place. {perm: closeout.billing}
@@ -34,6 +35,9 @@ The measurement book holds every billable quantity of a site: what was measured,
 - **Photos (n)**: takes or picks photos; they are uploaded with the line. {perm: closeout.billing}
 - **Save the line**: saves it. Greyed until an item is picked and the sizes give a quantity. A green note shows "Saved: <place> <qty> <unit>", with the zone warning if any. {perm: closeout.billing}
 - **Lines (n)**: every line of the site, with its status badge (draft, sent, approved, disputed), sizes, quantity, photos, the zone reason, the client's corrections (old value struck out, new value, by whom, status) and "approved by ... (recorded by staff) · billed in <RA bill>". {perm: closeout.billing}
+- **Accept** (on a pending correction): the line takes the client's value, its quantity is worked again, and when no other correction is pending it is approved as corrected (in the client's name). {perm: closeout.billing}
+- **Dispute…** (on a pending correction): asks "Why we dispute the correction (the client sees it)". The correction shows "disputed" with our answer, and the line goes back to the client (sent) to approve or correct again. {perm: closeout.billing}
+- **Record the client's signed sheet** (on a line not yet approved): the client signed the paper sheet. Asks **Approved by (the client's person)**, **Signed on** (empty: today) and **The signed sheet** (photo or scan, needed); **Record the approval** approves the line and locks it ("recorded by staff"). {perm: closeout.billing}
 - Tick box on a draft or disputed line: picks it to send. {perm: closeout.billing}
 - **Send n to the client**: sends the ticked lines as one set (MB-<site>-01, 02 ...). Greyed until a line is ticked. {perm: closeout.billing}
 - **Pick all unsent**: ticks every draft and disputed line. {perm: closeout.billing}
@@ -103,7 +107,10 @@ The measurement book holds every billable quantity of a site: what was measured,
 - "The client has this line: let them approve or correct it": wait for the client's answer.
 - "Line #n is sent" (or approved): only draft or disputed lines can be sent. Untick it.
 - "Pick the measurement lines to send": tick at least one line.
-- A line shows a pending correction from the client and never becomes approved: the app has no button yet to accept or dispute a correction. Tell the office admin.
+- "A correction on this line waits for our answer" (the client cannot approve the line): press **Accept** or **Dispute…** under the correction on **Measure**.
+- "Say why the correction is disputed": type the reason when you dispute.
+- "Already answered": the correction was answered already; refresh the page.
+- "Upload the signed sheet (photo or scan)": **Record the approval** needs the signed copy.
 - "That contract line is not on this site": pick another line, or refresh the page after changing the site.
 - "Missing permission: billing.edit": your role may look at the drawing and the bills but not change them.
 - "Send or delete the draft sheet first": a draft sheet is open. Send it or delete it before a new one.

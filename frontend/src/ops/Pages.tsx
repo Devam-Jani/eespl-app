@@ -4,8 +4,9 @@ import { Link, matchPath, useLocation, useNavigate, useParams } from "react-rout
 import { api, downloadFile } from "../api";
 import { useAuth } from "../auth";
 import { errorText, inr } from "../format";
+import { HowToLink } from "../help/HowTo";
 import { MENU } from "../menu";
-import { Button, Card, Field, FilePicker } from "../ui/components";
+import { Button, Card, CopyButton, Field, FilePicker } from "../ui/components";
 
 const when = (v: string | null | undefined) =>
   v
@@ -84,7 +85,7 @@ export function SetPassword() {
     <div className="login-page">
       <form className="login-card" onSubmit={(e) => void submit(e)}>
         <div className="login-brand">
-          <span className="brand-mark">E</span>
+          <span className="app-mark" aria-hidden="true">E</span>
           <div>
             <h1>Set your password</h1>
             {who && (
@@ -108,6 +109,11 @@ export function SetPassword() {
               Set the password
             </Button>
           </>
+        )}
+        {!who && error && (
+          <p className="small muted top-gap">
+            Each link works once, for 7 days. Ask your admin to resend the invite, or use <Link to="/login?forgot=1">Forgot password</Link> on the sign-in page if you have signed in before.
+          </p>
         )}
       </form>
     </div>
@@ -612,9 +618,7 @@ export function UserImport() {
                   <td className="small">{u.link ? <code className="secret">{base + u.link}</code> : <span className="muted">{u.status}</span>}</td>
                   <td>
                     {u.link && (
-                      <Button size="small" onClick={() => void navigator.clipboard?.writeText(base + u.link)}>
-                        Copy
-                      </Button>
+                      <CopyButton text={base + u.link} />
                     )}
                   </td>
                 </tr>
@@ -994,6 +998,10 @@ export function HelpButton() {
             ))}
           </ol>
           {help.role && <p className="small muted">For your role.</p>}
+          {/* on a phone the top bar has no room for "How to": it is here instead */}
+          <p className="help-howto">
+            <HowToLink />
+          </p>
         </div>
       )}
     </>

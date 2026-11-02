@@ -236,13 +236,19 @@ export default function Camera({ area, onClose, onSaved }: { area: Area; onClose
       if (!result) return;
       const plan = await planImage(result.polygon, area.name);
       setBusy(true);
-      const next = await upload(plan!, plan, { mode: "ar", width_px: "1200", height_px: "900" });
-      onSaved(
-        await api<Survey>(`/api/surveys/areas/${area.id}/camera`, {
+      await upload(plan!, plan, { mode: "ar", width_px: "1200", height_px: "900" });
+      let saved: Survey;
+      try {
+        saved = await api<Survey>(`/api/surveys/areas/${area.id}/camera`, {
           method: "POST",
           json: { method: "ar", polygon_m: result.polygon, wall_height_m: result.wallHeight, accuracy_note: "AR measure (WebXR hit-test)" },
-        }).catch(() => next),
-      );
+        });
+      } catch (err) {
+        // the plan photo is kept; the size is not: say so and stay open (not closed as if saved)
+        setError(`The plan photo is saved but the AR size was not: ${errorText(err)}`);
+        return;
+      }
+      onSaved(saved);
     } catch (err) {
       setArActive(false);
       setError(`AR stopped: ${errorText(err)}`);

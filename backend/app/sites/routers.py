@@ -30,7 +30,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app import audit
-from app.auth.deps import CurrentPrincipal, require_permission
+from app.auth.deps import CurrentPrincipal, require_any_permission, require_permission
 from app.config import settings
 from app.db import DbSession
 from app.execution.common import check_content, save_upload, send_file
@@ -81,12 +81,15 @@ from app.sites.schemas import (
 )
 from app.tenders.models import BoqLine, Tender
 from app.tenders.service import covers as tender_covers
+from app.timefmt import ist_today
 
 router = APIRouter(prefix="/api/sites", tags=["sites"])
 templates_router = APIRouter(prefix="/api/stage-templates", tags=["sites"])
 
 ViewScope = Annotated[str, Depends(require_permission("site.view"))]
 EditScope = Annotated[str, Depends(require_permission("site.edit"))]
+# stage templates: the office (site.edit) or the planning team (planning.edit)
+TemplateEditScope = Annotated[str, Depends(require_any_permission("site.edit", "planning.edit"))]
 
 
 def optional_scope(code: str):
@@ -125,7 +128,7 @@ def _editable(db, site_id, view, edit, principal) -> Site:
 
 
 def _late(target: date | None, done: bool) -> bool:
-    return bool(target and target < date.today() and not done)
+    return bool(target and target < ist_today() and not done)
 
 
 def _site_out(db: Session, site: Site, pct: dict[int, Decimal] | None = None) -> SiteOut:
@@ -198,7 +201,7 @@ def _list_query(scope, principal, q, status_, client_id, channel_id, incharge_id
         query = query.where(Site.source == source)
     if late:
         query = query.where(
-            Site.target_date < date.today(), Site.status.not_in(("completed", "closed"))
+            Site.target_date < ist_today(), Site.status.not_in(("completed", "closed"))
         )
     return query.order_by(Site.created_at.desc(), Site.id.desc())
 
@@ -367,7 +370,7 @@ def create_from_tender(
         tender_id=tender.id,
         city=fields.pop("city") or tender.site_city,
         state=fields.pop("state") or tender.site_state,
-        status="active" if body.start_date and body.start_date <= date.today() else "planned",
+        status="active" if body.start_date and body.start_date <= ist_today() else "planned",
         created_by=principal.user.id,
         **fields,
     )
@@ -1113,7 +1116,7 @@ def list_tasks(
         query = query.where(Task.status == status_)
     if filter == "late":
         query = query.where(
-            Task.planned_end < date.today(), Task.status.not_in(("done", "certified"))
+            Task.planned_end < ist_today(), Task.status.not_in(("done", "certified"))
         )
     elif filter == "blocked":
         query = query.where(Task.status == "blocked")
@@ -1231,9 +1234,9 @@ def update_task(
                     raise unprocessable("Every inspection item must pass before this step is done")
             _check_stage_checklists(db, task)
             task.progress_percent = Decimal(100)
-            task.actual_end = date.today()
+            task.actual_end = ist_today()
         if new in ("in_progress", "done") and task.actual_start is None:
-            task.actual_start = date.today()
+            task.actual_start = ist_today()
         if new in ("not_started", "in_progress", "blocked"):
             task.actual_end = None
             task.certified_at = task.certified_by = None
@@ -1753,7 +1756,11 @@ def _save_template(db: Session, t: StageTemplate, body: TemplateIn, user_id) -> 
 
 @templates_router.post("", status_code=status.HTTP_201_CREATED)
 def create_template(
-    body: TemplateIn, request: Request, db: DbSession, principal: CurrentPrincipal, _: EditScope
+    body: TemplateIn,
+    request: Request,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    _: TemplateEditScope,
 ) -> TemplateOut:
     t = StageTemplate(name=body.name.strip(), created_by=principal.user.id)
     db.add(t)
@@ -1780,7 +1787,7 @@ def update_template(
     request: Request,
     db: DbSession,
     principal: CurrentPrincipal,
-    _: EditScope,
+    _: TemplateEditScope,
 ) -> TemplateOut:
     """Replace the template's steps (weights must add up to 100). Steps with tasks on sites
     are kept (their weights change everywhere); new steps only reach a site on its next

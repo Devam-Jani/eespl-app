@@ -1,4 +1,4 @@
-from pydantic import Field, SecretStr
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -38,7 +38,11 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_user: str = ""
     smtp_password: SecretStr | None = None
-    smtp_from: str = "EESPL App <noreply@eespl.local>"
+    # the sender: MAIL_FROM (SMTP_FROM still read), e.g. "EESPL <noreply@company-domain>"
+    smtp_from: str = Field(
+        default="EESPL <noreply@eespl.local>",
+        validation_alias=AliasChoices("MAIL_FROM", "SMTP_FROM", "smtp_from"),
+    )
     mailpit_host: str = "mailpit"
     mailpit_port: int = 1025
     # AutoCAD takeoff: LibreDWG's dwg2dxf (built into the image), its timeout and the size limit

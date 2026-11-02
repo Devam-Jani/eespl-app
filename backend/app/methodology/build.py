@@ -10,7 +10,7 @@ red with two choices: an approved make, or keep ours and ask for its approval be
 import math
 import re
 from collections import Counter
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -33,6 +33,7 @@ from app.methodology.models import (
     StandardContradiction,
     StandardRule,
 )
+from app.timefmt import ist_today
 
 SMALL_TOILET_SQM = 4.5
 # where our library has no system for the element itself, the ones that suit it
@@ -54,7 +55,7 @@ INFORMATIONAL = {"part"}
 
 
 def new_code(db: Session) -> str:
-    year = date.today().year
+    year = ist_today().year
     n = (
         db.scalar(
             select(func.count())

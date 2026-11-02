@@ -10,7 +10,7 @@ import type { SiteTask } from "../types";
 import { BackButton, Button, Card, EmptyState, Icon, ProgressBar, Skeleton } from "../ui/components";
 import { checkFtIn, FtInInput } from "../ui/FtIn";
 import { useToast } from "../ui/Overlay";
-import { flush, sendOrKeep, type QueuedReport } from "./reportQueue";
+import { discard, flush, refused, retry, sendOrKeep, type QueuedReport } from "./reportQueue";
 
 type Place = { node_id: number; name: string; floor: string; steps: SiteTask[]; current: SiteTask | null; at: number };
 type Choice = "done" | "part" | "none";
@@ -74,17 +74,28 @@ export default function TodayReport() {
     api<SiteTask[]>(`/api/sites/${id}/tasks`).then(setTasks, (e) => setError(errorText(e)));
   }, [id]);
   useEffect(load, [load]);
-  // what was kept on the phone goes when the signal is back
+  // what was kept on the phone goes when the signal is back; a report the server refused is shown with its reason
+  const [refusedRows, setRefusedRows] = useState<QueuedReport[]>([]);
+  const showRefused = useCallback(() => void refused().then(setRefusedRows, () => setRefusedRows([])), []);
   useEffect(() => {
     const go = () =>
-      void flush().then(({ sent, left }) => {
-        if (sent) toast.show({ text: `${sent} report${sent > 1 ? "s" : ""} sent now that the signal is back.` });
-        setKept(left > 0);
-      });
+      void flush()
+        .then(({ sent, left }) => {
+          if (sent) toast.show({ text: `${sent} report${sent > 1 ? "s" : ""} sent now that the signal is back.` });
+          setKept(left > 0);
+        })
+        .finally(showRefused);
     go();
     window.addEventListener("online", go);
     return () => window.removeEventListener("online", go);
-  }, [toast]);
+  }, [toast, showRefused]);
+
+  async function tryAgain(r: QueuedReport) {
+    const how = await retry(r);
+    if (how === "sent") toast.show({ text: "Sent." });
+    if (how === "kept") setKept(true);
+    showRefused();
+  }
 
   const places = useMemo(() => (tasks ? placesToday(tasks, day) : []), [tasks, day]);
   const place = places.find((p) => p.node_id === pick) ?? places.find((p) => !done.includes(p.node_id)) ?? places[0] ?? null;
@@ -157,6 +168,20 @@ export default function TodayReport() {
         )}
       </header>
       <ProgressBar value={places.length ? (count / places.length) * 100 : 0} thin label={`${count} of ${places.length} places reported`} />
+      {refusedRows.map((r) => (
+        <div key={r.id} className="alert alert-error">
+          <b>Not sent: {r.line.description}</b>
+          <div className="small">{r.error}</div>
+          <div className="row-actions top-gap">
+            <Button size="small" onClick={() => void tryAgain(r)}>
+              Try again
+            </Button>
+            <Button size="small" variant="ghost" onClick={() => confirm("Drop this report from the phone? Its line and photos are lost.") && void discard(r.id).then(showRefused)}>
+              Discard
+            </Button>
+          </div>
+        </div>
+      ))}
 
       {!tasks ? (
         <Skeleton height={70} lines={4} />

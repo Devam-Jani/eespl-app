@@ -34,7 +34,8 @@ decides on **Material requests**.
 
 **On the page: Material requests (planning)**
 - Filters: **Waiting** (not decided yet), **Over the estimate** (requests sent with a reason for more
-  than the estimate) and **All**. {perm: material_request.approve}
+  than the estimate) and **All**. Opened from **Decide** on My work, the page starts on **This
+  request**, showing only that request. {perm: material_request.approve}
 - Columns: **Request** (code, material, date), **Site** (opens the site), **Area**, **Working** (the
   formula), **Left before** (what the estimate had left when it was asked), **Over the estimate** (a
   red "Over: <reason>" badge) and **Status**, with the changed quantity, the refusal note or the

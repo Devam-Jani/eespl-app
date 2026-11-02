@@ -17,6 +17,7 @@ from app.closeout.common import locked, now, unprocessable
 from app.closeout.models import LabourClaim
 from app.sites.models import Site, SiteNode
 from app.team.models import Measurement
+from app.timefmt import ist_today
 
 Q3 = Decimal("0.001")
 
@@ -164,7 +165,7 @@ def return_excess(db: Session, site: Site, product_id: int, qty: Decimal, user_i
     p = db.get(Product, product_id)
     store = svc.site_store(db, site, user_id)
     rate = svc.average_rate(db, store.id, p.id)
-    back = SiteIssue(code=svc.next_code(db, "ISS"), kind="return", store_id=store.id, site_id=site.id, issued_on=date.today(), remark="Excess from the reconciliation, back to the godown", created_by=user_id)
+    back = SiteIssue(code=svc.next_code(db, "ISS"), kind="return", store_id=store.id, site_id=site.id, issued_on=ist_today(), remark="Excess from the reconciliation, back to the godown", created_by=user_id)
     db.add(back)
     db.flush()
     svc.post(db, store_id=store.id, product=p, qty=qty, rate=rate, ref_type="return", ref_id=back.id, user_id=user_id, note=back.code)

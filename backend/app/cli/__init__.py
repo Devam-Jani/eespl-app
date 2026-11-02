@@ -490,7 +490,10 @@ def main(argv: list[str] | None = None) -> None:
         help="comma-separated: products,vendors,clients,library,knowledge,methodology,sites",
     )
     p.add_argument("--dry-run", action="store_true")
-    sub.add_parser("demo-xray", help="DEMO: the X-ray 3D building from the sample drawing")
+    xr = sub.add_parser("demo-xray", help="DEMO: the X-ray 3D building from the sample drawing")
+    xr.add_argument(
+        "--bill-only", action="store_true", help="only fill RA bill 01 (the site there, no drawing)"
+    )
     p = sub.add_parser(
         "demo-copy", help="Copy the DEMO company to another database (count, export, import)"
     )
@@ -675,7 +678,8 @@ def main(argv: list[str] | None = None) -> None:
         from app.building import demo as xray_demo  # noqa: PLC0415
 
         with SessionLocal() as db:
-            print(json.dumps(xray_demo.run(db), indent=1, default=str))
+            out = xray_demo.billing(db) if args.bill_only else xray_demo.run(db)
+            print(json.dumps(out, indent=1, default=str))
     elif args.command == "demo-copy":
         import json  # noqa: PLC0415
 

@@ -27,7 +27,7 @@ them. You see the surveys of your own sites, tenders and leads (all of them with
 - **m** / **ft-in**: the unit you type and read sizes in. It is saved for you, on every survey.
 - **Submit**: shown on a draft you can change. Sends the survey for approval; it becomes submitted. {perm: survey.edit}
 - **Approve**: shown on a submitted survey. Marks it approved and records you as the approver. {perm: survey.approve}
-- **Reopen**: shown on a submitted survey to everyone who opens it. Puts it back to draft.
+- **Reopen**: shown on a submitted survey to whoever can change the survey (and to an approver). Puts it back to draft. {perm: survey.edit, survey.approve}
 - **Reopen** is also shown on an approved survey. It puts it back to draft and clears the approval. {perm: survey.approve}
 - Tabs: **Areas (n)**, **Products**, **BOQ, indent, PDF**.
 
@@ -60,7 +60,7 @@ them. You see the surveys of your own sites, tenders and leads (all of them with
 - **System, wastage, method, remarks** (tap to open): {perm: survey.edit}
 - **System**: the systems suitable for the area type come first, marked "this client's last choice" or "suggested"; then **All systems**. Left empty, the type's suggested system is used. Your choice is remembered for this client. {perm: survey.edit}
 - **Wastage % (this area)**: empty means the type's or the system's. {perm: survey.edit}
-- **Measured by**: **Laser meter**, **Tape / by hand**, **Drawing (CAD)**, **Label / client figure**. On an area measured by the camera, **Edit** opens with **Laser meter** chosen: change it if the size really came from the camera, or saving turns the camera size into a laser size. {perm: survey.edit}
+- **Measured by**: **Laser meter**, **Tape / by hand**, **Drawing (CAD)**, **Label / client figure**. On an area measured by the camera, **Edit** opens with **Camera (AR)** or **Camera (marker)** chosen, so saving keeps it camera measured; pick another method only when the size was measured that way. {perm: survey.edit}
 - **Remarks**. {perm: survey.edit}
 - **Save and add next** (new area only): saves and keeps the form open with the place, tower, floor and type, ready for the next area. {perm: survey.edit}
 - **Save**: saves and closes. {perm: survey.edit}
@@ -71,7 +71,7 @@ them. You see the surveys of your own sites, tenders and leads (all of them with
 - The tilt guide shows "Floor: n° down" (aim 30°–60° down) or "Wall: n° upright". On an iPhone tap **Show the tilt guide** first. Keep the zoom at 1x. {perm: survey.edit}
 - Marker photo: lay both printed sheets flat in the area. Wait for "2 markers found", then press the round shutter. Tap the corners of the area in order on the photo; the sides and the area show as you tap. {perm: survey.edit}
 - **Undo corner** removes the last tap, **Retake** starts again, **Save measurement** saves the photo with the drawn outline and the camera size. {perm: survey.edit}
-- AR measure: **Start AR**, tap the corners on the floor, then **Done** (or **Cancel**). For a wall type, measure the wall height or type it and press **Use**. The plan drawing and the camera size are saved. {perm: survey.edit}
+- AR measure: **Start AR**, tap the corners on the floor, then **Done** (or **Cancel**). For a wall type, measure the wall height or type it and press **Use**. The plan drawing and the camera size are saved. If the size cannot be saved, the camera stays open with "The plan photo is saved but the AR size was not: <reason>". {perm: survey.edit}
 - Proof photo: take the photo, then **Save photo** or **Retake**. The size stays the laser / hand reading typed in the area. {perm: survey.edit}
 
 **Products tab**

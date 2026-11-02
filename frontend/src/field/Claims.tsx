@@ -141,13 +141,15 @@ export function ClaimDetail() {
   useEffect(() => {
     void load();
   }, [load]);
-  async function run(p: Promise<unknown>) {
+  async function run(p: Promise<unknown>): Promise<boolean> {
     setError(null);
     try {
       await p;
       await load();
+      return true;
     } catch (e) {
       setError(errorText(e));
+      return false;
     }
   }
   if (!c) return error ? <div className="alert alert-error">{error}</div> : <p className="muted">Loading…</p>;
@@ -228,7 +230,7 @@ export function ClaimDetail() {
                       <Button
                         variant="primary" size="small"
                         onClick={() =>
-                          void run(api(`/api/field/claims/${c.id}/days/${d.id}`, { method: "PUT", json: { km: edit.km, reason: edit.reason } })).then(() => setEdit(null))
+                          void run(api(`/api/field/claims/${c.id}/days/${d.id}`, { method: "PUT", json: { km: edit.km, reason: edit.reason } })).then((ok) => ok && setEdit(null))
                         }
                       >
                         Save

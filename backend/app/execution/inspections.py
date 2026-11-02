@@ -1,8 +1,9 @@
 """Checklist templates, inspections (with a drawn signature and photos) and minutes of meeting.
 
 inspection.view / inspection.edit by site; checklist templates are changed with inspection.edit
-scope all. A hold-point step whose stage step names a checklist is certified only after a
-passed inspection with that checklist (pass, or pass with remarks).
+scope all, or planning.edit (the planning team). A hold-point step whose stage step names a
+checklist is certified only after a passed inspection with that checklist (pass, or pass with
+remarks).
 """
 
 import base64
@@ -69,9 +70,13 @@ def list_checklists(db: DbSession, _: CurrentPrincipal) -> list[dict]:
 
 
 def _save_checklist(db, t: ChecklistTemplate, body: ChecklistIn, principal):
-    if principal.permissions.get("inspection.edit") != "all":
+    # the office (inspection.edit, all) or the planning team (planning.edit), as on the menu
+    if principal.permissions.get("inspection.edit") != "all" and (
+        "planning.edit" not in principal.permissions
+    ):
         raise HTTPException(
-            status.HTTP_403_FORBIDDEN, "Checklists are kept by the office (inspection.edit, all)"
+            status.HTTP_403_FORBIDDEN,
+            "Checklists are kept by the office or planning (inspection.edit all, or planning.edit)",
         )
     clash = db.scalar(select(ChecklistTemplate.id).where(ChecklistTemplate.name == body.name))
     if clash and clash != t.id:
@@ -376,7 +381,14 @@ async def create_inspection(
         i.id,
         after={"site": site.code, "template": t.name, "result": result, "task_id": body.task_id},
     )
-    if body.certify and task is not None and result != "fail":
+    # certify only when it can be (a done step, a caller with site.edit): otherwise the inspection
+    # is still saved and the hold point is certified later
+    may_certify = material.covers_site(
+        db, principal.permissions.get("site.edit"), principal, site.id, site.created_by
+    )
+    if body.certify and task is not None and result != "fail" and task.status == "done" and (
+        may_certify
+    ):
         db.flush()
         certify(db, request, principal, site, task, f"Certified on {i.code}")
     db.commit()

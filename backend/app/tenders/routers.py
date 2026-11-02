@@ -7,7 +7,7 @@ goes to callers with tender.margin (see schemas.py).
 
 import re
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any
@@ -97,6 +97,7 @@ from app.tenders.service import (
     next_code,
     scope_condition,
 )
+from app.timefmt import ist_today
 
 router = APIRouter(prefix="/api/tenders", tags=["tenders"])
 
@@ -162,7 +163,7 @@ def _tender_out(db: Session, tender: Tender, with_cost: bool) -> TenderOut:
         site_state=tender.site_state,
         received_on=tender.received_on,
         due_on=tender.due_on,
-        overdue=bool(tender.due_on and tender.due_on < date.today() and tender.status == "draft"),
+        overdue=bool(tender.due_on and tender.due_on < ist_today() and tender.status == "draft"),
         owner_id=tender.owner_id,
         owner_name=tender.owner.full_name if tender.owner else None,
         members=[MemberOut(user_id=m.user_id, full_name=m.user.full_name) for m in tender.members],

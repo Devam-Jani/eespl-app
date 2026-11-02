@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 from app.auth.deps import CurrentPrincipal, require_permission
 from app.db import DbSession
@@ -50,22 +51,31 @@ def user_template(db: DbSession, _: UsersAdmin) -> Response:
     return Response(users_import.template(db), media_type=XLSX, headers={"Content-Disposition": 'attachment; filename="users-template.xlsx"'})
 
 
-async def _rows(db, file: UploadFile):
+async def _rows(db, file: UploadFile, principal=None):
+    from app.auth.rbac import assign_refusal  # noqa: PLC0415
+    from app.models import Role  # noqa: PLC0415
     from app.ops import users_import  # noqa: PLC0415
 
     data = await file.read(5 * 1024 * 1024 + 1)
     if len(data) > 5 * 1024 * 1024:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "The file is larger than 5 MB")
     try:
-        return users_import.read(db, data)
+        rows = users_import.read(db, data)
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    # the same rule as Add user: no role above the importer's own, no admin permission they lack
+    by_code = {r.code: r for r in db.scalars(select(Role))}
+    for r in rows:
+        refusal = r.roles and assign_refusal(principal.user.roles, principal.permissions, [by_code[c] for c in r.roles])
+        if refusal and not r.exists:
+            r.errors.append(refusal)
+    return rows
 
 
 @router.post("/api/ops/user-import/check")
-async def user_check(db: DbSession, _: UsersAdmin, file: Annotated[UploadFile, File()]) -> dict:
+async def user_check(db: DbSession, principal: CurrentPrincipal, _: UsersAdmin, file: Annotated[UploadFile, File()]) -> dict:
     """Every row checked; nothing saved."""
-    rows = await _rows(db, file)
+    rows = await _rows(db, file, principal)
     return jsonable_encoder({"rows": [r.out() for r in rows], "new": sum(1 for r in rows if not r.errors and not r.exists),
                              "already": sum(1 for r in rows if r.exists and not r.errors), "errors": sum(1 for r in rows if r.errors)})  # fmt: skip
 
@@ -76,7 +86,7 @@ async def user_save(request: Request, db: DbSession, principal: CurrentPrincipal
     from app import audit  # noqa: PLC0415
     from app.ops import users_import  # noqa: PLC0415
 
-    rows = await _rows(db, file)
+    rows = await _rows(db, file, principal)
     errors = [r.out() for r in rows if r.errors]
     if errors:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"message": f"{len(errors)} row(s) have errors: nothing saved", "rows": errors})
@@ -230,6 +240,33 @@ def sop_read(role: str, db: DbSession, principal: CurrentPrincipal) -> dict:
 @router.get("/api/ops/mode")
 def mode() -> dict:
     """For the banner and the menu's switch: is this the training company, and where the other is."""
+    from app import branding  # noqa: PLC0415
     from app.config import settings  # noqa: PLC0415
 
-    return {"training": settings.training_mode, "main_url": settings.main_url or None, "training_url": settings.training_url or None}
+    return {"training": settings.training_mode, "main_url": settings.main_url or None, "training_url": settings.training_url or None, **branding.as_dict()}
+
+
+# --- the phone's home-screen app: name and tag from app.branding (one place) ---------------------------
+
+
+@router.get("/api/manifest.webmanifest")
+def manifest() -> JSONResponse:
+    from app import branding  # noqa: PLC0415
+
+    return JSONResponse(
+        {"name": branding.app_title(), "short_name": branding.PRODUCT_NAME, "description": branding.PRODUCT_TAG, "start_url": "/", "scope": "/", "display": "standalone",
+         "background_color": "#0F6B5C", "theme_color": "#0F6B5C", "icons": [{"src": "/api/app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]},
+        media_type="application/manifest+json",
+    )  # fmt: skip
+
+
+@router.get("/api/app-icon.svg")
+def app_icon() -> Response:
+    """A plain mark until the company's logo arrives (the first letter of the product name)."""
+    from html import escape  # noqa: PLC0415
+
+    from app import branding  # noqa: PLC0415
+
+    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="#0F6B5C"/>'
+           f'<text x="256" y="340" font-family="Arial, sans-serif" font-size="280" font-weight="700" fill="#fff" text-anchor="middle">{escape(branding.PRODUCT_NAME[:1])}</text></svg>')  # fmt: skip
+    return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=86400"})

@@ -21,7 +21,15 @@ Billing checks each labour contractor's bill against the work done before it is 
 - **Approve**: asks "Approved because", then pays the claimed quantity. {perm: closeout.claim_approve}
 - **Refuse**: asks "Refused because", then pays the approved quantity only. {perm: closeout.claim_approve}
 - A decided claim shows "pays <qty> (claimed / approved)", who decided and who approved, with the reason. {perm: closeout.billing, closeout.claim_approve}
-- "No claims yet.": the page has no form to enter a claim. {perm: closeout.billing, closeout.claim_approve}
+- "No claims yet.": no claim entered on this site. {perm: closeout.billing, closeout.claim_approve}
+- **Enter a claim**: enters a contractor's claim. {perm: closeout.billing}
+  - **Contractor**: the labour contractor's name. {perm: closeout.billing}
+  - **Area (empty: the whole site)**: the place claimed (an area under it counts too). {perm: closeout.billing}
+  - **Item (empty: every item)**: the contract line claimed; picking it fills the **Unit**. {perm: closeout.billing}
+  - **Claimed quantity**, **Unit** and **Month**: what the contractor claims, for which month. {perm: closeout.billing}
+  - **Note (optional)** and **Photos of the claimed work (optional)**. {perm: closeout.billing}
+  - **Save the claim**: saves it (open) and uploads the photos; it shows in the list against the approved measurement. {perm: closeout.billing}
+- **Add photos** (on a claim not yet decided): uploads more photos of the claimed work; the claimed photo count goes up. {perm: closeout.billing}
 
 **Rules**
 - **Mark checked** does not approve or pay the bill. A bill flagged low productivity stays for the director after your check.
@@ -44,4 +52,5 @@ Billing checks each labour contractor's bill against the work done before it is 
 - "Claim #n (decided) is locked: it cannot be changed or deleted. Make a new revision or an addendum.": it is decided already.
 - "Claim #n is not waiting for the director": it was decided meanwhile. Refresh.
 - "Claim not found": the claim is on a site you may not see.
+- "Claim #n (decided) is locked ...": photos cannot be added to a decided claim.
 - A claim's **Approved** is 0: no approved measurement on that area and item yet. Get the measurement approved first (Measurement book).

@@ -14,7 +14,7 @@ activity timeline.
 - **Status**, **Source**, **Owner**, **Kylas status** (filters): narrow the list. **All statuses**, **All sources**, **All owners** and **Any Kylas status** clear a filter.
 - **Follow-up due** (tick): only the leads whose next follow-up date has come. A due date shows in red in the **Follow-up** column.
 - **List** / **Kanban** (tabs): a table of 50 leads a page, or one column per status (up to 300 leads).
-- In **Kanban** you can drag a card to another status column; the lead's status changes and a line is added to its timeline. {perm: leads.edit}
+- In **Kanban** you can drag a card to another status column; the lead's status changes and a line is added to its timeline. A drop on **Lost** first opens **Mark the lead lost** for the reason (Cancel leaves the lead as it was). {perm: leads.edit}
 - **⤓ Export Excel**: downloads the leads as they are filtered.
 - **New lead**: opens the **New lead** form. {perm: leads.edit}
 - **Previous** / **Next**: move through the pages of the list.
@@ -67,8 +67,7 @@ activity timeline.
 **When it goes wrong**
 - "Lead not found": the lead is not yours (or was removed). Ask the owner or planning.
 - "You cannot change this lead": you may see it but not change it; ask the owner.
-- "Pick why the lead was lost": choose a reason in **Mark the lead lost**. Dragging a card to the **Lost** column in Kanban gives this error, because the drag cannot ask for a reason; open the lead and use **Status** instead.
-- Picking **Main job lost by the contractor** as the reason is refused for a lead in this version. Pick the closest other reason and write the details.
+- "Pick why the lead was lost": choose a reason in **Mark the lead lost**.
 - "Set the lead's client or channel first (a tender needs one)": edit the lead, fill **Client (if known)** or **Channel (who brought it)**, then **Convert to tender** again.
 - "This lead already has a tender": open it from the tender link under the name.
 - "Missing permission: tender.edit": your role cannot make tenders; ask the estimator.

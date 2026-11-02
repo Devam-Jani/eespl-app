@@ -13,6 +13,7 @@ over. An approved expense is charged to its site's budget.
   - **To** (required): the person. The first advance opens their account. {perm: expense.approve}
   - **Amount (₹)** (required). {perm: expense.approve}
   - **Mode**: cash, upi or neft. For upi and neft, **From bank**: the company bank account. {perm: expense.approve}
+  - **Date** (today by default; no future date) and **Remark**. {perm: expense.approve}
   - **Give**: records the advance. It counts in the balance at once. {perm: expense.approve}
 - **+ Expense**: opens the **Expense** form. Shown once you have an account. {perm: expense.create}
   - **Amount (₹)** (required). {perm: expense.create}
@@ -24,7 +25,7 @@ over. An approved expense is charged to its site's budget.
 - **My balance**: your balance now, and "₹n waiting for approval" when expenses wait. {perm: expense.create}
 - Your entries, newest first: date, what (category and site, or "Advance given" / "Cash
   returned"), paid to and remark, the amount (+ for advances, - for spending), a **submitted** or
-  **rejected** badge, and **bill** to open the photo.
+  **rejected** badge (with "Why: <reason>" under it), and **bill** to open the photo.
 - "No petty cash account yet: it opens with the first advance." when you have none.
 - **Accounts**: everyone's accounts with **Person**, **Advances**, **Spent**, **Returned**, **Waiting** and **Balance**. Press a row to open the person's account. {perm: expense.approve}
 - In a person's account ("Petty cash: <name>"): "Balance ₹n · waiting ₹n" and the entries. {perm: expense.approve}

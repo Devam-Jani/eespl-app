@@ -24,10 +24,12 @@ from openpyxl.worksheet.page import PageMargins
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import branding
 from app.config import settings
 from app.masters.models import CompanyGstin, CompanyProfile
 from app.tenders import revisions
 from app.tenders.models import BoqImport, Tender
+from app.timefmt import ist_today
 
 SUBJECT = "Waterproofing works"
 XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -94,7 +96,7 @@ def document(db: Session, tender: Tender, rev_no: int | None = None) -> Document
         snapshot = revisions.build_snapshot(db, tender)
         frozen = revisions.frozen(db, tender)
         label = revisions.revision_label(db, tender)
-        on = frozen.submitted_at.date() if frozen else date.today()
+        on = frozen.submitted_at.date() if frozen else ist_today()
     else:
         rev = revisions.get_revision(db, tender, rev_no)
         snapshot, label, on = rev.snapshot, revisions.label(rev.rev_no), rev.submitted_at.date()
@@ -314,6 +316,8 @@ def xlsx(doc: Document) -> bytes:
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_margins = PageMargins(left=0.4, right=0.4, top=0.5, bottom=0.6)
     ws.oddFooter.center.text = "Page &P of &N"
+    ws.oddFooter.left.text = branding.COMPANY_LINE
+    ws.oddFooter.left.size = 7
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()
@@ -351,7 +355,7 @@ h2 { font-size: 10pt; margin: 14px 0 4px; }
 .tc .text { white-space: pre-line; }
 .sign { margin-top: 26px; page-break-inside: avoid; }
 .sign .line { margin-top: 36px; }
-"""
+""" + branding.pdf_footer_css()
 
 
 def _e(value: Any) -> str:

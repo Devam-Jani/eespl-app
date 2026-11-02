@@ -27,6 +27,7 @@ from app.finance import service as svc
 from app.measure import bill as mb
 from app.measure import excel, register, slip
 from app.measure.realcheck import _user, files
+from app.timefmt import ist_today
 
 D = Decimal
 
@@ -101,7 +102,7 @@ def _old_bills(db: Session, site, c, imp, first_app_ra: int, user, base: Path) -
         n = f["ra"] if f["ra"] is not None else f["folder_ra"]
         reg = regs.get(n)
         made = date.fromisoformat(f["bill_date"]) if f.get("bill_date") else date.fromisoformat(f["name_date"]) if f.get("name_date") else None
-        b = RaBill(code=f"RA-{site.code}-{n:02d}", contract_id=c.id, site_id=site.id, seq=n, period_to=made or date.today(), status="invoiced" if reg and "TAX" in (reg.get("status") or "").upper() else "submitted",
+        b = RaBill(code=f"RA-{site.code}-{n:02d}", contract_id=c.id, site_id=site.id, seq=n, period_to=made or ist_today(), status="invoiced" if reg and "TAX" in (reg.get("status") or "").upper() else "submitted",
                    gross=D(f["basic"]), certified_gross=D(f["basic"]), net=D(f["basic"]), imported=True, remark=f"Imported from {Path(f['file']).name}", created_by=user.id)  # fmt: skip
         db.add(b)
         db.flush()

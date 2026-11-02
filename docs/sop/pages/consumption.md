@@ -9,6 +9,7 @@ mark: ⤓ Excel
 **On the page**
 - **Site** (list, top right): the site to check. The first of your sites is chosen when the page opens. The choice is kept in the page address.
 - **⤓ Excel**: downloads the site's table as an Excel file ("consumption-variance"), with a flag column.
+- **Mark reviewed** (when the site has flagged rows): you have looked into the flagged rows. Closes the site's "Consumption off the range" task for planning, the site engineer and the director, and shows "Marked reviewed". It is written to the audit log. {perm: site.view}
 - The table: **Place**, **Product**, **Sqm done**, **Issued**, **Expected**, **Per sqm**, **Variance**. A flagged row is red with ⚑.
 - **Variance** is +n % when more was issued than expected and −n % when less. "not in the system" means the product was issued to the place but is not in the place's system.
 - **Site average (completed areas)** (table): per system and product, the **System figure** next to the **Site average** (the median actual consumption per sqm over completed areas) and how many **Areas** it is based on.
@@ -20,7 +21,7 @@ mark: ⤓ Excel
 
 **What happens next**
 - Every week the worker counts the flagged rows of each active site. When there are any, planning and the site engineer get the task "<site>: n material(s) used outside the range on the areas. Review." with a link to this page. If nobody closes it in 3 days, it goes to the director.
-- The page has no "reviewed" button: close the task from the notifications once you have looked into it.
+- Once you have looked into it, press **Mark reviewed**: the task closes. Next week's count makes a new task if rows are still flagged.
 
 **Hands off**
 - Receives: material issued to places by the site store; area done from the daily reports.

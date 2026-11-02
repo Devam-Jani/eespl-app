@@ -5,7 +5,6 @@ MATERIAL | COST PER AREA (SQMT) | COST PER AREA (SQFT) | RATE REF, with live for
 rows (coverage with wastage × price + freight), LABOUR (₹ per sq ft × 10.7639), CTC, MARGIN, RATE.
 Cushions follow as visible rows. Internal only: never in what goes to the client."""
 
-from datetime import date
 from io import BytesIO
 
 from openpyxl import Workbook
@@ -17,6 +16,7 @@ from app.costing import prices, working
 from app.costing.models import RateWorking
 from app.masters.models import Product, ProductPrice
 from app.masters.rate import SQFT_PER_SQM
+from app.timefmt import ist_today
 
 HEADERS = [
     "SR NO",
@@ -147,4 +147,4 @@ def working_xlsx(db: Session, w: RateWorking) -> tuple[bytes, str]:
     buf = BytesIO()
     wb.save(buf)
     stem = _label(db, w).split(" ")[0].replace("/", "-")
-    return buf.getvalue(), f"{stem}-rate-working-{date.today():%Y%m%d}.xlsx"
+    return buf.getvalue(), f"{stem}-rate-working-{ist_today():%Y%m%d}.xlsx"

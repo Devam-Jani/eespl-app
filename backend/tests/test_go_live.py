@@ -420,7 +420,8 @@ def test_every_download_is_in_the_audit_log_under_exports(db, boss):
 
 def test_mode_says_whether_this_is_the_training_company(monkeypatch, login_as):
     c = TestClient(app)
-    assert c.get("/api/ops/mode").json() == {"training": False, "main_url": None, "training_url": None}
+    m = c.get("/api/ops/mode").json()
+    assert {k: m[k] for k in ("training", "main_url", "training_url")} == {"training": False, "main_url": None, "training_url": None}
     monkeypatch.setattr(settings, "training_mode", True)
     monkeypatch.setattr(settings, "main_url", "https://app.example.in")
     assert c.get("/api/ops/mode").json()["training"] is True

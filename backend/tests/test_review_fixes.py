@@ -4,7 +4,7 @@ product aliases and gsm per layer in the consistency check, places on daily repo
 director releasing a blocked vendor bill. Invented data only."""
 
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 
@@ -15,7 +15,7 @@ from app.quotations.checks import alias_map, check
 from app.sitecontrol import pdf
 from app.sitecontrol.models import DeliveryNote, NewAreaRequest
 from app.sites.models import SiteNode
-from app.timefmt import label
+from app.timefmt import ist_today, label
 from tests.test_finance import boss, contract, world  # noqa: F401  (fixtures)
 from tests.test_material import approved_po, godown, masters, site, stock, store_of  # noqa: F401
 from tests.test_sitecontrol import jpg, media, photos, po_site, raw_token, send  # noqa: F401
@@ -133,7 +133,7 @@ def test_daily_report_lines_carry_a_place(boss, world, db):
     c, h = boss
     site_id = world["site"]
     terrace = db.scalar(select(SiteNode).where(SiteNode.site_id == site_id))
-    day = date.today().isoformat()
+    day = ist_today().isoformat()
     url = f"/api/execution/sites/{site_id}/dprs/{day}"
     r = c.put(
         url,
@@ -211,7 +211,7 @@ def test_the_director_releases_a_blocked_bill(boss, po_site, db, client, login_a
         json={
             "vendor_id": po_site["vendors"][0],
             "bill_no": "INV-D1",
-            "bill_date": date.today().isoformat(),
+            "bill_date": ist_today().isoformat(),
             "grn_ids": [g.id],
             "grn_lines": [{"grn_line_id": line.id, "qty": "10"}],
         },

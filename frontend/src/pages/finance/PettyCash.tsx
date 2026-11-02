@@ -137,6 +137,7 @@ function Entries({ acc, canApprove, onChange }: { acc: PettyAccount; canApprove:
               </td>
               <td className="nowrap">
                 {e.status !== "approved" && <span className={`badge ${e.status === "submitted" ? "badge-warn" : "badge-danger"}`}>{e.status}</span>}
+                {e.status === "rejected" && e.reject_reason && <div className="small text-danger">Why: {e.reject_reason}</div>}
                 {e.has_photo && (
                   <Button variant="ghost" size="small" onClick={() => void photo(e)}>
                     bill
@@ -282,7 +283,7 @@ export default function PettyCash() {
 function AdvanceForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const lookups = useFinanceLookups();
   const [users, setUsers] = useState<SiteLookups["users"]>([]);
-  const [form, setForm] = useState({ user_id: "", amount: "", mode: "cash", bank_account_id: "", remark: "" });
+  const [form, setForm] = useState({ user_id: "", amount: "", on_date: localToday(), mode: "cash", bank_account_id: "", remark: "" });
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     api<SiteLookups>("/api/sites/lookups").then(
@@ -295,7 +296,7 @@ function AdvanceForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
     try {
       await api("/api/finance/petty-cash/advances", {
         method: "POST",
-        json: { ...form, bank_account_id: form.bank_account_id ? Number(form.bank_account_id) : null, remark: form.remark || null },
+        json: { ...form, bank_account_id: form.bank_account_id ? Number(form.bank_account_id) : null, remark: form.remark || null, on_date: form.on_date || null },
       });
       onSaved();
     } catch (err) {
@@ -339,7 +340,13 @@ function AdvanceForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
               </select>
             </Field>
           )}
+          <Field label="Date">
+            <input type="date" value={form.on_date} max={localToday()} onChange={(e) => setForm({ ...form, on_date: e.target.value })} />
+          </Field>
         </div>
+        <Field label="Remark">
+          <input value={form.remark} onChange={(e) => setForm({ ...form, remark: e.target.value })} placeholder="for example: site expenses, week of 3 Nov" />
+        </Field>
         <div className="form-actions">
           <Button type="submit" variant="primary">Give</Button>
         </div>

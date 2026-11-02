@@ -613,6 +613,7 @@ function SettingsPanel() {
   const [s, setS] = useState<Settings | null>(null);
   const [days, setDays] = useState("");
   const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
   useEffect(() => {
     void api<Settings>("/api/quotations/settings").then((r) => (setS(r), setDays(r.followup_days.join(", "))));
   }, []);
@@ -630,9 +631,11 @@ function SettingsPanel() {
         },
       });
       setS(r);
+      setError("");
       setMsg("Saved.");
     } catch (e) {
-      setMsg(errorText(e));
+      setMsg("");
+      setError(errorText(e));
     }
   }
   async function uploadTemplate(file: File) {
@@ -640,14 +643,17 @@ function SettingsPanel() {
     form.append("file", file);
     try {
       setS(await api<Settings>("/api/quotations/settings/word-template", { method: "POST", form }));
+      setError("");
       setMsg("The new Word template is used for every quotation from now on.");
     } catch (e) {
-      setMsg(errorText(e));
+      setMsg("");
+      setError(errorText(e));
     }
   }
   return (
     <Card as="div" className="settings-card">
       {msg && <div className="alert alert-ok">{msg}</div>}
+      {error && <div className="alert alert-error">{error}</div>}
       <div className="form-grid two">
         <Field label="Validity (days, default)">
           <input type="number" value={s.default_validity_days} onChange={(e) => setS({ ...s, default_validity_days: Number(e.target.value) })} disabled={!edit} />

@@ -7,6 +7,7 @@ import { errorText, inr } from "../format";
 import type { Tracked } from "../team/Pages";
 import { CertifyForm } from "../team/Pages";
 import { Button, buttonClass, Card, Field } from "../ui/components";
+import { ApprovalSwitch, ChangeAnswer, ClaimPhotos, LabourClaimForm, RecordApproval } from "./Entry";
 
 const d = (v: string | null | undefined) =>
   v ? new Date(v.length === 10 ? `${v}T00:00:00` : v).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
@@ -136,7 +137,7 @@ type MLine = {
   billed_in: string | null;
   photos: number;
   shown?: Record<string, string>;
-  changes: { id: number; field: string; old_shown?: string; new_shown?: string; remark: string | null; by: string; at: string; status: string }[];
+  changes: { id: number; field: string; old_shown?: string; new_shown?: string; remark: string | null; by: string; at: string; status: string; reply?: string | null }[];
 };
 type Form = { places: Place[]; cad_areas: CadArea[]; lines: BookLine[]; needs_approval: boolean; site: string };
 export type Size = { mode: "m" | "ft"; m: string; ft: string; inch: string };
@@ -308,6 +309,9 @@ export function MeasureEntry() {
             {form.data.needs_approval ? "Each line goes to the client for approval; bills take only approved lines." : "Lines are approved when written on this site."}
           </p>
         </div>
+        <div className="page-actions">
+          <ApprovalSwitch siteId={id ?? ""} needs={form.data.needs_approval} onDone={() => (form.load(), book.load())} onError={setError} />
+        </div>
       </div>
       {(error || form.error) && <div className="alert alert-error">{error || form.error}</div>}
       {saved && <div className="alert alert-ok">{saved}</div>}
@@ -443,8 +447,11 @@ export function MeasureEntry() {
               {m.changes.map((c) => (
                 <div key={c.id} className="m-change small">
                   {c.field.replace("_m", "")}: <s>{c.old_shown}</s> → <b>{c.new_shown}</b> by {c.by} ({c.status}){c.remark ? ` “${c.remark}”` : ""}
+                  {c.reply ? <span className="muted"> · our answer: {c.reply}</span> : null}
+                  <ChangeAnswer change={c} onDone={book.load} onError={setError} />
                 </div>
               ))}
+              {m.status !== "approved" && <RecordApproval lineId={m.id} onDone={book.load} />}
               {m.approved_name && (
                 <div className="small muted">
                   approved by {m.approved_name}
@@ -798,6 +805,11 @@ export function LabourClaims() {
             The contractor's claimed area against the approved measurement of each area, with the RFI zone and the photos. Paying more than approved needs the director.
           </p>
         </div>
+        {can("closeout.billing") && (
+          <div className="page-actions">
+            <LabourClaimForm siteId={id ?? ""} onSaved={load} />
+          </div>
+        )}
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       <Card as="div" className="table-wrap">
@@ -838,6 +850,11 @@ export function LabourClaims() {
                 <td className="small">{c.zone ? (c.zone.ours ? `ours · ${c.zone.name}` : `${c.zone.other ?? "another applicator"}`) : "—"}</td>
                 <td className="small">
                   {c.photos} measured · {c.claim_photos} claimed
+                  {c.status !== "decided" && can("closeout.billing") && (
+                    <div className="top-gap-small">
+                      <ClaimPhotos claimId={c.id} onDone={load} onError={setError} />
+                    </div>
+                  )}
                 </td>
                 <td className="small">
                   {c.status === "open" && can("closeout.billing") && (

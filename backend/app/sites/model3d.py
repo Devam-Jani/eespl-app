@@ -27,6 +27,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.sites.models import AreaScope, SiteNode, StageTemplateStep, Task
+from app.timefmt import ist_today
 
 DONE = ("done", "certified")
 STATUSES = ("not_started", "in_progress", "done", "certified", "blocked")
@@ -94,7 +95,7 @@ def build(db: Session, site_id: int, client: bool = False) -> dict[str, Any]:
     for row in rows:
         if row.node_id is not None:
             tasks[row.node_id].append(row)
-    today = date.today()
+    today = ist_today()
     from app.takeoff.service import node_sqm  # noqa: PLC0415
 
     autocad = node_sqm(db, site_id)  # accepted AutoCAD areas, shown on hover

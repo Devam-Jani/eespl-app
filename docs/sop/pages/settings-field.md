@@ -24,7 +24,7 @@ log.
 **A person's details**
 - **Rate per km**: the rates with their vehicle and dates ("from … to …", or "(in force)").
 - **Vehicle**, **Rate per km**, **Valid from**: a new rate from a date.
-- **Add the rate**: saves the new rate. The rate in force until then ends the day before. The history is kept. The form is cleared afterwards, also when the rate was refused.
+- **Add the rate**: saves the new rate. The rate in force until then ends the day before. The history is kept. The form is cleared afterwards; a refused rate stays in the form with the error at the top, to be corrected.
 - **Home location**: a map with the approved home (⌂) and the home asked for (?).
 - **Approve**: shown when a home is asked for. The asked-for place becomes the approved home.
 - **Not approved**: refuses it. The old home stays, if there was one.

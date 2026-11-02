@@ -7,7 +7,7 @@ import { BarChart, FunnelChart, HBarChart, LineChart, PALETTE, ScatterChart } fr
 import type { Row } from "./charts";
 import type { Column, Drill, Table } from "./ui";
 import { asOf, DataTable, drillHref, ExportButton, FilterBar, fmtValue, useData, useFilters } from "./ui";
-import { Button, Card, Field } from "../ui/components";
+import { Button, Card, EmptyState, Field } from "../ui/components";
 
 type PageData = { as_of: string | null; tables: Record<string, Table>; summary?: Record<string, number | null>; cost_shown?: boolean; salary_included?: boolean };
 
@@ -43,8 +43,10 @@ function ChartCard({ title, children, extra }: { title: string; children: React.
   );
 }
 
-function Loading({ error }: { error: string | null }) {
-  return error ? <div className="alert alert-error">{error}</div> : <p className="muted">Loading…</p>;
+export function Loading({ error }: { error: string | null }) {
+  // "" is an error the helper has already shown (errorText): the page failed, it is not still loading
+  if (error === null) return <p className="muted">Loading…</p>;
+  return <div className="alert alert-error">{error || "This could not be loaded. Reload the page to try again."}</div>;
 }
 
 // --- sites ---------------------------------------------------------------------------------------
@@ -588,7 +590,9 @@ export function DrillPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const q = params.toString();
-  const { data, error } = useData<{ title: string; columns: Column[]; rows: Record<string, unknown>[]; total: number }>(`/api/analytics/drill?${q}`);
+  const kind = params.get("kind");
+  // opened without a number to drill into (a bookmark, the menu): say so instead of loading for ever
+  const { data, error } = useData<{ title: string; columns: Column[]; rows: Record<string, unknown>[]; total: number }>(kind ? `/api/analytics/drill?${q}` : null);
   const demo = params.get("demo") === "1" || params.get("demo") === "true";
   return (
     <>
@@ -610,7 +614,13 @@ export function DrillPage() {
           <ExportButton path={`/api/analytics/drill?${q}&format=xlsx`} />
         </div>
       </div>
-      {!data ? <Loading error={error} /> : <DataTable table={{ title: data.title, columns: data.columns, rows: data.rows, note: null }} demo={demo} />}
+      {!kind ? (
+        <EmptyState title="No list chosen" hint="Press a number on a dashboard or an analytics page to see the records behind it." />
+      ) : !data ? (
+        <Loading error={error} />
+      ) : (
+        <DataTable table={{ title: data.title, columns: data.columns, rows: data.rows, note: null }} demo={demo} />
+      )}
     </>
   );
 }
@@ -730,13 +740,24 @@ export function AlertsPage() {
 
 // --- reports -------------------------------------------------------------------------------------
 
+/** What "File this week's now" says: filed, or already filed this week (the API files once a week). */
+export function weeklyNotice(r: { created: boolean }): string {
+  return r.created ? "This week's summary is filed: it is at the top of the list." : "This week's summary is already filed: it is in the list below.";
+}
+
 export function ReportsPage() {
   const { data, error, reload } =
     useData<{ id: number; week_start: string; generated_at: string; tiles: { label: string; value: unknown; unit: string }[] }[]>("/api/analytics/reports");
   const { data: sites } = useData<{ items: { id: number; code: string; name: string }[] }>("/api/sites?limit=500&status=active");
   const [site, setSite] = useState("");
   const { can } = useAuth();
+  const [notice, setNotice] = useState("");
   const dl = (path: string) => void downloadFile(path).catch((err) => showError(err));
+  const fileNow = () =>
+    void api<{ created: boolean }>("/api/analytics/reports/weekly", { method: "POST" }).then((r) => {
+      setNotice(weeklyNotice(r));
+      reload();
+    }, (err) => showError(err));
   return (
     <>
       <div className="page-header">
@@ -745,11 +766,12 @@ export function ReportsPage() {
           <p className="muted small">The management summary is filed every Monday at 8 am (IST) and announced in the bell. No email yet.</p>
         </div>
         <div className="page-actions">
-          <Button size="small" onClick={() => void api("/api/analytics/reports/weekly", { method: "POST" }).then(reload, (err) => showError(err))}>
+          <Button size="small" onClick={fileNow}>
             File this week's now
           </Button>
         </div>
       </div>
+      {notice && <div className="alert alert-ok">{notice}</div>}
       {can("reports.export") && (
         <Card as="div">
           <h2 className="section-title">Download</h2>

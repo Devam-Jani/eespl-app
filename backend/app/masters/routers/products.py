@@ -199,8 +199,10 @@ def update_product(
     principal: CurrentPrincipal,
 ) -> ProductOut:
     product = get_or_404(db, Product, product_id, "Product")
+    # an optional field sent empty (null) is cleared; the required ones ignore a null
+    clearable = ("brand", "pack_size", "category_id", "pack_unit", "hsn_code", "reorder_level")
     changes = {k: v for k, v in body.model_dump(exclude_unset=True).items()
-               if v is not None or k in ("brand", "pack_size", "category_id")}  # fmt: skip
+               if v is not None or k in clearable}  # fmt: skip
     if "category" in changes or "category_id" in changes:
         changes["category_id"] = _resolve_category(
             db, changes.get("category_id"), changes.pop("category", None)

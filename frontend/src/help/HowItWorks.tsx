@@ -3,6 +3,7 @@
 // read it as a picture of the flow.
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth";
+import { useBranding } from "../branding";
 import { MENU, type MenuItem } from "../menu";
 
 type Step = { n: number; title: string; who: string; to: string[]; highlight?: "accent" | "done" };
@@ -64,6 +65,7 @@ function Box({ step, can }: { step: Step; can: (...p: string[]) => boolean }) {
 }
 
 export default function HowItWorks() {
+  const brand = useBranding();
   const { can } = useAuth();
   const row1 = STEPS.slice(0, 5);
   const row2 = STEPS.slice(5).reverse(); // 10 ← 9 ← 8 ← 7 ← 6, as the design reads
@@ -107,6 +109,11 @@ export default function HowItWorks() {
           })}
         </ul>
       </section>
+      {brand && (
+        <p className="muted small top-gap">
+          {brand.app_title} · {brand.company_line}
+        </p>
+      )}
     </div>
   );
 }

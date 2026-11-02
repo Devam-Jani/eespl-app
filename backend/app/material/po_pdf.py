@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import branding
 from app.masters.models import CompanyProfile, TcTemplate
 from app.material import service as svc
 from app.material.models import Indent, PoIndent, PurchaseOrder, Store
@@ -63,7 +64,7 @@ h2 { font-size: 9.5pt; margin: 12px 0 4px; }
 .sign { margin-top: 26px; display: flex; justify-content: space-between;
   page-break-inside: avoid; }
 .sign .line { margin-top: 34px; }
-"""
+""" + branding.pdf_footer_css()
 
 ONES = (
     "",

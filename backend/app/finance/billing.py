@@ -758,9 +758,36 @@ def cancel_ra(
     ):
         raise svc.conflict(f"{b.code} is {b.status}; cancel its invoice with a credit note")
     b.status = "cancelled"  # keeps its number
-    record(db, request, principal, "ra.cancel", "ra_bill", b.id)
+    released = release_bill(db, b)
+    record(db, request, principal, "ra.cancel", "ra_bill", b.id, after=released)
     db.commit()
     return _ra_out(db, b)
+
+
+def release_bill(db, b: RaBill) -> dict:
+    """A cancelled bill gives back what it took: its approved measurements (the next bill takes
+    them), its measurement sheet, its variations and its "ready to bill" items (open again)."""
+    from app.measure.models import MeasureSheet, VariationRequest  # noqa: PLC0415
+    from app.sitecontrol.models import ReadyToBill  # noqa: PLC0415
+    from app.team.models import Measurement  # noqa: PLC0415
+
+    out = {"measurements": 0, "sheets": 0, "ready_to_bill": 0}
+    for m in db.scalars(select(Measurement).where(Measurement.ra_bill_id == b.id)):
+        m.ra_bill_id = None
+        out["measurements"] += 1
+    for s in db.scalars(select(MeasureSheet).where(MeasureSheet.ra_bill_id == b.id)):
+        s.ra_bill_id = None
+        if s.status == "billed":
+            s.status = "approved"
+        out["sheets"] += 1
+    for v in db.scalars(select(VariationRequest).where(VariationRequest.ra_bill_id == b.id)):
+        v.ra_bill_id = None
+    for it in db.scalars(select(ReadyToBill).where(ReadyToBill.ra_bill_id == b.id)):
+        it.ra_bill_id, it.billed_at = None, None
+        if it.status == "billed":
+            it.status = "open"
+        out["ready_to_bill"] += 1
+    return out
 
 
 class InvoiceFromRa(BaseModel):

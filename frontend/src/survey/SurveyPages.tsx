@@ -301,7 +301,7 @@ export function SurveyDetail() {
               Approve
             </Button>
           )}
-          {s.status !== "draft" && (s.can_approve || s.status === "submitted") && (
+          {s.status !== "draft" && (s.can_approve || (s.status === "submitted" && s.can_edit)) && (
             <Button variant="ghost" size="small" onClick={() => void act(`/api/surveys/${s.id}/reopen`)}>
               Reopen
             </Button>
@@ -599,7 +599,7 @@ function AreaForm({
     count: String(area?.count ?? 1),
     system_id: area?.system_id ? String(area.system_id) : "",
     wastage: area?.wastage_override_percent ?? "",
-    method: area && !area.camera_measured ? area.method : "laser",
+    method: area ? area.method : "laser", // a camera-measured area keeps its camera method (ar / marker)
     remarks: area?.remarks ?? "",
   }));
   const [error, setError] = useState<string | null>(null);
@@ -796,6 +796,7 @@ function AreaForm({
             </Field>
             <Field label="Measured by">
               <select className="tap-input" value={f.method} onChange={set("method")}>
+                {area?.camera_measured && <option value={area.method}>Camera ({area.method === "ar" ? "AR" : "marker"})</option>}
                 <option value="laser">Laser meter</option>
                 <option value="manual">Tape / by hand</option>
                 <option value="cad">Drawing (CAD)</option>
@@ -1095,7 +1096,7 @@ export function PilotReport() {
           </p>
         </div>
         <div className="page-actions">
-          <Button size="small" onClick={() => void downloadFile("/api/surveys/pilot?format=xlsx")}>
+          <Button size="small" onClick={() => void downloadFile("/api/surveys/pilot?format=xlsx").catch((e) => showError(e))}>
             ⤓ Excel
           </Button>
         </div>

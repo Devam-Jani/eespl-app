@@ -31,7 +31,7 @@ becomes a site. A salesperson sees only the tenders they own or are a member of.
 - **Submit R(n)**: freezes the BOQ and terms as revision R(n) and marks the tender **Submitted**. See **Submitting** below. Shown while the current revision is a draft. {perm: tender.edit}
 - **Quoted total (excl. GST)**.
 - After a submit: "R(n) was submitted. Any change to the BOQ or the terms starts R(n+1) as a draft." {perm: tender.edit}
-- A yellow note "Rates not sent to the lines." shows when the BOQ rates differ from the rate working, with **Send the rates to the lines** (draft only). Only roles that see margins can use the button; others get an error. {perm: tender.edit}
+- A yellow note "Rates not sent to the lines." shows when the BOQ rates differ from the rate working, with **Send the rates to the lines** (draft only), shown only to roles that see margins. {perm: tender.edit, tender.margin}
 
 **Tabs**
 - **Details**, **BOQ**, **Rate working**, **Margin check** (margin roles only), **Checks** (estimate roles only), **Terms**, **Revisions (n)**, and **Awaiting award** (while submitted) or **Award & bidders**.
@@ -62,7 +62,7 @@ becomes a site. A salesperson sees only the tenders they own or are a member of.
 - In the panel: **Mark not quoted** / **Quote this line**, **Clear rate**, **Delete line** (asks "Delete this line?"). {perm: tender.edit}
 
 **Rate working tab**
-- The same rate working as on a quotation: main items, their build-up, and **Rates to the lines**. **Match the client BOQ to the library** opens the library match. Editing needs the margin right and the tender edit right. {perm: tender.margin}
+- The same rate working as on a quotation: main items, their build-up, and **Rates to the lines**. **Match the client BOQ to the library** opens the library match. Editing needs the margin right and the tender edit right; without the tender edit right the working is read-only (no editing buttons), and **Mark final: add to the library** also needs the knowledge edit right. {perm: tender.margin}
 
 **Margin check tab** {perm: tender.margin}
 - Per BOQ line: rate, material, labour and cost per sqm, the material share and the margin on the selling price, with warnings ("Material alone is ...% of the rate ... (over ...%)", "No labour estimate in the working: the margin is before labour", no coverage, no price). "No rate working yet" until the rate working exists.
@@ -113,7 +113,7 @@ becomes a site. A salesperson sees only the tenders they own or are a member of.
 - "Only the director can send past the checklist".
 - "...: ... (largest difference ₹...). Send the rates to the lines from the rate working, or confirm the lines' rates.": on the Details tab **Mark submitted** cannot confirm; use **Submit R(n)** and answer OK, or ask the estimator to send the rates.
 - "R(n) is already submitted. Change the BOQ or T&C to start R(n+1)."
-- "Pick why the tender was lost or dropped": choose a reason. The reason **Main job lost by the contractor** is refused on a tender in this version; use **Won the main contract** on the winning contractor instead.
+- "Pick why the tender was lost or dropped": choose a reason.
 - "That is us: mark the tender won instead".
 - "Upload an .xlsx, .xls, .csv or .pdf file"; "The file is larger than 20 MB"; "Could not read the file: ..."; "No sheet named ..."; "The header row is past the end of the sheet"; "This tender already has n BOQ lines; import again with replace".
 - "The description cannot be empty"; "Quantity: a number with up to 3 decimals, QRO or NQ"; "Rate: a number with up to 2 decimals"; "Margin: a percentage, e.g. 25"; "Enter a percentage between 0 and 100".
@@ -121,4 +121,3 @@ becomes a site. A salesperson sees only the tenders they own or are a member of.
 - "Mark the tender won first"; "... was already made from ..." (the site exists: **Open site**).
 - "The tender is already quoted to ..."; "The main contract is already decided".
 - "The rate working is for the estimator and the director" / "Tender editing is not for your role": ask the estimator.
-- The **Add a civil contractor…** list is empty in this version, so **Quote it to them too** cannot be used yet; ask the administrator.

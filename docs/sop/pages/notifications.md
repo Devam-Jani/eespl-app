@@ -20,7 +20,8 @@ page.
   "· escalated", a note, "· email <state>" when it was also emailed, and either "· waiting n h" /
   "n d" or "· done <when> by <who>: <reason>".
 - Unread rows are highlighted. Escalated rows are red; open to-dos are orange.
-- Press a row: it is marked read and its page opens.
+- Press a row: it is marked read (the highlight goes at once) and its page opens; a message with no
+  page only turns read.
 - The action button on an open to-do (for example **Approve**, **Review**; **Open** when the rule
   names none): marks it read and opens its page, where you do the step.
 - **Done**: closes the to-do by hand. Type the **Reason** (at least 3 characters, "Why was

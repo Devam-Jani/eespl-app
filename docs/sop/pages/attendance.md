@@ -22,12 +22,13 @@ worker by worker, with the wage due. Marking itself is done on the site's labour
   P (present), H (half day) or A (absent), then days, half days, OT hours, wage and wage due.
 - The muster table: **Site**, **Worker** (with the trade, or "subcontractor"), **Days** (a half
   day counts as 0.5), **Half days**, **OT h**, **Wage**, **Due**. The last row,
-  **Wage due (payroll is M5)**, is the total due for the month.
+  **Wage due**, is the total due for the month.
 
 **Rules**
 - You only see the sites you are posted to, unless you hold labour for every site.
-- Marking attendance (on the site's labour tab) needs the right to keep the labour list. Without
-  it the save is refused with "Missing permission: labour.edit on <site code>".
+- Marking attendance (on the site's labour tab) needs the right to keep the labour list or to
+  manage site attendance, on that site. Without either the save is refused with "Missing
+  permission: labour.edit on <site code>".
 - Attendance cannot be marked for a future day.
 - A worker can be marked at one site only on a day.
 - No overtime on an absent day.

@@ -74,12 +74,12 @@ You open these less often, or only through a link from another page.
 
 ## Common mistakes
 
-- **Raise RA bill** makes the bill, then opens a page that does not exist, and you land on the home page (see the bugs list). Find the new bill under **Client billing**.
+- **Raise RA bill** makes the draft and opens it under **Client billing**: check its quantities before **Submit to client**.
 - "Finish (submit or cancel) the draft RA bill first": a draft is already open for the site.
 - "This site has no client contract yet": make the contract first, from the won tender.
 - "'<item>': n sqm is beyond the BOQ qty m; bill the excess as an extra item": lower the quantity and bill the excess as an **Extra item**.
 - "This place is outside our RFI zones (...): give the reason to measure it": give the reason.
-- **Cancel bill** leaves that bill's measurements tied to it (see the bugs list). Tell the office admin before billing them again.
+- A pending client correction blocks the line: answer it (**Accept** or **Dispute…**) on the site's **Measure** page, or the client cannot approve it.
 
 ## Quick card
 

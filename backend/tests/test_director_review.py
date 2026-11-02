@@ -4,7 +4,6 @@ certification recorded by staff, the Kylas quotation stage, systems offered per 
 daily report places moving progress and ready to bill. Invented data only."""
 
 import json
-from datetime import date
 from decimal import Decimal
 
 from fastapi.testclient import TestClient
@@ -20,6 +19,7 @@ from app.quotations.models import Quotation
 from app.sitecontrol.models import DeliveryNote, ReadyToBill
 from app.sites.models import AreaScope, SiteMember
 from app.survey.models import AreaType
+from app.timefmt import ist_today
 from tests.conftest import login
 from tests.test_crm import FakeKylas, configure, kylas  # noqa: F401  (fixtures)
 from tests.test_finance import boss, contract, world  # noqa: F401  (fixtures)
@@ -248,7 +248,7 @@ def test_an_approved_daily_report_line_moves_progress_and_makes_ready_to_bill(bo
     c, h = boss
     contract(c, h, world)
     scope = db.get(AreaScope, world["scopes"][0])  # 60 sqm of PU coating on the terrace
-    url = f"/api/execution/sites/{world['site']}/dprs/{date.today().isoformat()}"
+    url = f"/api/execution/sites/{world['site']}/dprs/{ist_today().isoformat()}"
     body = {
         "work_done": "Invented PU coating",
         "lines": [

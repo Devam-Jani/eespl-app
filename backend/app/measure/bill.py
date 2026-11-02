@@ -27,6 +27,7 @@ from app.measure import service as ms
 from app.measure.models import MeasureArea, MeasureBilled, MeasureEdge, MeasureLine, MeasureSheet
 from app.sites.models import Site
 from app.team.models import Measurement
+from app.timefmt import ist_today
 
 ZERO = Decimal(0)
 
@@ -173,7 +174,7 @@ def bill_from_sheet(db: Session, sheet: MeasureSheet, user, *, proforma_on: date
             given[m.contract_line_id] += Decimal(m.qty)
     seq = (db.scalar(select(RaBill.seq).where(RaBill.contract_id == c.id).order_by(RaBill.seq.desc()).limit(1)) or 0) + 1
     site = db.get(Site, c.site_id)
-    on = proforma_on or date.today()
+    on = proforma_on or ist_today()
     b = RaBill(code=f"RA-{site.code}-{seq:02d}", contract_id=c.id, site_id=site.id, seq=seq, period_to=sheet.measured_on, order_basis=basis,
                verbal_by=((verbal_by or "").strip() or None) if basis == "verbal" else None, verbal_on=verbal_on if basis == "verbal" else None,
                proforma_on=on, created_by=user.id)  # fmt: skip
@@ -344,7 +345,7 @@ def to_tax_invoice(db: Session, b: RaBill, user, on: date | None = None) -> TaxI
     c = db.get(ClientContract, b.contract_id)
     billing.camera_gate(db, b, c)
     p = proforma(db, b)
-    on = on or date.today()
+    on = on or ist_today()
     ours = svc.our_gstin(db, c.from_gstin_id)
     inv = TaxInvoice(number=svc.invoice_number(db, on), invoice_date=on, due_date=on + svc.timedelta(days=30), site_id=b.site_id, contract_id=c.id, ra_bill_id=b.id,
                      client_id=c.client_id, client_gstin=p["buyer"]["gstin"], billing_address=c.billing_address or ", ".join(x for x in (p["buyer"]["address"], p["buyer"]["city"], p["buyer"]["state"]) if x),

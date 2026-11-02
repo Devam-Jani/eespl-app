@@ -86,7 +86,7 @@ function Logo() {
       if (url) URL.revokeObjectURL(url);
     };
   }, []);
-  return src ? <img className="portal-logo" src={src} alt="EESPL" /> : <span className="brand-mark">E</span>;
+  return src ? <img className="portal-logo" src={src} alt="EESPL" /> : <span className="app-mark" aria-hidden="true">E</span>;
 }
 
 // --- layout and home -----------------------------------------------------------------------------
@@ -217,6 +217,11 @@ const TAB_RIGHTS: Record<string, string[]> = {
   handover: ["handover.edit", "progress.view"],
 };
 
+/** May the client press a button needing this right? null rights: no roles set (everything); undefined: still loading (not yet). */
+export function hasRight(rights: string[] | null | undefined, right: string): boolean {
+  return rights === null || (rights !== undefined && rights.includes(right));
+}
+
 function SiteView({ siteId }: { siteId: number }) {
   const { get, preview } = usePortal();
   const [params, setParams] = useSearchParams();
@@ -276,26 +281,26 @@ function SiteView({ siteId }: { siteId: number }) {
         ))}
       </div>
       <div className="top-gap">
-        {tab === "overview" && <OverviewTab site={site} onChange={load} />}
+        {tab === "overview" && <OverviewTab site={site} onChange={load} canSign={hasRight(rights, "inspection.sign")} />}
         {tab === "dpr" && <DprTab siteId={siteId} />}
         {tab === "photos" && <PhotosTab siteId={siteId} />}
-        {tab === "inspections" && <InspectionsTab siteId={siteId} />}
+        {tab === "inspections" && <InspectionsTab siteId={siteId} canSign={hasRight(rights, "inspection.sign")} />}
         {tab === "documents" && <DocumentsTab siteId={siteId} />}
         {tab === "billing" && (
           <>
             {(rights === null || rights === undefined || rights.includes("payment.view")) && <OverdueList siteId={siteId} />}
-            <BillingTab siteId={siteId} />
+            <BillingTab siteId={siteId} canCertify={hasRight(rights, "bill.certify")} />
           </>
         )}
         {tab === "measurements" && <MeasurementsTab siteId={siteId} />}
         {tab === "handover" && <HandoverTab siteId={siteId} canEdit={rights === null || rights === undefined || rights.includes("handover.edit")} />}
-        {tab === "snags" && <SnagsTab site={site} />}
+        {tab === "snags" && <SnagsTab site={site} canRaise={hasRight(rights, "snag.raise")} />}
       </div>
     </>
   );
 }
 
-function OverviewTab({ site, onChange }: { site: Overview; onChange: () => void }) {
+function OverviewTab({ site, onChange, canSign }: { site: Overview; onChange: () => void; canSign: boolean }) {
   const { readOnly, headers } = usePortal();
   const [error, setError] = useState<string | null>(null);
   const portal = useMemo(() => ({ modelPath: `/api/portal/sites/${site.id}/model`, headers }), [site.id, headers]);
@@ -365,7 +370,8 @@ function OverviewTab({ site, onChange }: { site: Overview; onChange: () => void 
               {p.acknowledged ? (
                 <span className="badge badge-ok">acknowledged</span>
               ) : (
-                !readOnly && (
+                !readOnly &&
+                canSign && (
                   <Button size="small" onClick={() => void ack(p.id)}>
                     Acknowledge
                   </Button>
@@ -548,7 +554,7 @@ type PMom = {
   points: { id: number; text: string; due_date: string | null; status: string; yours: boolean; owner: string | null; acknowledged_at: string | null }[];
 };
 
-function InspectionsTab({ siteId }: { siteId: number }) {
+function InspectionsTab({ siteId, canSign }: { siteId: number; canSign: boolean }) {
   const { get, file, readOnly } = usePortal();
   const [list, setList] = useState<PInspection[]>([]);
   const [moms, setMoms] = useState<PMom[]>([]);
@@ -590,12 +596,12 @@ function InspectionsTab({ siteId }: { siteId: number }) {
             <Button size="small" onClick={() => dl(`/api/portal/sites/${siteId}/inspections/${i.id}/pdf`)}>
               PDF
             </Button>
-            {i.client_signoff === "waiting" && !readOnly && (
+            {i.client_signoff === "waiting" && !readOnly && canSign && (
               <Button variant="primary" size="small" onClick={() => setSigning(i)}>
                 Sign off
               </Button>
             )}
-            {i.client_signoff === "waiting" && readOnly && <span className="badge badge-warn">waiting for sign-off</span>}
+            {i.client_signoff === "waiting" && (readOnly || !canSign) && <span className="badge badge-warn">waiting for sign-off</span>}
             {i.client_signoff === "signed" && <span className="badge badge-ok">signed by {i.client_signed_name}</span>}
           </div>
           {open === i.id && <Thread entityType="inspection" entityId={i.id} />}
@@ -626,7 +632,8 @@ function InspectionsTab({ siteId }: { siteId: number }) {
                 (p.acknowledged_at ? (
                   <span className="badge badge-ok">acknowledged</span>
                 ) : (
-                  !readOnly && (
+                  !readOnly &&
+                  canSign && (
                     <Button size="small" onClick={() => void ack(p.id)}>
                       Acknowledge
                     </Button>
@@ -805,7 +812,7 @@ type PBilling = {
   outstanding: Record<string, string>;
 };
 
-function BillingTab({ siteId }: { siteId: number }) {
+function BillingTab({ siteId, canCertify }: { siteId: number; canCertify: boolean }) {
   const { get, file, readOnly } = usePortal();
   const [data, setData] = useState<PBilling | null>(null);
   const [certifying, setCertifying] = useState<PRa | null>(null);
@@ -878,7 +885,7 @@ function BillingTab({ siteId }: { siteId: number }) {
             <Button size="small" onClick={() => dl(`/api/portal/sites/${siteId}/ra-bills/${b.id}/pdf`)}>
               PDF
             </Button>
-            {b.status === "submitted" && !readOnly && (
+            {b.status === "submitted" && !readOnly && canCertify && (
               <>
                 <Button variant="primary" size="small" onClick={() => setCertifying(b)}>
                   Certify
@@ -1055,8 +1062,9 @@ type PSnag = {
   photos: { id: number; kind: string; filename: string }[];
 };
 
-function SnagsTab({ site }: { site: Overview }) {
-  const { get, readOnly } = usePortal();
+function SnagsTab({ site, canRaise }: { site: Overview; canRaise: boolean }) {
+  const { get, readOnly: preview } = usePortal();
+  const readOnly = preview || !canRaise; // raise, verify and reopen all need snag.raise
   const [list, setList] = useState<PSnag[]>([]);
   const [raising, setRaising] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
@@ -1306,7 +1314,7 @@ export function InviteAccept() {
     <div className="login-page">
       <form className="login-card" onSubmit={submit}>
         <div className="login-brand">
-          <span className="brand-mark">E</span>
+          <span className="app-mark" aria-hidden="true">E</span>
           <div>
             <h1>EESPL client portal</h1>
             <p className="muted">{info ? `Welcome, ${info.full_name}` : "Set your password"}</p>

@@ -16,6 +16,7 @@ from sqlalchemy import select
 from app.knowledge import extract, library, service
 from app.knowledge.models import KnowledgeFile, KnowledgeLine, KnowledgeTemplate
 from app.knowledge.reader import read_file
+from app.timefmt import ist_today
 from tests.conftest import login
 from tests.test_finance import boss  # noqa: F401  (fixtures)
 from tests.test_rate_working import _group, _working, boq  # noqa: F401  (fixtures)
@@ -166,7 +167,7 @@ def _line(db, desc, city, rate, on, folder="Invented Client", **kw):
 
 @pytest.fixture
 def library_lines(db):
-    today = date.today()
+    today = ist_today()
     lines = [
         _line(db, SUNKEN, "Shela", 640, today - timedelta(days=40)),
         _line(
@@ -252,7 +253,7 @@ def test_picking_area_surface_and_requirements_proposes_the_template_and_fills_t
 ):
     c, h = boss
     hdpe, primer = boq["products"]
-    today = date.today()
+    today = ist_today()
     working = {"items": [
         {"label": "Invented HDPE membrane", "kind": "product", "consumption": "1.4", "price": "250", "freight": "6", "ref": "Working!E3"},
         {"label": "Invented primer", "kind": "product", "consumption": "0.25", "price": "80", "freight": None, "ref": "Working!E4"},

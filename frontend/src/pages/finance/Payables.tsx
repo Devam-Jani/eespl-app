@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../../api";
 import { useAuth } from "../../auth";
 import { Modal } from "../../ui/Overlay";
@@ -312,11 +313,24 @@ function PayForm({ bills, lookups, onClose, onSaved }: { bills: VendorBill[]; lo
   );
 }
 
+/** The message for a typed reason / note shorter than the API accepts (null when it is long enough). */
+export function tooShort(text: string, min: number, what: string): string | null {
+  return text.trim().length < min ? `The ${what} is too short: write at least ${min} characters.` : null;
+}
+
+type PayablesTab = "bills" | "payments" | "due" | "ageing" | "subcon";
+const PAYABLES_TABS: PayablesTab[] = ["bills", "payments", "due", "ageing", "subcon"];
+/** The tab a link asks for (?tab=subcon from the director's "productivity low" to-do); Vendor bills otherwise. */
+export function payablesTab(param: string | null): PayablesTab {
+  return PAYABLES_TABS.find((t) => t === param) ?? "bills";
+}
+
 export default function Payables() {
   const { can } = useAuth();
   const lookups = useFinanceLookups();
   const edit = can("payables.edit");
-  const [tab, setTab] = useState<"bills" | "payments" | "due" | "ageing" | "subcon">("bills");
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<PayablesTab>(() => payablesTab(params.get("tab")));
   const [bills, setBills] = useState<VendorBill[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [due, setDue] = useState<Due[]>([]);
@@ -456,7 +470,10 @@ export default function Payables() {
                         size="small"
                         onClick={() => {
                           const reason = prompt("Release this bill for approval despite the match: why?");
-                          if (reason && reason.trim().length >= 5) void act(`/api/sitecontrol/vendor-bills/${b.id}/release`, { reason: reason.trim() });
+                          if (reason === null) return; // Cancel
+                          const short = tooShort(reason, 3, "reason");
+                          if (short) return setError(short);
+                          void act(`/api/sitecontrol/vendor-bills/${b.id}/release`, { reason: reason.trim() });
                         }}
                       >
                         Release
@@ -465,11 +482,12 @@ export default function Payables() {
                     {b.status === "draft" && edit && !b.blocked && (
                       <Button
                         size="small"
-                        onClick={() =>
-                          void act(`/api/finance/vendor-bills/${b.id}/approve`, {
-                            accept_differences: b.match_issues.length > 0 && confirm("Accept the differences flagged on this bill?"),
-                          })
-                        }
+                        onClick={() => {
+                          // with flagged differences, Cancel on the question aborts (nothing is sent)
+                          const flagged = b.match_issues.length > 0;
+                          if (flagged && !confirm("Accept the differences flagged on this bill?")) return;
+                          void act(`/api/finance/vendor-bills/${b.id}/approve`, { accept_differences: flagged });
+                        }}
                       >
                         Approve
                       </Button>
@@ -633,7 +651,10 @@ export default function Payables() {
                           size="small"
                           onClick={() => {
                             const note = prompt("Override the labour check: note");
-                            if (note && note.trim().length >= 5) void act(`/api/sitecontrol/subcon-bills/${b.id}/override`, { note: note.trim() });
+                            if (note === null) return; // Cancel
+                            const short = tooShort(note, 5, "note");
+                            if (short) return setError(short);
+                            void act(`/api/sitecontrol/subcon-bills/${b.id}/override`, { note: note.trim() });
                           }}
                         >
                           Override

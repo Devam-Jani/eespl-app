@@ -204,7 +204,10 @@ def working_out(db, w: RateWorking, principal) -> dict:
         "quotation_id": w.quotation_id,
         "rev_no": w.rev_no,
         "locked": w.locked,
-        "can_edit": with_cost and not w.locked,
+        # the same rule as _editable: a tender's working also needs tender.edit
+        "can_edit": with_cost
+        and not w.locked
+        and (not w.tender_id or principal.permissions.get("tender.edit") is not None),
         "sees_cost": with_cost,
         "margin_basis": working.margin_basis(db, w),
         "margin_basis_label": working.BASIS_LABEL[working.margin_basis(db, w)],

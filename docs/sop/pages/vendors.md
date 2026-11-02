@@ -33,7 +33,7 @@ The list of everyone the company buys from or pays for work: material suppliers,
 - **Contacts**: a row each with **Name**, **Designation**, **Phone**, **Email** and **Primary** (only one can be primary). **×** drops a row; **+ Add contact** adds one. A row without a name is not saved. {perm: vendors.edit}
 - **Save**: creates or updates the vendor and opens its card. Saving replaces all the contacts with the rows on screen. {perm: vendors.edit}
 - **Cancel**: closes the form without saving. {perm: vendors.edit}
-- **Delete** (only when editing): asks "Delete vendor ... with its contacts and bank accounts?" and then removes the vendor. {perm: vendors.edit}
+- **Delete** (only when editing): asks "Delete vendor ... with its contacts and bank accounts?", removes the vendor and reloads the list. {perm: vendors.edit}
 
 **Rules**
 - To stop using a vendor, untick **Active** instead of deleting it. A vendor already used on a purchase order, rate contract, work order or bill cannot be deleted. {perm: vendors.edit}
@@ -59,5 +59,4 @@ The list of everyone the company buys from or pays for work: material suppliers,
 - "IFSC must look like HDFC0001234 (4 letters, 0, then 6 letters/digits)" or "Account number must be 6 to 18 digits": copy them from a cancelled cheque or the vendor's letterhead.
 - "A product can appear only once": remove the second row of that product.
 - "Missing permission: one of settings.company, finance.view (bank details)": your role cannot change bank details. Ask accounts or the office admin.
-- "It refers to a record that does not exist or was removed. Pick it from the list again." after **Delete**: the vendor is used on a purchase order, bill or work order and cannot be deleted. Edit it and untick **Active** instead.
-- After **Delete** the vendor may still show in the list: reload the page.
+- "<vendor> is in use (on a PO, rate contract, work order or bill): make it inactive instead" after **Delete**: the vendor cannot be deleted. Edit it and untick **Active** instead.

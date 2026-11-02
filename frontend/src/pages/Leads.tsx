@@ -5,7 +5,7 @@ import { api, queryString } from "../api";
 import { useAuth } from "../auth";
 import ExportButton from "../components/ExportButton";
 import { Modal } from "../ui/Overlay";
-import { errorText, inr } from "../format";
+import { errorText, inr, LOST_REASONS } from "../format";
 import type { KylasSync, Lead, LeadDetail, LeadDuplicate, LeadLookups, Page } from "../types";
 import { Pager } from "./Clients";
 import { shortDate } from "./Tenders";
@@ -71,6 +71,7 @@ export default function Leads() {
   const [page, setPage] = useState<Page<Lead> | null>(null);
   const [lookups, setLookups] = useState<LeadLookups | null>(null);
   const [creating, setCreating] = useState(false);
+  const [losing, setLosing] = useState<Lead | null>(null); // dropped on Lost: the reason dialog
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -95,9 +96,11 @@ export default function Leads() {
     setFilters((f) => ({ ...f, [key]: e.target.value }));
   };
 
-  async function move(lead: Lead, status: string) {
+  async function move(lead: Lead, status: string, lost?: { lost_reason: string; lost_to: string | null; lost_note: string | null }) {
+    // a drop on Lost asks why first (the API needs the reason), as the Status drop-down does
+    if (status === "lost" && !lost) return setLosing(lead);
     try {
-      await api(`/api/leads/${lead.id}`, { method: "PATCH", json: { status } });
+      await api(`/api/leads/${lead.id}`, { method: "PATCH", json: { status, ...lost } });
       await load();
     } catch (err) {
       setError(errorText(err));
@@ -283,7 +286,59 @@ export default function Leads() {
       {creating && lookups && (
         <LeadForm lookups={lookups} lead={null} onClose={() => setCreating(false)} onSaved={(l) => navigate(`/leads/${l.id}`)} />
       )}
+      {losing && (
+        <LeadLostDialog
+          onClose={() => setLosing(null)}
+          onSave={(body) => {
+            const lead = losing;
+            setLosing(null);
+            void move(lead, "lost", body);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+/** "Mark the lead lost": the reason (required by the API), who it was lost to, details. */
+export function LeadLostDialog({ onClose, onSave }: { onClose: () => void; onSave: (body: { lost_reason: string; lost_to: string | null; lost_note: string | null }) => void }) {
+  const [reason, setReason] = useState("");
+  const [to, setTo] = useState("");
+  const [note, setNote] = useState("");
+  return (
+    <Modal title="Mark the lead lost" onClose={onClose}>
+      <form
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          onSave({ lost_reason: reason, lost_to: to.trim() || null, lost_note: note.trim() || null });
+        }}
+      >
+        <Field label="Reason *">
+          <select required value={reason} onChange={(e) => setReason(e.target.value)} autoFocus>
+            <option value="">Choose…</option>
+            {Object.entries(LOST_REASONS).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Lost to (competitor, if known)">
+          <input value={to} onChange={(e) => setTo(e.target.value)} maxLength={200} />
+        </Field>
+        <Field label="Details">
+          <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
+        </Field>
+        <div className="form-actions">
+          <Button type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" disabled={!reason}>
+            Mark lost
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

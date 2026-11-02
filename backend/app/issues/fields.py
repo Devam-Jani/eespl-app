@@ -70,6 +70,9 @@ def plain(err: dict) -> tuple[str, str]:
         return f"{f} is not in the right form.", _pattern_hint(str(ctx.get("pattern", "")))
     if t in ("url_parsing", "url_scheme", "url_type"):
         return f"{f} is not a web address.", "Paste the full link, starting with https://."
+    if t == "value_error" and "not a valid email address" in str(err.get("msg", "")):
+        why = "its domain cannot receive email (e.g. .invalid, .test, .local)" if "special-use or reserved" in str(err.get("msg", "")) else "it is not in the form name@company.com"
+        return f"{f} is not an email address that can receive mail: {why}.", "Type the person's real work email, like name@company.com."
     if t in ("value_error", "assertion_error"):
         msg = re.sub(r"^(Value error|Assertion failed),\s*", "", str(err.get("msg", ""))).strip()
         return (f"{f}: {msg}" if f != "This field" else msg).rstrip(".") + ".", "Correct it as the message says."
@@ -112,6 +115,9 @@ def db_problem(exc: Exception) -> tuple[int | None, str]:
     code = getattr(getattr(exc, "orig", None), "sqlstate", None) or ""
     if code.startswith("22"):  # data exception: out of range, bad text for a number or a date
         return 422, "A value is out of range (a number too large, or text where a number or date belongs). Check the numbers and try again."
+    if code == "23503" and "update or delete on table" in str(getattr(exc, "orig", "")):
+        # removing a record that others still point to (ON DELETE RESTRICT), not a missing one
+        return 409, "It is still in use by other records, so it cannot be removed. Make it inactive instead."
     if code == "23503":
         return 422, "It refers to a record that does not exist or was removed. Pick it from the list again."
     if code == "23505":

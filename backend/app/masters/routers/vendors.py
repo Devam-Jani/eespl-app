@@ -9,6 +9,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import or_, select, update
+from sqlalchemy.exc import IntegrityError
 
 from app import audit
 from app.auth.deps import CurrentPrincipal, Principal, require_permission
@@ -229,7 +230,17 @@ def delete_vendor(
 ) -> None:
     vendor = get_or_404(db, Vendor, vendor_id, "Vendor")
     _record(db, request, principal, "vendor.delete", vendor, before=_snapshot(vendor))
+    name = vendor.name
     db.delete(vendor)
+    try:
+        db.flush()
+    except IntegrityError as exc:  # on a PO, rate contract, work order or bill (ON DELETE RESTRICT)
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{name} is in use (on a PO, rate contract, work order or bill): "
+            "make it inactive instead",
+        ) from exc
     db.commit()
 
 

@@ -419,7 +419,7 @@ export function QuotationEditor() {
       {header}
       <UnsentRates
         unsent={unsent}
-        canSend={!!q.can_edit}
+        canSend={!!q.can_edit && can("tender.margin")}
         onSend={() =>
           void api(`/api/rate-working/${unsent?.working_id}/apply`, { method: "POST" }).then(
             () => {
@@ -509,7 +509,7 @@ Send anyway? Give the reason:`)
             </Button>
           </>
         )}
-        {q.is_latest && q.status !== "won" && (
+        {q.is_latest && q.status !== "won" && q.can_edit && (
           <Button
             size="small"
             onClick={() =>
@@ -1211,17 +1211,21 @@ function RefsPanel({ q, apply }: { q: Quotation; apply: Apply }) {
 
 function FollowPanel({ q, apply }: { q: Quotation; apply: Apply }) {
   const [busy, setBusy] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   async function done(id: number) {
     const note = window.prompt("What did the client say? (optional)") ?? undefined;
     setBusy(id);
-    await api(`/api/quotations/followups/${id}/done`, { method: "POST", json: { note } }).catch(() => undefined);
+    setError(null);
+    // a refusal ("This follow-up is already closed", "Follow-up not found") is shown, then the list reloads
+    await api(`/api/quotations/followups/${id}/done`, { method: "POST", json: { note } }).catch((err) => setError(errorText(err)));
     await apply(`/api/quotations/${q.id}`, undefined, "GET");
     setBusy(0);
   }
   return (
     <div>
-      <NegotiationLog quotationId={q.id} revisions={q.revisions.filter((r) => r.id !== q.id).map((r) => ({ id: r.id, label: `R${r.revision}` }))} />
+      <NegotiationLog quotationId={q.id} canLog={!!q.can_edit} revisions={q.revisions.filter((r) => r.id !== q.id).map((r) => ({ id: r.id, label: `R${r.revision}` }))} />
       <h2 className="section-title top-gap">Follow-ups</h2>
+      {error && <div className="alert alert-error">{error}</div>}
       {q.followups.length === 0 ? (
         <p className="muted small">Follow-ups are scheduled when the quotation is sent (days 2, 7, 15 and 30).</p>
       ) : (

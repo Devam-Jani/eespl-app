@@ -112,7 +112,7 @@ export default function SiteDetail() {
       ["material", "Materials", can("indent.view", "indent.create", "store.view", "grn.view", "po.view")],
       ["finance", "Measurements & bills", can("billing.view")],
       ["drawings", "Drawings", true],
-      ["visits", "Site visits", true],
+      ["visits", "Site visits", can("sitevisit.log")],
       ["process", "Process", true],
       ["handover", "Handover", true],
       ["location", "Location & visits", true],

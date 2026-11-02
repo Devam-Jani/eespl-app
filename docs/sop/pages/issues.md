@@ -20,10 +20,15 @@ and any issue you raised or that is with you.
 - **Share with the client**: makes the issue a snag in the client portal (same title, details,
   person and due date). The client users of the site are notified. It is then shown as "shared with
   the client" and the button goes away. {perm: issues.edit}
-- **Resolved**: marks the issue resolved. The "Resolve it" task of the person who has it is closed.
-  Shown until the issue is resolved. {perm: issues.edit}
-- There is no button on this page to raise a new issue, attach photos, or change who has it or the
-  due date.
+- **Resolved…**: opens **Resolve <code>**. Type **What was done** (required) and press **Resolved**:
+  the issue is marked resolved and "What was done: <text>" is added to its comments. The "Resolve
+  it" task of the person who has it is closed. Not shown on a resolved or closed issue. {perm: issues.edit}
+- **With** (on an open issue): pick who has the issue. **Due**: change the due date. **Add photos**:
+  attach photos to the issue (the count shows on the button). {perm: issues.edit}
+- **+ Raise an issue** (top right): opens **Raise an issue**. Pick the **Site \*** and the
+  **Category \***, type **What is the issue \*** (at least 3 letters) and, if you like, **Details**,
+  **Who has it**, **Due** and **Photos**. **Raise the issue** saves it (with the photos); **Cancel**
+  closes without saving. {perm: issues.edit}
 
 **Rules**
 - A product marked discontinued raises an issue on every open methodology and site that uses it
@@ -33,6 +38,7 @@ and any issue you raised or that is with you.
   covers it, the details say "Not under any of our signed guarantees on this site: check whether it
   is our work."
 - A comment cannot be empty.
+- A closed issue cannot be marked resolved again ("<code> is closed").
 - Sharing an issue twice does nothing: it keeps the first snag.
 - Only an issue of a site can be shared with the client.
 

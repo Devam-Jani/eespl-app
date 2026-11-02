@@ -132,6 +132,18 @@ def list_labour(
     return [_labour_out(db, w) for w in db.scalars(query.order_by(Labour.name).limit(1000))]
 
 
+@router.get("/labour/sites")
+def labour_sites(db: DbSession, principal: CurrentPrincipal, _: LabourView) -> list[dict]:
+    """The sites the caller can post a worker to (labour.edit on them): Add worker's site picker."""
+    scope = principal.permissions.get("labour.edit")
+    if scope is None:
+        return []
+    q = select(Site).where(
+        Site.status != "closed", material.by_site(scope, principal, Site.id, Site.created_by)
+    )
+    return [{"id": s.id, "code": s.code, "name": s.name} for s in db.scalars(q.order_by(Site.code))]
+
+
 @router.post("/labour", status_code=status.HTTP_201_CREATED)
 def create_labour(
     body: LabourIn, request: Request, db: DbSession, principal: CurrentPrincipal
@@ -275,6 +287,20 @@ def _day_sheet(db, site: Site, day: date) -> dict:
     }
 
 
+def _marker_site(db, site_id: int, principal) -> Site:
+    """The site, when the caller may mark its attendance: labour.edit or attendance.manage
+    ("Manage site attendance", the Attendance menu) on it."""
+    site = svc.site_for(db, site_id, principal, "labour.view")
+    if not any(
+        material.covers_site(db, principal.permissions.get(c), principal, site.id, site.created_by)
+        for c in ("labour.edit", "attendance.manage")
+    ):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, f"Missing permission: labour.edit on {site.code}"
+        )
+    return site
+
+
 @router.get("/sites/{site_id}/attendance/{day}")
 def day_sheet(
     site_id: int, day: date, db: DbSession, principal: CurrentPrincipal, _: LabourView
@@ -294,7 +320,7 @@ def mark(
     _: LabourView,
 ) -> dict:
     """Mark (or correct) attendance. A worker already marked at another site that day is a 422."""
-    site = svc.site_for(db, site_id, principal, "labour.view", "labour.edit")
+    site = _marker_site(db, site_id, principal)
     if day > svc.today():
         raise svc.unprocessable("Attendance cannot be marked for a future day")
     for m in body.marks:
@@ -348,7 +374,7 @@ async def attendance_photo(
     labour_id: Annotated[int | None, Form()] = None,
 ) -> dict:
     """A selfie (one worker) or a group photo (everyone marked that day)."""
-    site = svc.site_for(db, site_id, principal, "labour.view", "labour.edit")
+    site = _marker_site(db, site_id, principal)
     q = select(Attendance).where(Attendance.site_id == site.id, Attendance.on_date == day)
     if labour_id:
         q = q.where(Attendance.labour_id == labour_id)

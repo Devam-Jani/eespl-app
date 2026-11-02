@@ -20,6 +20,7 @@ export default function ScopeTab({ site, onChange }: { site: Site; onChange: () 
   const [data, setData] = useState<ScopeOverview | null>(null);
   const [lookups, setLookups] = useState<SiteLookups | null>(null);
   const [assigning, setAssigning] = useState<ScopeLine | null>(null);
+  const [adding, setAdding] = useState(false);
   const { nodes } = useNodes(site.id);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -77,7 +78,7 @@ export default function ScopeTab({ site, onChange }: { site: Site; onChange: () 
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {notice && <div className="alert alert-ok">{notice}</div>}
-      {data.lines.length === 0 && <p className="empty">No priced BOQ lines.</p>}
+      {data.lines.length === 0 && site.tender_code && <p className="empty">No priced BOQ lines.</p>}
       {data.lines.map((ln) => (
         <div key={ln.boq_line_id} className="scope-line">
           <div className="toolbar">
@@ -98,11 +99,35 @@ export default function ScopeTab({ site, onChange }: { site: Site; onChange: () 
           {ln.scopes.length > 0 && <ScopeTable scopes={ln.scopes} canEdit={canEdit} siteId={site.id} onDone={run} />}
         </div>
       ))}
-      {data.other_scopes.length > 0 && (
+      {(data.other_scopes.length > 0 || canEdit) && (
         <>
-          <h3 className="section-title top-gap">Other scopes</h3>
-          <ScopeTable scopes={data.other_scopes} canEdit={canEdit} siteId={site.id} onDone={run} />
+          <div className="toolbar top-gap">
+            <h3 className="section-title grow">Other scopes</h3>
+            {canEdit && (
+              <Button size="small" disabled={!nodes.length || !lookups} title={nodes.length ? undefined : "Add the places in the Structure tab first"} onClick={() => setAdding(true)}>
+                Add a scope
+              </Button>
+            )}
+          </div>
+          {data.other_scopes.length > 0 ? (
+            <ScopeTable scopes={data.other_scopes} canEdit={canEdit} siteId={site.id} onDone={run} />
+          ) : (
+            <p className="muted small">Work that is not on a BOQ line: pick a place, a stage template and the quantity.</p>
+          )}
         </>
+      )}
+      {adding && lookups && (
+        <AddScopeDialog
+          siteId={site.id}
+          nodes={nodes}
+          templates={lookups.templates}
+          onClose={() => setAdding(false)}
+          onSaved={(d) => {
+            setData(d);
+            setAdding(false);
+            onChange();
+          }}
+        />
       )}
       {assigning && lookups && (
         <AssignDialog
@@ -173,6 +198,79 @@ function ScopeTable({ scopes, canEdit, siteId, onDone }: { scopes: AreaScope[]; 
         ))}
       </tbody>
     </table>
+  );
+}
+
+/** The body of POST /scope/assign for a scope that is not on a BOQ line (a site without a tender, or extra work). */
+export function addScopeBody(nodeId: string, templateId: string, qty: string, unit: string) {
+  return { boq_line_id: null, node_ids: [Number(nodeId)], stage_template_id: Number(templateId), qty: qty.trim(), unit: unit.trim() || null };
+}
+
+function AddScopeDialog({
+  siteId,
+  nodes,
+  templates,
+  onClose,
+  onSaved,
+}: {
+  siteId: number;
+  nodes: SiteNode[];
+  templates: { id: number; name: string }[];
+  onClose: () => void;
+  onSaved: (d: ScopeOverview) => void;
+}) {
+  const [node, setNode] = useState(String(nodes[0]?.id ?? ""));
+  const [template, setTemplate] = useState(String(templates[0]?.id ?? ""));
+  const [qty, setQty] = useState("");
+  const [unit, setUnit] = useState("sqm");
+  const [error, setError] = useState<string | null>(null);
+  const qtyOk = qty.trim() !== "" && Number(qty) > 0;
+
+  async function save() {
+    setError(null);
+    try {
+      onSaved(await api<ScopeOverview>(`/api/sites/${siteId}/scope/assign`, { method: "POST", json: addScopeBody(node, template, qty, unit) }));
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }
+
+  return (
+    <Modal title="Add a scope" onClose={onClose}>
+      {error && <div className="alert alert-error">{error}</div>}
+      <Field label="Place">
+        <select value={node} onChange={(e) => setNode(e.target.value)}>
+          {nodes.map((n) => (
+            <option key={n.id} value={n.id}>
+              {n.path}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Stage template">
+        <select value={template} onChange={(e) => setTemplate(e.target.value)}>
+          {templates.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <div className="grid-2">
+        <Field label="Quantity">
+          <input inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} />
+        </Field>
+        <Field label="Unit">
+          <input value={unit} onChange={(e) => setUnit(e.target.value)} />
+        </Field>
+      </div>
+      <div className="form-actions">
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="primary" disabled={!node || !template || !qtyOk} onClick={() => void save()}>
+          Add the scope
+        </Button>
+      </div>
+    </Modal>
   );
 }
 

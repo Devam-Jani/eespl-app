@@ -35,6 +35,6 @@ The billing checklist shows, for one tower or wing of a site, every flat (rows) 
 - Passes on: the checklist to the client's billing team.
 
 **When it goes wrong**
-- "This site has no towers or wings yet, so there is nothing to check. Add them under Zones.": the site's places have no tower or wing. Add them on the site's zones page.
+- "This site has no towers or wings yet, so there is nothing to check. Add them in the site's Structure tab.": the site's places have no tower or wing. The link opens the site's **Structure** tab, where they are added.
 - An area shows "billed in" a bill that was cancelled: the cancelled bill still holds its measurements. Tell the office admin.
 - An area you measured shows "measured", not "approved": the client has not approved the line yet (see Measurement book).

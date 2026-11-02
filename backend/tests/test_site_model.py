@@ -1,10 +1,11 @@
 """The 3D site model: every node with its status, ETag polling, and access."""
 
-from datetime import date, timedelta
+from datetime import timedelta
 
 from sqlalchemy import select
 
 from app.models import User
+from app.timefmt import ist_today
 from tests.conftest import login
 from tests.test_sites import TOWER, _assign, boss, media, new_site, won_site  # noqa: F401
 
@@ -79,7 +80,7 @@ def test_model_status_per_node(won_site):  # noqa: F811
     patch(by_node[a][1], status="done")  # hold point done, not certified
     patch(by_node[b][0], status="in_progress")
     patch(by_node[kitchen][0], status="blocked")
-    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    yesterday = (ist_today() - timedelta(days=1)).isoformat()
     patch(by_node[kitchen][2], planned_end=yesterday)
     status = {n["id"]: n["status"] for n in _model(client, headers, sid).json()["nodes"]}
     sa, sb, sk = status[a], status[b], status[kitchen]

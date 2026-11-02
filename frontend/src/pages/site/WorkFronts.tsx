@@ -2,7 +2,7 @@
 // work, from the phone, with an optional photo. Indent drafts from a survey order for ready
 // places only (planning can switch that off to order ahead).
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, fetchObjectUrl } from "../../api";
 import { useAuth } from "../../auth";
 import { errorText } from "../../format";
@@ -29,6 +29,7 @@ export default function WorkFronts() {
   const [error, setError] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
   const mayTick = can("site.update", "site.edit");
+  const asked = useSearchParams()[0].get("asked") === "1"; // back from the New area form's "Send to planning"
   useEffect(() => {
     api<Node[]>(`/api/sites/${id}/nodes`).then(setNodes, (e) => setError(errorText(e)));
     api<{ code: string; name: string }>(`/api/sites/${id}`).then(setSite, () => undefined);
@@ -56,6 +57,7 @@ export default function WorkFronts() {
         <Link to={`/sites/${id}`}>{site ? `${site.code} · ${site.name}` : "Site"}</Link> / Work fronts
       </div>
       <h1>Work fronts</h1>
+      {asked && <div className="alert alert-ok">Sent to planning: they approve the new area on the New areas page, then it shows here.</div>}
       <p className="muted small">
         Tick a place when it is open for our work. Material is ordered for ready places. {ready} of {nodes?.length ?? 0} ready.
       </p>

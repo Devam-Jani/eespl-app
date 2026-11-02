@@ -139,6 +139,7 @@ class IndentOut(BaseModel):
     lines: list[IndentLineOut]
     can_edit: bool
     can_approve: bool
+    can_cancel: bool = False
 
 
 class ReasonIn(BaseModel):

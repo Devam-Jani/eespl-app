@@ -34,6 +34,7 @@ from app.quotations.models import (
 )
 from app.sites.models import Site
 from app.tenders.models import BoqLine, Tender
+from app.timefmt import ist_today
 
 
 def _png() -> bytes:
@@ -515,7 +516,7 @@ def test_placeholders_filled_and_unknown_ones_refused(boss, lib):
         "INVENTO",
         "Invented Towers",
         "TERRACE AREA &amp; TANK AREA",
-        date.today().strftime("%d.%m.%Y"),
+        ist_today().strftime("%d.%m.%Y"),
     ):
         assert text in html, text
     assert "{" not in html.split("<body>")[1].split("<style>")[0]
@@ -618,7 +619,7 @@ def test_revision_diff_lost_needs_a_reason_and_follow_ups(boss, lib, db):
     sent = r.json()
     assert sent["status"] == "sent" and {f["kind"] for f in sent["files"]} == {"docx", "pdf"}
     assert sorted(f["day"] for f in sent["followups"]) == [2, 7, 15, 30]
-    assert sent["followups"][0]["due_on"] == (date.today() + timedelta(days=2)).isoformat()
+    assert sent["followups"][0]["due_on"] == (ist_today() + timedelta(days=2)).isoformat()
     acts = list(
         db.scalars(
             select(LeadActivity).where(
@@ -650,7 +651,7 @@ def test_revision_diff_lost_needs_a_reason_and_follow_ups(boss, lib, db):
     open_ = db.scalars(select(QuotationFollowUp).where(QuotationFollowUp.status == "open")).all()
     assert len(open_) == 4 and {f.quotation_id for f in open_} == {r1["id"]}
     # an overdue follow-up raises an alert for the salesperson
-    open_[0].due_on = date.today() - timedelta(days=1)
+    open_[0].due_on = ist_today() - timedelta(days=1)
     db.commit()
     alerts.run(db)
     db.commit()
@@ -707,7 +708,7 @@ def test_won_creates_the_tender_and_site_and_stops_follow_ups(boss, lib, db):
 def test_expiry_after_validity(boss, lib, db):
     client, h = boss
     q = new_quotation(
-        client, h, lib, validity_days=10, quote_date=(date.today() - timedelta(days=11)).isoformat()
+        client, h, lib, validity_days=10, quote_date=(ist_today() - timedelta(days=11)).isoformat()
     )
     client.post(f"/api/quotations/{q['id']}/status", json={"status": "sent"}, headers=h)
     client.get("/api/quotations", headers=h)

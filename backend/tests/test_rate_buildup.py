@@ -1,9 +1,10 @@
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal as D
 
 import pytest
 
 from app.masters.rate import ComponentInput, build_rate, labour_per_unit
+from app.timefmt import ist_today
 from tests.conftest import login
 
 
@@ -108,7 +109,7 @@ def working_sheet_system(login_as):
         return r.json()["id"]
 
     a, b = product("P-A", "Polymer coating"), product("P-B", "Primer")
-    today = date.today()
+    today = ist_today()
     for pid, price in ((a, "365"), (b, "95")):
         # an old price and a future price around the current one: only the current one counts
         for when, value in (

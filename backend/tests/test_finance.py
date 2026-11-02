@@ -17,6 +17,7 @@ from app.masters.models import Client, CompanyGstin, Product, Vendor
 from app.models import User
 from app.sites.models import AreaScope, Site, SiteNode, StageTemplate
 from app.tenders.models import BoqLine, Tender
+from app.timefmt import ist_today
 from tests.conftest import login
 
 D = Decimal
@@ -963,7 +964,8 @@ def test_tally_xml_balanced_and_exported_vouchers_skipped(boss, world, db):
         },
         headers=h,
     )
-    params = {"date_from": "2026-10-01", "date_to": "2026-10-31"}
+    # to today: the invoice and the receipt carry today's date (a fixed end failed from November)
+    params = {"date_from": "2026-10-01", "date_to": ist_today().isoformat()}
     r = client.post("/api/finance/tally/export", params=params, headers=h)
     assert r.status_code == 200 and r.headers["X-Voucher-Count"] == "4"
     root = ET.fromstring(r.content)  # well-formed (the "&" and "<" in the vendor name are escaped)

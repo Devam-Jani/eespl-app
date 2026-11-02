@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.knowledge import extract
 from app.knowledge.library import _product_index, jaccard, match_product, settings, words
 from app.knowledge.models import KnowledgeFile, KnowledgeLine, KnowledgeTemplate, ProductReview
+from app.timefmt import ist_today
 
 SQFT = Decimal("10.7639")
 NOT_PRODUCT = re.compile(r"margin|profit|overhead|total|gst|\btax\b|contingenc", re.I)
@@ -72,7 +73,7 @@ def rates(
     place, date (flagged when older than the set months), client folder, quantity, and (cost
     users) cost and margin."""
     s = settings(db)
-    old_before = date.today() - timedelta(days=int(30.4 * (s.old_after_months or 12)))
+    old_before = ist_today() - timedelta(days=int(30.4 * (s.old_after_months or 12)))
     region = region_of(db, city)
     files = {}
     rows = []
@@ -648,7 +649,7 @@ def learn(db: Session, w, city: str | None, on: date | None = None) -> int:
     from app.costing import working  # noqa: PLC0415
     from app.masters.models import Product  # noqa: PLC0415
 
-    on = on or date.today()
+    on = on or ist_today()
     db.query(KnowledgeLine).filter(
         KnowledgeLine.source == "won",
         (KnowledgeLine.tender_id == w.tender_id)

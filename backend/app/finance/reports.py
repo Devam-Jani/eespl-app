@@ -172,7 +172,7 @@ def put_settings(
 
 class TallySettingsIn(BaseModel):
     ledgers: dict[str, Any]
-    party_ledgers: dict[str, str] = {}
+    party_ledgers: dict[str, str] | None = None  # left out: the saved party ledgers are kept
 
 
 @router.get("/tally/settings")
@@ -186,8 +186,18 @@ def put_tally_settings(
     body: TallySettingsIn, request: Request, db: DbSession, principal: CurrentPrincipal, _: Export
 ) -> dict:
     s = svc.settings(db)
-    s.tally_ledgers, s.party_ledgers = body.ledgers, body.party_ledgers
-    record(db, request, principal, "tally.settings", "finance_settings", 1, after=body.model_dump())
+    s.tally_ledgers = body.ledgers
+    if body.party_ledgers is not None:
+        s.party_ledgers = body.party_ledgers
+    record(
+        db,
+        request,
+        principal,
+        "tally.settings",
+        "finance_settings",
+        1,
+        after=body.model_dump(exclude_none=True),
+    )
     db.commit()
     return {"ledgers": s.tally_ledgers, "party_ledgers": s.party_ledgers}
 

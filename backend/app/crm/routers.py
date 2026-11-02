@@ -30,6 +30,7 @@ from app.models import User
 from app.tenders.models import Tender, TenderMember
 from app.tenders.service import copy_template
 from app.tenders.service import next_code as next_tender_code
+from app.timefmt import ist_today
 
 router = APIRouter(prefix="/api/leads", tags=["crm"])
 settings_router = APIRouter(prefix="/api/settings/kylas", tags=["crm"])
@@ -96,7 +97,8 @@ class LeadUpdate(LeadFields):
     status: LeadStatus | None = None
     # required when the lead is marked lost (app.tenders.models.LOST_REASONS)
     lost_reason: (
-        Literal["price", "competitor", "timing", "spec", "relationship", "other"] | None
+        Literal["price", "competitor", "timing", "spec", "relationship", "other", "main_job_lost"]
+        | None
     ) = None
     lost_to: str | None = Field(default=None, max_length=200)
     lost_note: str | None = None
@@ -259,7 +261,7 @@ def _record(db, request, principal, action, lead, before=None, after=None):
 
 
 def next_code(db: Session) -> str:
-    year = date.today().year
+    year = ist_today().year
     value = db.execute(
         text(
             "INSERT INTO lead_sequences (year, last_value) VALUES (:y, 1) ON CONFLICT (year) DO "
@@ -318,7 +320,7 @@ def _out(db: Session, lead: Lead) -> dict:
         next_follow_up=lead.next_follow_up,
         follow_up_due=bool(
             lead.next_follow_up
-            and lead.next_follow_up <= date.today()
+            and lead.next_follow_up <= ist_today()
             and lead.status not in CLOSED_STATUSES
         ),
         tender_id=lead.tender_id,
@@ -398,7 +400,7 @@ def _query(scope, principal, q, status_, owner_id, source, due, sync):
         query = query.where(Lead.kylas_sync_status == sync)
     if due:
         query = query.where(
-            Lead.next_follow_up <= date.today(), Lead.status.not_in(CLOSED_STATUSES)
+            Lead.next_follow_up <= ist_today(), Lead.status.not_in(CLOSED_STATUSES)
         )
     return query.order_by(Lead.created_at.desc(), Lead.id.desc())
 
@@ -650,7 +652,7 @@ def convert_to_tender(
         channel_id=lead.channel_id,
         site_city=lead.city,
         site_state=lead.state,
-        received_on=date.today(),
+        received_on=ist_today(),
         owner_id=lead.owner_id,
         notes=f"From lead {lead.code}" + (f": {lead.requirement}" if lead.requirement else ""),
         created_by=principal.user.id,

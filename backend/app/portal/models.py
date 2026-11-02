@@ -233,18 +233,34 @@ class Notification(Base):
 
 
 class NotificationOutbox(Base):
-    """Delivery of a notification per channel. Only 'in_app' now (delivered when written);
-    M8 adds email / SMS / WhatsApp rows that a worker sends."""
+    """Delivery of a notification per channel (in_app delivered when written; email rows sent by
+    the worker). Also the account emails (kind 'invite' / 'reset', for user_id, no notification):
+    their single-use link is made by the worker when it sends, never stored (app.auth.invites)."""
 
     __tablename__ = "notification_outbox"
     __table_args__ = (
         CheckConstraint("channel IN ('in_app', 'email', 'sms', 'whatsapp')", name="channel_valid"),
         CheckConstraint("status IN ('pending', 'sent', 'failed', 'summary')", name="status_valid"),
+        CheckConstraint("kind IS NULL OR kind IN ('invite', 'reset')", name="kind_valid"),
+        CheckConstraint(
+            "notification_id IS NOT NULL OR (kind IS NOT NULL AND user_id IS NOT NULL)",
+            name="for_someone",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Identity(), primary_key=True)
-    notification_id: Mapped[int] = mapped_column(
+    notification_id: Mapped[int | None] = mapped_column(
         ForeignKey("notifications.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str | None] = mapped_column(String(10))
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
     )
     channel: Mapped[str] = mapped_column(String(10), server_default="in_app")
     status: Mapped[str] = mapped_column(String(8), server_default="sent")

@@ -2,7 +2,7 @@
 // assign, the site status board and allocation list, material plans, the measurement book, client
 // bill tracking, the labour bill check, the closure scorecard, the supervisor's day on the phone,
 // site visits, negotiations, tender award follow-ups and the team settings.
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadFile } from "../api";
@@ -12,6 +12,7 @@ import { Modal } from "../ui/Overlay";
 import { errorText, inr } from "../format";
 import { S } from "../receipt/strings";
 import type { Key } from "../receipt/strings";
+import { siteItems } from "./siteItems";
 import { Button, buttonClass, Card, Field, FilePicker } from "../ui/components";
 
 const Dashboard = lazy(() => import("../analytics/Dashboard"));
@@ -57,6 +58,7 @@ export type WorkItem = {
   menu: string;
   notification_id?: number;
   lines?: string[];
+  site_id?: number;
 };
 export type MyWorkData = { sections: { role: string; title: string; items: WorkItem[] }[]; counts: Record<string, number>; total: number };
 
@@ -384,6 +386,7 @@ type BoardSite = {
   salesperson: string | null;
   site_engineer: string | null;
   supervisor: string | null;
+  can_move: boolean; // planning, or the site's own engineer
 };
 type Board = { columns: { key: string; label: string }[]; sites: BoardSite[]; missing: BoardSite[] };
 
@@ -396,6 +399,20 @@ export function StatusBoard() {
   useEffect(() => {
     void load();
   }, [load]);
+  // the "Site allocation list" notification links here with ?download=1: the list downloads at once
+  const [params, setParams] = useSearchParams();
+  const fromNotice = params.get("download") === "1";
+  const [listFromNotice] = useState(fromNotice); // its recipients keep the download buttons
+  const downloaded = useRef(false);
+  useEffect(() => {
+    if (!fromNotice || downloaded.current) return;
+    downloaded.current = true;
+    setParams((p) => (p.delete("download"), p), { replace: true });
+    downloadFile("/api/team/allocation-list?format=pdf").then(
+      () => setMsg("The allocation list is downloaded."),
+      (e) => setError(errorText(e)),
+    );
+  }, [fromNotice, setParams]);
   async function move(id: number, column: string) {
     try {
       await api(`/api/team/board/${id}`, { method: "POST", json: { column } });
@@ -417,25 +434,27 @@ export function StatusBoard() {
       <div className="small muted">
         {n(s.progress_percent, 0)}% done · updated {fmt(s.last_update)}
       </div>
-      <Field label={`Move ${s.code}`} bare>
-        <select className="board-move" value={s.column ?? ""} onChange={(e) => void move(s.id, e.target.value)} aria-label={`Move ${s.code}`}>
-          <option value="" disabled>
-            Move to…
-          </option>
-          {b.columns.map((c) => (
-            <option key={c.key} value={c.key}>
-              {c.label}
+      {s.can_move && (
+        <Field label={`Move ${s.code}`} bare>
+          <select className="board-move" value={s.column ?? ""} onChange={(e) => void move(s.id, e.target.value)} aria-label={`Move ${s.code}`}>
+            <option value="" disabled>
+              Move to…
             </option>
-          ))}
-        </select>
-      </Field>
+            {b.columns.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
     </div>
   );
   return (
     <>
       <div className="page-header">
         <h1>Site status board</h1>
-        {can("planning.view") && (
+        {(can("planning.view") || listFromNotice) && (
           <div className="page-actions">
             <Button size="small" onClick={() => void downloadFile("/api/team/allocation-list?format=pdf")}>
               ⤓ Allocation list (PDF)
@@ -521,7 +540,7 @@ export function MaterialPlan() {
         method: "POST",
         json: { lines: Object.entries(qty).map(([product_id, q]) => ({ product_id: Number(product_id), qty: q })), submit: true, node_ids: node ? [Number(node)] : [] },
       });
-      navigate(`/indents/${r.id}`);
+      navigate(`/indents?open=${r.id}`);
     } catch (e) {
       setError(errorText(e));
     }
@@ -1114,7 +1133,7 @@ export function SupervisorDay() {
     void api<{ code: string; name: string }>(`/api/sites/${id}`).then(setSite, () => setSite(null));
   }, [id]);
   const items = useMemo(
-    () => (data?.sections ?? []).flatMap((s) => s.items).filter((i) => i.link.includes(`/${id}`) || i.link.includes(`site=${id}`) || i.source === "delivery"),
+    () => siteItems(data?.sections ?? [], Number(id)), // only this site's items (not site 12's on site 1)
     [data, id],
   );
   const pending = (...sources: string[]) => items.filter((i) => sources.includes(i.source));
@@ -1260,7 +1279,20 @@ export function SiteVisits({ siteId }: { siteId: number }) {
 
 type Neg = { id: number; asked: string; given: string | null; revision: string | null; by: string | null; at: string };
 
-export function NegotiationLog({ quotationId, tenderId, revisions }: { quotationId?: number; tenderId?: number; revisions?: { id: number; label: string }[] }) {
+export function NegotiationLog({
+  quotationId,
+  tenderId,
+  revisions,
+  canLog,
+}: {
+  quotationId?: number;
+  tenderId?: number;
+  revisions?: { id: number; label: string }[];
+  /** may log (the API needs quotation.edit / tender.edit); defaults to holding that permission */
+  canLog?: boolean;
+}) {
+  const { can } = useAuth();
+  const mayLog = canLog ?? can(quotationId ? "quotation.edit" : "tender.edit");
   const [rows, setRows] = useState<Neg[]>([]);
   const [f, setF] = useState({ asked: "", given: "", rev: "" });
   const [error, setError] = useState("");
@@ -1309,6 +1341,7 @@ export function NegotiationLog({ quotationId, tenderId, revisions }: { quotation
           </li>
         ))}
       </ol>
+      {mayLog && (
       <form onSubmit={(e) => void add(e)} className="neg-form">
         <Field label='What the client asked ("match X on this item")' bare>
           <input required value={f.asked} placeholder='What the client asked ("match X on this item")' onChange={(e) => setF({ ...f, asked: e.target.value })} />
@@ -1330,6 +1363,7 @@ export function NegotiationLog({ quotationId, tenderId, revisions }: { quotation
         )}
         <Button type="submit" size="small">Log</Button>
       </form>
+      )}
       {error && <div className="alert alert-error">{error}</div>}
     </div>
   );
@@ -1490,6 +1524,7 @@ export function TeamSettings() {
   const [s, setS] = useState<TeamSettingsT | null>(null);
   const [grants, setGrants] = useState<{ user_id: string; permission: string }[]>([]);
   const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
   useEffect(() => {
     void api<TeamSettingsT>("/api/team/settings").then(setS);
     if (can("grants.manage")) void api<{ user_id: string; permission: string }[]>("/api/team/grants").then(setGrants, () => setGrants([]));
@@ -1499,8 +1534,14 @@ export function TeamSettings() {
   async function toggle(uid: string, code: string) {
     const codes = grants.filter((g) => g.user_id === uid).map((g) => g.permission);
     const next = codes.includes(code) ? codes.filter((c) => c !== code) : [...codes, code];
-    await api(`/api/team/users/${uid}/grants`, { method: "PUT", json: { codes: next } });
-    setGrants([...grants.filter((g) => g.user_id !== uid), ...next.map((c) => ({ user_id: uid, permission: c }))]);
+    try {
+      await api(`/api/team/users/${uid}/grants`, { method: "PUT", json: { codes: next } });
+      setGrants([...grants.filter((g) => g.user_id !== uid), ...next.map((c) => ({ user_id: uid, permission: c }))]);
+      setError("");
+    } catch (e) {
+      setMsg("");
+      setError(errorText(e));
+    }
   }
   return (
     <>
@@ -1508,6 +1549,7 @@ export function TeamSettings() {
         <h1>Team</h1>
       </div>
       {msg && <div className="alert alert-ok">{msg}</div>}
+      {error && <div className="alert alert-error">{error}</div>}
       <Card as="div" className="settings-card">
         <div className="form-grid two">
           <Field label="Monthly RA bills: billing gets the to-do on day">
@@ -1538,8 +1580,8 @@ export function TeamSettings() {
           variant="primary"
           onClick={() =>
             void api<TeamSettingsT>("/api/team/settings", { method: "PUT", json: s }).then(
-              (r) => (setS(r), setMsg("Saved.")),
-              (e) => setMsg(errorText(e)),
+              (r) => (setS(r), setError(""), setMsg("Saved.")),
+              (e) => (setMsg(""), setError(errorText(e))),
             )
           }
         >

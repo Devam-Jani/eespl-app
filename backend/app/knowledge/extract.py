@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
 
+from app.timefmt import ist_today
+
 # (key, label, pattern): the first that matches wins, so the narrow ones come first
 AREA_TYPES: list[tuple[str, str, str]] = [
     ("expansion_joint", "Expansion joint", r"expansion\s*joint|\bEJ\b|construction\s*joint"),
@@ -261,7 +263,7 @@ def find_date(text: str | None) -> date | None:
                     d = date(2000 + int(c), int(b), int(a))
             except ValueError:
                 continue
-            if date(2015, 1, 1) <= d <= date.today():  # 270324 is 27-03-24, not 2027
+            if date(2015, 1, 1) <= d <= ist_today():  # 270324 is 27-03-24, not 2027
                 return d
     return None
 

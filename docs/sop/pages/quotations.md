@@ -29,7 +29,7 @@ quotations they made, are salesperson on, or that belong to their leads.
 **The editor: top of the page**
 - The header shows the code, the revision, the status, the client, project, date, validity, letterhead and salesperson; a won quotation links to its **site**.
 - **Revision** (drop-down): open another revision of the same quotation. Shown when there is more than one.
-- A yellow note "Rates not sent to the lines." appears when the lines' rates differ from the rate working. **Send the rates to the lines** copies the worked rates onto the lines. It is shown to everyone who can edit the quotation, but only roles that see margins (estimator, director) can use it; others get an error.
+- A yellow note "Rates not sent to the lines." appears when the lines' rates differ from the rate working. **Send the rates to the lines** copies the worked rates onto the lines. It is shown only to roles that may edit the quotation and see margins (estimator, director).
 - **Checks before it is sent**: shown only when something is wrong: coverage written outside the material library, or T&C wording that gives free-issue materials away (what it says and what it should read). {perm: estimate.view}
 - **Margin check** / **Hide the margin check**: opens the margin check card (see below). {perm: tender.margin}
 - **⤓ Word**, **⤓ PDF**: download the quotation as it is now.
@@ -38,7 +38,7 @@ quotations they made, are salesperson on, or that belong to their leads.
 - **Mark sent**: on the latest revision, in draft or negotiation. See **Sending** below. {perm: quotation.send}
 - **Negotiation**: a sent quotation goes into negotiation (the client is bargaining). {perm: quotation.edit}
 - **Won** / **Lost**: on the latest revision in draft, sent or negotiation. They open the **won** and **lost** dialogs. {perm: quotation.send}
-- **New revision**: copies this revision into the next one (R1, R2 ...) and opens it. A sent quotation moves to negotiation. Not shown on a won quotation. It needs the right to edit quotations; without it the app says "You cannot change this quotation".
+- **New revision**: copies this revision into the next one (R1, R2 ...) and opens it. A sent quotation moves to negotiation. Not shown on a won quotation, nor to roles that may not edit this quotation.
 - **Rate working**: opens /quotations/:id/working (see below).
 - **Changes from R(n)**: shows what changed from the revision before: each line's old and new rate and the % change, quantities, text changes, lines and areas added or removed, and the totals.
 - **Quantities from a survey**: opens **Quantities from a site survey**. {perm: quotation.edit}
@@ -59,7 +59,7 @@ quotations they made, are salesperson on, or that belong to their leads.
 - **Terms & conditions (n)**: each clause with its **Category**, **↑** / **↓**, **Remove**; **+ From the T&C library** adds library clauses; **Save terms** saves them for this quotation. Lines starting with "- " print as a), b), c). {perm: quotation.edit}
 - **References (n)**: **Title**, **State (e.g. Gujarat)**, **Area type**, **Load from the library** (fills past clients of that state and area type), a tick per client to include it, **↑** / **↓**, **Save references**. {perm: quotation.edit}
 - **Follow-ups & files**: the **Negotiation log**, the **Follow-ups** and the **Issued files** (each with a download button).
-- **Negotiation log**: **What the client asked ("match X on this item")**, **What we gave**, **Revision that followed**, **Log**. Logging tells the estimator and the salesperson "the client asked ... Revise the offer." If no new revision follows in 2 days, the director is told. The form shows to everyone who opens the quotation, but only roles that edit quotations can log; others get "Missing permission".
+- **Negotiation log**: **What the client asked ("match X on this item")**, **What we gave**, **Revision that followed**, **Log**. Logging tells the estimator and the salesperson "the client asked ... Revise the offer." If no new revision follows in 2 days, the director is told. Everyone who opens the quotation sees the log; the form shows only to roles that may edit the quotation.
 - **Follow-ups**: made when the quotation is sent, on day 2, 7, 15 and 30. **Done** asks "What did the client say? (optional)" and closes the follow-up; its note goes on the lead's timeline. An overdue follow-up shows red.
 
 **Sending (Mark sent)** {perm: quotation.send}
@@ -93,7 +93,7 @@ quotations they made, are salesperson on, or that belong to their leads.
 - **Margin for this working:** **on the selling price** or **on cost**. {perm: tender.margin}
 - Per main item: **Main item**, **System**, **Application**, **Surface**, **Client asks: min kg/sqm · DFT mm**, **Wastage %**, **Coats**, **Surface preparation (₹/sqm)**, **Labour rate card (what we pay)**, **Labour in the rate (₹/sq ft)**, **Labour paid (₹/sq ft)**, **Margin %**, and the products with **Consumption**, **Reason (when changed)**, **Price**, **Freight used**, **Freight actual**. **Work the rate** saves and shows the **Build-up per sqm**, the **Cushions (visible, not hidden)**, **Against what we sold at before** and **Against the rate library**. {perm: tender.margin}
 - **Rates to the lines**: copies the worked rates onto the quotation lines ("n client line(s) priced from the working"). Lines in another unit are left for you. {perm: tender.margin}
-- **Mark final: add to the library**: adds the working to the BOQ knowledge as new evidence ("Added to the library: n main item(s)."). It also needs the knowledge edit right; without it the app says "Missing permission: knowledge.edit". {perm: tender.margin}
+- **Mark final: add to the library**: adds the working to the BOQ knowledge as new evidence ("Added to the library: n main item(s)."). Shown only with the knowledge edit right too. {perm: tender.margin, knowledge.edit}
 - **Working sheet (Excel)**: downloads the internal working. {perm: tender.margin}
 
 **Rules**
@@ -122,4 +122,4 @@ quotations they made, are salesperson on, or that belong to their leads.
 - "... say why the consumption differs from ... for this site": write a reason of at least 3 characters next to the changed consumption.
 - "R... was submitted: its working is kept as it was; work on the new revision".
 - "You cannot see surveys": your role has no access to surveys; ask the site engineer for the quantities.
-- A follow-up's **Done** shows no message if it fails; reload the page and check the follow-up's status.
+- A follow-up's **Done** that fails shows the reason above the follow-ups (for example "This follow-up is already closed").

@@ -129,7 +129,7 @@ You open these less often, or only through a link from another page.
 
 ## Common mistakes
 
-- An override or a release without a full reason is refused, or does nothing (see the bugs list). Write a full reason.
+- An override or a release with too short a reason shows "The reason is too short" (or "The note is too short"). Write a full reason.
 - The tiles show the period picked at the top: change it before you compare.
 
 ## Quick card

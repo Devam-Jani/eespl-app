@@ -12,7 +12,6 @@ questions); the internal copy adds the compliance summary and the pre-bid query 
 
 import io
 import re
-from datetime import date
 from html import escape
 
 from docx import Document
@@ -38,6 +37,7 @@ from app.quotations import docx_out, html_out
 from app.quotations.models import Letterhead
 from app.quotations.render import Doc, _media
 from app.tenders.models import Tender
+from app.timefmt import ist_today
 
 STATUS_LABEL = {"green": "Complies", "red": "Gap", "confirm": "To confirm"}
 
@@ -76,7 +76,7 @@ def base_doc(db: Session, m: Methodology) -> Doc:
         footer_text=(head.footer_text if head else "") or "",
         primary=head.primary_color if head else "#0F6E5A",
         accent=head.accent_color if head else "#E69F00",
-        opening=[f"Date: {date.today():%d.%m.%Y}", f"To: {client}", f"Project: {project}"],
+        opening=[f"Date: {ist_today():%d.%m.%Y}", f"To: {client}", f"Project: {project}"],
         subject=f"SUB: TECHNICAL SPECIFICATION & METHODOLOGY FOR WATERPROOFING WORKS — {project.upper()}",
         body=[
             "Dear Sir,",

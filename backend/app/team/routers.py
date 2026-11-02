@@ -34,7 +34,7 @@ from app.team.models import (
     UserGrant,
     board_label,
 )
-from app.timefmt import label
+from app.timefmt import ist_today, label
 
 router = APIRouter(prefix="/api/team", tags=["team"])
 
@@ -517,6 +517,18 @@ def board(db: DbSession, principal: CurrentPrincipal, scope: BoardView) -> dict:
         else _scope_sites(db, principal.permissions.get("site.view", "own"), principal)
     )
     rows = team.board_rows(db, allowed)
+    # who may move a card (the same check as move below): planning, or the site's own engineer
+    upd = principal.permissions.get("site.update")
+    if "planning.edit" in principal.permissions or upd == "all":
+        movable = None
+    elif upd == "assigned":
+        movable = set(material.site_ids(db, principal))
+    elif upd == "own":
+        movable = set(db.scalars(select(Site.id).where(Site.created_by == principal.user.id)))
+    else:
+        movable = set()
+    for r in rows:
+        r["can_move"] = movable is None or r["id"] in movable
     return jsonable_encoder(
         {
             "columns": [{"key": c, "label": board_label(c)} for c in BOARD_COLUMNS],
@@ -602,9 +614,14 @@ ALLOC_HEADS = [
 @router.get("/allocation-list")
 def allocation_list(
     db: DbSession,
-    _: Annotated[str, Depends(require_permission("planning.view"))],
+    principal: CurrentPrincipal,
     format: str = "pdf",
 ):
+    # planning, and the people the list is sent to (their notification downloads it)
+    if "planning.view" not in principal.permissions and principal.user.id not in (
+        team.settings(db).allocation_recipients or []
+    ):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Missing permission: planning.view")
     rows = _allocation_rows(db)
     if format == "xlsx":
         from app.sitecontrol.routers import _book  # noqa: PLC0415
@@ -630,7 +647,7 @@ th {{ background: #e8f0ee; }}
 <p>As of {label(team.now())}</p>
 <table><thead><tr>{"".join(f"<th>{h}</th>" for h in ALLOC_HEADS)}</tr></thead><tbody>{body}</tbody></table></body></html>"""
     return pdf_response(
-        HTML(string=html).write_pdf(), f"site-allocation-list-{date.today():%Y%m%d}"
+        HTML(string=html).write_pdf(), f"site-allocation-list-{ist_today():%Y%m%d}"
     )
 
 

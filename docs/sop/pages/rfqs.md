@@ -22,7 +22,7 @@ status. An RFQ is started from the Indents page (Indents › pick › Create RFQ
 - Radio button in a cell (shown once that quote is saved): picks that vendor for the line. It is saved at once. The lowest landed rate is picked unless you pick another. {perm: po.edit}
 - Picking a vendor that is not the lowest asks "This is not the lowest landed rate. Why this vendor?". Without a reason nothing is picked. The reason shows under the item as "Picked over the lowest: <reason>". {perm: po.edit}
 - **Deliver to**: **Deliver to: the indent's store**, or one store from the list. {perm: po.edit}
-- **Make PO(s) from the picks**: makes one draft PO per picked vendor and closes the RFQ. With one PO it opens that PO; with more it opens the PO list. {perm: po.edit}
+- **Make PO(s) from the picks**: makes one draft PO per picked vendor and closes the RFQ (and the "Indent approved, place the PO" task of its indents). With one PO it opens that PO; with more it opens the PO list. {perm: po.edit}
 - Once closed, the grid is read-only and shows **picked** on the chosen vendor.
 
 **Rules**

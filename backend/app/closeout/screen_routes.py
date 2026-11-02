@@ -35,6 +35,7 @@ from app.closeout.routes import (
 from app.db import DbSession
 from app.execution.common import save_upload
 from app.sites.models import AreaScope, Site, SiteNode, Task
+from app.timefmt import ist_today
 
 router = APIRouter(prefix="/api/closeout", tags=["close-out screens"])
 ClaimApprove = Annotated[str, Depends(require_permission("closeout.claim_approve"))]
@@ -138,7 +139,7 @@ def quality_sign(task_id: int, body: QualitySignIn, request: Request, db: DbSess
         raise locked(f"Stage {t.name} (signed by the client)")
     if i is None or i.inspected_by is not None and i.result == "fail":
         tpl = _sign_template(db, t)
-        i = Inspection(code=material.next_code(db, "INS"), site_id=t.site_id, node_id=t.node_id, task_id=t.id, template_id=tpl.id, on_date=body.ended_on or date.today(),
+        i = Inspection(code=material.next_code(db, "INS"), site_id=t.site_id, node_id=t.node_id, task_id=t.id, template_id=tpl.id, on_date=body.ended_on or ist_today(),
                        answers=[{"item_id": it.id, "text": it.text, "type": it.type, "required": it.required, "value": "pass" if it.type == "pass_fail" else None} for it in tpl.items],
                        result="pass", remark=body.remark, created_by=principal.user.id, photos=[])  # fmt: skip
         db.add(i)
@@ -281,7 +282,7 @@ def bill_story(rid: int, db: DbSession, principal: CurrentPrincipal, scope: Bill
     )
 
     b = _bill(db, rid, scope, principal)
-    row = bsvc.bill_out(db, b, date.today())
+    row = bsvc.bill_out(db, b, ist_today())
     site = db.get(Site, b.site_id)
     row["site"] = f"{site.code} {site.name}" if site else None
     row["cycle"] = cycle_out(bsvc.cycle_for(db, site)) if site else None

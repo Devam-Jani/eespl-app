@@ -61,4 +61,4 @@ routes: /knowledge, /knowledge/templates/:id, /knowledge/match/tender/:id
 - "Pick the product it is": the merge needs a product.
 - "No access to tenders": your role cannot see tenders, so it cannot open a tender's match.
 - "Line not found" or "Not found": the line was removed. Reload.
-- **Merge this into it** shows no message when it fails: if the page does not move to the other template, reload and try **Merge into** with its number instead.
+- **Merge this into it** that fails shows the reason under the near-duplicates (for example "Template not found": reload the page).

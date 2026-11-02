@@ -12,9 +12,10 @@ from urllib.parse import quote
 
 from cryptography.fernet import Fernet, InvalidToken
 
+from app import branding
 from app.config import settings
 
-ISSUER = "EESPL App"
+ISSUER = branding.PRODUCT_NAME
 STEP = 30
 
 

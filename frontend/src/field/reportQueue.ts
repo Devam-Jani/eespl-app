@@ -48,23 +48,33 @@ export function isOffline(e: unknown): boolean {
   return (e instanceof ApiError && e.status === 0) || (typeof navigator !== "undefined" && navigator.onLine === false);
 }
 
-type Dpr = { lines: (QueuedLine & { id?: number })[]; status: string };
+type Dpr = { lines: (QueuedLine & { id?: number })[]; status: string; work_done?: string | null };
 
-/** Sends one report: today's lines with this one added (or replacing the same place's line), then
- * its photos. */
-export async function sendReport(r: QueuedReport): Promise<void> {
-  const base = `/api/execution/sites/${r.site_id}/dprs/${r.day}`;
-  const now = await api<Dpr>(base);
+/** What the phone PUTs: only the lines (the weather, work done, hindrances and plan typed on the
+ * site's DPR tab are not sent, so they stay); on the last place, the work done is written from the
+ * day's lines when nobody typed one (the server needs it to submit). */
+export function reportBody(now: Dpr, r: QueuedReport): { lines: QueuedLine[]; work_done?: string } {
   const keep = (now.lines ?? [])
     .filter((l) => !(r.line.node_id !== null && l.node_id === r.line.node_id && l.area_scope_id === r.line.area_scope_id))
     .map(({ description, qty, unit, node_id, area_scope_id }) => ({ description, qty, unit, node_id, area_scope_id }));
-  await api(base, { method: "PUT", json: { lines: [...keep, r.line], submit: r.submit } });
+  const lines = [...keep, r.line];
+  return r.submit && !(now.work_done ?? "").trim() ? { lines, work_done: lines.map((l) => l.description).join("\n") } : { lines };
+}
+
+/** Sends one report: today's lines with this one added (or replacing the same place's line), then
+ * its photos; the last place of the day then submits the DPR (after the photos: a submitted DPR
+ * takes no more photos). */
+export async function sendReport(r: QueuedReport): Promise<void> {
+  const base = `/api/execution/sites/${r.site_id}/dprs/${r.day}`;
+  const now = await api<Dpr>(base);
+  await api(base, { method: "PUT", json: { ...reportBody(now, r), submit: false } });
   for (const p of r.photos) {
     const form = new FormData();
     form.append("file", p, "site-photo.jpg");
     form.append("caption", r.line.description.slice(0, 300));
     await api(`${base}/photos`, { method: "POST", form });
   }
+  if (r.submit) await api(base, { method: "PUT", json: { submit: true } });
 }
 
 /** Send now, or keep it on the phone when there is no signal. */
@@ -79,9 +89,35 @@ export async function sendOrKeep(r: QueuedReport, store: ReportStore = browserSt
   }
 }
 
-/** Everything kept, oldest first; stops at the first lost connection. Returns how many went. */
+/** The reports the server refused, with the reason, for the person to see (they are not retried
+ * on their own: "Try again" or "Discard" on the report screen). */
+export async function refused(store: ReportStore = browserStore): Promise<QueuedReport[]> {
+  return (await store.all()).filter((r) => !!r.error);
+}
+
+/** "Try again" on a refused report: sent and removed, kept on a lost connection, or kept with the
+ * new reason. */
+export async function retry(r: QueuedReport, store: ReportStore = browserStore, send = sendReport): Promise<"sent" | "kept" | "refused"> {
+  try {
+    await send(r);
+    await store.remove(r.id);
+    return "sent";
+  } catch (e) {
+    if (isOffline(e)) return "kept";
+    await store.put({ ...r, error: e instanceof Error ? e.message : String(e) });
+    return "refused";
+  }
+}
+
+/** "Discard": the person drops a refused report (it is never dropped without them). */
+export function discard(id: string, store: ReportStore = browserStore): Promise<void> {
+  return store.remove(id);
+}
+
+/** Everything kept, oldest first; stops at the first lost connection. Returns how many went. A
+ * refused report waits for the person (see `refused`), so it is not retried for ever. */
 export async function flush(store: ReportStore = browserStore, send = sendReport): Promise<{ sent: number; left: number }> {
-  const rows = await store.all();
+  const rows = (await store.all()).filter((r) => !r.error);
   let sent = 0;
   for (const r of rows) {
     try {
@@ -93,6 +129,6 @@ export async function flush(store: ReportStore = browserStore, send = sendReport
       await store.put({ ...r, error: e instanceof Error ? e.message : String(e) }); // refused: kept with the reason
     }
   }
-  const left = (await store.all()).length;
+  const left = (await store.all()).filter((r) => !r.error).length; // waiting for the signal (refused ones are shown apart)
   return { sent, left };
 }

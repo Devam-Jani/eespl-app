@@ -8,7 +8,7 @@ My day records your working day for attendance and travel: you start the day whe
 check in at each site, vendor, godown or client office with your location (and a selfie at a site),
 and end the day at home. The road km between your stops make your monthly travel claim. It is made
 for the phone. The location is recorded only between **Start day** and **End day**, and only after
-you give your consent.
+you give your consent. On a phone, site roles open it from the **My day** tab at the bottom.
 
 **Before the first day**
 - "You are not set up for field tracking. The office admin sets who is tracked (Settings › Field
@@ -73,7 +73,9 @@ you give your consent.
 - **Stops**: each stop with times, minutes, the distance and reason when outside, and the selfie.
 - **Km for the claim** (only for the person's manager, the director and the office admin, after the
   day ended): **Reason** (field), **Use road km** or **Use tracked km**. Tracked km needs a reason
-  (for example a detour the stops do not show).
+  (for example a detour the stops do not show). Once the month's travel claim is approved by the
+  manager, or the manager changed that day on the claim, the buttons are gone and a line says why:
+  change the km on the claim instead.
 
 **Rules**
 - Nothing is recorded before **Start day**, after **End day**, on a day off, or without consent.

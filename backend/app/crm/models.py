@@ -99,7 +99,7 @@ class Lead(Tracked, Base):
     kylas_converted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     kylas_deal_id: Mapped[int | None] = mapped_column(BigInteger)
     kylas_won_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    lost_reason: Mapped[str | None] = mapped_column(String(12))
+    lost_reason: Mapped[str | None] = mapped_column(String(20))
     lost_to: Mapped[str | None] = mapped_column(String(200))  # the competitor, if known
     lost_note: Mapped[str | None] = mapped_column(Text)
     # invented analytics demo data (python -m app.cli seed-demo-analytics); never real
