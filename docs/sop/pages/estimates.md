@@ -28,7 +28,16 @@ cover.
   sheet against the drawing (with the difference), the coverages in the sheet against the library,
   and figures typed as text that no total adds. Nothing is saved or changed.
 - **Issue**: issues the estimate (status issued) at once, with no question asked. Its areas and lines
-  can then no longer be changed. {perm: estimate.edit}
+  can then no longer be changed, and its quantities, coverages, wastage and packs are kept as they are
+  that day: later changes in the Material library do not touch them, on the page, in Excel and PDF, or
+  in what is left for the site's requests. {perm: estimate.edit}
+- **Library changed since issue** (yellow box on an issued estimate): the library would now give other
+  figures. Each material is listed, as issued and as the library has it now. The estimate does not
+  change by itself.
+- **Revise** (on an issued estimate): makes the next version as a draft, with the same areas and
+  materials, on today's library, and opens it (its code ends in -V2, -V3...). The old version stays
+  read-only and stays in force until the new one is issued. What the site has already asked for still
+  counts against the new version. {perm: estimate.edit}
 - The red or yellow box at the top lists the warnings: measured areas not in the estimate, and
   materials with no coverage in the library ("the estimate is not complete").
 - **Measured areas not in the estimate** (card, only when there are some): each missed area with its
@@ -76,7 +85,8 @@ cover.
 - Every measured area must be in the estimate or excluded with a reason (at least 3 characters).
   The estimate cannot be issued while one is missed.
 - An estimate with no material line cannot be issued.
-- Only a draft can be changed. Once issued, no one can change its areas or lines: make a new estimate.
+- Only a draft can be changed. Once issued, no one can change its areas or lines: press **Revise**.
+- Each version has one next version: **Revise** shows only on the latest.
   The quantities still follow the material library, so a coverage or wastage changed later changes
   them.
 - A material with no coverage in the library shows "No coverage in the library for <material>: the
@@ -105,7 +115,8 @@ cover.
 - "Put these measured areas in the estimate or exclude them with a reason first: ...": press **Add to
   the estimate** or **Exclude…** on each area listed, then **Issue** again.
 - "Add the materials first": add at least one material line before issuing.
-- "<code> is issued: make a new one to change it": the estimate is frozen; make a new estimate.
+- "<code> is issued: press Revise to make the next version": the estimate is frozen; press **Revise**.
+- "<code> has a next version already: <code>": open that version instead.
 - "Say why the area is left out": write the reason before pressing **Exclude**.
 - "That area is not measured on this site, or is in the estimate already": the page was out of date;
   reload it.

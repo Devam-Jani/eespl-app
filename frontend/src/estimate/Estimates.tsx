@@ -77,7 +77,20 @@ type Estimate = {
   missed: Missed[];
   warnings: string[];
   can_edit: boolean;
+  version: number;
+  replaces: { id: number; code: string } | null;
+  next_version: { id: number; code: string; status: string } | null;
+  library_changes: LibraryChange[];
+  can_revise: boolean;
 };
+
+export type LibraryChange = { product: string; unit: string; issued_qty: string | null; library_qty: string | null; issued_packs: string | null; library_packs: string | null; issued_coverage: string | null; library_coverage: string | null };
+
+/** "12.5 kg" for one side of a change; a material the library no longer covers says so. */
+export function changeSide(qty: string | null, unit: string, packs: string | null): string {
+  if (qty === null) return "not in the library";
+  return `${num(qty)} ${unit}${packs ? ` (${packs})` : ""}`;
+}
 
 type Balance = { product_id: number; product: string; unit: string; qty: string; complete: boolean; packs: string | null; requested: string; sent: string; returned: string; stock: string; used: string; left: string };
 
@@ -209,6 +222,7 @@ function NewEstimate({ onClose, onMade }: { onClose: () => void; onMade: (e: Est
 
 export function EstimatePage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [est, setEst] = useState<Estimate | null>(null);
   const [balance, setBalance] = useState<Balance[] | null>(null);
   const [error, setError] = useState("");
@@ -259,6 +273,20 @@ export function EstimatePage() {
     }
   };
 
+  /** the next version as a draft, opened; this one stays as issued */
+  const revise = async () => {
+    setBusy("revise");
+    setError("");
+    try {
+      const next = await api<Estimate>(`${E}/estimates/${id}/revise`, { method: "POST" });
+      navigate(`/estimates/${next.id}`);
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy("");
+    }
+  };
+
   if (!est) return error ? <div className="alert alert-error">{error}</div> : <PageSkeleton label="Loading the estimate" />;
   const edit = est.can_edit;
   const byId = new Map(est.areas.map((a) => [a.id, a]));
@@ -292,7 +320,13 @@ export function EstimatePage() {
             ) : (
               "No site"
             )}{" "}
-            · upturn {num(est.upturn_mm)} mm · <span className={`badge ${STATUS_BADGE[est.status] ?? "badge-muted"}`}>{est.status}</span>
+            · upturn {num(est.upturn_mm)} mm · <span className={`badge ${STATUS_BADGE[est.status] ?? "badge-muted"}`}>{est.status}</span> · version {est.version}
+            {est.replaces && (
+              <>
+                {" "}
+                · replaces <Link to={`/estimates/${est.replaces.id}`}>{est.replaces.code}</Link>
+              </>
+            )}
           </p>
         </div>
         <div className="page-actions">
@@ -314,9 +348,32 @@ export function EstimatePage() {
               Issue
             </Button>
           )}
+          {est.can_revise && (
+            <Button variant={est.library_changes.length ? "primary" : "secondary"} loading={busy === "revise"} onClick={() => void revise()} title="A new draft version with these areas and materials, on today's library. This version stays as it is.">
+              Revise
+            </Button>
+          )}
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
+      {est.next_version && (
+        <div className="alert alert-warn" role="status">
+          Read-only: <Link to={`/estimates/${est.next_version.id}`}>{est.next_version.code}</Link> is the next version ({est.next_version.status}).
+          {est.next_version.status === "draft" ? " This version stays in force until that one is issued." : ""}
+        </div>
+      )}
+      {est.library_changes.length > 0 && (
+        <div className="alert alert-warn" role="status">
+          <b>Library changed since issue.</b> This estimate keeps its figures as issued; press Revise to make a version on today's library.
+          <ul>
+            {est.library_changes.map((c) => (
+              <li key={c.product}>
+                {c.product}: issued {changeSide(c.issued_qty, c.unit, c.issued_packs)}, library now {changeSide(c.library_qty, c.unit, c.library_packs)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {est.warnings.length > 0 && (
         <div className={`alert ${est.missed.length ? "alert-error" : "alert-warn"}`} role="alert">
           {est.warnings.map((w, i) => (

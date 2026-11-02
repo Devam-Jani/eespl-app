@@ -79,9 +79,9 @@ def left(db: Session, est: Estimate, product_id: int, area: EstimateArea | None,
     if not found:
         return None
     q = select(func.coalesce(func.sum(func.coalesce(MaterialRequest.approved_qty, MaterialRequest.qty)), 0)).where(
-        MaterialRequest.estimate_id == est.id, MaterialRequest.product_id == product_id, MaterialRequest.status != "rejected")
-    if area is not None:
-        q = q.where(MaterialRequest.estimate_area_id == area.id)
+        MaterialRequest.estimate_id.in_(est_svc.versions_back(db, est)), MaterialRequest.product_id == product_id, MaterialRequest.status != "rejected")
+    if area is not None:  # with what was asked on this area in the versions before
+        q = q.where(MaterialRequest.estimate_area_id.in_(est_svc.area_back(db, area)))
     if exclude_id is not None:
         q = q.where(MaterialRequest.id != exclude_id)
     return planned - D(db.scalar(q) or 0)

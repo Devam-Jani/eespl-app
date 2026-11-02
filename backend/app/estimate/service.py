@@ -248,15 +248,151 @@ def lines_of(db: Session, est: Estimate) -> list[EstimateLine]:
     return list(db.scalars(select(EstimateLine).where(EstimateLine.estimate_id == est.id).order_by(EstimateLine.sort_order, EstimateLine.id)))
 
 
-def worked(db: Session, est: Estimate) -> list[LineOut]:
+def live_worked(db: Session, est: Estimate) -> list[LineOut]:
+    """The lines worked out from today's library."""
     areas = areas_of(db, est)
     return [work_line(db, est, ln, areas) for ln in lines_of(db, est)]
 
 
-def summary(db: Session, est: Estimate) -> list[dict]:
-    """Per material: the total of its lines, its packs (rounded up once, on the total)."""
-    by: dict[int, dict] = {}
+def worked(db: Session, est: Estimate) -> list[LineOut]:
+    """The figures of this estimate: as issued once it is issued, else from today's library."""
+    return _thaw(db, est) if est.snapshot else live_worked(db, est)
+
+
+# --- issued figures stay as issued --------------------------------------------------------------
+
+
+@dataclass
+class FrozenProduct:
+    """A material as it was named when the estimate was issued (what the lines need of a Product)."""
+
+    id: int
+    name: str
+    unit: str
+
+
+def _txt(v) -> str | None:
+    return None if v is None else str(v)
+
+
+def _dec(v) -> Decimal | None:
+    return None if v is None else D(v)
+
+
+def freeze(db: Session, est: Estimate) -> dict:
+    """Every figure the library gave this estimate, at full precision, for Issue to keep."""
+    lines = []
+    for lo in live_worked(db, est):
+        lines.append({"line_id": lo.line.id, "product_id": lo.product.id, "product": lo.product.name, "unit": lo.product.unit, "system": lo.system, "wastage": _txt(lo.wastage), "qty": _txt(lo.qty),
+                      "cov": {"per_sqm": _txt(lo.cov.per_sqm), "shown": lo.cov.shown, "coverage_id": lo.cov.coverage_id, "mix": lo.cov.mix} if lo.cov else None,
+                      "packs": {"count": lo.packs.count, "size": _txt(lo.packs.size), "unit": lo.packs.unit, "text": lo.packs.text} if lo.packs else None,
+                      "rows": [{"area_id": r.area_id, "code": r.code, "name": r.name, "measure_area_id": r.measure_area_id, "floor_sqm": _txt(r.floor_sqm), "upturn_sqm": _txt(r.upturn_sqm),
+                                "base_sqm": _txt(r.base_sqm), "qty": _txt(r.qty), "formula": r.formula} for r in lo.rows]})  # fmt: skip
+    return {"lines": lines, "summary": [{**row, "qty": _txt(row["qty"])} for row in _live_summary(db, est)]}
+
+
+def _thaw(db: Session, est: Estimate) -> list[LineOut]:
+    by_id = {ln.id: ln for ln in lines_of(db, est)}
+    out = []
+    for s in est.snapshot["lines"]:
+        c, p = s["cov"], s["packs"]
+        out.append(LineOut(by_id[s["line_id"]], FrozenProduct(s["product_id"], s["product"], s["unit"]), s["system"],
+                           Cov(D(c["per_sqm"]), c["shown"], c["coverage_id"], c["mix"]) if c else None, D(s["wastage"]),
+                           [Row(r["area_id"], r["code"], r["name"], r["measure_area_id"], D(r["floor_sqm"]), D(r["upturn_sqm"]), D(r["base_sqm"]), _dec(r["qty"]), r["formula"]) for r in s["rows"]],
+                           _dec(s["qty"]), lib.Packs(p["count"], D(p["size"]), p["unit"], p["text"]) if p else None))  # fmt: skip
+    return out
+
+
+def next_version(db: Session, est: Estimate) -> Estimate | None:
+    return db.scalar(select(Estimate).where(Estimate.revises_id == est.id))
+
+
+def library_changes(db: Session, est: Estimate) -> list[dict]:
+    """Where today's library would give an issued estimate other figures: each line, as issued and now."""
+    if not est.snapshot:
+        return []
+    now = {lo.line.id: lo for lo in live_worked(db, est)}
+    out = []
     for lo in worked(db, est):
+        cur = now.get(lo.line.id)
+        if cur is None:
+            continue
+        was_cov, now_cov = lo.cov.per_sqm if lo.cov else None, cur.cov.per_sqm if cur.cov else None
+        was_pack, now_pack = lo.packs.text if lo.packs else None, cur.packs.text if cur.packs else None
+        if (was_cov, lo.wastage, lo.qty, was_pack) == (now_cov, cur.wastage, cur.qty, now_pack):
+            continue
+        out.append({"product": lo.product.name, "unit": lo.product.unit, "issued_qty": lo.qty, "library_qty": cur.qty, "issued_packs": was_pack, "library_packs": now_pack,
+                    "issued_coverage": lo.cov.shown if lo.cov else None, "library_coverage": cur.cov.shown if cur.cov else None})  # fmt: skip
+    return out
+
+
+def versions_back(db: Session, est: Estimate) -> list[int]:
+    """This estimate's id and those of the versions before it."""
+    ids = [est.id]
+    cur = est
+    while cur.revises_id is not None and cur.revises_id not in ids:
+        cur = db.get(Estimate, cur.revises_id)
+        if cur is None:
+            break
+        ids.append(cur.id)
+    return ids
+
+
+def area_back(db: Session, area: EstimateArea) -> list[int]:
+    """This area's id and the same area's in the versions before."""
+    ids = [area.id]
+    cur = area
+    while cur.copied_from_id is not None and cur.copied_from_id not in ids:
+        cur = db.get(EstimateArea, cur.copied_from_id)
+        if cur is None:
+            break
+        ids.append(cur.id)
+    return ids
+
+
+def revise(db: Session, est: Estimate, user_id) -> Estimate:
+    """The next version: a draft with this one's areas and lines, on today's library. This version
+    stays as issued; it goes on being the site's estimate until the new one is issued."""
+    if est.status != "issued":
+        raise Refused(f"{est.code} is still a draft: change it directly")
+    later = next_version(db, est)
+    if later is not None:
+        raise Refused(f"{est.code} has a next version already: {later.code}")
+    version = est.version + 1
+    new = Estimate(code=f"{est.code.split('-V')[0]}-V{version}", site_id=est.site_id, tender_id=est.tender_id, title=est.title, upturn_mm=est.upturn_mm, note=est.note,
+                   is_demo=est.is_demo, version=version, revises_id=est.id, created_by=user_id)  # fmt: skip
+    db.add(new)
+    db.flush()
+    skip = {"id", "estimate_id", "parent_id", "copied_from_id"}
+    made: dict[int, EstimateArea] = {}
+    olds = areas_of(db, est)
+    for a in olds:
+        fields = {c.key: getattr(a, c.key) for c in EstimateArea.__mapper__.column_attrs if c.key not in skip}
+        made[a.id] = EstimateArea(estimate_id=new.id, copied_from_id=a.id, **fields)
+        db.add(made[a.id])
+    db.flush()
+    for a in olds:
+        if a.parent_id:
+            made[a.id].parent_id = made[a.parent_id].id
+    for ln in lines_of(db, est):
+        fields = {c.key: getattr(ln, c.key) for c in EstimateLine.__mapper__.column_attrs if c.key not in {"id", "estimate_id", "area_ids"}}
+        ids = [made[i].id for i in ln.area_ids if i in made] if ln.area_ids else ln.area_ids
+        db.add(EstimateLine(estimate_id=new.id, area_ids=ids, **fields))
+    db.flush()
+    return new
+
+
+def summary(db: Session, est: Estimate) -> list[dict]:
+    """Per material: the total of its lines, its packs (rounded up once, on the total); as issued
+    once the estimate is issued."""
+    if est.snapshot:
+        return [{**row, "qty": D(row["qty"])} for row in est.snapshot["summary"]]
+    return _live_summary(db, est)
+
+
+def _live_summary(db: Session, est: Estimate) -> list[dict]:
+    by: dict[int, dict] = {}
+    for lo in live_worked(db, est):
         row = by.setdefault(lo.product.id, {"product_id": lo.product.id, "product": lo.product.name, "unit": lo.product.unit, "qty": ZERO, "complete": True})
         if lo.qty is None:
             row["complete"] = False
@@ -295,7 +431,7 @@ def balance(db: Session, est: Estimate) -> list[dict]:
     out = []
     for row in summary(db, est):
         asked = D(db.scalar(select(func.coalesce(func.sum(func.coalesce(MaterialRequest.approved_qty, MaterialRequest.qty)), 0)).where(
-            MaterialRequest.estimate_id == est.id, MaterialRequest.product_id == row["product_id"], MaterialRequest.status != "rejected")) or 0)  # fmt: skip
+            MaterialRequest.estimate_id.in_(versions_back(db, est)), MaterialRequest.product_id == row["product_id"], MaterialRequest.status != "rejected")) or 0)  # fmt: skip
         u = usage(db, est.site_id, row["product_id"]) if est.site_id else {"sent": ZERO, "returned": ZERO, "stock": ZERO, "used": ZERO}
         out.append({**row, "requested": asked, "sent": u["sent"], "returned": u["returned"], "stock": u["stock"], "used": u["used"], "left": row["qty"] - u["used"]})
     return out

@@ -124,6 +124,11 @@ class Estimate(Tracked, Base):
     issued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     issued_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     is_demo: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    # the figures as issued (service.freeze): an issued estimate reads these, never the live library
+    snapshot: Mapped[dict | None] = mapped_column(JSONB)
+    version: Mapped[int] = mapped_column(Integer, server_default="1")
+    # the version this one replaces: one next version each, the old one stays as it was
+    revises_id: Mapped[int | None] = mapped_column(ForeignKey("estimates.id", ondelete="SET NULL"), unique=True)
 
 
 class EstimateArea(Base):
@@ -142,6 +147,8 @@ class EstimateArea(Base):
     measure_area_id: Mapped[int | None] = mapped_column(ForeignKey("measure_areas.id", ondelete="SET NULL"))
     cad_area_id: Mapped[int | None] = mapped_column(ForeignKey("cad_areas.id", ondelete="SET NULL"))
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("estimate_areas.id", ondelete="CASCADE"))
+    # the same area in the version before: what the site asked for on it still counts here
+    copied_from_id: Mapped[int | None] = mapped_column(ForeignKey("estimate_areas.id", ondelete="SET NULL"))
     sort_order: Mapped[int] = mapped_column(Integer, server_default="0")
     code: Mapped[str | None] = mapped_column(String(20))
     name: Mapped[str] = mapped_column(String(200))
