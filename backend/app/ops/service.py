@@ -8,6 +8,7 @@ OSRM. A night without a backup tells the director and the office admin (in the a
 staff when EMAIL_ENABLED is set)."""
 
 import os
+import time
 import urllib.request
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -47,14 +48,26 @@ def heartbeat(db: Session) -> None:
 # --- health -------------------------------------------------------------------------------------
 
 
+# the last OSRM answer and when: a route takes about 1.3 s on the test server's small OSRM, and
+# Administration > Backups and /health/full asked for one on every load (an answer kept 60 s; a
+# failure only 10 s, so an outage still shows within seconds)
+_OSRM_SEEN: dict[str, Any] = {"at": 0.0, "result": None}
+OSRM_KEEP_OK, OSRM_KEEP_ERROR = 60.0, 10.0
+
+
 def _osrm() -> tuple[str, str | None]:
     """A short route in Ahmedabad on our own OSRM (nothing leaves the server)."""
+    last, at = _OSRM_SEEN["result"], _OSRM_SEEN["at"]
+    if last is not None and time.monotonic() - at < (OSRM_KEEP_OK if last[0] == "ok" else OSRM_KEEP_ERROR):
+        return last
     url = f"{settings.osrm_url}/route/v1/driving/72.5714,23.0225;72.5800,23.0300?overview=false"
     try:
         with urllib.request.urlopen(url, timeout=4) as r:  # noqa: S310  (our own container)
-            return ("ok", None) if r.status == 200 else ("error", f"HTTP {r.status}")
+            result = ("ok", None) if r.status == 200 else ("error", f"HTTP {r.status}")
     except Exception as exc:  # noqa: BLE001
-        return "error", type(exc).__name__
+        result = "error", type(exc).__name__
+    _OSRM_SEEN["at"], _OSRM_SEEN["result"] = time.monotonic(), result
+    return result
 
 
 def health(db: Session) -> dict:
