@@ -17,7 +17,7 @@ from app.auth.deps import CurrentPrincipal, require_permission
 from app.db import DbSession
 from app.export import EXPORT_ROW_LIMIT, xlsx_response
 from app.masters.models import Product, System, SystemComponent, Unit
-from app.masters.rate import MissingPriceError, labour_fits, system_rate
+from app.masters.rate import AREA, MissingPriceError, labour_fits, system_rate
 from app.masters.routers.common import (
     Limit,
     Offset,
@@ -111,12 +111,14 @@ def _components(
 
 
 def _labour_check(unit: str, labour_unit: str, labour_rate) -> None:
-    """Labour per sqm or sq ft only on a system per sqm or sq ft (a system in rmt: no labour)."""
-    if Decimal(labour_rate or 0) != 0 and not labour_fits(labour_unit, unit):
-        raise unprocessable(
-            f"The labour is per {labour_unit} but the system is per {unit}: labour per sqm or "
-            "sq ft fits only a system per sqm or sq ft"
-        )
+    """Labour per sqm or sq ft on a system per sqm or sq ft, else per the system's own unit (₹ per
+    rmt of coving); labour per another unit is refused (with no labour too, unless sqm or sq ft)."""
+    if labour_fits(labour_unit, unit) or (Decimal(labour_rate or 0) == 0 and labour_unit in AREA):
+        return
+    raise unprocessable(
+        f"The labour is per {labour_unit} but the system is per {unit}: labour per sqm or sq ft "
+        f"fits a system per sqm or sq ft; otherwise give the labour per {unit}"
+    )
 
 
 def _check(db: Session, code: str | None, unit: str | None, exclude: int | None = None) -> None:
@@ -255,6 +257,10 @@ def update_system(
     changes = {k: v for k, v in body.model_dump(exclude_unset=True, exclude={"components"}).items()
                if v is not None or k == "description"}  # fmt: skip
     _check(db, changes.get("code"), changes.get("unit"), exclude=system.id)
+    new_unit = changes.get("unit", system.unit)
+    no_labour = Decimal(changes.get("labour_rate", system.labour_rate) or 0) == 0
+    if "labour_unit" not in changes and no_labour and not labour_fits(system.labour_unit, new_unit):
+        changes["labour_unit"] = "sqm"  # no labour, per the old unit: nothing to keep
     _labour_check(changes.get("unit", system.unit), changes.get("labour_unit", system.labour_unit),
                   changes.get("labour_rate", system.labour_rate))  # fmt: skip
     before =audit.model_snapshot(system, "components")

@@ -130,6 +130,7 @@ type MarginLine = {
   materials: MarginMaterial[];
   no_coverage: string[];
   no_price: string[];
+  not_converted?: string[];
   free_issue: string[];
   warnings: string[];
 };
@@ -245,6 +246,7 @@ export function MarginCheck({ tenderId, quotationId }: { tenderId?: number; quot
                           {ln.free_issue.length > 0 && <p className="small">Free issue (client supplies, not in our cost): {ln.free_issue.join(", ")}</p>}
                           {ln.no_coverage.length > 0 && <p className="small text-danger">No coverage in the library: {ln.no_coverage.join(", ")}</p>}
                           {ln.no_price.length > 0 && <p className="small text-danger">No price: {ln.no_price.join(", ")}</p>}
+                          {(ln.not_converted ?? []).length > 0 && <p className="small text-danger">Price unit not converted: {ln.not_converted!.join(", ")}</p>}
                           {Number(ln.surface_prep_sqm) > 0 && <p className="small">Surface preparation {inr(ln.surface_prep_sqm)}/sqm is in the cost.</p>}
                         </td>
                       </tr>

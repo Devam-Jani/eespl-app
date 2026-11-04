@@ -13,6 +13,7 @@ export type ContractLine = {
   rate: string;
   amount: Money;
   is_extra: boolean;
+  if_required: boolean; // billed on measurement, out of the contract value
   approved: boolean;
   approved_by_name: string | null;
   done_qty: string;
@@ -27,6 +28,7 @@ export type Contract = {
   client_id: number | null;
   client_name: string | null;
   contract_value: Money;
+  if_required_value: Money; // "If required (billed on measurement)": not in the contract value
   retention_percent: string;
   advance_amount: Money;
   advance_recovery_percent: string;

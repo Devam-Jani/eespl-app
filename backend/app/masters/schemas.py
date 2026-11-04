@@ -16,7 +16,6 @@ from pydantic import (
 from app.masters.models import (
     CATEGORY_KINDS,
     CLIENT_TYPES,
-    LABOUR_UNITS,
     TAG_MODULES,
     VENDOR_TYPES,
 )
@@ -24,7 +23,8 @@ from app.masters.models import (
 T = TypeVar("T")
 
 ClientType = Literal[CLIENT_TYPES]  # type: ignore[valid-type]
-LabourUnit = Literal[LABOUR_UNITS]  # type: ignore[valid-type]
+# sqm, sqft or the system's own unit (rmt, nos, cum): checked against the system on save
+LabourUnit = Annotated[str, Field(min_length=1, max_length=10)]
 NonNegative = Annotated[Decimal, Field(ge=0, max_digits=14, decimal_places=4)]
 Percent = Annotated[Decimal, Field(ge=0, lt=1000, max_digits=6, decimal_places=2)]
 # a margin is on the selling price (app.margin): 100 % or more has no rate

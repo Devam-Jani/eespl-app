@@ -102,14 +102,20 @@ def _contract_out(db, c: ClientContract) -> dict:
                 "rate": ln.rate,
                 "amount": svc.money(Decimal(ln.qty) * Decimal(ln.rate)),
                 "is_extra": ln.is_extra,
+                "if_required": ln.if_required,
                 "approved": not ln.is_extra or ln.approved_by is not None,
                 "approved_by_name": who.get(ln.approved_by),
                 "done_qty": svc.done_qty(db, ln.boq_line_id),
                 "billed_qty": billed,
             }
         )
+    if_required = sum(
+        (Decimal(ln.qty) * Decimal(ln.rate) for ln in c.lines if ln.if_required), ZERO
+    )
     return {
         "id": c.id,
+        # under the contract value: "If required (billed on measurement): Rs X"
+        "if_required_value": svc.money(if_required),
         "site_id": site.id,
         "site_code": site.code,
         "site_name": site.name,
@@ -212,6 +218,7 @@ def create_contract(
                     unit=b.unit or b.unit_raw or "nos",
                     qty=b.qty,
                     rate=b.rate,
+                    if_required=b.if_required,
                     created_by=principal.user.id,
                 )
             )
@@ -223,9 +230,9 @@ def create_contract(
     wo = closeout_billing.work_order_of(db, site.id)
     if wo is not None:  # the accepted work order's units, rates and quantities
         workorder.apply_to_contract(db, wo)
-    if body.contract_value is None:
+    if body.contract_value is None:  # "if required" lines are billed on measurement, not in it
         c.contract_value = svc.money(
-            sum((Decimal(ln.qty) * Decimal(ln.rate) for ln in c.lines), ZERO)
+            sum((Decimal(ln.qty) * Decimal(ln.rate) for ln in c.lines if not ln.if_required), ZERO)
         )
     record(
         db,

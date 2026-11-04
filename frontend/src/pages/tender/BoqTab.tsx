@@ -564,6 +564,12 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
             <dd>{inr(boq.totals.gst)}</dd>
             <dt className="grand">Total with GST</dt>
             <dd className="grand">{inr(boq.totals.grand_total)}</dd>
+            {Number(boq.totals.if_required_amount ?? 0) > 0 && (
+              <>
+                <dt>If required (billed on measurement)</dt>
+                <dd>{inr(boq.totals.if_required_amount)}</dd>
+              </>
+            )}
             {boq.totals.cost_total !== undefined && (
               <>
                 <dt>Cost of system-priced lines</dt>

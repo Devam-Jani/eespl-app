@@ -97,6 +97,8 @@ class Totals:
     counts: dict[str, int]
     # the part of the subtotal that is still only suggested (nobody has reviewed those rates)
     suggested_amount: Decimal = Decimal(0)
+    # "if required" lines of a won order: never in the subtotal, shown under it
+    if_required_amount: Decimal = Decimal(0)
 
 
 def tender_totals(db: Session, tender: Tender, lines: list[BoqLine] | None = None) -> Totals:
@@ -115,6 +117,7 @@ def tender_totals(db: Session, tender: Tender, lines: list[BoqLine] | None = Non
     margin_total = Decimal(0)
     costed = 0
     suggested_amount = Decimal(0)
+    if_required_amount = Decimal(0)
     counts = {s: 0 for s in ("unpriced", "suggested", "priced", "not_quoted")}
     counts.update(qro=0, nq=0)
     for ln in lines:
@@ -123,7 +126,9 @@ def tender_totals(db: Session, tender: Tender, lines: list[BoqLine] | None = Non
             counts["qro"] += 1
         if ln.qty_note == "NQ":
             counts["nq"] += 1
-        if ln.amount is not None:  # QRO / NQ lines have no amount: excluded from totals
+        if ln.amount is not None and ln.if_required:  # billed on measurement, not in the total
+            if_required_amount += ln.amount
+        elif ln.amount is not None:  # QRO / NQ lines have no amount: excluded from totals
             sections[ln.section_id] = sections.get(ln.section_id, Decimal(0)) + ln.amount
             subtotal += ln.amount
             if ln.status == "suggested":
@@ -144,6 +149,7 @@ def tender_totals(db: Session, tender: Tender, lines: list[BoqLine] | None = Non
         money(margin_total) if costed else None,
         counts,
         money(suggested_amount),
+        money(if_required_amount),
     )
 
 

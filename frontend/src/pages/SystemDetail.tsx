@@ -303,6 +303,7 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
             <select value={settings.labour_unit} onChange={setSetting("labour_unit")} disabled={!canEdit}>
               <option value="sqm">sqm</option>
               <option value="sqft">sqft</option>
+              {!["sqm", "sqft"].includes(system.unit) && <option value={system.unit}>{system.unit}</option>}
             </select>
           </Field>
         </div>

@@ -681,8 +681,9 @@ def mark_won(
     choices: dict[int, str] | None = None,
 ) -> tuple[Tender, Site]:
     """Won: the tender (order) record gets the quotation's lines (the chosen option of each
-    item; "if required" lines too, client's scope never), then the site is made or linked. The
-    execution and billing work from those same lines."""
+    item; "if required" lines too, with their qty but out of the order's total; client's scope
+    never), then the site is made or linked. The execution and billing work from those same
+    lines."""
     if q.status not in ("draft", "sent", "negotiation"):
         raise HTTPException(status.HTTP_409_CONFLICT, f"A {q.status} quotation cannot be won")
     choices = choices or {}
@@ -739,6 +740,7 @@ def mark_won(
                         system_id=ln.system_id,
                         library_item_id=ln.library_item_id,
                         status="priced" if ln.rate is not None else "unpriced",
+                        if_required=ln.if_required,
                         created_by=user_id,
                     )
                 )

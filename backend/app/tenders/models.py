@@ -185,6 +185,9 @@ class BoqLine(Tracked, Base):
     our_product: Mapped[str | None] = mapped_column(Text)
     manufacturer: Mapped[str | None] = mapped_column(String(100))  # the send checklist
     status: Mapped[str] = mapped_column(String(12), server_default="unpriced")
+    # a won quotation's "if required" line: in the order with its qty, out of the contract value
+    # (shown under the total, billed on measurement)
+    if_required: Mapped[bool] = mapped_column(server_default=false())
     # Row (1-based) of the client's sheet that holds this item's quantity: where "client format"
     # export writes our rate. None for lines added by hand.
     source_row: Mapped[int | None] = mapped_column(Integer)
@@ -309,7 +312,8 @@ def _quoted_totals(session: Session, ctx) -> None:
     rows = session.connection().execute(
         text(
             "UPDATE tenders t SET quoted_total = "
-            "COALESCE((SELECT SUM(amount) FROM boq_lines WHERE tender_id = t.id), 0) "
+            "COALESCE((SELECT SUM(amount) FROM boq_lines "
+            "WHERE tender_id = t.id AND NOT if_required), 0) "
             "WHERE t.id = ANY(:ids) RETURNING t.id, t.quoted_total"
         ),
         {"ids": sorted(touched)},

@@ -34,7 +34,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.masters.models import Tracked
+from app.masters.models import Tracked, UnitPrice
 from app.models import Base
 
 Money = Numeric(14, 2)
@@ -97,7 +97,7 @@ class FreightRate(Tracked, Base):
     )
     vendor_id: Mapped[int | None] = mapped_column(ForeignKey("vendors.id", ondelete="CASCADE"))
     store_id: Mapped[int | None] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"))
-    per_unit: Mapped[Decimal] = mapped_column(Money)
+    per_unit: Mapped[Decimal] = mapped_column(UnitPrice)
     effective_from: Mapped[date] = mapped_column(Date)
     note: Mapped[str | None] = mapped_column(Text)
 
@@ -237,11 +237,11 @@ class RateGroupProduct(Base):
     consumption_row_id: Mapped[int | None] = mapped_column(
         ForeignKey("product_consumptions.id", ondelete="SET NULL")
     )
-    price: Mapped[Decimal | None] = mapped_column(Money)
+    price: Mapped[Decimal | None] = mapped_column(UnitPrice)
     price_id: Mapped[int | None] = mapped_column(
         ForeignKey("product_prices.id", ondelete="SET NULL")
     )
-    freight_used: Mapped[Decimal] = mapped_column(Money, server_default="0")
+    freight_used: Mapped[Decimal] = mapped_column(UnitPrice, server_default="0")
     freight_actual: Mapped[Decimal | None] = mapped_column(Money)
     # the product's own wastage (the system's figure) when no application matched; blank: the
     # main item's wastage

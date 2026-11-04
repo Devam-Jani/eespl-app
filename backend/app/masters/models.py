@@ -40,9 +40,13 @@ PRODUCT_CATEGORIES = (
     "accessory",
     "other",
 )
+# labour per sqm or sq ft (converted on a system per sqm or sq ft), else per the system's own unit
+# (₹ per rmt of coving, per nos of pipe outlets, per cum)
 LABOUR_UNITS = ("sqm", "sqft")
 
 Money = Numeric(14, 2)
+# a price per the product's unit: a bag's price ÷ its kg keeps 4 decimals (₹2,500 / 30 kg = 83.3333)
+UnitPrice = Numeric(14, 4)
 
 
 def _in(column: str, values: tuple[str, ...]) -> str:
@@ -177,8 +181,8 @@ class ProductPrice(Tracked, Base):
 
     id: Mapped[int] = mapped_column(Identity(), primary_key=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"))
-    purchase_rate: Mapped[Decimal] = mapped_column(Money)
-    freight_per_unit: Mapped[Decimal] = mapped_column(Money, server_default="0")
+    purchase_rate: Mapped[Decimal] = mapped_column(UnitPrice)
+    freight_per_unit: Mapped[Decimal] = mapped_column(UnitPrice, server_default="0")
     effective_from: Mapped[date] = mapped_column(Date)
     note: Mapped[str | None] = mapped_column(Text)
     unit: Mapped[str | None] = mapped_column(String(20))  # the product's unit when blank
@@ -191,7 +195,11 @@ class System(Tracked, Base):
     """A rate build-up recipe for one waterproofing system."""
 
     __tablename__ = "systems"
-    __table_args__ = (CheckConstraint(_in("labour_unit", LABOUR_UNITS), name="labour_unit_valid"),)
+    __table_args__ = (
+        CheckConstraint(
+            f"{_in('labour_unit', LABOUR_UNITS)} OR labour_unit = unit", name="labour_unit_valid"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Identity(), primary_key=True)
     code: Mapped[str] = mapped_column(String(50), unique=True)

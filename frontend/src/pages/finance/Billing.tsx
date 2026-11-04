@@ -98,6 +98,7 @@ export function SiteBilling({ siteId, openRa }: { siteId: number; openRa?: numbe
             <div className="tile">
               <div className="tile-title">Contract value</div>
               <b>{inr(contract.contract_value)}</b>
+              {Number(contract.if_required_value) > 0 && <div className="small">If required (billed on measurement): {inr(contract.if_required_value)}</div>}
               <div className="small muted">
                 {contract.client_name} · GST {num(contract.gst_percent)}% · SAC {contract.sac}
               </div>

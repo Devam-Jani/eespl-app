@@ -132,6 +132,12 @@ def basis_of(db: Session, p: ProductPrice, on: date | None = None) -> str:
 # --- a price per bag or pack: per the product's base unit -----------------------------------------
 
 
+def per_unit_price(v) -> Decimal:
+    """A price per the product's unit: 4 decimals (₹2,500 a 30 kg bag = ₹83.3333/kg); money totals
+    round once at the end."""
+    return Decimal(v).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+
 class UnitNotConvertible(ValueError):
     """A price or freight per a unit that does not convert to the product's unit."""
 
@@ -244,8 +250,7 @@ def record_price(
             note = f"entered ₹{rate} per {unit} ({f.normalize():f} {product.unit})" + (f"; {note}" if note else "")
             rate, freight = Decimal(rate) / f, Decimal(freight) / f
         unit = product.unit
-    rate = Decimal(rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    freight = Decimal(freight).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    rate, freight = per_unit_price(rate), per_unit_price(freight)
     on = on or ist_today()
     if ref:
         same = db.scalar(
@@ -428,7 +433,7 @@ def add_price(
 
 
 def _per_base(db: Session, product: Product, value: Decimal, unit: str | None, note: str | None):
-    """(value per the product's unit rounded to paise, the product's unit, the note saying what was
+    """(value per the product's unit to 4 decimals, the product's unit, the note saying what was
     entered); 422 for a unit that does not convert."""
     try:
         f = base_factor(db, product, unit)
@@ -437,7 +442,7 @@ def _per_base(db: Session, product: Product, value: Decimal, unit: str | None, n
     if f == 1:
         return Decimal(value), product.unit if unit else None, note
     entered = f"entered ₹{value} per {unit} ({f.normalize():f} {product.unit})"
-    per = (Decimal(value) / f).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    per = per_unit_price(Decimal(value) / f)
     return per, product.unit, entered + (f"; {note}" if note else "")
 
 

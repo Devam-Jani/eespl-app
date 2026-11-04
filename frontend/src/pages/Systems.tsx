@@ -176,6 +176,7 @@ function NewSystem({ onClose }: { onClose: () => void }) {
             <select value={form.labour_unit} onChange={set("labour_unit")}>
               <option value="sqm">sqm</option>
               <option value="sqft">sqft</option>
+              {!["sqm", "sqft"].includes(form.unit) && <option value={form.unit}>{form.unit}</option>}
             </select>
           </Field>
         </div>

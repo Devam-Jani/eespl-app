@@ -153,6 +153,7 @@ class LineOut(BaseModel):
     manufacturer: str | None = None
     status: str
     suggestion_score: Decimal | None
+    if_required: bool = False
 
 
 class LineCostOut(LineOut):
@@ -171,6 +172,8 @@ class TotalsOut(BaseModel):
     counts: dict[str, int]
     # the amount of the lines still only suggested ("N lines still suggested, Rs X")
     suggested_amount: Decimal = Decimal(0)
+    # "If required (billed on measurement)": a won order's lines out of the subtotal
+    if_required_amount: Decimal = Decimal(0)
 
 
 class TotalsCostOut(TotalsOut):

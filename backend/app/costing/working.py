@@ -560,7 +560,7 @@ def new_product(
         consumption_row_id=row_id,
         price=price,
         price_id=cur.id if cur else None,
-        freight_used=money(freight or Decimal(0)),
+        freight_used=q4(freight or Decimal(0)),
     )
 
 
@@ -573,7 +573,7 @@ def price_of(db: Session, cur) -> tuple[Decimal | None, Decimal]:
         rate, freight = prices.base_price(db, cur)
     except prices.UnitNotConvertible:
         return None, Decimal(0)
-    return money(rate), freight
+    return q4(rate), q4(freight)
 
 
 # --- working a main item -------------------------------------------------------------------------
