@@ -61,17 +61,30 @@ ACRONYMS = {
     "HB",
     "NSPG",
 }
+# the UoM cell with everything but letters and digits dropped, "PER" in front dropped
 UOM_MAP = {
-    "SQMT": "sqm",
-    "SQM": "sqm",
-    "SQFT": "sqft",
-    "RFT": "rft",
-    "RMT": "rmt",
-    "NOS": "nos",
-    "NO": "nos",
-    "KG": "kg",
-    "LTR": "ltr",
-    "LS": "ls",
+    **dict.fromkeys(
+        (
+            "SQMT",
+            "SQM",
+            "SQMTR",
+            "SQMTRS",
+            "SQMETER",
+            "SQMETERS",
+            "SQMETRE",
+            "SQMETRES",
+            "M2",
+            "SMT",
+        ),
+        "sqm",
+    ),
+    **dict.fromkeys(("SQFT", "SFT", "SQFEET", "SQF", "FT2", "SQRFT"), "sqft"),
+    **dict.fromkeys(("RFT", "RUNNINGFEET", "RUNNINGFT"), "rft"),
+    **dict.fromkeys(("RMT", "RM", "RMTR", "RUNNINGMETER", "RUNNINGMETRE", "RUNNINGMTR"), "rmt"),
+    **dict.fromkeys(("NOS", "NO", "NUMBER", "NUMBERS", "EACH", "EA", "PCS", "PC"), "nos"),
+    **dict.fromkeys(("KG", "KGS"), "kg"),
+    **dict.fromkeys(("LTR", "LTRS", "LITRE", "LITRES", "LITER", "LITERS"), "ltr"),
+    **dict.fromkeys(("LS", "LUMPSUM"), "ls"),
 }
 # (wrong, right, applies to: None = everywhere, else item numbers)
 TYPOS: list[tuple[str, str, tuple[int, ...] | None]] = [
@@ -336,11 +349,30 @@ def _stage(heading: str) -> str:
     return sentence(h)
 
 
-def _decimal(text: str) -> Decimal | None:
+NUMBER = r"\d[\d,]*(?:\.\d+)?"
+RANGE_RE = re.compile(rf"({NUMBER})\s*(?:-|–|to)\s*({NUMBER})", re.I)
+
+
+def _rate(text: str) -> tuple[Decimal | None, str | None]:
+    """The first number in the cell, commas dropped: "Rs. 1,250/-" 1250, "625.00 (18% GST
+    extra)" 625.00. A range "550-600" keeps the lower value, flagged "range"."""
+    text = text or ""
+    m = re.search(NUMBER, text)
+    if not m:
+        return None, None
     try:
-        return Decimal(re.sub(r"[^\d.]", "", text)) if re.search(r"\d", text) else None
+        value = Decimal(m.group(0).replace(",", ""))
     except InvalidOperation:
-        return None
+        return None, None
+    r = RANGE_RE.match(text, m.start())
+    if r:
+        lo, hi = (Decimal(x.replace(",", "")) for x in r.groups())
+        return min(lo, hi), "range"
+    return value, None
+
+
+def _decimal(text: str) -> Decimal | None:
+    return _rate(text)[0]
 
 
 def _flags(text: str) -> tuple[str, bool, bool]:
@@ -960,11 +992,12 @@ def _lines(rows: list[list[list[str]]], fix: Fixer, n: int, name: str, res: Resu
                         flags=re.I,
                     )
                     text, c2, req = _flags("\n".join(common + part))
+                    uom, rate = _unit_rate(uom_cell[0], rate_cell[j], text, n, name, res)
                     out.append(
                         {
                             "description": text,
-                            "uom": _uom(uom_cell[0]),
-                            "rate": _decimal(rate_cell[j]),
+                            "uom": uom,
+                            "rate": rate,
                             "option": str(j + 1),
                             "if_required": req,
                             "client_scope": c2,
@@ -973,11 +1006,23 @@ def _lines(rows: list[list[list[str]]], fix: Fixer, n: int, name: str, res: Resu
                 continue
             uom_cell = uom_cell[:1]
         text, c2, req = _flags("\n".join(desc_paras))
+        uom, rate = (
+            ("sqft", None)
+            if client
+            else _unit_rate(
+                uom_cell[0] if uom_cell else "",
+                rate_cell[0] if rate_cell else "",
+                text,
+                n,
+                name,
+                res,
+            )
+        )
         out.append(
             {
                 "description": text,
-                "uom": _uom(uom_cell[0]) if uom_cell and not client else "sqft",
-                "rate": None if client else _decimal(rate_cell[0] if rate_cell else ""),
+                "uom": uom,
+                "rate": rate,
                 "option": option,
                 "if_required": req,
                 "client_scope": client or c2,
@@ -986,6 +1031,82 @@ def _lines(rows: list[list[list[str]]], fix: Fixer, n: int, name: str, res: Resu
     return out
 
 
-def _uom(text: str) -> str:
-    key = re.sub(r"[^A-Z]", "", text.upper())
-    return UOM_MAP.get(key, "sqft")
+def _unit_rate(
+    uom_text: str, rate_text: str, desc: str, n: int, name: str, res: Result
+) -> tuple[str, Decimal | None]:
+    """A row's UoM and rate. A rate range keeps the lower value and is listed; a UoM not known
+    is listed and the row keeps no rate (a UoM is needed, so it is saved per sqft, marked
+    "imported, check" like every row), so a rate is never taken as per sqft by mistake."""
+    uom = _uom(uom_text)
+    rate, flag = _rate(rate_text)
+    where = f"Item {n}{f' “{name}”' if name else ''}, line “{plain(desc)[:50]}”"
+    if flag == "range":
+        res.notes.append(
+            f"{where}: rate “{rate_text}” is a range, the lower {rate} is used: check it"
+        )
+    if uom is None:
+        if uom_text.strip() or rate is not None:
+            res.notes.append(
+                f"{where}: unit “{uom_text}” not known (rate as printed: {rate_text or '-'}); "
+                "saved with no rate: set its unit and rate"
+            )
+        uom, rate = "sqft", None
+    return uom, rate
+
+
+def _uom(text: str) -> str | None:
+    """The UoM cell: "Sq. Mtr.", "Per Sqm", "M2", "Sq.Meter" sqm; "RM" rmt; "Each" nos. None: not known
+    (flagged for review, never taken as sqft)."""
+    key = re.sub(r"[^A-Z0-9]", "", (text or "").upper().replace("²", "2"))
+    key = re.sub(r"^PER", "", key)
+    return UOM_MAP.get(key)
+
+
+def recheck(db: Session, path: Path) -> dict[str, Any]:
+    """Dry run, writes nothing: read the offer's budget tables again with today's number and
+    unit reading and compare each row with the offer line already in the library (same text).
+    Returns the rows whose default rate or UoM would change, the rows not found, and the
+    notes (ranges, units not known)."""
+    res = Result()
+    fix = Fixer(res)
+    items, _ = read(path)
+    out: dict[str, Any] = {
+        "rows": 0,
+        "matched": 0,
+        "rate_changes": [],
+        "unit_changes": [],
+        "not_found": [],
+    }
+    for k, it in enumerate(items):
+        m = BUDGET_RE.match(it.plain) if isinstance(it, Para) else None
+        if not m:
+            continue
+        j = k + 1
+        while j < len(items) and not isinstance(items[j], list):
+            j += 1
+        if j >= len(items):
+            continue
+        n = int(m.group(1)) if m.group(1) else 0
+        title = sentence(re.sub(r"\s+", " ", m.group(2)).strip(" -"))
+        for ln in _lines(items[j][1:], fix, n, title, res):
+            out["rows"] += 1
+            have = db.scalars(
+                select(OfferLine).where(
+                    OfferLine.description == ln["description"], OfferLine.is_active
+                )
+            ).all()
+            if not have:
+                out["not_found"].append(plain(ln["description"])[:60])
+                continue
+            out["matched"] += 1
+            # the same text from another offer may be its own line at its own rate
+            if any(ol.uom == ln["uom"] and ol.default_rate == ln["rate"] for ol in have):
+                continue
+            ol = have[0]
+            label = f"#{ol.id} {plain(ol.description)[:50]}"
+            if ol.uom != ln["uom"]:
+                out["unit_changes"].append((label, ol.uom, ln["uom"]))
+            if ol.default_rate != ln["rate"]:
+                out["rate_changes"].append((label, ol.default_rate, ln["rate"]))
+    out["notes"] = res.notes
+    return out

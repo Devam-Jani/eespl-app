@@ -16,7 +16,7 @@ from app.auth.deps import Principal
 from app.crm.models import Lead, LeadActivity
 from app.masters.conversions import Rule
 from app.masters.models import Client, LibraryItem, System, UnitConversion
-from app.masters.rate import MissingPriceError, system_rate
+from app.masters.rate import SQFT_PER_SQM, MissingPriceError, system_rate
 from app.masters.rate_policy import load_histories
 from app.material import service as material
 from app.models import User
@@ -100,6 +100,25 @@ def check_edit(db: Session, q: Quotation, principal: Principal) -> None:
         )
 
 
+# the line fields that change an amount; a sent revision keeps them as the client has them
+MONEY_FIELDS = ("uom", "rate", "qty", "option", "if_required", "client_scope")
+
+
+def prices_locked(q: Quotation) -> bool:
+    """A revision once sent (or in negotiation) keeps its prices: the issued PDF says them."""
+    return q.sent_at is not None or q.status in OPEN_STATUSES
+
+
+def check_price_edit(q: Quotation) -> None:
+    """Rates, quantities, units, options and lines of a sent revision are not edited in place
+    (a re-send would not re-issue the PDF); wording still is."""
+    if prices_locked(q):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{q.code} R{q.revision} has been sent. Make a new revision to change prices",
+        )
+
+
 # --- options -------------------------------------------------------------------------------------
 
 
@@ -160,6 +179,10 @@ class RateContext:
         return self._matcher
 
     def factor(self, uom: str, other: str | None) -> Decimal | None:
+        """Multiplier turning a rate per `other` into a rate per `uom`; sqm and sqft at
+        1 sqm = 10.7639 sqft. None: no conversion."""
+        if {uom, other} == {"sqm", "sqft"}:
+            return SQFT_PER_SQM if uom == "sqm" else 1 / SQFT_PER_SQM
         return pricing._unit_factor(self.rules, uom, other)
 
 
@@ -238,7 +261,7 @@ def fill_rate(rc: RateContext, line: QuotationLine, src: OfferLine | None) -> No
     fixed rate, else Suggest; the library's default rate is the last resort."""
     if line.overridden:
         return
-    line.cost_rate = line.margin_percent = None
+    line.cost_rate = line.margin_percent = line.rate_note = None
     if line.client_scope:
         line.rate, line.rate_source, line.rate_note = None, None, "Client's scope"
         return
@@ -247,18 +270,60 @@ def fill_rate(rc: RateContext, line: QuotationLine, src: OfferLine | None) -> No
         return
     if source == "library" and src.library_item_id and _library(rc, line, src.library_item_id):
         return
+    # the library's fixed / default rate is per the library line's unit: converted to the
+    # line's (705.77 per sqm on a sqft line is 65.57), refused when there is no factor
+    f = rc.factor(line.uom, src.uom) if src and src.default_rate is not None else None
+    no_factor = (
+        f"the library rate is per {src.uom}, the line per {line.uom}: enter a rate"
+        if src and src.default_rate is not None and f is None
+        else None
+    )
     if source == "fixed" and src.default_rate is not None:
-        line.rate, line.rate_source = money(src.default_rate), "fixed"
-        line.rate_note = "Fixed rate from the library"
+        if no_factor:
+            line.rate, line.rate_source, line.rate_note = None, None, no_factor
+            return
+        line.rate, line.rate_source = money(Decimal(src.default_rate) * f), "fixed"
+        line.rate_note = "Fixed rate from the library" + (
+            f" (per {src.uom}, converted)" if f != 1 else ""
+        )
         return
     if source != "fixed" and _suggest(rc, line):
         return
-    default = src.default_rate if src else None
+    if no_factor:
+        line.rate, line.rate_source = None, None
+        line.rate_note = (line.rate_note + "; " if line.rate_note else "") + no_factor
+        return
+    default = Decimal(src.default_rate) * f if src and src.default_rate is not None else None
     line.rate = money(default) if default is not None else None
     line.rate_source = "fixed" if default is not None else None
     line.rate_note = (line.rate_note + "; " if line.rate_note else "") + (
         "library default rate" if default is not None else "no rate found: enter one"
     )
+
+
+def change_unit(
+    rc: RateContext, line: QuotationLine, uom: str, keep_rate: bool, keep_qty: bool
+) -> None:
+    """A line's unit changed: its rate (unless retyped) and quantity (unless retyped) are
+    converted with the unit factor (Rs 705.77 per sqm is Rs 65.57 per sqft, 100 sqm is
+    1,076.39 sqft); with no factor they are cleared, never carried over to the new unit."""
+    old = line.uom
+    if uom == old:
+        return
+    f = rc.factor(uom, old)  # rate per new unit = rate per old unit x f
+    if keep_rate and line.rate is not None and not line.client_scope:
+        if f is None:
+            line.rate = line.cost_rate = line.margin_percent = line.rate_source = None
+            line.overridden = False
+            line.rate_note = f"Unit changed from {old} to {uom}, no conversion: enter a rate"
+        else:
+            line.rate = money(Decimal(line.rate) * f)
+            if line.cost_rate is not None:
+                line.cost_rate = money(Decimal(line.cost_rate) * f)
+            line.rate_note = f"{line.rate_note or 'Rate'} (converted from per {old})"
+    if keep_qty and line.qty is not None:
+        line.qty = None if f is None else (Decimal(line.qty) / f).quantize(Decimal("0.001"))
+    line.uom = uom
 
 
 # --- assembling ----------------------------------------------------------------------------------
@@ -367,25 +432,54 @@ def line_amount(ln: QuotationLine) -> Decimal | None:
     return money(Decimal(ln.qty) * Decimal(ln.rate))
 
 
+GST_PERCENT = Decimal(18)  # printed under the total, which stays excluding GST
+
+
 def totals(q: Quotation) -> dict[str, Any]:
     """Per item and overall: lines with a quantity and a rate; where options are offered only
-    the first offered option counts; "if required" and client's-scope lines never count."""
+    the first offered option counts; "if required" and client's-scope lines never count.
+    Each item also has its total per offered option (the common lines plus that option's), as
+    printed: "Item total, Option 1", "Item total, Option 2". GST @18% and the total with GST
+    are shown below the total."""
     items, grand = [], Decimal(0)
     for item in q.items:
+        opts = sorted(
+            {
+                ln.option
+                for ln in item.lines
+                if ln.option is not None and is_offered(item, ln.option)
+            },
+            key=lambda o: (len(o), o),
+        )
         first = min(offered(item), key=lambda o: (len(o), o), default=None)
-        s = Decimal(0)
+        common, by_opt = Decimal(0), dict.fromkeys(opts, Decimal(0))
         for ln in item.lines:
             if not is_offered(item, ln.option) or ln.if_required:
                 continue
-            if ln.option is not None and ln.option != first:
-                continue
-            s += line_amount(ln) or 0
-        items.append({"item_id": item.id, "total": money(s)})
+            if ln.option is None:
+                common += line_amount(ln) or 0
+            else:
+                by_opt[ln.option] += line_amount(ln) or 0
+        s = common + by_opt.get(first, Decimal(0))
+        items.append(
+            {
+                "item_id": item.id,
+                "total": money(s),
+                "options": [{"option": o, "total": money(common + by_opt[o])} for o in opts]
+                if len(opts) > 1
+                else [],
+            }
+        )
         grand += s
+    total = money(grand)
+    gst = money(total * GST_PERCENT / 100)
     return {
         "items": items,
-        "total": money(grand),
+        "total": total,
         "option_note": any(len(offered(i)) > 1 for i in q.items),
+        "gst_percent": GST_PERCENT,
+        "gst": gst,
+        "total_with_gst": total + gst,
     }
 
 
@@ -449,10 +543,17 @@ def _key(item: QuotationItem, ln: QuotationLine) -> tuple:
 
 
 def diff(old: Quotation, new: Quotation) -> dict[str, Any]:
-    """What changed between two revisions, for negotiation: rates, quantities, lines and items."""
+    """What changed between two revisions, for negotiation: rates, quantities, lines and items.
+    A library line used twice in an item is told apart by its position among its copies."""
 
     def lines(q):
-        return {_key(i, ln): (i, ln) for i in q.items for ln in i.lines}
+        out, seen = {}, {}
+        for i in q.items:
+            for ln in sorted(i.lines, key=lambda x: (x.sort_order, x.id or 0)):
+                k = _key(i, ln)
+                seen[k] = seen.get(k, 0) + 1
+                out[(*k, seen[k])] = (i, ln)
+        return out
 
     a, b = lines(old), lines(new)
     changed, added, removed = [], [], []
