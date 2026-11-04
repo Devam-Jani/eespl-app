@@ -519,6 +519,7 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("estimate-snapshots", help="Freeze estimates issued before snapshots existed")
     mr = sub.add_parser("margin-recheck", help="Rates that change: margin on the selling price")
     mr.add_argument("--apply", action="store_true", help="make them suggested")
+    sub.add_parser("price-units", help="Price rows in another unit than the product's (read-only)")
     xr = sub.add_parser("demo-xray", help="DEMO: the X-ray 3D building from the sample drawing")
     xr.add_argument(
         "--bill-only", action="store_true", help="only fill RA bill 01 (the site there, no drawing)"
@@ -711,6 +712,12 @@ def main(argv: list[str] | None = None) -> None:
             if args.apply:
                 print(mrc.apply(db, changes))
                 db.commit()
+    elif args.command == "price-units":
+        import app.main  # noqa: F401, PLC0415  (every model registered)
+        from app.cli import price_units  # noqa: PLC0415
+
+        with SessionLocal() as db:
+            print(price_units.report(price_units.find(db)))
     elif args.command == "estimate-snapshots":
         import app.main  # noqa: F401, PLC0415  (every model registered)
         from app.estimate import service as est_svc  # noqa: PLC0415

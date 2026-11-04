@@ -41,8 +41,10 @@ def _per_sqm(rate: Decimal | None, unit: str | None) -> Decimal | None:
 
 def material_sqm(db: Session, g: RateGroup, free: set[int]) -> dict:
     """The group's material per sqm from the library: each product's coverage × (1 + wastage) ×
-    (price + freight); free-issue products out; products with no coverage or no price listed."""
-    rows, missing, no_price, free_rows = [], [], [], []
+    (price + freight) per the product's unit (a price kept per bag ÷ the pack size, as the rate
+    working); free-issue products out; products with no coverage, no price or a price in a unit
+    that does not convert listed."""
+    rows, missing, no_price, free_rows, not_converted = [], [], [], [], []
     total = ZERO
     for gp in g.products:
         p = db.get(Product, gp.product_id)
@@ -57,14 +59,19 @@ def material_sqm(db: Session, g: RateGroup, free: set[int]) -> dict:
         if pr is None:
             no_price.append(p.name)
             continue
+        try:
+            rate, freight = prices.base_price(db, pr)
+        except prices.UnitNotConvertible:
+            not_converted.append(p.name)
+            continue
         q = lib.per_sqm(c.value, c.unit)
         w = lib.wastage(p)
-        unit_price = D(pr.purchase_rate) + D(pr.freight_per_unit or 0)
+        unit_price = rate + freight
         cost = q * (1 + w / 100) * unit_price
         total += cost
         rows.append({"product_id": p.id, "product": p.name, "coverage": lib.label(c), "per_sqm": q, "wastage_percent": w, "price": unit_price, "cost_sqm": _money(cost),
                      "how": f"{lib.n(q, 4)} {p.unit}/sqm × (1 + {lib.n(w, 2)}%) × {inr(unit_price)}"})  # fmt: skip
-    return {"total": _money(total), "rows": rows, "no_coverage": missing, "no_price": no_price, "free_issue": free_rows}
+    return {"total": _money(total), "rows": rows, "no_coverage": missing, "no_price": no_price, "free_issue": free_rows, "not_converted": not_converted}
 
 
 def check(db: Session, w: RateWorking) -> dict:
@@ -95,7 +102,7 @@ def check(db: Session, w: RateWorking) -> dict:
             rate_sqm = _per_sqm(rate, unit) if rate is not None else (D(g.rate_sqm) if g.rate_sqm is not None else None)
             row = {"group_id": g.id, "group": g.name, "item": item, "description": (desc or "")[:200], "unit": unit, "rate": rate, "rate_sqm": _money(rate_sqm) if rate_sqm is not None else None,
                    "material_sqm": mat["total"], "labour_sqm": _money(labour) if labour is not None else None, "surface_prep_sqm": _money(prep), "materials": mat["rows"],
-                   "no_coverage": mat["no_coverage"], "no_price": mat["no_price"], "free_issue": mat["free_issue"], "warnings": []}  # fmt: skip
+                   "no_coverage": mat["no_coverage"], "no_price": mat["no_price"], "free_issue": mat["free_issue"], "not_converted": mat["not_converted"], "warnings": []}  # fmt: skip
             if rate_sqm is None or rate_sqm <= 0:
                 row["warnings"].append("No rate per sqm to compare with")
             else:

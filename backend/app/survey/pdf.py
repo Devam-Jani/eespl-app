@@ -109,6 +109,33 @@ def method_text(a) -> str:
     return a.method
 
 
+NOT_CONVERTED = "price unit not converted"
+
+
+def rates_of(db: Session, product_ids) -> dict[int, Decimal | str]:
+    """The latest price + freight per the product's unit (a price kept per bag ÷ the pack size or
+    the unit conversion, as the rate working), else NOT_CONVERTED; no price: left out."""
+    from app.costing.prices import UnitNotConvertible, base_price  # noqa: PLC0415
+
+    rates: dict[int, Decimal | str] = {}
+    for pid in product_ids:
+        price = db.scalar(
+            select(ProductPrice)
+            .where(ProductPrice.product_id == pid)
+            .order_by(ProductPrice.effective_from.desc(), ProductPrice.id.desc())
+            .limit(1)
+        )
+        if price is None:
+            continue
+        try:
+            rate, freight = base_price(db, price)
+        except UnitNotConvertible:
+            rates[pid] = NOT_CONVERTED
+            continue
+        rates[pid] = rate + freight
+    return rates
+
+
 def survey_pdf(db: Session, s: Survey, parent: str, include_rates: bool) -> bytes:
     types = {t.id: t.name for t in db.scalars(select(AreaType))}
     rows, thumbs = [], []
@@ -131,17 +158,7 @@ def survey_pdf(db: Session, s: Survey, parent: str, include_rates: bool) -> byte
                 thumbs.append(f"<figure>{img}<figcaption>{e(a.name)}</figcaption></figure>")
     c = svc.consumption(db, list(s.areas))
     total = svc.packs(db, c.products)
-    rates = {}
-    if include_rates:
-        for pid in c.products:
-            price = db.scalar(
-                select(ProductPrice)
-                .where(ProductPrice.product_id == pid)
-                .order_by(ProductPrice.effective_from.desc())
-                .limit(1)
-            )
-            if price:
-                rates[pid] = Decimal(price.purchase_rate) + Decimal(price.freight_per_unit or 0)
+    rates = rates_of(db, c.products) if include_rates else {}
     names = {r["product_id"]: r for r in total}
     floor_blocks = []
     for (tower, _n, label), prods in sorted(c.by_floor.items()):
@@ -157,7 +174,9 @@ def survey_pdf(db: Session, s: Survey, parent: str, include_rates: bool) -> byte
         f"<tr><td>{e(r['name'])}</td><td class='num'>{r['qty']:,.3f} {e(r['unit'])}</td>"
         f"<td class='num'>{f'{r['packs']} × {r['pack_size']:g} {e(r['unit'])} {e(r['pack_unit'] or 'pack')}' if r['packs'] is not None else '—'}</td>"
         + (
-            f"<td class='num'>{inr(rates[r['product_id']])}</td><td class='num'>{inr((r['pack_qty'] or r['qty']) * rates[r['product_id']])}</td>"
+            f"<td class='num' colspan='2'>{NOT_CONVERTED}</td>"
+            if include_rates and rates.get(r["product_id"]) == NOT_CONVERTED
+            else f"<td class='num'>{inr(rates[r['product_id']])}</td><td class='num'>{inr((r['pack_qty'] or r['qty']) * rates[r['product_id']])}</td>"
             if include_rates and r["product_id"] in rates
             else ("<td></td><td></td>" if include_rates else "")
         )
