@@ -47,7 +47,8 @@ class LabourUnitError(MissingPriceError):
         ValueError.__init__(
             self,
             f"The labour is per {labour_unit} but the system is per {system_unit}: "
-            "labour per sqm or sq ft fits only a system per sqm or sq ft",
+            "labour per sqm or sq ft fits a system per sqm or sq ft; otherwise give it per "
+            f"{system_unit}",
         )
 
 
