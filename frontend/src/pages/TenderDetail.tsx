@@ -153,7 +153,24 @@ Send anyway? Give the reason:`);
     try {
       await downloadFile(`${path}${queryString({ rev: exportRev })}`);
     } catch (err) {
-      setError(errorText(err));
+      // lines still suggested or unpriced hold the client exports: the director may export
+      // anyway, with a reason (logged), as for the send checklist
+      const text = errorText(err);
+      if (text.includes("cannot be sent yet") && can("sendcheck.override")) {
+        const reason = prompt(`${text}
+
+Export anyway? Give the reason:`);
+        if (reason && reason.trim().length >= 5) {
+          try {
+            await downloadFile(`${path}${queryString({ rev: exportRev, override_reason: reason.trim() })}`);
+            return;
+          } catch (err2) {
+            setError(errorText(err2));
+            return;
+          }
+        }
+      }
+      setError(text);
     }
   }
 

@@ -257,10 +257,12 @@ def test_pdf_import_through_the_api(boss):
     assert confirm(client, headers, tid, preview).status_code == 200
     lines = client.get(f"/api/tenders/{tid}/boq", headers=headers).json()["lines"]
     assert [(ln["source_page"], ln["source_page_to"]) for ln in lines][-2:] == [(2, 3), (3, 3)]
-    # client format needs a spreadsheet; the EESPL export still works
-    r = client.get(f"/api/tenders/{tid}/export/client", headers=headers)
+    # client format needs a spreadsheet; the EESPL export still works. The lines are unpriced,
+    # which holds the client exports (Prompt 38): the director exports past that with a reason
+    past = "?override_reason=Invented: checking the layout"
+    r = client.get(f"/api/tenders/{tid}/export/client{past}", headers=headers)
     assert r.status_code == 409 and "PDF" in r.json()["detail"]
-    assert client.get(f"/api/tenders/{tid}/export.xlsx", headers=headers).status_code == 200
+    assert client.get(f"/api/tenders/{tid}/export.xlsx{past}", headers=headers).status_code == 200
 
 
 def test_scanned_pdf_is_refused(boss):

@@ -169,6 +169,8 @@ class TotalsOut(BaseModel):
     gst: Decimal
     grand_total: Decimal
     counts: dict[str, int]
+    # the amount of the lines still only suggested ("N lines still suggested, Rs X")
+    suggested_amount: Decimal = Decimal(0)
 
 
 class TotalsCostOut(TotalsOut):
@@ -364,6 +366,8 @@ class ImportReportOut(BaseModel):
     skipped_by_reason: dict[str, int]
     unrecognised_units: dict[str, int]
     kept_prices: int
+    # qty text that is not a number ("as per drawing"): those lines have no qty
+    qty_not_read: list[dict[str, Any]] = []
 
 
 # --- T&C ---

@@ -245,6 +245,7 @@ def _boq(db: Session, tender: Tender, with_cost: bool) -> BoqOut:
         gst=totals.gst,
         grand_total=totals.grand_total,
         counts=totals.counts,
+        suggested_amount=totals.suggested_amount,
     )
     return BoqOut(
         sections=[
@@ -790,6 +791,7 @@ def update_lines(
         if not can_cost(principal):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Missing permission: tender.margin")
     aliases = load_aliases(db)
+    rules = None  # unit conversions, loaded on the first unit change
     changes: dict[int, dict] = {}
     for update in body.lines:
         line = _line(db, tender, update.id)
@@ -812,8 +814,13 @@ def update_lines(
         if fields.get("description"):
             line.description = fields["description"].strip()
         if "unit" in fields:
+            old_unit = line.unit
             line.unit_raw = fields["unit"]
             line.unit = normalise_unit(fields["unit"], aliases) if fields["unit"] else None
+            if line.unit != old_unit:  # the rate (and the qty, unless typed) converted
+                if rules is None:
+                    rules = pricing.generic_rules(db)
+                pricing.change_unit(line, old_unit, rules, qty_typed="qty" in fields)
         if "qty" in fields:
             line.qty = fields["qty"]
         if "qty_note" in fields:
@@ -1254,7 +1261,8 @@ def confirm_boq(
     edit: EditScope,
 ) -> ImportReportOut:
     """Write the parsed sections and lines. A tender that already has lines needs replace=true;
-    priced rates are then kept for lines whose (item no, description) match."""
+    priced rates are then carried over, as suggested, for lines whose (item no, description)
+    match, in the same unit or one that converts."""
     tender = _editable(db, tender_id, view, edit, principal, request)
     path = _find_upload(tender, body.upload_id)
     existing = list(db.scalars(select(BoqLine).where(BoqLine.tender_id == tender.id)))
@@ -1276,11 +1284,35 @@ def confirm_boq(
         raise unprocessable(str(exc)) from exc
     pages = _pages(grid, body.sheet)
 
-    kept: dict[tuple[str, str], dict[str, Any]] = {
-        _key(ln.client_item_no, ln.description): {f: getattr(ln, f) for f in _KEPT}
-        for ln in existing
-        if ln.status == "priced"
-    }
+    # priced lines, by (item no, description) and then unit: each old rate is used once, in
+    # order, so two lines with the same key never both get the same old rate
+    kept: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for ln in sorted(existing, key=lambda x: (x.sort_order, x.id)):
+        if ln.status == "priced":
+            kept.setdefault(_key(ln.client_item_no, ln.description), []).append(
+                {**{f: getattr(ln, f) for f in _KEPT}, "unit": ln.unit}
+            )
+    rules = pricing.generic_rules(db)
+
+    def carried(item_no: str | None, description: str, unit: str | None) -> dict | None:
+        """The old line's pricing for a new line: same unit first, else one whose unit converts
+        (rate and cost converted); a unit with no conversion is not carried over."""
+        pool = kept.get(_key(item_no, description), [])
+        for same_unit in (True, False):
+            for i, old in enumerate(pool):
+                if (old["unit"] == unit) != same_unit:
+                    continue
+                factor = pricing.unit_factor(rules, unit, old["unit"])
+                if factor is None:
+                    continue
+                pool.pop(i)
+                values = {f: old[f] for f in _KEPT}
+                for f in ("rate", "cost_rate"):
+                    if values[f] is not None and factor != 1:
+                        values[f] = pricing.money(Decimal(str(values[f])) * factor)
+                return values
+        return None
+
     for line in existing:
         db.delete(line)
     for section in db.scalars(select(BoqSection).where(BoqSection.tender_id == tender.id)):
@@ -1327,11 +1359,14 @@ def confirm_boq(
             source_page_to=max(pages[r - 1][1] for r in p.rows) if pages else None,
             created_by=principal.user.id,
         )
-        previous = kept.get(_key(p.item_no, p.description))
-        if previous and line.status != "not_quoted":
+        previous = (
+            carried(p.item_no, p.description, p.unit) if line.status != "not_quoted" else None
+        )
+        if previous:
             for f, v in previous.items():
                 if v is not None or f in ("source", "rate"):
                     setattr(line, f, v)
+            line.status = "suggested"  # carried over from the last BOQ: someone reviews it
             kept_count += 1
         pricing.refresh_amount(line)
         db.add(line)
@@ -1345,7 +1380,12 @@ def confirm_boq(
         header_row=body.header_row,
         column_map=cols,
         row_count=len(grid[body.sheet]),
-        report={**counts, "skipped_rows": parsed.skipped[:500], "kept_prices": kept_count},
+        report={
+            **counts,
+            "qty_not_read": counts["qty_not_read"][:500],
+            "skipped_rows": parsed.skipped[:500],
+            "kept_prices": kept_count,
+        },
         created_by=principal.user.id,
     )
     db.add(record)
@@ -1377,6 +1417,7 @@ def confirm_boq(
         skipped_by_reason=counts["skipped_by_reason"],
         unrecognised_units=counts["unrecognised_units"],
         kept_prices=kept_count,
+        qty_not_read=counts["qty_not_read"],
     )
 
 
@@ -1572,6 +1613,40 @@ def compare_revisions(
 # --- exports -------------------------------------------------------------------------------------
 
 
+OverrideReason = Annotated[
+    str | None,
+    Query(max_length=500, description="The director's reason to export past the review check"),
+]
+
+
+def _review_check(
+    db: Session,
+    request: Request,
+    principal: Principal,
+    tender: Tender,
+    override_reason: str | None,
+    what: str,
+) -> None:
+    """The live BOQ goes to the client only when no line is still suggested or unpriced; the
+    director (sendcheck.override) can export anyway with a reason, which is logged. A submitted
+    revision already passed the check (or was overridden) when it was frozen."""
+    from app.team import service as team  # noqa: PLC0415
+
+    override = team.enforce_send_check(
+        db, principal, pricing.unreviewed(db, tender), override_reason, tender.code
+    )
+    if override:
+        _record(
+            db,
+            request,
+            principal,
+            "tender.export_override",
+            tender,
+            after={**override, "export": what},
+        )
+        db.commit()
+
+
 def _download(content: bytes, media_type: str, filename: str) -> Response:
     safe = re.sub(r"[^A-Za-z0-9._ ()-]+", "_", filename)
     return Response(
@@ -1587,14 +1662,19 @@ def export_xlsx(
     db: DbSession,
     principal: CurrentPrincipal,
     scope: ViewScope,
+    request: Request,
     rev: Annotated[
         int | None, Query(ge=0, description="A submitted revision; default: current")
     ] = None,
     internal: bool = False,
+    override_reason: OverrideReason = None,
 ) -> Response:
     """EESPL's BOQ as Excel (selling rates only, never cost or margin). internal: with the rate
-    working as a separate WORKING sheet, for tender.margin only; never sent to the client."""
+    working as a separate WORKING sheet, for tender.margin only; never sent to the client.
+    The live BOQ is held while lines are suggested or unpriced (override_reason: director)."""
     tender = get_visible(db, tender_id, scope, principal)
+    if rev is None and not internal:
+        _review_check(db, request, principal, tender, override_reason, "xlsx")
     doc = export.document(db, tender, rev)
     content = export.xlsx(doc)
     if not internal:
@@ -1631,12 +1711,18 @@ def export_pdf(
     db: DbSession,
     principal: CurrentPrincipal,
     scope: ViewScope,
+    request: Request,
     rev: Annotated[
         int | None, Query(ge=0, description="A submitted revision; default: current")
     ] = None,
+    override_reason: OverrideReason = None,
 ) -> Response:
-    """EESPL's BOQ as PDF, A4 landscape (selling rates only)."""
-    doc = export.document(db, get_visible(db, tender_id, scope, principal), rev)
+    """EESPL's BOQ as PDF, A4 landscape (selling rates only). The live BOQ is held while lines
+    are suggested or unpriced (override_reason: the director)."""
+    tender = get_visible(db, tender_id, scope, principal)
+    if rev is None:
+        _review_check(db, request, principal, tender, override_reason, "pdf")
+    doc = export.document(db, tender, rev)
     return _download(export.pdf(doc), "application/pdf", f"{export.file_stem(doc)}.pdf")
 
 
@@ -1646,13 +1732,18 @@ def export_client_format(
     db: DbSession,
     principal: CurrentPrincipal,
     scope: ViewScope,
+    request: Request,
     rev: Annotated[
         int | None, Query(ge=0, description="A submitted revision; default: current")
     ] = None,
+    override_reason: OverrideReason = None,
 ) -> Response:
     """Our rates written into the client's own uploaded sheet (saved as a new file). 409 when
-    the original was not .xlsx or had no rate column mapped."""
+    the original was not .xlsx or had no rate column mapped, or (live BOQ) while lines are
+    suggested or unpriced (override_reason: the director)."""
     tender = get_visible(db, tender_id, scope, principal)
+    if rev is None:
+        _review_check(db, request, principal, tender, override_reason, "client format")
     doc = export.document(db, tender, rev)
     data, name, counts = export.client_format(db, tender, doc)
     response = _download(data, export.XLSX_TYPE, name)

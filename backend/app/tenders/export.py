@@ -275,8 +275,9 @@ def xlsx(doc: Document) -> bytes:
         if section is not None:
             ws.cell(row=row, column=2, value=f"Total — {section['title']}").font = Font(bold=True)
             ws.cell(row=row, column=2).alignment = Alignment(horizontal="right", wrap_text=True)
+            # an empty section has no rows to add up: 0, not a formula pointing at itself
             total = ws.cell(
-                row=row, column=6, value=f"=SUBTOTAL(9,F{start}:F{max(start, row - 1)})"
+                row=row, column=6, value=f"=SUBTOTAL(9,F{start}:F{row - 1})" if lines else 0
             )
             total.font = Font(bold=True)
             total.number_format = INR_FORMAT
@@ -436,13 +437,13 @@ def pdf(doc: Document) -> bytes:
 
 def client_format(db: Session, tender: Tender, doc: Document) -> tuple[bytes, str, dict[str, int]]:
     """Our rates (and amounts, where the client's amount cell is not already a formula) written
-    into the client's uploaded sheet, keeping its layout. Returns (bytes, filename, counts)."""
-    imp = db.scalar(
-        select(BoqImport)
-        .where(BoqImport.tender_id == tender.id)
-        .order_by(BoqImport.imported_at.desc(), BoqImport.id.desc())
-        .limit(1)
-    )
+    into the client's uploaded sheet, keeping its layout. Returns (bytes, filename, counts).
+    The sheet is the import the revision was built from (its lines' source rows point into
+    it); a snapshot from before that was stored uses the latest import."""
+    imp_id = doc.snapshot.get("boq_import_id")
+    imp = db.get(BoqImport, imp_id) if imp_id else None
+    if imp is None or imp.tender_id != tender.id:
+        imp = revisions.latest_import(db, tender)
     if imp is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "This tender has no imported client BOQ")
     path = Path(settings.media_dir) / imp.stored_path

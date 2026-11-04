@@ -450,6 +450,7 @@ export type BoqTotals = {
   gst: string;
   grand_total: string;
   counts: Record<string, number>;
+  suggested_amount?: string; // the amount of the lines still only suggested
   cost_total?: string | null;
   margin_amount?: string | null;
 };
@@ -538,6 +539,7 @@ export type ImportPreview = {
     skipped: number;
     skipped_by_reason: Record<string, number>;
     unrecognised_units: Record<string, number>;
+    qty_not_read?: { row: number; text: string }[];
   };
   existing_lines: number;
   page_count: number | null;
@@ -553,6 +555,7 @@ export type ImportReport = {
   skipped_by_reason: Record<string, number>;
   unrecognised_units: Record<string, number>;
   kept_prices: number;
+  qty_not_read?: { row: number; text: string }[];
 };
 
 export type SuggestResult = {

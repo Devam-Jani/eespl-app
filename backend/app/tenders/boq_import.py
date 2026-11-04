@@ -328,6 +328,8 @@ def column_letter(index: int) -> str:
 
 def _match(field_name: str, header: str) -> float:
     exact, keywords = HEADER_RULES[field_name]
+    if field_name == "unit" and "rate" in header.split():
+        return 0.0  # "Unit Rate" is the rate, not the unit
     if header in exact:
         return 0.95
     if any(k in header for k in keywords):
@@ -467,7 +469,14 @@ def _number(value: Any) -> Decimal | None:
         return None
     if isinstance(value, int | float):
         return Decimal(str(value))
-    text = str(value).replace(",", "").replace("₹", "").replace(" ", "").strip()
+    text = str(value).replace(",", "").replace("₹", "").strip()
+    # "Rs. 450", "450/-", "1,250 sqm", "12.5 Sqm": a leading Rs. and a trailing /- or unit go
+    text = re.sub(r"^(rs\.?|inr)\s*", "", text, flags=re.I)
+    text = re.sub(r"\s*/-$", "", text)
+    m = re.fullmatch(r"([-+]?[\d.]+)\s*([^\d\s][^\d]*)", text)
+    if m and normalise_unit(m.group(2)):
+        text = m.group(1)
+    text = text.replace(" ", "")
     try:
         return Decimal(text) if text else None
     except InvalidOperation:
@@ -510,6 +519,7 @@ class Row:
     material_rate: Decimal | None = None
     application_rate: Decimal | None = None
     notes_head: bool = False
+    qty_unread: str | None = None  # qty text that is not a number, QRO / NQ or a dash
 
 
 @dataclass
@@ -549,6 +559,7 @@ class ParsedBoq:
     skipped: list[tuple[int, str]] = field(default_factory=list)
     unrecognised_units: dict[str, int] = field(default_factory=dict)
     order: list[tuple[str, int]] = field(default_factory=list)  # ("section"|"line", index)
+    qty_not_read: list[dict[str, Any]] = field(default_factory=list)  # {row, text}
 
     def counts(self) -> dict[str, Any]:
         reasons: dict[str, int] = {}
@@ -562,6 +573,7 @@ class ParsedBoq:
             "skipped": len(self.skipped),
             "skipped_by_reason": reasons,
             "unrecognised_units": self.unrecognised_units,
+            "qty_not_read": self.qty_not_read,
         }
 
 
@@ -636,6 +648,12 @@ def _extract(
     if unit_raw and is_rate_only(unit_raw) and qty is None:
         qty_note = qty_note or "QRO"
     has_quantities = bool(unit_raw or qty is not None or qty_note or rate is not None)
+    qty_text = _text(qty_cell)
+    qty_unread = (
+        qty_text[:100]
+        if qty_text and qty is None and qty_note is None and qty_text.lower() not in DASHES
+        else None
+    )
     return (
         Row(
             number=number,
@@ -655,6 +673,7 @@ def _extract(
             notes_head=len(description) <= 30
             and bool(NOTES_HEAD.match(description))
             and not has_quantities,
+            qty_unread=qty_unread,
         ),
         None,
     )
@@ -791,6 +810,8 @@ def parse(
                 result.skipped.append((index, "blank row"))
                 in_notes = False  # a notes block ends at a blank row
             continue
+        if row.qty_unread:  # shown in the import report as "qty not read"
+            result.qty_not_read.append({"row": index, "text": row.qty_unread})
         if row.notes_head:
             in_notes = True
         if in_notes and not row.has_quantities:

@@ -202,6 +202,12 @@ export default function ImportWizard({ tenderId, onClose, onImported }: { tender
                   .join(", ")}
               </span>
             )}
+            {(preview.counts.qty_not_read?.length ?? 0) > 0 && (
+              <span className="text-warn">
+                {" "}
+                · qty not read: {preview.counts.qty_not_read?.map((q) => `row ${q.row} "${q.text}"`).join(", ")}
+              </span>
+            )}
           </p>
 
           <div className="table-wrap preview-table">
@@ -248,7 +254,7 @@ export default function ImportWizard({ tenderId, onClose, onImported }: { tender
           {preview.existing_lines > 0 && (
             <label className="check alert alert-warn">
               <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />
-              This tender already has {preview.existing_lines} lines. Replace them (priced rates are kept where the item no and description match).
+              This tender already has {preview.existing_lines} lines. Replace them (priced rates are carried over, as suggested, where the item no, description and unit match; a convertible unit is converted).
             </label>
           )}
           <div className="form-actions">
@@ -270,7 +276,7 @@ export default function ImportWizard({ tenderId, onClose, onImported }: { tender
         <div>
           <div className="alert alert-ok">
             Imported {report.lines} lines in {report.sections} sections.
-            {report.kept_prices > 0 && ` Kept ${report.kept_prices} priced rates.`}
+            {report.kept_prices > 0 && ` Carried over ${report.kept_prices} rates from the last BOQ, as suggested: review them.`}
           </div>
           <dl className="totals">
             <dt>QRO (rate only)</dt>
@@ -291,6 +297,8 @@ export default function ImportWizard({ tenderId, onClose, onImported }: { tender
                 .map(([k, v]) => `${k} (${v})`)
                 .join(", ") || "none"}
             </dd>
+            <dt>Qty not read</dt>
+            <dd>{report.qty_not_read?.map((q) => `row ${q.row} "${q.text}"`).join(", ") || "none"}</dd>
           </dl>
           <div className="form-actions">
             <Button variant="primary" onClick={() => void onImported()}>

@@ -366,7 +366,8 @@ def test_preview_saves_nothing_then_confirm_replace_keeps_prices(boss, db):
     assert r.json()["kept_prices"] == 1
     data = boq(client, headers, tid)
     kept = line(data, "Crystalline coating")
-    assert (kept["rate"], kept["status"], kept["amount"]) == ("470.00", "priced", "56635.00")
+    # carried over from the last BOQ as suggested, for someone to review (Prompt 38; was "priced")
+    assert (kept["rate"], kept["status"], kept["amount"]) == ("470.00", "suggested", "56635.00")
     assert db.scalar(select(func.count()).select_from(LibraryItem)) == 0  # nothing leaks out
 
 
