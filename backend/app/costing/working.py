@@ -68,11 +68,11 @@ def basis_note(db: Session, w: RateWorking) -> str | None:
 
 
 def with_margin(cost: Decimal, margin_percent: Decimal, basis: str) -> Decimal | None:
-    """The rate before rounding: on cost, cost × (1 + m); on the selling price, cost ÷ (1 − m)."""
-    m = Decimal(margin_percent) / 100
-    if basis == "selling":
-        return None if m >= 1 else cost / (1 - m)
-    return cost * (1 + m)
+    """The rate before rounding (app.margin, the one rule): on the selling price cost ÷ (1 − m),
+    on cost (a working saved that way) cost × (1 + m)."""
+    from app.margin import with_margin as rule  # noqa: PLC0415
+
+    return rule(cost, margin_percent, basis)
 
 
 def wastage_from_settings(db: Session, application: str | None) -> tuple[Decimal, str] | None:
@@ -560,7 +560,7 @@ def work(db: Session, g: RateGroup) -> dict:
         surface_prep=Decimal(g.surface_prep or 0),
         labour_rate=Decimal(g.labour_used_sqft or 0),
         labour_unit="sqft",
-        margin_percent=Decimal(g.margin_percent or 0),
+        margin_percent=Decimal(0),  # the working's own basis is applied just below
     )
     basis = margin_basis(db, db.get(RateWorking, g.working_id))
     gross = with_margin(br.base_cost, Decimal(g.margin_percent or 0), basis)

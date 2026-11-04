@@ -16,6 +16,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.margin import selling_rate, with_margin
 from app.masters.models import ProductPrice, System
 from app.timefmt import ist_today
 
@@ -96,7 +97,11 @@ def build_rate(
     labour_rate: Decimal,
     labour_unit: str,
     margin_percent: Decimal,
+    basis: str = "selling",
 ) -> RateBreakdown:
+    """The rate: (material + surface prep + labour) with the margin on the selling price,
+    rate = base ÷ (1 − m/100) (app.margin); a rate working saved on the cost basis passes
+    basis="cost". A selling margin of 100 % or more raises MarginTooHigh."""
     costs = []
     for c in components:
         quantity = c.consumption_per_unit * (1 + c.wastage_percent / HUNDRED)
@@ -118,7 +123,12 @@ def build_rate(
     material = sum((c.cost for c in costs), Decimal(0))
     labour = labour_per_unit(labour_rate, labour_unit, unit)
     base = material + surface_prep + labour
-    margin_amount = base * margin_percent / HUNDRED
+    if basis == "selling":
+        gross = selling_rate(base, margin_percent)
+    else:
+        gross = with_margin(base, margin_percent, basis)
+    rate = gross.quantize(CENT, rounding=ROUND_HALF_UP)
+    margin_amount = rate - base
     return RateBreakdown(
         unit=unit,
         components=costs,
@@ -130,7 +140,7 @@ def build_rate(
         base_cost=base,
         margin_percent=margin_percent,
         margin_amount=margin_amount,
-        rate=(base + margin_amount).quantize(CENT, rounding=ROUND_HALF_UP),
+        rate=rate,
     )
 
 

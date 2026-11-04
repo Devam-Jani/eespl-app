@@ -66,7 +66,10 @@ def refresh_amount(line: BoqLine) -> None:
 
 
 def rate_from_margin(cost_rate: Decimal, margin_percent: Decimal) -> Decimal:
-    return money(cost_rate * (1 + margin_percent / HUNDRED))
+    """The margin on the selling price (app.margin): cost ÷ (1 − m/100), rounded once."""
+    from app.margin import selling_rate  # noqa: PLC0415
+
+    return money(selling_rate(cost_rate, margin_percent))
 
 
 def apply_margin(line: BoqLine, margin_percent: Decimal) -> bool:
