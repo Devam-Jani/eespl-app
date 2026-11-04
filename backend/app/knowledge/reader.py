@@ -303,7 +303,7 @@ def _facts_of_line(ln: dict, context: extract.Requirements | None = None) -> Non
         cost = dec(w.get("cost"))
         ln["margin_percent"] = dec(w.get("margin_on_selling_percent"))
         ln["cost_sqm"] = (
-            cost if unit != "sqft" or cost is None else (cost * SQFT).quantize(Decimal("0.01"))
+            cost if unit not in ("sqft", "sft") or cost is None else (cost * SQFT).quantize(Decimal("0.01"))
         )
         worked = dec(w.get("rate"))
         if rate and worked and abs(worked - rate) > max(Decimal("1"), rate * Decimal("0.02")):

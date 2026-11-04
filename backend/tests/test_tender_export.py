@@ -224,6 +224,16 @@ def priced(boss, db):
     ]
     r = client.patch(f"/api/tenders/{tid}/lines", json={"lines": edits}, headers=headers)
     assert r.status_code == 200, r.text
+    # every line reviewed: the suggestions accepted and the rest priced (Prompt 38 holds submit
+    # and the client exports while a line is suggested or unpriced)
+    r = client.post(f"/api/tenders/{tid}/boq/accept", json={"min_score": "0"}, headers=headers)
+    assert r.status_code == 200, r.text
+    rest = [
+        {"id": ln["id"], "rate": "845"} for ln in r.json()["lines"] if ln["status"] == "unpriced"
+    ]
+    if rest:
+        r = client.patch(f"/api/tenders/{tid}/lines", json={"lines": rest}, headers=headers)
+        assert r.status_code == 200, r.text
     terms = client.get(f"/api/tenders/{tid}/tc", headers=headers).json()
     r = client.put(
         f"/api/tenders/{tid}/tc",
@@ -378,7 +388,10 @@ def test_client_format_needs_a_rate_column(boss):
     preview = upload(client, headers, tid)
     preview["column_map"].pop("rate")
     assert confirm(client, headers, tid, preview).status_code == 200
-    r = client.get(f"/api/tenders/{tid}/export/client", headers=headers)
+    # the lines are unpriced, which holds the client exports (Prompt 38): past it with a reason
+    r = client.get(
+        f"/api/tenders/{tid}/export/client?override_reason=Invented: a check", headers=headers
+    )
     assert r.status_code == 409 and "rate column" in r.json()["detail"]
 
 

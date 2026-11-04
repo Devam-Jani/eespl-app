@@ -151,8 +151,9 @@ OUR_SCOPE = ("our_scope", "applicator")
 
 
 def tender_send_check(db: Session, tender: Tender) -> list[str]:
-    """Every quoted line has a product and its manufacturer, the guarantee years are filled, and
-    our scope and the client's scope come from the T&C library."""
+    """Every quoted line has a product and its manufacturer and a reviewed rate (none still
+    suggested or unpriced), the guarantee years are filled, and our scope and the client's scope
+    come from the T&C library."""
     from app.masters.models import TcClause  # noqa: PLC0415
 
     missing = []
@@ -165,6 +166,9 @@ def tender_send_check(db: Session, tender: Tender) -> list[str]:
         missing.append(f"{len(no_product)} line(s) without our product")
     if no_make:
         missing.append(f"{len(no_make)} line(s) without the manufacturer")
+    from app.tenders import pricing  # noqa: PLC0415
+
+    missing += pricing.unreviewed(db, tender)  # suggested (not reviewed) or unpriced lines
     if not tender.guarantee_years:
         missing.append("Guarantee years not filled")
     cats = set(
@@ -182,7 +186,18 @@ def tender_send_check(db: Session, tender: Tender) -> list[str]:
 
 
 def quotation_send_check(q) -> list[str]:
+    from app.quotations.service import is_offered  # noqa: PLC0415
+
     missing = []
+    # an offered line with no rate prints "On request"
+    no_rate = sum(
+        1
+        for item in q.items
+        for ln in item.lines
+        if is_offered(item, ln.option) and not ln.client_scope and ln.rate is None
+    )
+    if no_rate:
+        missing.append(f"{no_rate} line{'s have' if no_rate > 1 else ' has'} no rate")
     if not q.guarantee_years:
         missing.append("Guarantee years not filled")
     cats = {t.get("category") for t in q.terms or []}

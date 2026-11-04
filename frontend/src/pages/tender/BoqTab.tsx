@@ -484,6 +484,24 @@ export default function BoqTab({ tender, canEdit, onTotalChange }: { tender: Ten
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {notice && <div className="alert alert-ok">{notice}</div>}
+      {((counts.suggested ?? 0) > 0 || (counts.unpriced ?? 0) > 0) && (
+        <div className="alert alert-warn" role="status">
+          {(counts.suggested ?? 0) > 0 && (
+            <>
+              <b>
+                {counts.suggested} line{counts.suggested === 1 ? "" : "s"} still suggested, {inr(boq.totals.suggested_amount ?? "0")}
+              </b>{" "}
+              (in the totals, not reviewed yet).{" "}
+            </>
+          )}
+          {(counts.unpriced ?? 0) > 0 && (
+            <>
+              {counts.unpriced} line{counts.unpriced === 1 ? "" : "s"} without a rate.{" "}
+            </>
+          )}
+          Submit and the client exports are held until they are reviewed; the director can override with a reason.
+        </div>
+      )}
 
       <div className={selected !== null ? "boq-layout with-panel" : "boq-layout"}>
         <Card as="div" className="boq-card">

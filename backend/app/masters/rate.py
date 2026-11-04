@@ -9,15 +9,14 @@ per-sqm system is × 10.7639 (and ÷ for the reverse). Everything is Decimal; on
 rate is rounded, so intermediate figures in the breakdown are exact.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.margin import selling_rate, with_margin
 from app.masters.models import ProductPrice, System
-from app.timefmt import ist_today
 
 SQFT_PER_SQM = Decimal("10.7639")
 HUNDRED = Decimal(100)
@@ -38,6 +37,34 @@ class MissingConsumptionError(MissingPriceError):
     def __init__(self, products: list[str]):
         self.products = products
         ValueError.__init__(self, f"Consumption to confirm for: {', '.join(products)}")
+
+
+class LabourUnitError(MissingPriceError):
+    """The labour's unit does not fit the system's (₹ per sq ft on a system in rmt): no rate."""
+
+    def __init__(self, labour_unit: str, system_unit: str):
+        self.products = []
+        ValueError.__init__(
+            self,
+            f"The labour is per {labour_unit} but the system is per {system_unit}: "
+            "labour per sqm or sq ft fits only a system per sqm or sq ft",
+        )
+
+
+class PriceUnitError(MissingPriceError):
+    """A price kept per a unit (a drum) that does not convert to the product's unit."""
+
+    def __init__(self, messages: list[str]):
+        self.products = messages
+        ValueError.__init__(self, "; ".join(messages))
+
+
+AREA = {"sqm", "sqft"}
+
+
+def labour_fits(labour_unit: str, system_unit: str) -> bool:
+    """Labour per sqm or sq ft on a system per sqm or sq ft (converted), or the system's unit."""
+    return labour_unit == system_unit or {labour_unit, system_unit} <= AREA
 
 
 @dataclass(frozen=True)
@@ -78,9 +105,17 @@ class RateBreakdown:
     margin_percent: Decimal
     margin_amount: Decimal
     rate: Decimal  # the only rounded figure
+    # a price or a consumption of 0: worked, but said (a free sample, a figure not filled in)
+    warnings: list[str] = field(default_factory=list)
 
 
 def labour_per_unit(labour_rate: Decimal, labour_unit: str, system_unit: str) -> Decimal:
+    """The labour in the system's unit; a unit that does not fit is refused (LabourUnitError),
+    except for no labour at all."""
+    if not labour_fits(labour_unit, system_unit):
+        if Decimal(labour_rate or 0) == 0:
+            return Decimal(0)
+        raise LabourUnitError(labour_unit, system_unit)
     if labour_unit == "sqft" and system_unit == "sqm":
         return labour_rate * SQFT_PER_SQM
     if labour_unit == "sqm" and system_unit == "sqft":
@@ -96,10 +131,19 @@ def build_rate(
     labour_rate: Decimal,
     labour_unit: str,
     margin_percent: Decimal,
+    basis: str = "selling",
 ) -> RateBreakdown:
+    """The rate: (material + surface prep + labour) with the margin on the selling price,
+    rate = base ÷ (1 − m/100) (app.margin); a rate working saved on the cost basis passes
+    basis="cost". A selling margin of 100 % or more raises MarginTooHigh."""
     costs = []
+    warnings = []
     for c in components:
-        quantity = c.consumption_per_unit * (1 + c.wastage_percent / HUNDRED)
+        if Decimal(c.purchase_rate) == 0:
+            warnings.append(f"{c.product_name}: price is 0")
+        if Decimal(c.consumption_per_unit) == 0:
+            warnings.append(f"{c.product_name}: consumption is 0")
+        quantity =c.consumption_per_unit * (1 + c.wastage_percent / HUNDRED)
         landed = c.purchase_rate + c.freight_per_unit
         costs.append(
             ComponentCost(
@@ -118,7 +162,12 @@ def build_rate(
     material = sum((c.cost for c in costs), Decimal(0))
     labour = labour_per_unit(labour_rate, labour_unit, unit)
     base = material + surface_prep + labour
-    margin_amount = base * margin_percent / HUNDRED
+    if basis == "selling":
+        gross = selling_rate(base, margin_percent)
+    else:
+        gross = with_margin(base, margin_percent, basis)
+    rate = gross.quantize(CENT, rounding=ROUND_HALF_UP)
+    margin_amount = rate - base
     return RateBreakdown(
         unit=unit,
         components=costs,
@@ -130,28 +179,19 @@ def build_rate(
         base_cost=base,
         margin_percent=margin_percent,
         margin_amount=margin_amount,
-        rate=(base + margin_amount).quantize(CENT, rounding=ROUND_HALF_UP),
+        rate=rate,
+        warnings=warnings,
     )
 
 
 def current_prices(
     db: Session, product_ids: list[int], on: date | None = None
 ) -> dict[int, ProductPrice]:
-    """The price row in force on `on` (default today) for each product that has one."""
-    if not product_ids:
-        return {}
-    on = on or ist_today()
-    rows = db.scalars(
-        select(ProductPrice)
-        .where(ProductPrice.product_id.in_(product_ids), ProductPrice.effective_from <= on)
-        .order_by(
-            ProductPrice.product_id,
-            ProductPrice.effective_from.desc(),
-            ProductPrice.id.desc(),
-        )
-        .distinct(ProductPrice.product_id)
-    )
-    return {p.product_id: p for p in rows}
+    """The price row in force on `on` (default today) for each product that has one: a valid
+    rate contract, else the latest PO or vendor quote, else a typed price (costing.prices)."""
+    from app.costing.prices import current_many  # noqa: PLC0415  (costing imports masters)
+
+    return current_many(db, product_ids, on)
 
 
 def system_rate(
@@ -166,6 +206,16 @@ def system_rate(
     missing = [c.product.name for c in system.components if c.product_id not in prices]
     if missing:
         raise MissingPriceError(missing)
+    from app.costing.prices import UnitNotConvertible, base_price  # noqa: PLC0415
+
+    per_base, wrong_unit = {}, []
+    for c in system.components:
+        try:  # a price kept per bag is per kg here (÷ the pack size or the unit conversion)
+            per_base[c.product_id] = base_price(db, prices[c.product_id])
+        except UnitNotConvertible as exc:
+            wrong_unit.append(str(exc))
+    if wrong_unit:
+        raise PriceUnitError(wrong_unit)
     inputs = [
         ComponentInput(
             product_id=c.product_id,
@@ -173,8 +223,8 @@ def system_rate(
             unit=c.product.unit,
             consumption_per_unit=c.consumption_per_unit,
             wastage_percent=c.wastage_percent,
-            purchase_rate=prices[c.product_id].purchase_rate,
-            freight_per_unit=prices[c.product_id].freight_per_unit,
+            purchase_rate=per_base[c.product_id][0],
+            freight_per_unit=per_base[c.product_id][1],
         )
         for c in system.components
     ]

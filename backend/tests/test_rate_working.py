@@ -61,7 +61,10 @@ def test_the_last_price_used_is_shown_and_a_change_over_10_percent_is_flagged(bo
     r = c.post(f"/api/prices/products/{p.id}", json={"rate": "280"}, headers=h)
     assert r.json()["check"]["flagged"]
     page = c.get(f"/api/prices/products/{p.id}", headers=h).json()
-    assert d(page["current"]["rate"]) == 280 and page["history"][0]["flagged"]
+    # Prompt 38 Part 3.5: the current price prefers a vendor quote (250, Q-17) to a price typed in
+    # the list (280, source "manual"); it was the newest of any source (280)
+    assert d(page["current"]["rate"]) == 250 and page["current"]["basis"].startswith("latest PO or vendor quote")
+    assert page["history"][0]["flagged"]
     assert not page["history"][1]["flagged"]  # the first price has nothing to compare with
     # freight per unit, per product or per vendor and godown, with its own history
     v = Vendor(name="Invented Polymers", type="material_supplier")
@@ -294,9 +297,16 @@ def test_the_rate_formula_cushions_reasons_flags_and_the_rate_to_every_line(
         ).status_code
         == 403
     )
-    # the client's Excel never has the working; the internal one has it as its own sheet
+    # the client's Excel never has the working; the internal one has it as its own sheet. Only
+    # the raft lines are priced, which holds the client export (Prompt 38): the director
+    # exports past that with a reason
     client_file = load_workbook(
-        BytesIO(c.get(f"/api/tenders/{boq['tender']}/export.xlsx", headers=h).content)
+        BytesIO(
+            c.get(
+                f"/api/tenders/{boq['tender']}/export.xlsx?override_reason=Invented: a check",
+                headers=h,
+            ).content
+        )
     )
     assert "WORKING" not in client_file.sheetnames
     internal = c.get(f"/api/tenders/{boq['tender']}/export.xlsx?internal=true", headers=h)

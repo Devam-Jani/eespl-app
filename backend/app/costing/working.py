@@ -10,7 +10,11 @@ Each main item is worked per sqm, the same way by everyone:
 
     material  = Σ consumption × (price + freight) × (1 + wastage of the application)
     cost      = material + surface preparation + labour (₹ per sq ft × 10.7639 per sqm)
-    rate      = cost × (1 + margin %)              per sqm, and ÷ 10.7639 per sq ft
+    rate      = cost ÷ (1 − margin %)              per sqm, and ÷ 10.7639 per sq ft
+
+A system per sq ft has its consumption and surface preparation × 10.7639 per sqm (a system per
+rmt or nos has no working); a price per bag is per kg (÷ the pack size); with no application
+matched each product keeps its own wastage; free-issue material is shown, not costed.
 
 (app.masters.rate.build_rate, Decimal throughout, only the rate rounded). Consumption defaults from
 the system and needs a reason when changed; the price comes from the master price list, freight
@@ -68,11 +72,11 @@ def basis_note(db: Session, w: RateWorking) -> str | None:
 
 
 def with_margin(cost: Decimal, margin_percent: Decimal, basis: str) -> Decimal | None:
-    """The rate before rounding: on cost, cost × (1 + m); on the selling price, cost ÷ (1 − m)."""
-    m = Decimal(margin_percent) / 100
-    if basis == "selling":
-        return None if m >= 1 else cost / (1 - m)
-    return cost * (1 + m)
+    """The rate before rounding (app.margin, the one rule): on the selling price cost ÷ (1 − m),
+    on cost (a working saved that way) cost × (1 + m)."""
+    from app.margin import with_margin as rule  # noqa: PLC0415
+
+    return rule(cost, margin_percent, basis)
 
 
 def wastage_from_settings(db: Session, application: str | None) -> tuple[Decimal, str] | None:
@@ -89,6 +93,28 @@ def wastage_from_settings(db: Session, application: str | None) -> tuple[Decimal
 
 def money(v: Decimal) -> Decimal:
     return Decimal(v).quantize(CENT, rounding=ROUND_HALF_UP)
+
+
+def q4(v: Decimal) -> Decimal:
+    """A per sq ft (or converted) figure kept to 4 decimals until the final rate."""
+    return Decimal(v).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+
+class WorkingUnitError(ValueError):
+    """A system per rmt, nos ...: a rate working is per sqm (and per sq ft from it)."""
+
+
+def per_sqm_factor(system: System) -> Decimal:
+    """× this turns the system's per-unit figures into per sqm: 10.7639 for a system per sq ft.
+    Other units are refused (WorkingUnitError)."""
+    unit = (system.unit or "sqm").lower()
+    if unit == "sqm":
+        return Decimal(1)
+    if unit in ("sqft", "sft"):
+        return SQFT_PER_SQM
+    raise WorkingUnitError(
+        f"{system.name} is per {system.unit}: a rate working is per sqm or sq ft"
+    )
 
 
 # --- the client's lines --------------------------------------------------------------------------
@@ -248,6 +274,7 @@ GROUP_FIELDS = (
 PRODUCT_FIELDS = (
     "product_id", "sort_order", "consumption", "default_consumption", "consumption_reason",
     "consumption_source", "consumption_row_id", "price", "price_id", "freight_used", "freight_actual",
+    "wastage_percent",
 )  # fmt: skip
 
 
@@ -362,7 +389,10 @@ def suggest(db: Session, w: RateWorking, user_id=None) -> list[RateGroup]:
         g.lines = [_group_line(x["key"]) for x in c["lines"]]
         db.add(g)
         db.flush()
-        init_from_system(db, g, " ".join(x["description"] for x in c["lines"][:3]))
+        try:
+            init_from_system(db, g, " ".join(x["description"] for x in c["lines"][:3]))
+        except WorkingUnitError as exc:  # a system per rmt or nos: the main item says so
+            g.note = str(exc)
         made.append(g)
     db.flush()
     db.refresh(w)
@@ -382,26 +412,35 @@ def init_from_system(db: Session, g: RateGroup, context: str = "") -> None:
     from app.process.engine import wastage_for  # noqa: PLC0415
 
     system = db.get(System, g.system_id) if g.system_id else None
+    # a system per sq ft: its consumption and surface preparation × 10.7639 per sqm; per rmt,
+    # nos ...: refused (WorkingUnitError) before anything is changed
+    factor = per_sqm_factor(system) if system else Decimal(1)
     app_w = wastage_for(db, f"{g.name} {context}")
     g.application = app_w[0] if app_w else None
     if app_w:
         g.wastage_percent, g.wastage_source = wastage_from_settings(db, app_w[0])
     elif system:
+        # no application matched: each product keeps its own wastage from the system (the
+        # highest shown on the main item)
         g.wastage_percent = max(
             (Decimal(c.wastage_percent or 0) for c in system.components), default=Decimal(0)
         )
-        g.wastage_source = f"the system {system.name}"
+        g.wastage_source = f"the system {system.name}: each product's own"
     if system is None:
         return
-    g.surface_prep = Decimal(system.surface_prep_per_unit or 0)
+    g.surface_prep = q4(Decimal(system.surface_prep_per_unit or 0) * factor)
     labour = Decimal(system.labour_rate or 0)
-    g.labour_used_sqft = money(labour / SQFT_PER_SQM if system.labour_unit == "sqm" else labour)
+    g.labour_used_sqft = q4(labour / SQFT_PER_SQM if system.labour_unit == "sqm" else labour)
     g.margin_percent = Decimal(system.default_margin_percent or 0)
     g.coats = max((c.coats for c in system.components if c.coats), default=None)
     g.products = []
     for i, c in enumerate(system.components):
-        value, source, row_id = pick_consumption(db, g, c.product_id, c.consumption_per_unit)
-        g.products.append(new_product(db, c.product_id, value, i, source, row_id))
+        figure = Decimal(c.consumption_per_unit) * factor if c.consumption_per_unit is not None else None
+        value, source, row_id = pick_consumption(db, g, c.product_id, figure)
+        p = new_product(db, c.product_id, value, i, source, row_id)
+        if not app_w:
+            p.wastage_percent = Decimal(c.wastage_percent or 0)
+        g.products.append(p)
 
 
 SOURCE_LABEL = {
@@ -487,7 +526,9 @@ def repick(db: Session, g: RateGroup) -> None:
     """The surface or the requirement changed: every product whose consumption was not changed
     by hand takes the row for the new surface and requirement."""
     system = db.get(System, g.system_id) if g.system_id else None
-    figures = {c.product_id: c.consumption_per_unit for c in (system.components if system else [])}
+    factor = per_sqm_factor(system) if system else Decimal(1)
+    figures = {c.product_id: (Decimal(c.consumption_per_unit) * factor if c.consumption_per_unit is not None else None)
+               for c in (system.components if system else [])}  # fmt: skip
     for p in g.products:
         if p.consumption != p.default_consumption:
             continue  # typed for this site, with its reason: kept
@@ -507,8 +548,9 @@ def new_product(
     row_id: int | None = None,
 ) -> RateGroupProduct:
     cur = prices.current(db, product_id)
+    price, freight = price_of(db, cur)
     f = prices.freight_for(db, product_id)
-    freight = f.per_unit if f else (cur.freight_per_unit if cur else Decimal(0))
+    freight = f.per_unit if f else freight
     return RateGroupProduct(
         product_id=product_id,
         sort_order=sort,
@@ -516,10 +558,22 @@ def new_product(
         default_consumption=consumption,
         consumption_source=source,
         consumption_row_id=row_id,
-        price=cur.purchase_rate if cur else None,
+        price=price,
         price_id=cur.id if cur else None,
-        freight_used=freight or Decimal(0),
+        freight_used=money(freight or Decimal(0)),
     )
+
+
+def price_of(db: Session, cur) -> tuple[Decimal | None, Decimal]:
+    """(price, freight) per the product's unit from a master price row (one kept per bag ÷ the
+    pack size); a price in a unit that does not convert gives no price (the working says why)."""
+    if cur is None:
+        return None, Decimal(0)
+    try:
+        rate, freight = prices.base_price(db, cur)
+    except prices.UnitNotConvertible:
+        return None, Decimal(0)
+    return money(rate), freight
 
 
 # --- working a main item -------------------------------------------------------------------------
@@ -530,13 +584,29 @@ def work(db: Session, g: RateGroup) -> dict:
     result on the group."""
     errors = []
     comps = []
+    w = db.get(RateWorking, g.working_id)
+    # material the client supplies (cement, sand ...): shown as free issue, never costed
+    free = set(w.free_issue_product_ids or []) if w else set()
+    system = db.get(System, g.system_id) if g.system_id else None
+    if system is not None:
+        try:
+            per_sqm_factor(system)
+        except WorkingUnitError as exc:
+            errors.append(str(exc))
     for p in g.products:
         product = db.get(Product, p.product_id)
+        if p.product_id in free:
+            continue
         if p.consumption is None:
             errors.append(f"{product.name}: consumption to confirm")
             continue
         if p.price is None:
-            errors.append(f"{product.name}: no price in the master price list")
+            kept = db.get(prices.ProductPrice, p.price_id) if p.price_id else None
+            errors.append(
+                f"{product.name}: the price is per {kept.unit}, which does not convert to {product.unit}"
+                if kept is not None and kept.unit and price_of(db, kept)[0] is None
+                else f"{product.name}: no price in the master price list"
+            )
             continue
         comps.append(
             ComponentInput(
@@ -544,7 +614,7 @@ def work(db: Session, g: RateGroup) -> dict:
                 product_name=product.name,
                 unit=product.unit,
                 consumption_per_unit=Decimal(p.consumption),
-                wastage_percent=Decimal(g.wastage_percent or 0),
+                wastage_percent=Decimal(p.wastage_percent if p.wastage_percent is not None else (g.wastage_percent or 0)),
                 purchase_rate=Decimal(p.price),
                 freight_per_unit=Decimal(p.freight_used or 0),
             )
@@ -553,14 +623,14 @@ def work(db: Session, g: RateGroup) -> dict:
         if not g.products:
             errors.append("No products: choose the system or add products")
         g.cost_sqm = g.rate_sqm = g.rate_sqft = None
-        return {"errors": errors, "rate_sqm": None, "rate_sqft": None, "rows": [], "cushions": []}
+        return {"errors": errors, "warnings": [], "rate_sqm": None, "rate_sqft": None, "rows": [], "cushions": []}
     br = build_rate(
         unit="sqm",
         components=comps,
         surface_prep=Decimal(g.surface_prep or 0),
         labour_rate=Decimal(g.labour_used_sqft or 0),
         labour_unit="sqft",
-        margin_percent=Decimal(g.margin_percent or 0),
+        margin_percent=Decimal(0),  # the working's own basis is applied just below
     )
     basis = margin_basis(db, db.get(RateWorking, g.working_id))
     gross = with_margin(br.base_cost, Decimal(g.margin_percent or 0), basis)
@@ -575,9 +645,15 @@ def work(db: Session, g: RateGroup) -> dict:
     rows = [{"item": "Surface preparation", "coverage": None, "cost_of_material": None,
              "per_sqm": money(br.surface_prep), "ref": None}]  # fmt: skip
     cushions = []
+    for p in g.products:
+        if p.product_id in free:
+            rows.append({"item": db.get(Product, p.product_id).name, "product_id": p.product_id,
+                         "unit": db.get(Product, p.product_id).unit, "consumption": p.consumption,
+                         "coverage": None, "price": None, "freight": None, "cost_of_material": None,
+                         "per_sqm": Decimal(0), "ref": "free issue"})  # fmt: skip
     for c, p in zip(
         br.components,
-        [x for x in g.products if x.consumption is not None and x.price is not None],
+        [x for x in g.products if x.product_id not in free and x.consumption is not None and x.price is not None],
         strict=True,
     ):
         rows.append({
@@ -615,6 +691,7 @@ def work(db: Session, g: RateGroup) -> dict:
     )
     return {
         "errors": [],
+        "warnings": br.warnings,  # a price or a consumption of 0: worked, but said
         "rows": rows,
         "material_sqm": money(br.material_cost),
         "cost_sqm": money(br.base_cost),
@@ -672,8 +749,10 @@ def labour_from_card(db: Session, g: RateGroup) -> None:
     card = db.get(LabourRateCard, g.labour_rate_card_id) if g.labour_rate_card_id else None
     if card is None:
         return
+    if card.unit not in ("sqm", "sqft"):
+        raise WorkingUnitError(f"{card.job} is paid per {card.unit}: the working's labour is per sq ft (or sqm)")
     rate = Decimal(card.rate)
-    g.labour_paid_sqft = money(rate / SQFT_PER_SQM if card.unit == "sqm" else rate)
+    g.labour_paid_sqft = q4(rate / SQFT_PER_SQM if card.unit == "sqm" else rate)
 
 
 # --- the rate to the client's lines --------------------------------------------------------------
@@ -735,14 +814,22 @@ def step_shares(db: Session, w: RateWorking, g: RateGroup) -> dict[str, Decimal]
     for k in list(parts):
         if k not in present:
             parts[home] = parts.get(home, Decimal(0)) + parts.pop(k)
-    return {
-        key: money(parts.get(kind or "coating", Decimal(0)) * factor) for key, kind in kinds.items()
-    }
+    # each step rounded, the paise left over on the largest step: the steps add up to the rate
+    step_rate = {k: money(parts.get(k, Decimal(0)) * factor) for k in present}
+    largest = max(sorted(present), key=lambda k: step_rate[k])
+    step_rate[largest] += Decimal(g.rate_sqm) - sum(step_rate.values(), Decimal(0))
+    return {key: step_rate[kind or "coating"] for key, kind in kinds.items()}
 
 
 def apply_rates(db: Session, w: RateWorking) -> dict:
     """Every client line in a worked group gets the group's rate (sqm or sq ft); a line in another
-    unit is left for a person (reported)."""
+    unit is left for a person (reported). A quotation once sent keeps its prices (409: make a new
+    revision), the same rule as editing its lines."""
+    if w.quotation_id:
+        from app.quotations import service as qsvc  # noqa: PLC0415
+        from app.quotations.models import Quotation  # noqa: PLC0415
+
+        qsvc.check_price_edit(db.get(Quotation, w.quotation_id))
     applied, skipped = 0, []
     tender_lines = []
     for g in w.groups:

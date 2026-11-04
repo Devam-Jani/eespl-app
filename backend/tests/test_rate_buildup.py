@@ -32,7 +32,8 @@ def test_eespl_working_sheet_example():
     )
     assert b.material_cost == D("422.90")
     assert b.base_cost == D("542.90")
-    assert b.rate == D("705.77")
+    # 542.90 ÷ (1 − 0.30): the margin is on the selling price (was 705.77, a markup)
+    assert b.rate == D("775.57")
 
 
 def test_labour_per_sqft_is_converted_to_per_sqm():
@@ -57,12 +58,12 @@ def test_sqft_labour_with_materials_wastage_freight_and_margin():
         labour_unit="sqft",
         margin_percent=D("30"),
     )
-    # 1.5 × 1.05 × 310 = 488.25; labour 6.5 × 10.7639 = 69.96535; base 583.21535; × 1.3
+    # 1.5 × 1.05 × 310 = 488.25; labour 6.5 × 10.7639 = 69.96535; base 583.21535; ÷ 0.7
     assert b.components[0].quantity_with_wastage == D("1.575")
     assert b.material_cost == D("488.25")
     assert b.labour_per_unit == D("69.96535")
     assert b.base_cost == D("583.21535")
-    assert b.rate == D("758.18")  # 758.179955 rounded once, at the end
+    assert b.rate == D("833.16")  # 833.164786 rounded once, at the end (was 758.18 as a markup)
 
 
 def test_only_the_final_rate_is_rounded():
@@ -84,10 +85,19 @@ def test_only_the_final_rate_is_rounded():
         ("10", "sqm", "sqm", "10"),
         ("10", "sqft", "sqm", "107.639"),
         ("107.639", "sqm", "sqft", "10"),
-        ("10", "sqm", "rmt", "10"),
+        # Prompt 38 Part 2.6: labour per sqm on a system per rmt was used unconverted (10 → 10);
+        # it does not fit and is refused now (None: LabourUnitError). No labour at all still works.
+        ("10", "sqm", "rmt", None),
+        ("0", "sqm", "rmt", "0"),
     ],
 )
 def test_labour_unit_conversion(rate, labour_unit, system_unit, expected):
+    if expected is None:
+        from app.masters.rate import LabourUnitError
+
+        with pytest.raises(LabourUnitError):
+            labour_per_unit(D(rate), labour_unit, system_unit)
+        return
     assert labour_per_unit(D(rate), labour_unit, system_unit) == D(expected)
 
 
@@ -149,13 +159,13 @@ def test_system_rate_endpoint_uses_current_prices(working_sheet_system):
     r = client.get(f"/api/systems/{system_id}/rate", headers=headers)
     assert r.status_code == 200, r.text
     body = r.json()
-    assert D(body["rate"]) == D("705.77")
+    assert D(body["rate"]) == D("775.57")
     assert [D(c["purchase_rate"]) for c in body["components"]] == [D("365"), D("95")]
 
     r = client.get(f"/api/systems/{system_id}/rate", params={"margin": "0"}, headers=headers)
     assert D(r.json()["rate"]) == D("542.90")
 
-    assert D(client.get(f"/api/systems/{system_id}", headers=headers).json()["rate"]) == D("705.77")
+    assert D(client.get(f"/api/systems/{system_id}", headers=headers).json()["rate"]) == D("775.57")
 
 
 def test_system_without_a_current_price_reports_it(login_as):
@@ -193,7 +203,7 @@ def test_cost_data_hidden_without_tender_margin(working_sheet_system, make_user)
 
     # sales: library.view without tender.margin -> names and final rate only
     s = sales.get(f"/api/systems/{system_id}", headers=sales_h).json()
-    assert D(s["rate"]) == D("705.77")
+    assert D(s["rate"]) == D("775.57")
     assert s["cost"] is None
     assert [c["product_name"] for c in s["components"]] == ["Polymer coating", "Primer"]
     flat = str(s)
@@ -217,7 +227,7 @@ def test_cost_data_hidden_without_tender_margin(working_sheet_system, make_user)
     e = est.get(f"/api/systems/{system_id}", headers=est_h).json()
     assert D(e["cost"]["default_margin_percent"]) == D("30")
     assert [D(c["consumption_per_unit"]) for c in e["cost"]["components"]] == [D("1.13"), D("0.11")]
-    assert D(est.get(f"/api/systems/{system_id}/rate", headers=est_h).json()["rate"]) == D("705.77")
+    assert D(est.get(f"/api/systems/{system_id}/rate", headers=est_h).json()["rate"]) == D("775.57")
     prods = est.get("/api/products", headers=est_h).json()["items"]
     assert {D(p["cost"]["current_price"]["purchase_rate"]) for p in prods} == {D("365"), D("95")}
     assert len(est.get(f"/api/products/{pid}/prices", headers=est_h).json()) == 3

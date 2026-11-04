@@ -366,7 +366,8 @@ def test_preview_saves_nothing_then_confirm_replace_keeps_prices(boss, db):
     assert r.json()["kept_prices"] == 1
     data = boq(client, headers, tid)
     kept = line(data, "Crystalline coating")
-    assert (kept["rate"], kept["status"], kept["amount"]) == ("470.00", "priced", "56635.00")
+    # carried over from the last BOQ as suggested, for someone to review (Prompt 38; was "priced")
+    assert (kept["rate"], kept["status"], kept["amount"]) == ("470.00", "suggested", "56635.00")
     assert db.scalar(select(func.count()).select_from(LibraryItem)) == 0  # nothing leaks out
 
 
@@ -423,7 +424,7 @@ def test_suggest_sources_units_and_priced_lines(priced_setup):
     assert (membrane["cost_rate"], membrane["margin_percent"], membrane["rate"]) == (
         "320.00",
         "20.00",
-        "384.00",
+        "400.00",  # 320 ÷ (1 − 0.20), the margin on the selling price (was 384.00, a markup)
     )
 
     crystal = line(data, "Crystalline coating")  # library-only match
@@ -490,8 +491,8 @@ def test_margin_recalculates_system_lines_only_and_totals(priced_setup, db):
     membrane = line(data, "APP membrane")
     assert (membrane["margin_percent"], membrane["rate"], membrane["amount"]) == (
         "12.50",
-        "360.00",
-        "108000.00",
+        "365.71",  # 320 ÷ (1 − 0.125) (was 360.00 as a markup)
+        "109713.00",  # 300 × 365.71 = 320 ÷ (1 − 0.125) (was 108000.00 as a markup)
     )
     crystal = line(data, "Crystalline coating")
     assert (crystal["rate"], crystal["margin_percent"]) == ("455.00", None)  # library: untouched
@@ -528,8 +529,9 @@ def test_margin_recalculates_system_lines_only_and_totals(priced_setup, db):
 
 
 def test_decimal_rounding_on_the_final_value_only():
-    assert pricing.rate_from_margin(Decimal("10.10"), Decimal("25")) == Decimal("12.63")  # half up
-    assert pricing.rate_from_margin(Decimal("10.02"), Decimal("12.5")) == Decimal("11.27")
+    # on the selling price: 10.10 ÷ 0.75 = 13.4667, 10.02 ÷ 0.875 = 11.4514 (were 12.63, 11.27)
+    assert pricing.rate_from_margin(Decimal("10.10"), Decimal("25")) == Decimal("13.47")  # half up
+    assert pricing.rate_from_margin(Decimal("10.02"), Decimal("12.5")) == Decimal("11.45")
     assert pricing.money(Decimal("40.123") * Decimal("600.00")) == Decimal("24073.80")
     assert pricing.money(Decimal("0.005")) == Decimal("0.01")
 

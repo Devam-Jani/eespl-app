@@ -49,6 +49,8 @@ export type QItem = {
   specs: SpecCopy[];
   lines: QLine[];
   total: string | null;
+  // one per offered option when there are two or more: the common lines plus that option's
+  option_totals: { option: string; total: string }[];
 };
 export type Term = { category: string; text: string; clause_id?: number | null };
 export type Ref = {
@@ -119,10 +121,16 @@ export type Quotation = {
   items: QItem[];
   total: string;
   total_option_note: boolean;
+  gst_percent: string;
+  gst_amount: string;
+  total_with_gst: string;
+  total_with_gst_words: string;
   revisions: { id: number; revision: number; status: string; quote_date: string }[];
   files: QFile[];
   followups: FollowUp[];
   can_edit: boolean;
+  // false once this revision has been sent: rates, quantities and lines need a new revision
+  can_edit_prices: boolean;
   can_send: boolean;
   can_template_edit: boolean;
   can_margin: boolean;

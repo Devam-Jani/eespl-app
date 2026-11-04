@@ -1,11 +1,14 @@
+# ruff: noqa: E501  (the queries and messages read better unwrapped)
 """The master price list: every product's price history (price, unit, date, source, who entered
-it), the current price (the newest in force), freight per unit with its own history, and the
+it), the current price (a valid rate contract, else the latest PO or vendor quote, else a typed
+price; a price per bag kept per the product's unit), freight per unit with its own history, and the
 "last price used" shown wherever a price is entered (rate working, PO, rate contract), with a
 change of more than 10 % (setting) flagged.
 
 Prices are cost data: the history and the master list are for tender.margin; the last-price hint
 also reaches whoever enters prices (purchase, rate contracts, payables)."""
 
+import re
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated
@@ -59,17 +62,106 @@ def history(db: Session, product_id: int) -> list[ProductPrice]:
     )
 
 
-def current(db: Session, product_id: int, on: date | None = None) -> ProductPrice | None:
-    """The newest price in force on `on` (default today)."""
-    return db.scalar(
+def _contract_id(p: ProductPrice) -> int | None:
+    """The rate contract a price row came from ("RC 12 v2": 12), else None."""
+    m = re.match(r"RC (\d+)\b", p.ref or "") if p.source == "rate_contract" else None
+    return int(m.group(1)) if m else None
+
+
+def _valid_contracts(db: Session, product_ids, on: date) -> tuple[dict, set[int]]:
+    """{contract id: contract} of the rate contracts in force on `on`, and every contract id the
+    products have (valid or not)."""
+    from app.sitecontrol.models import RateContract  # noqa: PLC0415
+
+    rows = db.scalars(select(RateContract).where(RateContract.product_id.in_(list(product_ids)))).all()
+    valid = {c.id: c for c in rows if c.is_active and c.valid_from <= on <= c.valid_till}
+    return valid, {c.id for c in rows}
+
+
+def _tier(p: ProductPrice, valid: dict, known: set[int]) -> int:
+    """0 a rate contract in force; 1 a PO or a vendor quote (or a contract price with no contract
+    record); 2 a typed price; 3 the price of a contract no longer in force."""
+    rc = _contract_id(p)
+    if rc is not None and rc in valid:
+        return 0
+    if rc is not None and rc in known:
+        return 3
+    return 2 if p.source == "manual" else 1
+
+
+def current_many(db: Session, product_ids, on: date | None = None) -> dict[int, ProductPrice]:
+    """The price in force on `on` (default today) per product, in this order: a valid rate
+    contract, then the latest PO or vendor quote, then a typed price (a one-off price typed in a
+    working never beats a contract); the newest within each."""
+    ids = list(product_ids)
+    if not ids:
+        return {}
+    on = on or ist_today()
+    valid, known = _valid_contracts(db, ids, on)
+    best: dict[int, tuple[int, ProductPrice]] = {}
+    for p in db.scalars(
         select(ProductPrice)
-        .where(
-            ProductPrice.product_id == product_id,
-            ProductPrice.effective_from <= (on or ist_today()),
-        )
+        .where(ProductPrice.product_id.in_(ids), ProductPrice.effective_from <= on)
         .order_by(ProductPrice.effective_from.desc(), ProductPrice.id.desc())
-        .limit(1)
-    )
+    ):
+        tier = _tier(p, valid, known)
+        if p.product_id not in best or tier < best[p.product_id][0]:
+            best[p.product_id] = (tier, p)  # newest first: the first of a tier is its newest
+    return {pid: p for pid, (_t, p) in best.items()}
+
+
+def current(db: Session, product_id: int, on: date | None = None) -> ProductPrice | None:
+    """The price in force on `on` (default today): see current_many."""
+    return current_many(db, [product_id], on).get(product_id)
+
+
+def basis_of(db: Session, p: ProductPrice, on: date | None = None) -> str:
+    """Which kind of price it is, said beside the price used."""
+    on = on or ist_today()
+    valid, known = _valid_contracts(db, [p.product_id], on)
+    tier = _tier(p, valid, known)
+    if tier == 0:
+        return f"rate contract {p.ref} (valid till {valid[_contract_id(p)].valid_till:%d-%m-%Y})"
+    if tier == 3:
+        return f"rate contract {p.ref}, no longer in force"
+    if tier == 1:
+        return f"latest PO or vendor quote{f' ({p.ref})' if p.ref else ''}"
+    return "typed price"
+
+
+# --- a price per bag or pack: per the product's base unit -----------------------------------------
+
+
+class UnitNotConvertible(ValueError):
+    """A price or freight per a unit that does not convert to the product's unit."""
+
+
+def base_factor(db: Session, product: Product, unit: str | None) -> Decimal:
+    """How many of the product's unit one `unit` is: a 25 kg bag is 25 (the pack size), else the
+    unit conversions (Settings); blank or the product's own unit is 1. Raises UnitNotConvertible."""
+    from app.masters.conversions import ConversionError, convert  # noqa: PLC0415
+
+    u = " ".join((unit or "").lower().split())
+    base = (product.unit or "").lower()
+    if not u or u == base:
+        return Decimal(1)
+    pack = " ".join((product.pack_unit or "").lower().split())
+    if product.pack_size and Decimal(product.pack_size) > 0 and u in {pack, "pack"} - {""}:
+        return Decimal(product.pack_size)
+    try:
+        return convert(db, Decimal(1), u, product.unit, product.id)
+    except ConversionError:
+        raise UnitNotConvertible(
+            f"{product.name} is priced per {product.unit}: a price per {unit} does not convert "
+            f"(set its pack size or a unit conversion)"
+        ) from None
+
+
+def base_price(db: Session, p: ProductPrice) -> tuple[Decimal, Decimal]:
+    """(price, freight) per the product's unit, unrounded: a row kept per bag is ÷ the pack size."""
+    product = db.get(Product, p.product_id)
+    f = base_factor(db, product, p.unit)
+    return Decimal(p.purchase_rate) / f, Decimal(p.freight_per_unit or 0) / f
 
 
 def price_out(db: Session, p: ProductPrice | None) -> dict | None:
@@ -89,6 +181,7 @@ def price_out(db: Session, p: ProductPrice | None) -> dict | None:
         "by": _who(db, p.created_by),
         "note": p.note,
         "entered_at": p.created_at,
+        "basis": basis_of(db, p),  # rate contract / latest PO or vendor quote / typed price
     }
 
 
@@ -136,25 +229,40 @@ def record_price(
     on: date | None = None,
     note: str | None = None,
     freight: Decimal = Decimal(0),
+    return_existing: bool = False,
 ) -> ProductPrice | None:
     """Add a price to the history (a PO sent, a rate contract agreed): never edits one; the same
-    reference at the same rate again (a retry) adds nothing."""
+    reference at the same rate on the same date again (a retry) adds nothing (None, or that row
+    with return_existing). A price per bag (unit) is kept per the product's unit (UnitNotConvertible
+    when it does not convert)."""
     if source not in PRICE_SOURCES:
         raise ValueError(source)
+    if unit:
+        product = db.get(Product, product_id)
+        f = base_factor(db, product, unit)
+        if f != 1:
+            note = f"entered ₹{rate} per {unit} ({f.normalize():f} {product.unit})" + (f"; {note}" if note else "")
+            rate, freight = Decimal(rate) / f, Decimal(freight) / f
+        unit = product.unit
     rate = Decimal(rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    if ref and db.scalar(
-        select(ProductPrice.id).where(
-            ProductPrice.product_id == product_id,
-            ProductPrice.ref == ref,
-            ProductPrice.purchase_rate == rate,
+    freight = Decimal(freight).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    on = on or ist_today()
+    if ref:
+        same = db.scalar(
+            select(ProductPrice).where(
+                ProductPrice.product_id == product_id,
+                ProductPrice.ref == ref,
+                ProductPrice.purchase_rate == rate,
+                ProductPrice.effective_from == on,
+            )
         )
-    ):
-        return None
+        if same is not None:
+            return same if return_existing else None
     p = ProductPrice(
         product_id=product_id,
         purchase_rate=rate,
         freight_per_unit=freight,
-        effective_from=on or ist_today(),
+        effective_from=on,
         source=source,
         ref=ref,
         vendor_id=vendor_id,
@@ -291,32 +399,51 @@ def add_price(
     _: CostView,
     __: Annotated[str, Depends(require_permission("library.edit"))],
 ) -> dict:
-    """A new price (never an edit); the response says how it compares with the last one used."""
-    if db.get(Product, product_id) is None:
+    """A new price (never an edit); the response says how it compares with the last one used. A
+    price per bag or pack is kept per the product's unit (÷ the pack size or the unit conversion);
+    a unit that does not convert is refused."""
+    product = db.get(Product, product_id)
+    if product is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
-    flag = check(db, product_id, body.rate)
+    rate, unit, note = _per_base(db, product, body.rate, body.unit, body.note)
+    flag = check(db, product_id, rate)
     p = ProductPrice(
         product_id=product_id,
-        purchase_rate=body.rate,
-        unit=body.unit,
+        purchase_rate=rate,
+        unit=unit,
         effective_from=body.effective_from or ist_today(),
         source=body.source,
         vendor_id=body.vendor_id,
         ref=body.ref,
-        note=body.note,
+        note=note,
         created_by=principal.user.id,
     )
     db.add(p)
     db.flush()
     record(db, request, principal, "product_price.create", "product", product_id,
-           after={"rate": str(body.rate), "source": body.source, "ref": body.ref,
+           after={"rate": str(rate), "entered": f"{body.rate} per {body.unit or unit}", "source": body.source, "ref": body.ref,
                   "change_percent": str(flag["change_percent"])})  # fmt: skip
     db.commit()
     return jsonable_encoder(price_out(db, p) | {"check": flag})
 
 
+def _per_base(db: Session, product: Product, value: Decimal, unit: str | None, note: str | None):
+    """(value per the product's unit rounded to paise, the product's unit, the note saying what was
+    entered); 422 for a unit that does not convert."""
+    try:
+        f = base_factor(db, product, unit)
+    except UnitNotConvertible as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from None
+    if f == 1:
+        return Decimal(value), product.unit if unit else None, note
+    entered = f"entered ₹{value} per {unit} ({f.normalize():f} {product.unit})"
+    per = (Decimal(value) / f).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return per, product.unit, entered + (f"; {note}" if note else "")
+
+
 class FreightIn(BaseModel):
     per_unit: Decimal = Field(ge=0)
+    unit: str | None = Field(None, max_length=20)  # per bag: kept per the product's unit
     vendor_id: int | None = None
     store_id: int | None = None
     effective_from: date | None = None
@@ -333,21 +460,23 @@ def add_freight(
     _: CostView,
     __: Annotated[str, Depends(require_permission("library.edit"))],
 ) -> dict:
-    if db.get(Product, product_id) is None:
+    product = db.get(Product, product_id)
+    if product is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
+    per_unit, _unit, note = _per_base(db, product, body.per_unit, body.unit, body.note)
     f = FreightRate(
         product_id=product_id,
-        per_unit=body.per_unit,
+        per_unit=per_unit,
         vendor_id=body.vendor_id,
         store_id=body.store_id,
         effective_from=body.effective_from or ist_today(),
-        note=body.note,
+        note=note,
         created_by=principal.user.id,
     )
     db.add(f)
     db.flush()
     record(db, request, principal, "freight_rate.create", "product", product_id,
-           after={"per_unit": str(body.per_unit), "vendor_id": body.vendor_id,
+           after={"per_unit": str(per_unit), "entered": f"{body.per_unit} per {body.unit or product.unit}", "vendor_id": body.vendor_id,
                   "store_id": body.store_id})  # fmt: skip
     db.commit()
     return jsonable_encoder(freight_out(db, f))

@@ -538,7 +538,7 @@ def gap_to_past(
     median, where = near_median(db, t, city)
     rate = g.rate_sqm if t.unit == "sqm" else g.rate_sqm
     limit = Decimal(prices.settings(db).library_diff_flag_percent)
-    if median is None or rate is None:
+    if not median or rate is None:  # no past rate, or a median of 0: no gap to work out
         return {
             "median": median,
             "where": where,

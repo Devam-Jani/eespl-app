@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.masters.models import TcClause
 from app.tenders import pricing
-from app.tenders.models import BoqLine, BoqSection, Tender, TenderRevision, TenderTc
+from app.tenders.models import BoqImport, BoqLine, BoqSection, Tender, TenderRevision, TenderTc
 from app.tenders.service import clause_text
 
 LINE_FIELDS = (
@@ -70,6 +70,15 @@ def revision_label(db: Session, tender: Tender) -> str:
     return label(tender.revision) if frozen(db, tender) else f"{label(tender.revision)} (draft)"
 
 
+def latest_import(db: Session, tender: Tender) -> BoqImport | None:
+    return db.scalar(
+        select(BoqImport)
+        .where(BoqImport.tender_id == tender.id)
+        .order_by(BoqImport.imported_at.desc(), BoqImport.id.desc())
+        .limit(1)
+    )
+
+
 def build_snapshot(db: Session, tender: Tender) -> dict[str, Any]:
     """The tender as it stands now, in the snapshot shape (also used for live exports)."""
     totals = pricing.tender_totals(db, tender)
@@ -87,9 +96,12 @@ def build_snapshot(db: Session, tender: Tender) -> dict[str, Any]:
         .where(TenderTc.tender_id == tender.id)
         .order_by(TenderTc.sort_order, TenderTc.id)
     ).all()
+    imp = latest_import(db, tender)
     return {
         "rev_no": tender.revision,
         "label": label(tender.revision),
+        # the client file the lines came from: client format of this revision writes into it
+        "boq_import_id": imp.id if imp else None,
         "tender": {
             "code": tender.code,
             "name": tender.name,

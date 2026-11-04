@@ -33,7 +33,7 @@ from sqlalchemy.orm import Session, lazyload
 
 from app.masters.conversions import ConversionError, Rule, convert_with
 from app.masters.models import CompanyProfile, System, UnitConversion
-from app.masters.rate import MissingPriceError, system_rate
+from app.masters.rate import SQFT_PER_SQM, MissingPriceError, system_rate
 from app.masters.rate_policy import POLICIES, History, Obs, choose, load_histories, same_channel
 from app.masters.search import STOPWORDS, SYNONYMS, search_library
 from app.tenders.models import BoqLine, BoqLineCandidate, BoqSection, Tender
@@ -66,7 +66,10 @@ def refresh_amount(line: BoqLine) -> None:
 
 
 def rate_from_margin(cost_rate: Decimal, margin_percent: Decimal) -> Decimal:
-    return money(cost_rate * (1 + margin_percent / HUNDRED))
+    """The margin on the selling price (app.margin): cost ÷ (1 − m/100), rounded once."""
+    from app.margin import selling_rate  # noqa: PLC0415
+
+    return money(selling_rate(cost_rate, margin_percent))
 
 
 def apply_margin(line: BoqLine, margin_percent: Decimal) -> bool:
@@ -92,6 +95,8 @@ class Totals:
     cost_total: Decimal | None
     margin_total: Decimal | None
     counts: dict[str, int]
+    # the part of the subtotal that is still only suggested (nobody has reviewed those rates)
+    suggested_amount: Decimal = Decimal(0)
 
 
 def tender_totals(db: Session, tender: Tender, lines: list[BoqLine] | None = None) -> Totals:
@@ -109,6 +114,7 @@ def tender_totals(db: Session, tender: Tender, lines: list[BoqLine] | None = Non
     cost_total = Decimal(0)
     margin_total = Decimal(0)
     costed = 0
+    suggested_amount = Decimal(0)
     counts = {s: 0 for s in ("unpriced", "suggested", "priced", "not_quoted")}
     counts.update(qro=0, nq=0)
     for ln in lines:
@@ -120,6 +126,8 @@ def tender_totals(db: Session, tender: Tender, lines: list[BoqLine] | None = Non
         if ln.amount is not None:  # QRO / NQ lines have no amount: excluded from totals
             sections[ln.section_id] = sections.get(ln.section_id, Decimal(0)) + ln.amount
             subtotal += ln.amount
+            if ln.status == "suggested":
+                suggested_amount += ln.amount
             if ln.cost_rate is not None and ln.qty is not None:
                 cost = ln.qty * ln.cost_rate
                 costed += 1
@@ -135,7 +143,25 @@ def tender_totals(db: Session, tender: Tender, lines: list[BoqLine] | None = Non
         money(cost_total) if costed else None,
         money(margin_total) if costed else None,
         counts,
+        money(suggested_amount),
     )
+
+
+def unreviewed(db: Session, tender: Tender) -> list[str]:
+    """What holds the submit and the client exports: lines still only suggested (with their
+    amount) and quoted lines without a rate. Not-quoted lines never count."""
+    from app.tenders.export import inr  # noqa: PLC0415
+
+    totals = tender_totals(db, tender)
+    out = []
+    if totals.counts["suggested"]:
+        out.append(
+            f"{totals.counts['suggested']} line(s) still suggested, "
+            f"{inr(totals.suggested_amount)}: review them"
+        )
+    if totals.counts["unpriced"]:
+        out.append(f"{totals.counts['unpriced']} line(s) without a rate")
+    return out
 
 
 def refresh_tender_total(db: Session, tender: Tender) -> Totals:
@@ -295,11 +321,16 @@ def _unit_factor(
         return Decimal(1) if line_unit == other_unit else None
     if line_unit == other_unit:
         return Decimal(1)
+    if {line_unit, other_unit} == {"sqm", "sqft"}:  # 1 sqm = 10.7639 sqft, the house figure
+        return SQFT_PER_SQM if line_unit == "sqm" else 1 / SQFT_PER_SQM
     try:
         # rate per line unit = rate per other unit × (how many other units in one line unit)
         return convert_with(rules, Decimal(1), line_unit, other_unit)
     except ConversionError:
         return None
+
+
+unit_factor = _unit_factor  # for the BOQ re-import
 
 
 class _SystemMatcher:
@@ -353,11 +384,13 @@ class _SystemMatcher:
             factor = _unit_factor(self.rules, line.unit, system.unit)
             if factor is None:
                 continue
+            # the cost converted first, then the margin, rounded once (rounding the rate per
+            # sqft before × 10.7639 was off by a few paise)
             out.append(
                 Candidate(
                     source="system",
                     ref_id=system.id,
-                    rate=money(b.rate * factor),
+                    rate=rate_from_margin(b.base_cost * factor, b.margin_percent),
                     cost_rate=money(b.base_cost * factor),
                     margin_percent=b.margin_percent,
                     score=round(score, 4),
@@ -423,10 +456,7 @@ def suggest(
 ) -> SuggestResult:
     limit = threshold(db)
     result = SuggestResult(threshold=limit)
-    rules = [
-        Rule(r.from_unit, r.to_unit, r.factor, None)
-        for r in db.scalars(select(UnitConversion).where(UnitConversion.product_id.is_(None)))
-    ]
+    rules = generic_rules(db)
     systems = list(db.scalars(select(System).where(System.is_active)))
     matcher = _SystemMatcher(db, systems, rules)
     ctx = PolicyContext(rate_policy(db), tender.channel.name if tender.channel else None)
@@ -490,6 +520,41 @@ def clear_pricing(line: BoqLine) -> None:
     line.cost_rate = line.margin_percent = line.rate = line.amount = None
     line.suggestion_score = None
     line.status = "unpriced"
+
+
+def generic_rules(db: Session) -> list[Rule]:
+    """The unit conversions that are not tied to a product."""
+    return [
+        Rule(r.from_unit, r.to_unit, r.factor, None)
+        for r in db.scalars(select(UnitConversion).where(UnitConversion.product_id.is_(None)))
+    ]
+
+
+QTY_PLACES = Decimal("0.001")  # boq_lines.qty is Numeric(14, 3)
+
+
+def change_unit(
+    line: BoqLine, old_unit: str | None, rules: list[Rule], qty_typed: bool = False
+) -> None:
+    """After a line's unit changed from old_unit: a priced or suggested rate (and its cost) is
+    converted with the unit factor, the qty too unless it was typed with the change; with no
+    factor the price is cleared. Candidates were worked in the old unit, so they go. A line
+    whose old unit was not recognised keeps its rate (the unit is being put right, not changed)."""
+    if line.unit == old_unit:
+        return
+    line.candidates = []
+    if old_unit is None or line.rate is None or line.status not in ("priced", "suggested"):
+        return
+    factor = _unit_factor(rules, line.unit, old_unit)  # rate per new unit = rate per old × factor
+    if factor is None:
+        clear_pricing(line)
+        return
+    line.rate = money(Decimal(str(line.rate)) * factor)
+    if line.cost_rate is not None:
+        line.cost_rate = money(Decimal(str(line.cost_rate)) * factor)
+    if line.qty is not None and not qty_typed:
+        line.qty = (Decimal(str(line.qty)) / factor).quantize(QTY_PLACES, rounding=ROUND_HALF_UP)
+    refresh_amount(line)
 
 
 def section_titles(db: Session, tender: Tender) -> dict[int, str]:

@@ -306,14 +306,17 @@ def test_full_flow_indent_rfq_po_grn_transfer_issue(boss, masters, db):
     assert r.status_code == 201
     assert stock(client, h, site_store["id"])[products["T-CRYS"]][0] == 48
 
-    # freight: the PO freight follows the GRN (19,200 of 27,600 received), the transfer godown->site
+    # freight: the PO freight was added to material cost, so it is in the landed rate above and
+    # reaches the site with the material issued; it is not booked to the site again (Prompt 38,
+    # Part 3.4: it was inbound 695.65 = 1,000 x 19,200 / 27,600, total 1445.65, counted twice).
+    # The transfer godown -> site is the site's freight.
     report = client.get(
         "/api/material/freight/report", params={"site_id": s["id"]}, headers=h
     ).json()
     assert len(report) == 1
-    assert D(report[0]["inbound"]) == D("695.65") and D(report[0]["godown_to_site"]) == 750
+    assert D(report[0]["inbound"]) == 0 and D(report[0]["godown_to_site"]) == 750
     summary = client.get(f"/api/material/sites/{s['id']}/summary", headers=h).json()
-    assert D(summary["freight"]["total"]) == D("1445.65")
+    assert D(summary["freight"]["total"]) == 750
 
     # the ledger is append-only and explains the balance
     ledger = client.get(

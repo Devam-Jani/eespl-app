@@ -36,6 +36,7 @@ from app.db import DbSession
 from app.execution.common import media, record, save_upload
 from app.masters.models import Client, ClientContact, Product, TcClause, TcTemplateClause
 from app.material import service as material
+from app.material.po_pdf import in_words
 from app.models import RolePermission, User, UserRole
 from app.quotations import docx_out, html_out, render
 from app.quotations import library as lib
@@ -175,6 +176,9 @@ def _q_out(db, q: Quotation, principal) -> dict:
                 "specs": i.specs,
                 "lines": [_line_out(ln, i, margin) for ln in i.lines],
                 "total": next((x["total"] for x in t["items"] if x["item_id"] == i.id), None),
+                "option_totals": next(
+                    (x["options"] for x in t["items"] if x["item_id"] == i.id), []
+                ),
                 "checks": checks.get(i.id, []),
             }
             for i in q.items
@@ -182,6 +186,10 @@ def _q_out(db, q: Quotation, principal) -> dict:
         "checks_count": sum(len(v) for v in checks.values()),
         "total": t["total"],
         "total_option_note": t["option_note"],
+        "gst_percent": t["gst_percent"],
+        "gst_amount": t["gst"],
+        "total_with_gst": t["total_with_gst"],
+        "total_with_gst_words": in_words(t["total_with_gst"]),
         "revisions": [
             {"id": r.id, "revision": r.revision, "status": r.status, "quote_date": r.quote_date}
             for r in revisions
@@ -201,6 +209,11 @@ def _q_out(db, q: Quotation, principal) -> dict:
         ],
         "followups": svc.followup_rows(db, quotation_code=q.code, status_=None),
         "can_edit": bool(can_edit) and q.is_latest and q.status not in svc.TERMINAL,
+        # a sent revision keeps its rates, quantities and lines: a new revision changes them
+        "can_edit_prices": bool(can_edit)
+        and q.is_latest
+        and q.status not in svc.TERMINAL
+        and not svc.prices_locked(q),
         "can_send": bool(can_send),
         "can_template_edit": "quotation.template.edit" in perms,
         "can_margin": margin,
@@ -1383,6 +1396,7 @@ def add_item(
 ) -> dict:
     q = svc.get_visible(db, qid, scope, principal)
     svc.check_edit(db, q, principal)
+    svc.check_price_edit(q)
     offer = db.get(OfferItem, body.offer_item_id)
     if offer is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Offer item not found")
@@ -1430,6 +1444,8 @@ def update_item(
     svc.check_edit(db, q, principal)
     item = _item(db, q, item_id)
     data = body.model_dump(exclude_unset=True)
+    if "options" in data and [str(o) for o in data["options"] or []] != list(item.options or []):
+        svc.check_price_edit(q)  # the options offered change the item total
     if "specs" in data:
         data["specs"] = [
             {
@@ -1469,6 +1485,7 @@ def delete_item(
 ) -> dict:
     q = svc.get_visible(db, qid, scope, principal)
     svc.check_edit(db, q, principal)
+    svc.check_price_edit(q)
     item = _item(db, q, item_id)
     q.items.remove(item)
     record(
@@ -1518,7 +1535,25 @@ def update_line(
     svc.check_edit(db, q, principal)
     _item_, ln = _line(db, q, line_id)
     data = body.model_dump(exclude_unset=True)
-    before = {"rate": ln.rate, "qty": ln.qty}
+    # the screen sends the unchanged fields with a change: only a different value is an edit
+    # (rate: null asks for the filled rate again, which is a change too)
+    changed = {k for k in svc.MONEY_FIELDS if k in data and data[k] != getattr(ln, k)}
+    if "rate" in data and data["rate"] is None:
+        changed.add("rate")
+    if changed:
+        svc.check_price_edit(q)
+    before = {"rate": ln.rate, "qty": ln.qty, "uom": ln.uom}
+    if "uom" in changed:  # the rate and qty go with the unit (converted, or cleared)
+        svc.change_unit(
+            svc.RateContext.make(db),
+            ln,
+            data.pop("uom"),
+            "rate" not in changed,
+            "qty" not in changed,
+        )
+        for k in ("rate", "qty"):
+            if k not in changed:
+                data.pop(k, None)
     if "rate" in data:
         ln.overridden = data["rate"] is not None
         if data["rate"] is not None:
@@ -1567,6 +1602,7 @@ def add_line(
 ) -> dict:
     q = svc.get_visible(db, qid, scope, principal)
     svc.check_edit(db, q, principal)
+    svc.check_price_edit(q)
     item = _item(db, q, item_id)
     order = max((ln.sort_order for ln in item.lines), default=0) + 10
     if body.offer_line_id:
@@ -1609,6 +1645,7 @@ def delete_line(
 ) -> dict:
     q = svc.get_visible(db, qid, scope, principal)
     svc.check_edit(db, q, principal)
+    svc.check_price_edit(q)
     item, ln = _line(db, q, line_id)
     item.lines.remove(ln)
     record(
@@ -1630,6 +1667,7 @@ def refill_rates(
 ) -> dict:
     q = svc.get_visible(db, qid, scope, principal)
     svc.check_edit(db, q, principal)
+    svc.check_price_edit(q)
     n = svc.refill_rates(db, q)
     record(db, request, principal, "quotation.refill", "quotation", q.id, after={"lines": n})
     db.commit()
@@ -1653,6 +1691,7 @@ def survey_quantities(
     areas of that type, on its sqm / sqft lines (rft and nos lines stay as they are)."""
     q = svc.get_visible(db, qid, scope, principal)
     svc.check_edit(db, q, principal)
+    svc.check_price_edit(q)
     sscope = principal.permissions.get("survey.view")
     if sscope is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot see surveys")

@@ -114,6 +114,8 @@ def consumption(text: str) -> list[tuple[Decimal, Decimal]]:
     out += [(Decimal(x), Decimal(x)) for x in OVERALL.findall(text)]
     for a, b in COVERAGE.findall(text):
         lo, hi = sorted((Decimal(a), Decimal(b)))
+        if lo <= 0:  # "0 - 5 sq. mtr. per kg" has no consumption: skipped
+            continue
         out.append(((1 / hi).quantize(Decimal("0.01")), (1 / lo).quantize(Decimal("0.01"))))
     return out
 

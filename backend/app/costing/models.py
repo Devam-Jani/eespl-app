@@ -159,12 +159,13 @@ class RateGroup(Tracked, Base):
     wastage_percent: Mapped[Decimal] = mapped_column(Pct, server_default="0")
     # where the wastage came from: the application in Settings > Process rules, the system, typed
     wastage_source: Mapped[str | None] = mapped_column(String(200))
-    surface_prep: Mapped[Decimal] = mapped_column(Money, server_default="0")  # ₹ per sqm
+    # 4 decimals: a per sq ft figure × 10.7639 (or a per sqm one ÷) is kept until the final rate
+    surface_prep: Mapped[Decimal] = mapped_column(Rate, server_default="0")  # ₹ per sqm
     labour_rate_card_id: Mapped[int | None] = mapped_column(
         ForeignKey("labour_rate_cards.id", ondelete="SET NULL")
     )
-    labour_used_sqft: Mapped[Decimal] = mapped_column(Money, server_default="0")  # in the rate
-    labour_paid_sqft: Mapped[Decimal | None] = mapped_column(Money)  # what the gang is paid
+    labour_used_sqft: Mapped[Decimal] = mapped_column(Rate, server_default="0")  # in the rate
+    labour_paid_sqft: Mapped[Decimal | None] = mapped_column(Rate)  # what the gang is paid
     margin_percent: Mapped[Decimal] = mapped_column(Pct, server_default="30")
     # the worked result, kept so the lines and exports show it without re-working
     cost_sqm: Mapped[Decimal | None] = mapped_column(Rate)
@@ -242,6 +243,9 @@ class RateGroupProduct(Base):
     )
     freight_used: Mapped[Decimal] = mapped_column(Money, server_default="0")
     freight_actual: Mapped[Decimal | None] = mapped_column(Money)
+    # the product's own wastage (the system's figure) when no application matched; blank: the
+    # main item's wastage
+    wastage_percent: Mapped[Decimal | None] = mapped_column(Pct)
 
     product = relationship("Product", lazy="joined")
 

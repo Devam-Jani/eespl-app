@@ -27,6 +27,8 @@ ClientType = Literal[CLIENT_TYPES]  # type: ignore[valid-type]
 LabourUnit = Literal[LABOUR_UNITS]  # type: ignore[valid-type]
 NonNegative = Annotated[Decimal, Field(ge=0, max_digits=14, decimal_places=4)]
 Percent = Annotated[Decimal, Field(ge=0, lt=1000, max_digits=6, decimal_places=2)]
+# a margin is on the selling price (app.margin): 100 % or more has no rate
+MarginPercent = Annotated[Decimal, Field(ge=0, lt=100, max_digits=5, decimal_places=2)]
 Name = Annotated[str, Field(min_length=1, max_length=200)]
 
 
@@ -284,7 +286,7 @@ class SystemFields(BaseModel):
     surface_prep_per_unit: NonNegative | None = None
     labour_rate: NonNegative | None = None
     labour_unit: LabourUnit | None = None
-    default_margin_percent: Percent | None = None
+    default_margin_percent: MarginPercent | None = None
     is_active: bool | None = None
     to_confirm: bool | None = None
     note: str | None = None
@@ -371,6 +373,7 @@ class RateBreakdownOut(BaseModel):
     margin_percent: Decimal
     margin_amount: Decimal
     rate: Decimal
+    warnings: list[str] = []  # a price or consumption of 0: worked, but said
 
 
 # --- library ---

@@ -68,14 +68,21 @@ def add_working_sheet(
         first = ws.max_row + 1
         ws.append([None, "SURFACE PREPARATION", 1, float(g.surface_prep or 0), None])
         ws.cell(ws.max_row, 5).value = f"=C{ws.max_row}*D{ws.max_row}"
-        w_pct = float(g.wastage_percent or 0) / 100
+        free = set(w.free_issue_product_ids or [])
+        # a product with no price or consumption: no rate (a SUM without it would understate it)
+        no_rate = False
         for p in g.products:
             product = db.get(Product, p.product_id)
             row = ws.max_row + 1
+            if p.product_id in free:  # the client supplies it: shown, not costed
+                ws.append([None, product.name, None, None, None, None, "free issue"])
+                continue
             if p.consumption is None or p.price is None:
+                no_rate = True
                 ws.append([None, product.name, None, None, None, None,
                            "consumption to confirm" if p.consumption is None else "no price"])  # fmt: skip
                 continue
+            w_pct = float(p.wastage_percent if p.wastage_percent is not None else (g.wastage_percent or 0)) / 100
             ref = "price list"
             if p.price_id:
                 info = prices.price_out(db, db.get(ProductPrice, p.price_id))
@@ -114,7 +121,10 @@ def add_working_sheet(
             ]
         )
         rate = mar + 1
-        ws.append([None, "RATE", None, None, f"=SUM(E{ctc}:E{mar})", f"=E{rate}/{F}",
+        if no_rate:
+            for col in (5, 6):
+                ws.cell(ctc, col).value = ws.cell(mar, col).value = "no rate"
+        ws.append([None, "RATE", None, None, *(("no rate", "no rate") if no_rate else (f"=SUM(E{ctc}:E{mar})", f"=E{rate}/{F}")),
                    f"app: ₹{result['rate_sqm']} / sqm, ₹{result['rate_sqft']} / sq ft"
                    if result["rate_sqm"] is not None else "; ".join(result["errors"])])  # fmt: skip
         for col in (2, 5, 6):

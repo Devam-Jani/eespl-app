@@ -400,8 +400,14 @@ def line_site(db: Session, po: PurchaseOrder, line: PoLine) -> int | None:
 def grn_freight(db: Session, po: PurchaseOrder, grn: Grn, user_id) -> None:
     """A PO's freight is charged to sites as the material arrives: each GRN carries the share of
     every freight charge that its received value bears to the PO's taxable value, split over
-    the sites of the lines received. A cancelled or short-closed PO charges no more freight."""
-    freight = [c for c in po.charges if c.kind == "freight" and Decimal(c.amount) > 0]
+    the sites of the lines received. A cancelled or short-closed PO charges no more freight.
+    Freight added to material cost is already in the landed rate, so it reaches the site with the
+    material issued; only freight not added to cost is booked here (else it counted twice)."""
+    freight = [
+        c
+        for c in po.charges
+        if c.kind == "freight" and Decimal(c.amount) > 0 and not c.add_to_cost
+    ]
     if not freight or not po.taxable:
         return
     lines = {ln.id: ln for ln in po.lines}

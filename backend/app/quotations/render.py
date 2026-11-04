@@ -9,7 +9,7 @@ general terms and conditions; "Our esteemed clients".
 """
 
 from dataclasses import dataclass, field
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 from sqlalchemy import select
@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings as app_settings
 from app.masters.models import CompanyProfile
+from app.material.po_pdf import in_words
 from app.quotations import service as svc
 from app.quotations.markup import fill, placeholders_in
 from app.quotations.models import TC_GROUP_LABELS, UOM_LABELS, Letterhead, Quotation
@@ -28,7 +29,7 @@ def fmt_money(v: Decimal | None) -> str:
     """Indian grouping, 2 decimals: 1,25,000.00."""
     if v is None:
         return ""
-    v = Decimal(v).quantize(Decimal("0.01"))
+    v = Decimal(v).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     sign = "-" if v < 0 else ""
     whole, frac = f"{abs(v):.2f}".split(".")
     if len(whole) > 3:
@@ -53,7 +54,8 @@ def fmt_qty(v) -> str:
 def fmt_area(v: Decimal | None) -> str:
     if v is None:
         return ""
-    return fmt_money(v)[:-3]  # whole numbers: 10,85,000
+    # whole numbers, rounded (not cut): 10,85,000
+    return fmt_money(Decimal(v).quantize(Decimal(1), rounding=ROUND_HALF_UP))[:-3]
 
 
 @dataclass
@@ -93,7 +95,8 @@ class Row:
 class BudgetOut:
     heading: str
     rows: list[Row]
-    subtotal: str = ""
+    # ("Item total", "87,000.00"), or one per offered option: ("Item total, Option 1", ...)
+    subtotals: list[tuple[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -128,6 +131,8 @@ class Doc:
     show_amounts: bool = False
     total: str = ""
     total_note: str = ""
+    gst_line: str = ""  # "GST @18% extra: Rs X, total with GST Rs Y"
+    gst_words: str = ""  # the total with GST in words
     terms: list[TermGroup] = field(default_factory=list)
     references_title: str = ""
     references: list[dict] = field(default_factory=list)
@@ -216,6 +221,9 @@ def budget_out(item, n: int, show_amounts: bool) -> BudgetOut:
         if ln.if_required and "if required" not in text.lower():
             text += " ==(If required)=="
         amount = svc.line_amount(ln)
+        shown = fmt_money(amount) if show_amounts and amount is not None else ""
+        if shown and ln.if_required:  # never in the item total
+            shown += " (extra, if required)"
         rows.append(
             Row(
                 sr=sr,
@@ -224,7 +232,7 @@ def budget_out(item, n: int, show_amounts: bool) -> BudgetOut:
                 rate=CLIENT_SCOPE if ln.client_scope else fmt_money(ln.rate) or "On request",
                 client_scope=ln.client_scope,
                 qty=fmt_qty(ln.qty) if show_amounts else "",
-                amount=fmt_money(amount) if show_amounts and amount is not None else "",
+                amount=shown,
             )
         )
     return BudgetOut(
@@ -298,11 +306,16 @@ def build(db: Session, q: Quotation, preprinted: bool | None = None) -> Doc:
     for n, item in enumerate(q.items, 1):
         doc.specs.append((n, spec_outs(item, n)))
     t = svc.totals(q)
-    by_item = {x["item_id"]: x["total"] for x in t["items"]}
+    by_item = {x["item_id"]: x for x in t["items"]}
     for n, item in enumerate(q.items, 1):
         b = budget_out(item, n, q.show_amounts)
-        if q.show_amounts and by_item.get(item.id):
-            b.subtotal = fmt_money(by_item[item.id])
+        it = by_item.get(item.id)
+        if q.show_amounts and it and any(o["total"] for o in it["options"]):  # one per option
+            b.subtotals = [
+                (f"Item total, Option {o['option']}", fmt_money(o["total"])) for o in it["options"]
+            ]
+        elif q.show_amounts and it and it["total"]:
+            b.subtotals = [("Item total", fmt_money(it["total"]))]
         doc.budgets.append(b)
     if q.show_amounts:
         doc.total = fmt_money(t["total"])
@@ -310,6 +323,11 @@ def build(db: Session, q: Quotation, preprinted: bool | None = None) -> Doc:
         if t["option_note"]:
             notes.insert(0, "Where options are offered, the total takes the first option.")
         doc.total_note = " ".join(notes)
+        doc.gst_line = (
+            f"GST @{t['gst_percent'].normalize():f}% extra: Rs {fmt_money(t['gst'])}, "
+            f"total with GST Rs {fmt_money(t['total_with_gst'])}"
+        )
+        doc.gst_words = in_words(t["total_with_gst"])
     doc.terms = term_groups(q.terms or [], applicator.upper())
     doc.references_title = q.references_title or "Our Esteemed Clients for Waterproofing Projects"
     doc.references = [

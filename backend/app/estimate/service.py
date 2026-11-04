@@ -11,6 +11,7 @@ the library's for the product in the line's system, or a mix design's component 
 Every measured area on the site's drawings is in the estimate or excluded with a reason; any
 other is a missed area, and the estimate says so (Dholera: 29.99 sqm measured, never estimated)."""
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, time
 from decimal import Decimal
@@ -117,8 +118,33 @@ def add_measured(db: Session, est: Estimate, keys: list[str] | None = None) -> l
         db.flush()
         if a.parent_id is None and a.measure_area_id:
             by_measure[a.measure_area_id] = a
+            if m.outline:
+                _take_cut_outs(db, a, m, outlines, current + made)
         made.append(a)
     return made
+
+
+def _take_cut_outs(db: Session, host: EstimateArea, m: Measured, outlines: dict, areas: list[EstimateArea]) -> None:
+    """A host added after its cut-outs (the shaft first, the terrace later): an area already in the
+    set and wholly inside the new host becomes its Misc cut-out, as if it had come after it. An area
+    already cut out of a larger host moves to this smaller one."""
+    by_id = {x.id: x for x in areas}
+    hosts = {x.parent_id for x in areas if x.parent_id}
+    for x in areas:
+        if x is host or x.id in hosts or not x.measure_area_id or not outlines.get(x.measure_area_id):
+            continue
+        old = by_id.get(x.parent_id) if x.parent_id else None
+        if x.parent_id and (old is None or D(old.floor_sqm) <= m.floor_sqm):
+            continue  # cut out of a smaller host already
+        if not _inside(outlines[x.measure_area_id], m.outline):
+            continue
+        if old is not None:
+            old.deduction_sqm = D(old.deduction_sqm) - D(x.floor_sqm)
+            x.name = re.sub(r"^Misc: (.*) \(cut out of .*\)$", r"\1", x.name)
+        x.source, x.parent_id, x.use_floor, x.use_upturn = "misc", host.id, False, True
+        x.name = f"Misc: {x.name} (cut out of {host.code or host.name})"
+        host.deduction_sqm = D(host.deduction_sqm) + D(x.floor_sqm)
+    db.flush()
 
 
 def exclude(db: Session, est: Estimate, key: str, reason: str) -> EstimateArea:

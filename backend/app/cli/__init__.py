@@ -350,19 +350,40 @@ def run_kylas_discover() -> None:
                 print(f"      stage {stage['id']}  {stage['name']}")
 
 
-def run_import_offer(path: str, again: bool, preset: str | None = None) -> None:
+def run_import_offer(
+    path: str, again: bool, preset: str | None = None, dry_run: bool = False
+) -> None:
     """A hand-made techno-commercial offer (.docx) -> the quotation libraries. A path under data/
-    is read from the /data mount (where the company files live in the container)."""
+    is read from the /data mount (where the company files live in the container). --dry-run
+    writes nothing: it lists the library's default rates and units a fresh read would change."""
     from pathlib import Path
 
     import app.main  # noqa: F401  (every model, for the foreign keys)
-    from app.quotations.importer import import_offer
+    from app.quotations.importer import import_offer, recheck
 
     p = Path(path)
     if not p.exists() and Path("/" + path).exists():
         p = Path("/" + path)
     if not p.exists():
         sys.exit(f"Not found: {path}")
+    if dry_run:
+        with SessionLocal() as db:
+            r = recheck(db, p)
+            db.rollback()
+        print(
+            f"{p.name}: {r['rows']} offer rows, {r['matched']} found in the library; "
+            f"{len(r['rate_changes'])} default rate(s) and {len(r['unit_changes'])} unit(s) would "
+            f"change; {len(r['not_found'])} row(s) not found (nothing written)"
+        )
+        for label, old, new in r["rate_changes"]:
+            print(f"  rate {label}: {old} -> {new}")
+        for label, old, new in r["unit_changes"]:
+            print(f"  unit {label}: {old} -> {new}")
+        for text in r["not_found"]:
+            print(f"  not found: {text}")
+        for n in r["notes"]:
+            print(f"Note: {n}")
+        return
     with SessionLocal() as db:
         try:
             res = import_offer(db, p, again=again, preset=preset)
@@ -460,6 +481,11 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument(
         "--preset", help="Also save the imported items as an offer preset with this name"
     )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Write nothing: list the library rates and units a fresh read would change",
+    )
 
     sub.add_parser("make-offer-template", help="Write the default Word template for quotations")
     sub.add_parser(
@@ -491,6 +517,8 @@ def main(argv: list[str] | None = None) -> None:
     )
     p.add_argument("--dry-run", action="store_true")
     sub.add_parser("estimate-snapshots", help="Freeze estimates issued before snapshots existed")
+    mr = sub.add_parser("margin-recheck", help="Rates that change: margin on the selling price")
+    mr.add_argument("--apply", action="store_true", help="make them suggested")
     xr = sub.add_parser("demo-xray", help="DEMO: the X-ray 3D building from the sample drawing")
     xr.add_argument(
         "--bill-only", action="store_true", help="only fill RA bill 01 (the site there, no drawing)"
@@ -583,7 +611,7 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "seed-demo-analytics":
         run_demo(args.purge, args.sites, args.leads)
     elif args.command == "import-offer":
-        run_import_offer(args.path, args.again, args.preset)
+        run_import_offer(args.path, args.again, args.preset, args.dry_run)
     elif args.command == "make-offer-template":
         run_make_offer_template()
     elif args.command == "create-director":
@@ -673,6 +701,16 @@ def main(argv: list[str] | None = None) -> None:
             done = issues_svc.released(db, commits)
             db.commit()
         print(f"released: {', '.join(f'#{i}' for i in done) or 'none'}")
+    elif args.command == "margin-recheck":
+        import app.main  # noqa: F401, PLC0415  (every model registered)
+        from app.cli import margin_recheck as mrc  # noqa: PLC0415
+
+        with SessionLocal() as db:
+            changes = mrc.find(db)
+            print(mrc.report(changes))
+            if args.apply:
+                print(mrc.apply(db, changes))
+                db.commit()
     elif args.command == "estimate-snapshots":
         import app.main  # noqa: F401, PLC0415  (every model registered)
         from app.estimate import service as est_svc  # noqa: PLC0415

@@ -530,7 +530,7 @@ Send anyway? Give the reason:`)
             Changes from R{q.revision - 1}
           </Button>
         )}
-        {q.can_edit && (
+        {q.can_edit_prices && (
           <>
             <Button variant="ghost" size="small" onClick={() => setDialog("survey")}>
               Quantities from a survey
@@ -542,6 +542,9 @@ Send anyway? Give the reason:`)
         )}
       </div>
       {error && <div className="alert alert-error">{error}</div>}
+      {q.can_edit && !q.can_edit_prices && (
+        <div className="alert alert-warn">R{q.revision} has been sent: its rates, quantities and lines stay as sent. Make a new revision to change prices.</div>
+      )}
       {note && (
         <div className="alert alert-ok" onClick={() => setNote("")}>
           {note}
@@ -565,7 +568,7 @@ Send anyway? Give the reason:`)
               )}
             </button>
           ))}
-          {q.can_edit && (
+          {q.can_edit_prices && (
             <button className="outline-row add" onClick={() => setDialog("add")}>
               + Add an area
             </button>
@@ -581,8 +584,12 @@ Send anyway? Give the reason:`)
           </button>
           {q.show_amounts && (
             <div className="outline-total">
-              Total <b>{inr(q.total)}</b>
+              Total (excluding GST) <b>{inr(q.total)}</b>
               {q.total_option_note && <span className="muted small"> (first option)</span>}
+              <div className="small">
+                GST @{Number(q.gst_percent)}% extra: {inr(q.gst_amount)}, total with GST <b>{inr(q.total_with_gst)}</b>
+              </div>
+              <div className="muted small">{q.total_with_gst_words}</div>
             </div>
           )}
         </Card>
@@ -825,7 +832,7 @@ function ItemPanel({ q, item, lookups, apply, onRemoved }: { q: Quotation; item:
                 <input
                   type="checkbox"
                   checked={offered.includes(o)}
-                  disabled={ro}
+                  disabled={ro || !q.can_edit_prices}
                   onChange={(e) => {
                     const next = e.target.checked ? [...offered, o].sort() : offered.filter((x) => x !== o);
                     if (next.length) void apply(`${base}/items/${item.id}`, { options: next }, "PUT");
@@ -847,14 +854,16 @@ function ItemPanel({ q, item, lookups, apply, onRemoved }: { q: Quotation; item:
               Save names back to library
             </Button>
           )}
-          <Button
-            variant="ghost" size="small" className="danger"
-            onClick={() => {
-              if (window.confirm(`Remove ${item.name} from this quotation?`)) void apply(`${base}/items/${item.id}`, undefined, "DELETE").then(onRemoved);
-            }}
-          >
-            Remove area
-          </Button>
+          {q.can_edit_prices && (
+            <Button
+              variant="ghost" size="small" className="danger"
+              onClick={() => {
+                if (window.confirm(`Remove ${item.name} from this quotation?`)) void apply(`${base}/items/${item.id}`, undefined, "DELETE").then(onRemoved);
+              }}
+            >
+              Remove area
+            </Button>
+          )}
         </div>
       )}
       <h3 className="section-title top-gap">Technical specification</h3>
@@ -890,6 +899,7 @@ function ItemPanel({ q, item, lookups, apply, onRemoved }: { q: Quotation; item:
         <LineEditor key={`${ln.id}-${ln.rate}-${ln.qty}`} q={q} line={ln} lookups={lookups} apply={apply} />
       ))}
       {!ro &&
+        q.can_edit_prices &&
         (adding ? (
           <AddLine q={q} item={item} lookups={lookups} apply={apply} onDone={() => setAdding(false)} />
         ) : (
@@ -897,13 +907,23 @@ function ItemPanel({ q, item, lookups, apply, onRemoved }: { q: Quotation; item:
             + Line
           </Button>
         ))}
-      {item.total && q.show_amounts && <p className="small top-gap">Item total {inr(item.total)}</p>}
+      {q.show_amounts &&
+        (item.option_totals.length ? (
+          item.option_totals.map((o) => (
+            <p key={o.option} className="small top-gap">
+              Item total, Option {o.option} {inr(o.total)}
+            </p>
+          ))
+        ) : (
+          Number(item.total) > 0 && <p className="small top-gap">Item total {inr(item.total)}</p>
+        ))}
     </div>
   );
 }
 
 function LineEditor({ q, line, lookups, apply }: { q: Quotation; line: QLine; lookups: Lookups; apply: Apply }) {
   const ro = !q.can_edit;
+  const roMoney = ro || !q.can_edit_prices; // a sent revision: wording only
   const [f, setF] = useState({
     description: line.description,
     uom: line.uom,
@@ -937,7 +957,7 @@ function LineEditor({ q, line, lookups, apply }: { q: Quotation; line: QLine; lo
           <MarkupField label="Description" value={f.description} onChange={(v) => setF({ ...f, description: v })} rows={4} disabled={ro} />
           <div className="form-grid four">
             <Field label="UoM">
-              <select value={f.uom} onChange={(e) => setF({ ...f, uom: e.target.value })} disabled={ro}>
+              <select value={f.uom} onChange={(e) => setF({ ...f, uom: e.target.value })} disabled={roMoney}>
                 {lookups.uoms.map((u) => (
                   <option key={u.code} value={u.code}>
                     {u.label}
@@ -946,20 +966,21 @@ function LineEditor({ q, line, lookups, apply }: { q: Quotation; line: QLine; lo
               </select>
             </Field>
             <Field label="Rate (₹)">
-              <input inputMode="decimal" value={f.rate} onChange={(e) => setF({ ...f, rate: e.target.value })} disabled={ro || f.client_scope} />
+              <input inputMode="decimal" value={f.rate} onChange={(e) => setF({ ...f, rate: e.target.value })} disabled={roMoney || f.client_scope} />
             </Field>
             <Field label="Qty">
-              <input inputMode="decimal" value={f.qty} placeholder="rate only" onChange={(e) => setF({ ...f, qty: e.target.value })} disabled={ro} />
+              <input inputMode="decimal" value={f.qty} placeholder="rate only" onChange={(e) => setF({ ...f, qty: e.target.value })} disabled={roMoney} />
             </Field>
             <Field as="div" label="Amount">
               <span className="num">{line.amount ? inr(line.amount) : "—"}</span>
+              {line.amount && line.if_required ? <span className="muted small"> extra, if required</span> : null}
             </Field>
           </div>
           <label className="check inline">
-            <input type="checkbox" checked={f.if_required} onChange={(e) => setF({ ...f, if_required: e.target.checked })} disabled={ro} /> If required
+            <input type="checkbox" checked={f.if_required} onChange={(e) => setF({ ...f, if_required: e.target.checked })} disabled={roMoney} /> If required
           </label>
           <label className="check inline">
-            <input type="checkbox" checked={f.client_scope} onChange={(e) => setF({ ...f, client_scope: e.target.checked })} disabled={ro} /> Client's scope
+            <input type="checkbox" checked={f.client_scope} onChange={(e) => setF({ ...f, client_scope: e.target.checked })} disabled={roMoney} /> Client's scope
           </label>
           {!ro && (
             <div className="panel-actions">
@@ -975,7 +996,7 @@ function LineEditor({ q, line, lookups, apply }: { q: Quotation; line: QLine; lo
               >
                 Save line
               </Button>
-              {line.overridden && (
+              {line.overridden && !roMoney && (
                 <Button variant="ghost" size="small" onClick={() => void apply(url, { rate: null }, "PUT", "Rate filled again from its source.")}>
                   Use the filled rate
                 </Button>
@@ -985,9 +1006,11 @@ function LineEditor({ q, line, lookups, apply }: { q: Quotation; line: QLine; lo
                   Save back to library
                 </Button>
               )}
-              <Button variant="ghost" size="small" className="danger" onClick={() => void apply(url, undefined, "DELETE")}>
-                Delete
-              </Button>
+              {!roMoney && (
+                <Button variant="ghost" size="small" className="danger" onClick={() => void apply(url, undefined, "DELETE")}>
+                  Delete
+                </Button>
+              )}
             </div>
           )}
         </div>

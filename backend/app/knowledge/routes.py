@@ -8,7 +8,7 @@ reason). Clients never hold these permissions."""
 
 import statistics
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -27,6 +27,7 @@ from app.knowledge.models import (
     KnowledgeMatch,
     KnowledgeTemplate,
 )
+from app.masters.rate import SQFT_PER_SQM
 
 router = APIRouter(prefix="/api/knowledge", tags=["boq knowledge"])
 View = Annotated[str, Depends(require_permission("knowledge.view"))]
@@ -513,6 +514,15 @@ def gap(gid: int, db: DbSession, principal: CurrentPrincipal, _: View) -> dict:
 # --- an imported client BOQ, matched -------------------------------------------------------------------
 
 
+def median_in_line_unit(median: Decimal | None, template_unit: str | None, line_unit: str | None) -> tuple[Decimal | None, str | None]:
+    """An area template's median is per sqm; next to a client line per sq ft it is shown per sq ft
+    (Rs 700/sqm is Rs 65.03/sqft). Returns (median, the unit it is in)."""
+    u = "".join(ch for ch in (line_unit or "").lower() if ch.isalnum())
+    if template_unit == "sqm" and u in ("sqft", "sft", "sqfeet", "squarefeet", "squarefoot", "ft2"):
+        return (median / SQFT_PER_SQM).quantize(Decimal("0.01"), ROUND_HALF_UP) if median is not None else None, "sqft"
+    return median, template_unit
+
+
 def _match_rows(
     db, rows: list[tuple[str, int, str, str | None]], city: str | None, principal
 ) -> list[dict]:
@@ -530,8 +540,9 @@ def _match_rows(
             db.flush()
         t = db.get(KnowledgeTemplate, m.template_id) if m.template_id else None
         near = service.near_median(db, t, city) if t else (None, None)
+        median, median_unit = median_in_line_unit(near[0], t.unit, unit) if t else (None, None)
         out.append({"match_id": m.id, "line_id": lid, "kind": kind, "description": desc, "unit": unit, "template": service.template_brief(t) if t else None,
-                    "confidence": m.confidence, "status": m.status, "median_near": near[0], "median_where": near[1]})  # fmt: skip
+                    "confidence": m.confidence, "status": m.status, "median_near": median, "median_unit": median_unit, "median_where": near[1]})  # fmt: skip
     db.commit()
     return out
 

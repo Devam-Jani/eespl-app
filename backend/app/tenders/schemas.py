@@ -20,6 +20,8 @@ LostReason = Literal[
 LineStatus = Literal["unpriced", "suggested", "priced", "not_quoted"]
 QtyNote = Literal["QRO", "NQ"]
 Percent = Annotated[Decimal, Field(ge=0, lt=1000, max_digits=6, decimal_places=2)]
+# a margin is on the selling price (app.margin): 100 % or more has no rate
+MarginPercent = Annotated[Decimal, Field(ge=0, lt=100, max_digits=5, decimal_places=2)]
 
 
 class MemberOut(BaseModel):
@@ -167,6 +169,8 @@ class TotalsOut(BaseModel):
     gst: Decimal
     grand_total: Decimal
     counts: dict[str, int]
+    # the amount of the lines still only suggested ("N lines still suggested, Rs X")
+    suggested_amount: Decimal = Decimal(0)
 
 
 class TotalsCostOut(TotalsOut):
@@ -261,7 +265,7 @@ class LineUpdate(BaseModel):
     our_product: str | None = None
     manufacturer: str | None = Field(default=None, max_length=100)
     rate: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=2)
-    margin_percent: Percent | None = None
+    margin_percent: MarginPercent | None = None
     status: Literal["unpriced", "not_quoted"] | None = None
 
 
@@ -285,7 +289,7 @@ class UseCandidateIn(BaseModel):
 
 
 class MarginIn(BaseModel):
-    margin_percent: Percent
+    margin_percent: MarginPercent
     line_ids: list[int] | None = None  # default: every system-priced line
 
 
@@ -362,6 +366,8 @@ class ImportReportOut(BaseModel):
     skipped_by_reason: dict[str, int]
     unrecognised_units: dict[str, int]
     kept_prices: int
+    # qty text that is not a number ("as per drawing"): those lines have no qty
+    qty_not_read: list[dict[str, Any]] = []
 
 
 # --- T&C ---

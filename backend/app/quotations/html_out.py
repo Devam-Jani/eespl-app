@@ -254,15 +254,20 @@ def html(doc: Doc, for_pdf: bool = True) -> str:
             else:
                 cells += f'<td class="num">{escape(r.rate)}</td>'
             parts.append(f"<tr>{cells}</tr>")
-        if amounts and b.subtotal:
-            parts.append(
-                f'<tr class="subtotal"><td colspan="5">Item total</td><td class="num">{escape(b.subtotal)}</td></tr>'
-            )
+        if amounts:
+            parts += [
+                f'<tr class="subtotal"><td colspan="5">{escape(label)}</td><td class="num">{escape(value)}</td></tr>'
+                for label, value in b.subtotals
+            ]
         parts.append("</tbody></table>")
     if amounts and doc.total:
         parts.append(
             f'<p class="total">Total (excluding GST): ₹ {escape(doc.total)}</p><p class="total-note">{escape(doc.total_note)}</p>'
         )
+        if doc.gst_line:
+            parts.append(
+                f'<p class="total-note gst">{escape(doc.gst_line)}</p><p class="total-note">({escape(doc.gst_words)})</p>'
+            )
     # terms and conditions
     if doc.terms:
         parts.append('<h2 class="terms">GENERAL TERMS AND CONDITIONS</h2>')

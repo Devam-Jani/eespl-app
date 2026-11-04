@@ -589,7 +589,11 @@ def test_budget_actuals_shortage_and_freight_follows_grns(boss, masters, db):
                 "vendor_id": masters["vendor"],
                 "store_id": st,
                 "lines": [{"product_id": pid, "qty": qty, "rate": "50"}],
-                "charges": [{"kind": "freight", "amount": "1000"}],
+                # not added to cost: freight added to cost is in the landed rate and reaches the
+                # site with the material issued, so it is no longer booked here as well (Prompt 38,
+                # Part 3.4; with add_to_cost on, the freight head was 700 and the stock carried
+                # the same 400 again)
+                "charges": [{"kind": "freight", "amount": "1000", "add_to_cost": False}],
             },
             headers=h,
         )

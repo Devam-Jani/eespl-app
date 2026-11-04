@@ -388,14 +388,14 @@ def docx(doc: Doc, template: str | None = None) -> bytes:
                 _cell(cells[5], r.amount, s["Offer Table Text"], align=WD_ALIGN_PARAGRAPH.RIGHT)
             else:
                 _cell(cells[3], r.rate, s["Offer Table Text"], align=WD_ALIGN_PARAGRAPH.RIGHT)
-        if amounts and b.subtotal:
+        for text, value in b.subtotals if amounts else []:
             row = t.add_row()
             _row_rules(row)
             label = row.cells[0].merge(row.cells[4])
-            _cell(label, "Item total", s["Offer Table Text"], bold=True)
+            _cell(label, text, s["Offer Table Text"], bold=True)
             _cell(
                 row.cells[5],
-                b.subtotal,
+                value,
                 s["Offer Table Text"],
                 bold=True,
                 align=WD_ALIGN_PARAGRAPH.RIGHT,
@@ -410,6 +410,9 @@ def docx(doc: Doc, template: str | None = None) -> bytes:
         p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
         p2 = _para(d, doc.total_note, s["Offer Body"])
         p2.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        for text in (doc.gst_line, f"({doc.gst_words})") if doc.gst_line else ():
+            p3 = _para(d, text, s["Offer Body"])
+            p3.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     # terms and conditions
     if doc.terms:
         _para(d, "GENERAL TERMS AND CONDITIONS", s["Offer Item Heading"], bold=True, keep=True)
