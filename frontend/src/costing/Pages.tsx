@@ -25,9 +25,10 @@ type Product = {
   consumption_reason: string | null;
   consumption_source?: string | null;
   price: string | null;
-  price_info: { id: number; rate: string; date: string; by: string | null; source: string } | null;
+  price_info: { id: number; rate: string; date: string; by: string | null; source: string; basis?: string } | null;
   freight_used: string;
   freight_actual: string | null;
+  wastage_percent?: string | null;
 };
 type Row = { item: string; consumption?: string; coverage: string | null; price?: string; freight?: string; cost_of_material: string | null; per_sqm: string; ref: string | null };
 type Group = {
@@ -41,6 +42,7 @@ type Group = {
   rate_sqm: string | null;
   rate_sqft: string | null;
   errors: string[];
+  warnings?: string[];
   library_flagged: boolean;
   library_diff_percent: string | null;
   library_median_sqm: string | null;
@@ -62,6 +64,7 @@ type Group = {
   labour_used_sqft?: string;
   labour_paid_sqft?: string | null;
   margin_percent?: string;
+  free_issue_ids?: number[];
   note?: string | null;
   products?: Product[];
   rows?: Row[];
@@ -403,7 +406,8 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
               consumption: opt(p.consumption),
               consumption_reason: opt(p.consumption_reason),
               price: opt(p.price),
-              freight_used: p.freight_used || "0",
+              // blank: the master freight is kept (a new product never resets it to 0)
+              freight_used: opt(p.freight_used),
               freight_actual: opt(p.freight_actual),
             })),
           };
@@ -566,6 +570,8 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
                   <tr key={p.id ?? `n${i}`}>
                     <td>
                       {p.product} <span className="muted small">/{p.unit}</span>
+                      {(s.free_issue_ids ?? []).includes(p.product_id) && <div className="small text-warn">free issue: the client supplies it, not costed</div>}
+                      {s.products?.[i]?.wastage_percent != null && <div className="small muted">its own wastage {num(s.products[i].wastage_percent ?? "0")} %</div>}
                     </td>
                     <td className="num">
                       <Field label="Consumption" bare>
@@ -591,6 +597,7 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
                       <div>
                         <LastPrice productId={p.product_id} rate={p.price} excludeId={p.price_info?.id} />
                       </div>
+                      {p.price_info?.basis && <div className="small muted">{p.price_info.basis}</div>}
                     </td>
                     <td className="num">
                       <Field label="Freight used" bare>
@@ -624,6 +631,7 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
       <div className="split top-gap">
         <Card as="div">
           <h3>Build-up per sqm</h3>
+          {(s.warnings ?? []).length > 0 && <div className="alert alert-warn">Check: {(s.warnings ?? []).join("; ")}</div>}
           {s.errors.length > 0 ? (
             <div className="alert alert-warn">{s.errors.join("; ")}</div>
           ) : (
@@ -798,6 +806,7 @@ type PriceRow = {
   id: number;
   rate: string;
   unit: string | null;
+  basis?: string;
   freight_per_unit: string;
   date: string;
   source: string;
@@ -827,14 +836,17 @@ export function ProductPrices() {
   const [source, setSource] = useState("vendor_quote");
   const [ref, setRef] = useState("");
   const [freight, setFreight] = useState("");
-  const load = useCallback(() => api<PricePage>(`/api/prices/products/${id}`).then(setP, (e) => setError(errorText(e))), [id]);
+  const [priceUnit, setPriceUnit] = useState("");
+  const [freightUnit, setFreightUnit] = useState("");
+  const load =useCallback(() => api<PricePage>(`/api/prices/products/${id}`).then(setP, (e) => setError(errorText(e))), [id]);
   useEffect(() => {
     void load();
   }, [load]);
   async function add() {
     try {
-      await api(`/api/prices/products/${id}`, { method: "POST", json: { rate, source, ref: ref || null } });
+      await api(`/api/prices/products/${id}`, { method: "POST", json: { rate, unit: priceUnit.trim() || null, source, ref: ref || null } });
       setRate("");
+      setPriceUnit("");
       setRef("");
       void load();
     } catch (e) {
@@ -843,8 +855,9 @@ export function ProductPrices() {
   }
   async function addFreight() {
     try {
-      await api(`/api/prices/products/${id}/freight`, { method: "POST", json: { per_unit: freight } });
+      await api(`/api/prices/products/${id}/freight`, { method: "POST", json: { per_unit: freight, unit: freightUnit.trim() || null } });
       setFreight("");
+      setFreightUnit("");
       void load();
     } catch (e) {
       setError(errorText(e));
@@ -868,6 +881,7 @@ export function ProductPrices() {
           <span className="muted small">Current price</span>
           <strong>{p.current ? inr(p.current.rate) : "—"}</strong>
           <span className="muted small">{p.current ? `${shortDate(p.current.date)} · ${p.current.by ?? ""}` : "none yet"}</span>
+          {p.current?.basis && <span className="muted small">{p.current.basis}</span>}
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
@@ -906,6 +920,9 @@ export function ProductPrices() {
             <div className="form-row top-gap">
               <Field label="New price">
                 <input className="input-num" value={rate} onChange={(e) => setRate(e.target.value)} />
+              </Field>
+              <Field label="Per (bag, pack ...: kept per the product's unit)">
+                <input value={priceUnit} placeholder={p.product.unit} onChange={(e) => setPriceUnit(e.target.value)} />
               </Field>
               <Field label="Source">
                 <select value={source} onChange={(e) => setSource(e.target.value)}>
@@ -955,6 +972,9 @@ export function ProductPrices() {
             <div className="form-row top-gap">
               <Field label="Freight per unit">
                 <input className="input-num" value={freight} onChange={(e) => setFreight(e.target.value)} />
+              </Field>
+              <Field label="Per">
+                <input value={freightUnit} placeholder={p.product.unit} onChange={(e) => setFreightUnit(e.target.value)} />
               </Field>
               <Button disabled={!freight} onClick={() => void addFreight()}>
                 Add freight

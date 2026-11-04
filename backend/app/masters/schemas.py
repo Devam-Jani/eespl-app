@@ -373,6 +373,7 @@ class RateBreakdownOut(BaseModel):
     margin_percent: Decimal
     margin_amount: Decimal
     rate: Decimal
+    warnings: list[str] = []  # a price or consumption of 0: worked, but said
 
 
 # --- library ---

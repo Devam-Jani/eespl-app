@@ -219,8 +219,14 @@ def ra_to(db: Session, ln) -> date:
 
 
 def paid_qty(
-    db: Session, contract_line_id: int, contractor_id: int, exclude_bill: int | None = None
+    db: Session,
+    contract_line_id: int,
+    contractor_id: int,
+    exclude_bill: int | None = None,
+    job: str | None = None,
 ) -> Decimal:
+    """What the contractor was already paid for the item, for this job only (the coating paid
+    never reduces the plaster bill of the same item): bill lines whose rate card is the job's."""
     q = (
         select(func.coalesce(func.sum(LabourBillLine.qty), 0))
         .join(LabourBill, LabourBill.id == LabourBillLine.bill_id)
@@ -231,6 +237,10 @@ def paid_qty(
             LabourBill.status != "cancelled",
         )
     )
+    if job is not None:  # every card of the job (a renewed card is the same job)
+        q = q.join(LabourRateCard, LabourRateCard.id == LabourBillLine.rate_card_id).where(
+            func.lower(func.trim(LabourRateCard.job)) == " ".join(job.lower().split())
+        )
     if exclude_bill:
         q = q.where(LabourBill.id != exclude_bill)
     return Decimal(db.scalar(q))
@@ -262,7 +272,7 @@ def piece_lines(
                 status.HTTP_422_UNPROCESSABLE_ENTITY, f"{card.job} is another contractor's rate"
             )
         done, basis = client_qty(db, cl.id, upto, since)
-        qty = q3(max(ZERO, done - paid_qty(db, cl.id, contractor_id)))
+        qty = q3(max(ZERO, done - paid_qty(db, cl.id, contractor_id, job=card.job)))
         rate = rate_in(card, cl.unit).quantize(Decimal("0.0001"))
         out.append({
             "site_id": site_id, "contract_line_id": cl.id, "rate_card_id": card.id,

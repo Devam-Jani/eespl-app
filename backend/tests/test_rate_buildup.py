@@ -85,10 +85,19 @@ def test_only_the_final_rate_is_rounded():
         ("10", "sqm", "sqm", "10"),
         ("10", "sqft", "sqm", "107.639"),
         ("107.639", "sqm", "sqft", "10"),
-        ("10", "sqm", "rmt", "10"),
+        # Prompt 38 Part 2.6: labour per sqm on a system per rmt was used unconverted (10 → 10);
+        # it does not fit and is refused now (None: LabourUnitError). No labour at all still works.
+        ("10", "sqm", "rmt", None),
+        ("0", "sqm", "rmt", "0"),
     ],
 )
 def test_labour_unit_conversion(rate, labour_unit, system_unit, expected):
+    if expected is None:
+        from app.masters.rate import LabourUnitError
+
+        with pytest.raises(LabourUnitError):
+            labour_per_unit(D(rate), labour_unit, system_unit)
+        return
     assert labour_per_unit(D(rate), labour_unit, system_unit) == D(expected)
 
 

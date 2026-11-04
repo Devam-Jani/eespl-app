@@ -103,6 +103,7 @@ def group_out(db, g: RateGroup, lines: dict[str, dict], with_cost: bool) -> dict
         "rate_sqm": result["rate_sqm"],
         "rate_sqft": result["rate_sqft"],
         "errors": result["errors"],
+        "warnings": result.get("warnings", []),  # a price or consumption of 0: worked, but said
         "library_flagged": result.get("library_flagged", False),
         "library_diff_percent": result.get("library_diff_percent"),
         "library_median_sqm": result.get("library_median_sqm"),
@@ -126,16 +127,17 @@ def group_out(db, g: RateGroup, lines: dict[str, dict], with_cost: bool) -> dict
         "wastage_source": g.wastage_source,
         "applications": _applications(db),
         "system_coats": _system_coats(db, g.system_id),
-        "surface_prep": g.surface_prep,
+        "surface_prep": _trim(g.surface_prep),
         "labour_rate_card_id": g.labour_rate_card_id,
         "labour_rate_card": (
             f"{db.get(Vendor, card.contractor_id).name}: {card.job} ₹{card.rate}/{card.unit}"
             if card
             else None
         ),
-        "labour_used_sqft": g.labour_used_sqft,
-        "labour_paid_sqft": g.labour_paid_sqft,
+        "labour_used_sqft": _trim(g.labour_used_sqft),
+        "labour_paid_sqft": _trim(g.labour_paid_sqft),
         "margin_percent": g.margin_percent,
+        "free_issue_ids": db.get(RateWorking, g.working_id).free_issue_product_ids or [],
         "note": g.note,
         "products": [product_out(db, p) for p in g.products],
         "rows": result["rows"],
@@ -147,6 +149,14 @@ def group_out(db, g: RateGroup, lines: dict[str, dict], with_cost: bool) -> dict
         "library_limit_percent": result.get("library_limit_percent"),
     }
     return out
+
+
+def _trim(v: Decimal | None) -> Decimal | None:
+    """A 4-decimal figure shown with 2 when the rest is 0 (12.0000 is 12.00; 0.9290 stays)."""
+    if v is None:
+        return None
+    v = Decimal(v)
+    return v.quantize(Decimal("0.01")) if v == v.quantize(Decimal("0.01")) else v
 
 
 def _applications(db) -> list[dict]:
@@ -187,6 +197,7 @@ def product_out(db, p: RateGroupProduct) -> dict:
         "price_info": prices.price_out(db, used),
         "freight_used": p.freight_used,
         "freight_actual": p.freight_actual,
+        "wastage_percent": p.wastage_percent,  # its own (no application matched); blank: the item's
     }
 
 
@@ -439,7 +450,7 @@ class ProductIn(BaseModel):
     consumption: Decimal | None = Field(None, ge=0)
     consumption_reason: str | None = Field(None, max_length=300)
     price: Decimal | None = Field(None, ge=0)
-    freight_used: Decimal = Field(Decimal(0), ge=0)
+    freight_used: Decimal | None = Field(None, ge=0)  # blank: the master freight kept
     freight_actual: Decimal | None = Field(None, ge=0)
 
 
@@ -480,10 +491,18 @@ def update_group(
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unknown labour rate card")
     if new_system:  # the system's build-up first; what was typed with it wins
         g.system_id = data.pop("system_id")
-        working.init_from_system(db, g, " ".join(working.words(g.name)))
-    old_wastage = g.wastage_percent
+        try:
+            working.init_from_system(db, g, " ".join(working.words(g.name)))
+        except working.WorkingUnitError as exc:  # a system per rmt or nos
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from None
+    old_wastage, old_application = g.wastage_percent, g.application
     for k, v in data.items():
         setattr(g, k, v)
+    if ("application" in data and data["application"] != old_application) or (
+        "wastage_percent" in data and data["wastage_percent"] != old_wastage
+    ):
+        for p in g.products:  # the main item's wastage now rules every product
+            p.wastage_percent = None
     # the application picked: its wastage from Settings > Process rules (and where it came from)
     if "application" in data and "wastage_percent" not in data:
         found = working.wastage_from_settings(db, g.application)
@@ -494,7 +513,10 @@ def update_group(
         if not (from_app and from_app[0] == data["wastage_percent"]):
             g.wastage_source = "typed for this site"
     if "labour_rate_card_id" in data and "labour_paid_sqft" not in data:
-        working.labour_from_card(db, g)
+        try:
+            working.labour_from_card(db, g)
+        except working.WorkingUnitError as exc:  # a card per rmt or nos
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from None
     # the surface or the client's requirement changed: the consumption rows for them
     previous = {p.id: p.default_consumption for p in g.products}
     repicked = bool(set(data) & {"surface", "req_min_kg_sqm", "req_dft_mm", "coats"}) and not new_system
@@ -535,7 +557,8 @@ def update_group(
                         f"{p.default_consumption.normalize():f} ({p.consumption_source or 'the system'}) for this site",
                     )
             p.consumption_reason = reason if p.consumption != p.default_consumption else None
-            p.freight_used = row.get("freight_used") or Decimal(0)
+            if row.get("freight_used") is not None:  # blank: the master freight (new_product) kept
+                p.freight_used = row["freight_used"]
             p.freight_actual = row.get("freight_actual")
             if row.get("price") is not None and (
                 p.price is None or Decimal(row["price"]) != Decimal(p.price)
@@ -544,10 +567,10 @@ def update_group(
                 rec = prices.record_price(
                     db, p.product_id, Decimal(row["price"]), source="manual",
                     user_id=principal.user.id, ref=f"Rate working {w.id}",
-                    note=f"Typed in the rate working of {g.name}",
+                    note=f"Typed in the rate working of {g.name}", return_existing=True,
                 )  # fmt: skip
                 p.price = Decimal(row["price"])
-                p.price_id = rec.id if rec else p.price_id
+                p.price_id = rec.id  # the row of this price (a retry the same day: that row)
                 flags.append(flag | {"product": db.get(Product, p.product_id).name})
     db.flush()
     lines = {x["key"]: x for x in working.client_lines(db, w)}
@@ -565,8 +588,8 @@ def refresh_prices(gid: int, request: Request, db: DbSession, principal: Current
     for p in g.products:
         cur = prices.current(db, p.product_id)
         f = prices.freight_for(db, p.product_id)
-        if cur is not None:
-            p.price, p.price_id = cur.purchase_rate, cur.id
+        if cur is not None:  # per the product's unit (a price kept per bag ÷ the pack size)
+            p.price, p.price_id = working.price_of(db, cur)[0], cur.id
         if f is not None:
             p.freight_used = f.per_unit
     db.flush()
