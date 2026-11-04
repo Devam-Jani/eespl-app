@@ -15,6 +15,10 @@ Statistics
 
 Merging keeps both rows: the duplicate gets `merged_into_id` and drops out of search, and its
 lines count towards the target. Unmerging clears the pointer and recomputes both.
+
+Units: a line's rate is in its own unit (the line's unit; the item's when a person corrected the
+item's unit). It counts towards an item in another unit only converted (sqm <-> sqft); a line
+whose unit does not convert is left out, and items whose units do not convert are not merged.
 """
 
 import re
@@ -28,6 +32,33 @@ from sqlalchemy import func, select, text, update
 from sqlalchemy.orm import Session
 
 from app.masters.models import LibraryItem, LibraryLine
+from app.masters.rate import SQFT_PER_SQM
+
+# area units: how many of the unit make one sqm
+AREA_PER_SQM = {"sqm": Decimal(1), "sqft": SQFT_PER_SQM, "sft": SQFT_PER_SQM}
+
+
+def units_convert(unit: str | None, to_unit: str | None) -> bool:
+    if not unit or not to_unit or unit == to_unit:
+        return True
+    return unit in AREA_PER_SQM and to_unit in AREA_PER_SQM
+
+
+def rate_in_unit(rate: Decimal | None, unit: str | None, to_unit: str | None) -> Decimal | None:
+    """A rate per `unit` as a rate per `to_unit` (Rs 65/sqft is Rs 699.6535/sqm); None when the
+    units do not convert. A blank unit is taken as the same unit."""
+    if rate is None or not unit or not to_unit or unit == to_unit:
+        return rate
+    if unit in AREA_PER_SQM and to_unit in AREA_PER_SQM:
+        return rate * AREA_PER_SQM[unit] / AREA_PER_SQM[to_unit]
+    return None
+
+
+def line_unit(line_unit: str | None, item_unit: str | None, item_unit_manual: bool) -> str | None:
+    """The unit a library line's rate is in: the line's own, unless a person corrected its item's
+    unit (the source's unit was wrong for the line too)."""
+    return item_unit if item_unit_manual and item_unit else (line_unit or item_unit)
+
 
 WORKING_ROW = re.compile(r"^\s*(margin|working|sub[\s-]*total|total)\b", re.IGNORECASE)
 COMPETITOR_NOTE = re.compile(r"comparative|other\s+bidders?", re.IGNORECASE)
@@ -116,6 +147,7 @@ def recompute_stats(db: Session, item_ids: list[int] | None = None) -> int:
             LibraryItem.source_stats,
             LibraryItem.is_excluded,
             LibraryItem.is_competitor,
+            LibraryItem.unit,
         ).where(LibraryItem.id.in_(item_ids) if item_ids is not None else True)
     ).all()
     if not items:
@@ -137,9 +169,10 @@ def recompute_stats(db: Session, item_ids: list[int] | None = None) -> int:
             for child in children.get(item.id, []):
                 owner[child] = item.id
 
+    unit_of = {i.id: i.unit for i in items}
     lines: dict[int, list[_Line]] = defaultdict(list)
     if owner:
-        for item_id, rate, file, channel, excluded, competitor in db.execute(
+        for item_id, rate, file, channel, excluded, competitor, unit, own, manual in db.execute(
             select(
                 LibraryLine.library_item_id,
                 LibraryLine.rate,
@@ -147,8 +180,15 @@ def recompute_stats(db: Session, item_ids: list[int] | None = None) -> int:
                 LibraryLine.channel,
                 LibraryLine.is_excluded,
                 LibraryLine.is_competitor,
-            ).where(LibraryLine.library_item_id.in_(owner.keys()))
+                LibraryLine.unit,
+                LibraryItem.unit,
+                LibraryItem.unit_manual,
+            )
+            .join(LibraryItem, LibraryItem.id == LibraryLine.library_item_id)
+            .where(LibraryLine.library_item_id.in_(owner.keys()))
         ):
+            # a merged duplicate's line counts in the master's unit, converted (sqft -> sqm)
+            rate = rate_in_unit(rate, line_unit(unit, own, manual), unit_of.get(owner[item_id]))
             lines[owner[item_id]].append(
                 _Line(
                     rate,
@@ -191,6 +231,11 @@ def merge(db: Session, source: LibraryItem, target: LibraryItem) -> list[int]:
         raise MergeError("This item is already merged into another item")
     if target.merged_into_id is not None:
         raise MergeError("The target item is itself merged; merge into the item it points to")
+    if not units_convert(source.unit, target.unit):
+        raise MergeError(
+            f"This item is per {source.unit} and the target per {target.unit}: rates in units "
+            "that do not convert cannot be merged; correct the unit first"
+        )
     moved = list(db.scalars(select(LibraryItem.id).where(LibraryItem.merged_into_id == source.id)))
     if moved:
         db.execute(

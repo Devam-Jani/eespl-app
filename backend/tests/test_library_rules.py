@@ -160,6 +160,13 @@ def test_merge_moves_lines_recomputes_and_unmerge_restores(library, login_as):
         2, Decimal("250"), Decimal("275"), Decimal("300"),
     )  # fmt: skip
 
+    # Prompt 38, Part 2.4: rates per sqm and per nos do not convert, so the merge is refused until
+    # a person corrects the duplicate's unit (it was merged as it stood, mixing the units)
+    r = client.post(f"/api/library/items/{sqm.id}/merge", json={"into_id": nos.id},
+                    headers=headers)  # fmt: skip
+    assert r.status_code == 409 and "correct the unit first" in r.text
+    assert client.patch(f"/api/library/items/{sqm.id}", json={"unit": "nos"},
+                        headers=headers).status_code == 200  # fmt: skip
     r = client.post(f"/api/library/items/{sqm.id}/merge", json={"into_id": nos.id},
                     headers=headers)  # fmt: skip
     assert r.status_code == 200, r.text
@@ -201,4 +208,5 @@ def test_merge_moves_lines_recomputes_and_unmerge_restores(library, login_as):
         select(AuditLog).where(AuditLog.entity == "library_item").order_by(AuditLog.id)
     )
     actions = [a.action for a in audit_rows]
-    assert actions == ["library_item.merge", "library_item.unmerge"]
+    # the unit correction comes first now (Part 2.4); it was merge, unmerge
+    assert actions == ["library_item.update", "library_item.merge", "library_item.unmerge"]

@@ -20,6 +20,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.masters.library import line_unit, rate_in_unit
 from app.masters.models import LibraryItem, LibraryLine
 
 CENT = Decimal("0.01")
@@ -191,18 +192,21 @@ def load_histories(db: Session, item_ids: Iterable[int] | None = None) -> dict[i
             LibraryItem.id,
             LibraryItem.merged_into_id,
             LibraryItem.unit,
+            LibraryItem.unit_manual,
             LibraryItem.latest_source_file,
         )
     ).all()
     parent = {i.id: i.merged_into_id for i in items}
     latest_src = {i.id: i.latest_source_file for i in items}
     unit = {i.id: i.unit for i in items}
+    manual = {i.id: i.unit_manual for i in items}
     rows = db.execute(
         select(
             LibraryLine.library_item_id,
             LibraryLine.rate,
             LibraryLine.file,
             LibraryLine.channel,
+            LibraryLine.unit,
         ).where(
             LibraryLine.rate.is_not(None),
             LibraryLine.library_item_id.is_not(None),
@@ -212,8 +216,14 @@ def load_histories(db: Session, item_ids: Iterable[int] | None = None) -> dict[i
     ).all()
     files_by_item: dict[int, set[str]] = defaultdict(set)
     raw: dict[int, list[tuple[Decimal, str, str | None]]] = defaultdict(list)
-    for item_id, rate, file, channel in rows:
+    for item_id, rate, file, channel, ln_unit in rows:
         root = _root(item_id, parent)
+        # each line in its own unit, converted to the master's (Rs 65/sqft is Rs 699.65/sqm);
+        # a line whose unit does not convert is left out
+        own = line_unit(ln_unit, unit.get(item_id), manual.get(item_id, False))
+        rate = rate_in_unit(rate, own, unit.get(root))
+        if rate is None:
+            continue
         files_by_item[root].add(file)
         raw[root].append((rate, file, channel))
     latest_file: dict[int, str] = {}

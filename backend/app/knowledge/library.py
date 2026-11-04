@@ -18,7 +18,7 @@ import re
 import statistics
 import time
 from collections import Counter, defaultdict
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 from sqlalchemy import delete, func, select, text
@@ -585,6 +585,8 @@ def check_units(db: Session) -> dict:
             and (blank or sheet_sqft[(ln.file_id, ln.sheet)])
         ):
             ln.rate_sqm = conv.quantize(Decimal("0.01"))
+            if ln.cost_sqm is not None:  # the working's cost was read in the same (wrong) unit
+                ln.cost_sqm = (Decimal(ln.cost_sqm) * Decimal("10.7639")).quantize(Decimal("0.01"), ROUND_HALF_UP)
             ln.to_check, ln.check_note = (
                 True,
                 f"unit read as sq ft: ₹{r} per sq ft is ₹{ln.rate_sqm} per sqm (×10.7639)",

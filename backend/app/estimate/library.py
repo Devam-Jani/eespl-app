@@ -154,6 +154,8 @@ def _to_unit(lo: Decimal, hi: Decimal, unit: str, target: str) -> tuple[Decimal,
         return lo, hi
     if _amount(unit) != _amount(target):  # kg against litres: not comparable
         return None
+    if lo <= 0 or hi <= 0:  # "0-4 sqm/kg": a bound of 0 has no kg/sqm (1 / 0); not judged
+        return None
     x, y = in_unit(per_sqm(lo, unit), target), in_unit(per_sqm(hi, unit), target)
     return min(x, y), max(x, y)
 

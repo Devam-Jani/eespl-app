@@ -492,6 +492,7 @@ type MatchRow = {
   confidence: string | null;
   status: string;
   median_near: string | null;
+  median_unit: string | null;
   median_where: string | null;
 };
 
@@ -542,7 +543,8 @@ export function MatchPage() {
                 <span className={`badge ${Number(m.confidence) >= 70 ? "badge-ok" : Number(m.confidence) >= 50 ? "badge-muted" : "badge-warn"}`}>{m.confidence ?? 0} %</span>
               </td>
               <td className="num small">
-                {inr(m.median_near)} <span className="muted">{m.median_where}</span>
+                {inr(m.median_near)}
+                {m.median_near != null && m.median_unit ? ` per ${m.median_unit}` : ""} <span className="muted">{m.median_where}</span>
               </td>
               <td>
                 {m.status === "accepted" ? (
