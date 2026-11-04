@@ -491,8 +491,8 @@ def main(argv: list[str] | None = None) -> None:
     )
     p.add_argument("--dry-run", action="store_true")
     sub.add_parser("estimate-snapshots", help="Freeze estimates issued before snapshots existed")
-    mr = sub.add_parser("margin-recheck", help="Lines whose rate changes (margin on the selling price)")
-    mr.add_argument("--apply", action="store_true", help="tender lines suggested, quotation lines noted")
+    mr = sub.add_parser("margin-recheck", help="Rates that change: margin on the selling price")
+    mr.add_argument("--apply", action="store_true", help="make them suggested")
     xr = sub.add_parser("demo-xray", help="DEMO: the X-ray 3D building from the sample drawing")
     xr.add_argument(
         "--bill-only", action="store_true", help="only fill RA bill 01 (the site there, no drawing)"
