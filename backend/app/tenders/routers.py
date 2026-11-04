@@ -246,6 +246,7 @@ def _boq(db: Session, tender: Tender, with_cost: bool) -> BoqOut:
         grand_total=totals.grand_total,
         counts=totals.counts,
         suggested_amount=totals.suggested_amount,
+        if_required_amount=totals.if_required_amount,
     )
     return BoqOut(
         sections=[

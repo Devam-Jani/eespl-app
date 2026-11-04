@@ -434,6 +434,7 @@ export type BoqLine = {
   manufacturer?: string | null;
   status: LineStatus;
   suggestion_score: string | null;
+  if_required?: boolean;
   // only with tender.margin
   source?: "system" | "library" | "manual" | null;
   system_id?: number | null;
@@ -451,6 +452,7 @@ export type BoqTotals = {
   grand_total: string;
   counts: Record<string, number>;
   suggested_amount?: string; // the amount of the lines still only suggested
+  if_required_amount?: string; // a won order's "if required" lines: out of the subtotal
   cost_total?: string | null;
   margin_amount?: string | null;
 };
