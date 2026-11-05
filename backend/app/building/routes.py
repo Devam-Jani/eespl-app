@@ -21,6 +21,7 @@ from app.takeoff.models import CadFile
 
 router = APIRouter(prefix="/api/sites", tags=["building"])
 View = Annotated[str, Depends(require_permission("site.view"))]
+Remover = Annotated[str, Depends(require_permission("drawings.delete"))]
 
 
 def _site(db, site_id: int, view: str, principal) -> Site:
@@ -29,6 +30,11 @@ def _site(db, site_id: int, view: str, principal) -> Site:
 
 def _can_edit(site: Site, principal) -> bool:
     scope = principal.permissions.get("building.edit")
+    return scope is not None and sites.covers(scope, principal, site)
+
+
+def _can_remove(site: Site, principal) -> bool:
+    scope = principal.permissions.get("drawings.delete")
     return scope is not None and sites.covers(scope, principal, site)
 
 
@@ -87,13 +93,16 @@ def _out(db, site: Site, principal) -> dict:
         "model": None if m is None else {"id": m.id, "version": m.version, "cad_file_id": m.cad_file_id, "data": m.data, "note": m.note, "changes": m.changes,
                                           "by": m.created_by_name, "at": m.created_at, "unit_m": cad.unit_m if cad else None,
                                           "floors": service.elevations(m.data or {}), "unmatched_levels": service.unmatched_levels(m.data or {})},  # fmt: skip
-        "drawings": [{"cad_file_id": f.id, "title": title, "rev_no": rev, "unit_m": f.unit_m, "newer": bool(m and m.cad_file_id and f.id > m.cad_file_id)} for f, title, rev in files],
+        # where it was read (a layout when model space is empty) and its external references
+        "drawings": [{"cad_file_id": f.id, "title": title, "rev_no": rev, "unit_m": f.unit_m, "newer": bool(m and m.cad_file_id and f.id > m.cad_file_id),
+                      "space": (f.summary or {}).get("space", "Model"), "xrefs": (f.summary or {}).get("xrefs", [])} for f, title, rev in files],  # fmt: skip
         # every AutoCAD revision of the site with how far it is read (the page shows it, and a
         # "Read the drawing" button to those who may read drawings)
         "revisions": [{"revision_id": r.id, "title": title, "rev_no": r.rev_no, "filename": r.filename, "cad_file_id": f.id if f else None, "state": drawing_state(f),
                        "progress": f.progress if f else None, "progress_at": f.progress_at if f else None, "error": f.error if f else None} for r, title, f in readable],  # fmt: skip
         "model_drawing": state,
         "can_read": can_read,
+        "can_remove": _can_remove(site, principal),
         "plans": service.plans(cad) if cad else [],
         "site_floors": [{"node_id": f.id, "name": f.name, "level": service.level_of(f)} for f in service.site_floors(db, site.id)],
     }
@@ -102,6 +111,42 @@ def _out(db, site: Site, principal) -> dict:
 @router.get("/{site_id}/building")
 def get_building(site_id: int, db: DbSession, principal: CurrentPrincipal, view: View) -> dict:
     return _out(db, _site(db, site_id, view, principal), principal)
+
+
+@router.delete("/{site_id}/building/revisions/{revision_id}")
+def remove_drawing(site_id: int, revision_id: int, request: Request, db: DbSession, principal: CurrentPrincipal, view: View, remove: Remover) -> dict:
+    """A drawing that could not be read, removed from the card that shows it (a test upload, a
+    wrong file): its revision and files; the drawing itself when it has no other revision.
+    Super admin and planning; any other drawing is removed from the site's Drawings."""
+    from app.takeoff import pipeline  # noqa: PLC0415
+
+    site = _site(db, site_id, view, principal)
+    if not sites.covers(remove, principal, site):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Removing a drawing needs drawings.delete on this site")
+    rev = db.get(DrawingRevision, revision_id)
+    drawing = db.get(Drawing, rev.drawing_id) if rev else None
+    if rev is None or drawing is None or drawing.site_id != site.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Drawing not found")
+    f = db.scalar(select(CadFile).where(CadFile.revision_id == rev.id))
+    if f is None or f.status != "failed":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Only a drawing that could not be read is removed here")
+    if db.scalar(select(func.count()).select_from(BuildingModel).where(BuildingModel.cad_file_id == f.id)):
+        raise HTTPException(status.HTTP_409_CONFLICT, "The 3D model was made from this drawing: read it again instead")
+    files = {p for p in (rev.stored_path, f.dxf_path, f.geometry_path) if p}
+    before = {"drawing_id": drawing.id, "title": drawing.title, "rev": f"R{rev.rev_no}", "filename": rev.filename, "error": f.error}
+    others = [r for r in drawing.revisions if r.id != rev.id]
+    if others:
+        if drawing.current_revision_id == rev.id:
+            drawing.current_revision_id = max(others, key=lambda r: r.rev_no).id
+        db.delete(rev)
+    else:
+        db.delete(drawing)
+    audit.record(db, user_id=principal.user.id, action="site.drawing.remove", entity="site", entity_id=site.id, before=before, ip=audit.client_ip(request))
+    db.commit()
+    for p in files:
+        pipeline.media(p).unlink(missing_ok=True)
+    db.expire_all()
+    return _out(db, site, principal)
 
 
 class FromDrawingIn(BaseModel):
