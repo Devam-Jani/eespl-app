@@ -339,6 +339,7 @@
   "wo.view"
  ],
  "planning": [
+  "bom.import",
   "building.edit",
   "clients.edit",
   "clients.view",
@@ -532,6 +533,7 @@
   "billing.approve",
   "billing.edit",
   "billing.view",
+  "bom.import",
   "budget.edit",
   "budget.view",
   "building.edit",

@@ -174,6 +174,7 @@ class EstimateLine(Base):
     sort_order: Mapped[int] = mapped_column(Integer, server_default="0")
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"))
     system_id: Mapped[int | None] = mapped_column(ForeignKey("systems.id", ondelete="SET NULL"))
+    system_option_id: Mapped[int | None] = mapped_column(ForeignKey("system_options.id", ondelete="SET NULL"))  # the brand; blank: default
     mix_design_id: Mapped[int | None] = mapped_column(ForeignKey("mix_designs.id", ondelete="SET NULL"))
     thickness_mm: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
     part: Mapped[str] = mapped_column(String(6), server_default="both")

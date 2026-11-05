@@ -8,7 +8,8 @@ import { useLearned } from "../sitecontrol/learned";
 import { Button, Card, Field } from "../ui/components";
 
 // consumption or coats left blank: "to confirm" (never guessed); the note says where figures come from
-type Row = { product_id: number; consumption_per_unit: string; wastage_percent: string; coats: string; to_confirm: boolean; note: string };
+type Row = { product_id: number; consumption_per_unit: string; wastage_percent: string; coats: string; to_confirm: boolean; note: string; wastage_included: boolean };
+const PER: Record<string, string> = { sqft: "sq ft", rft: "rft", sqm: "sqm", rmt: "rmt", nos: "nos" };
 type Settings = {
   surface_prep_per_unit: string;
   labour_rate: string;
@@ -24,6 +25,8 @@ export default function SystemDetail() {
   const [system, setSystem] = useState<System | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // the brand option shown and edited (a system with options); blank: the default one
+  const [optionId, setOptionId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -38,6 +41,17 @@ export default function SystemDetail() {
   }, [load]);
 
   if (!system) return error ? <div className="alert alert-error">{error}</div> : <p className="muted">Loading…</p>;
+  const options = system.options ?? [];
+  const shown = options.find((o) => o.id === optionId) ?? options.find((o) => o.is_default) ?? options[0] ?? null;
+  const makeDefault = async (id: number) => {
+    setError(null);
+    try {
+      setSystem(await api<System>(`/api/systems/${system.id}/options/${id}/default`, { method: "PUT" }));
+      setNotice("Default brand option set: workings, offer lines and estimates take it when none is chosen.");
+    } catch (err) {
+      setError(errorText(err));
+    }
+  };
 
   return (
     <>
@@ -61,6 +75,32 @@ export default function SystemDetail() {
       {error && <div className="alert alert-error">{error}</div>}
       {notice && <div className="alert alert-ok">{notice}</div>}
 
+      {options.length > 0 && (
+        <Card as="div">
+          <h2 className="section-title">Brand options</h2>
+          <p className="small muted">The same work item with each brand's products{system.source === "company_bom" ? " (the company BOM)" : ""}. The rate working, the quotation and the estimate choose one; the default is used when none is chosen.</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }} aria-label="Brand options">
+            {options.map((o) => (
+              <Button key={o.id} variant={shown?.id === o.id ? "primary" : "ghost"} size="small" onClick={() => setOptionId(o.id)} aria-pressed={shown?.id === o.id}>
+                {o.brand}
+                {o.is_default ? " (default)" : ""} · {o.rate ? inr(o.rate) : "no rate"}
+              </Button>
+            ))}
+          </div>
+          {shown && (
+            <p className="small muted top-gap">
+              {shown.source_ref ? `From ${shown.source_ref}. ` : ""}
+              {shown.rate_error ?? ""}
+              {canEdit && !shown.is_default && (
+                <Button size="small" onClick={() => void makeDefault(shown.id)}>
+                  Make {shown.brand} the default
+                </Button>
+              )}
+            </p>
+          )}
+        </Card>
+      )}
+
       {!seesCost ? (
         <Card as="div">
           <h2 className="section-title">Products used</h2>
@@ -70,12 +110,14 @@ export default function SystemDetail() {
                 {c.product_name} {c.brand && <span className="muted">({c.brand})</span>}
               </li>
             ))}
+            {options.length > 0 && <li className="muted small">The default brand option&apos;s products.</li>}
           </ul>
         </Card>
       ) : (
         <CostView
-          // remount after a save so the form starts from what the server stored
-          key={JSON.stringify(system.cost)}
+          // remount after a save (or another brand option) so the form starts from what the server stored
+          key={`${shown?.id ?? 0}:${JSON.stringify(system.cost)}`}
+          optionId={shown?.id ?? null}
           system={system}
           canEdit={canEdit}
           onSaved={async (msg) => {
@@ -89,18 +131,32 @@ export default function SystemDetail() {
   );
 }
 
-function CostView({ system, canEdit, onSaved, onError }: { system: System; canEdit: boolean; onSaved: (msg: string) => Promise<void>; onError: (msg: string | null) => void }) {
+function CostView({
+  system,
+  optionId,
+  canEdit,
+  onSaved,
+  onError,
+}: {
+  system: System;
+  optionId: number | null;
+  canEdit: boolean;
+  onSaved: (msg: string) => Promise<void>;
+  onError: (msg: string | null) => void;
+}) {
   const cost = system.cost!;
-  const [rows, setRows] = useState<Row[]>(
-    cost.components.map((c) => ({
-      product_id: c.product_id,
-      consumption_per_unit: c.consumption_per_unit ?? "",
-      wastage_percent: c.wastage_percent,
-      coats: c.coats === null ? "" : String(c.coats),
-      to_confirm: c.to_confirm,
-      note: c.note ?? "",
-    })),
-  );
+  // a system with brand options: the shown option's components only (each option is saved on its own)
+  const mine = optionId === null ? cost.components : cost.components.filter((c) => c.option_id === optionId);
+  const toRow = (c: (typeof cost.components)[number]): Row => ({
+    product_id: c.product_id,
+    consumption_per_unit: c.consumption_per_unit ?? "",
+    wastage_percent: c.wastage_percent,
+    coats: c.coats === null ? "" : String(c.coats),
+    to_confirm: c.to_confirm,
+    note: c.note ?? "",
+    wastage_included: !!c.wastage_included,
+  });
+  const [rows, setRows] = useState<Row[]>(mine.map(toRow));
   const [settings, setSettings] = useState<Settings>({
     surface_prep_per_unit: cost.surface_prep_per_unit,
     labour_rate: cost.labour_rate,
@@ -127,7 +183,7 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
     const value = margin.trim();
     if (value === "" || Number(value) < 0) return;
     const timer = setTimeout(() => {
-      api<RateBreakdown>(`/api/systems/${system.id}/rate?margin=${encodeURIComponent(value)}`).then(
+      api<RateBreakdown>(`/api/systems/${system.id}/rate?margin=${encodeURIComponent(value)}${optionId ? `&option_id=${optionId}` : ""}`).then(
         (b) => {
           setBreakdown(b);
           setCalcError(null);
@@ -139,22 +195,12 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
       );
     }, 250);
     return () => clearTimeout(timer);
-  }, [margin, system.id, system.rate]);
+  }, [margin, system.id, system.rate, optionId]);
 
   const productName = (id: number) => cost.components.find((c) => c.product_id === id)?.product_name ?? products.find((p) => p.id === id)?.name ?? `#${id}`;
 
   const dirty =
-    JSON.stringify(rows) !==
-      JSON.stringify(
-        cost.components.map((c) => ({
-          product_id: c.product_id,
-          consumption_per_unit: c.consumption_per_unit ?? "",
-          wastage_percent: c.wastage_percent,
-          coats: c.coats === null ? "" : String(c.coats),
-          to_confirm: c.to_confirm,
-          note: c.note ?? "",
-        })),
-      ) ||
+    JSON.stringify(rows) !== JSON.stringify(mine.map(toRow)) ||
     settings.surface_prep_per_unit !== cost.surface_prep_per_unit ||
     settings.labour_rate !== cost.labour_rate ||
     settings.labour_unit !== cost.labour_unit ||
@@ -167,6 +213,7 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
         method: "PATCH",
         json: {
           ...settings,
+          option_id: optionId,
           components: rows
             .filter((r) => r.product_id)
             .map((r) => ({
@@ -176,6 +223,7 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
               coats: r.coats.trim() === "" ? null : Number(r.coats),
               to_confirm: r.to_confirm || r.consumption_per_unit.trim() === "",
               note: r.note.trim() || null,
+              wastage_included: r.wastage_included,
             })),
         },
       });
@@ -225,6 +273,14 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
                       productName(r.product_id)
                     )}
                     {r.note && <div className="small muted">{r.note}</div>}
+                    {mine[i]?.source === "company_bom" && (
+                      <div className="small muted">
+                        Company BOM
+                        {mine[i].original_consumption && mine[i].original_unit && mine[i].original_unit !== system.unit
+                          ? `: ${num(mine[i].original_consumption!)} per ${PER[mine[i].original_unit!] ?? mine[i].original_unit} in the file`
+                          : ""}
+                      </div>
+                    )}
                   </td>
                   <td className="num">
                     {canEdit ? (
@@ -259,11 +315,14 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
                   <td className="num">
                     {canEdit ? (
                       <Field label="Wastage %" bare>
-                        <input className="input-num" type="number" step="0.01" min="0" value={r.wastage_percent} onChange={(e) => setRow(i, { wastage_percent: e.target.value })} />
+                        <input className="input-num" type="number" step="0.01" min="0" value={r.wastage_percent} onChange={(e) => setRow(i, { wastage_percent: e.target.value })} disabled={r.wastage_included} />
                       </Field>
                     ) : (
-                      num(r.wastage_percent, 2)
+                      !r.wastage_included && num(r.wastage_percent, 2)
                     )}
+                    <label className="small muted" title="The figure already has its wastage (a sheet's or mesh's overlap): none is added">
+                      <input type="checkbox" checked={r.wastage_included} disabled={!canEdit} onChange={(e) => setRow(i, { wastage_included: e.target.checked })} /> included
+                    </label>
                   </td>
                   <td className="num muted">
                     {siteAverage(r.product_id) ? <span title={`${siteAverage(r.product_id)!.areas} completed area(s)`}>{num(siteAverage(r.product_id)!.site_average)}</span> : "—"}
@@ -283,7 +342,7 @@ function CostView({ system, canEdit, onSaved, onError }: { system: System; canEd
         {canEdit && (
           <Button
             size="small"
-            onClick={() => setRows((rs) => [...rs, { product_id: 0, consumption_per_unit: "", wastage_percent: "0", coats: "", to_confirm: true, note: "" }])}
+            onClick={() => setRows((rs) => [...rs, { product_id: 0, consumption_per_unit: "", wastage_percent: "0", coats: "", to_confirm: true, note: "", wastage_included: false }])}
           >
             + Add product
           </Button>

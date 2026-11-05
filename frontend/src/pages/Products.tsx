@@ -9,6 +9,7 @@ import ExportButton from "../components/ExportButton";
 import type { Category, Page, Price, Product, Unit } from "../types";
 import { Pager } from "./Clients";
 import { Button, Card, Field } from "../ui/components";
+import BomImport from "./BomImport";
 
 /** Categories of one kind (work or material), active first. */
 export function useCategories(kind: "work" | "material"): Category[] {
@@ -43,6 +44,7 @@ export default function Products() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [pricing, setPricing] = useState<Product | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -89,6 +91,7 @@ export default function Products() {
             </select>
           </Field>
           <ExportButton path={`/api/products/export${queryString(filters)}`} />
+          {can("bom.import") && <Button onClick={() => setImporting(true)}>Import BOM</Button>}
           {canEdit && (
             <Button variant="primary" onClick={() => setEditing("new")}>
               Add product
@@ -183,6 +186,7 @@ export default function Products() {
           }}
         />
       )}
+      {importing && <BomImport onClose={() => setImporting(false)} onDone={() => void load()} />}
     </>
   );
 }

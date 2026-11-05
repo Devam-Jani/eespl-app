@@ -40,7 +40,8 @@ export type Library = {
   products: LibProduct[];
   units: string[];
   sources: { key: string; label: string }[];
-  systems: { id: number; name: string; upturn_mm: string | null }[];
+  // options: the brand options of a system from the company BOM (Bronco, Chryso)
+  systems: { id: number; name: string; unit?: string; upturn_mm: string | null; options?: { id: number; brand: string; is_default: boolean }[] }[];
   can_edit: boolean;
 };
 

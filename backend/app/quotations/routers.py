@@ -29,12 +29,13 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
+from sqlalchemy.orm import object_session
 
 from app.auth.deps import CurrentPrincipal, require_permission
 from app.crm.models import Lead
 from app.db import DbSession
 from app.execution.common import media, record, save_upload
-from app.masters.models import Client, ClientContact, Product, TcClause, TcTemplateClause
+from app.masters.models import Client, ClientContact, Product, System, TcClause, TcTemplateClause
 from app.material import service as material
 from app.material.po_pdf import in_words
 from app.models import RolePermission, User, UserRole
@@ -93,6 +94,15 @@ def _send_scope(db, q: Quotation, principal) -> None:
 # --- serialising ---------------------------------------------------------------------------------
 
 
+def _options(ln: QuotationLine) -> list[dict]:
+    """The line's system's brand options, to pick from (Bronco, Chryso)."""
+    system = object_session(ln).get(System, ln.system_id) if ln.system_id else None
+    return [
+        {"id": o.id, "brand": o.brand, "is_default": o.is_default}
+        for o in (system.options if system else [])
+    ]
+
+
 def _line_out(ln: QuotationLine, item: QuotationItem, margin: bool) -> dict:
     out = {
         "id": ln.id,
@@ -112,6 +122,9 @@ def _line_out(ln: QuotationLine, item: QuotationItem, margin: bool) -> dict:
         "if_required": ln.if_required,
         "client_scope": ln.client_scope,
         "system_id": ln.system_id,
+        "system_option_id": ln.system_option_id,
+        # the system's brand options, to pick from (Bronco, Chryso)
+        "system_options": _options(ln),
         "library_item_id": ln.library_item_id,
     }
     if margin:
@@ -536,6 +549,7 @@ class LineIn(BaseModel):
     uom: Literal[UOMS] | None = None  # type: ignore[valid-type]
     rate_source: Literal[RATE_SOURCES] | None = None  # type: ignore[valid-type]
     system_id: int | None = None
+    system_option_id: int | None = None  # the system's brand option; blank: its default
     library_item_id: int | None = None
     default_rate: Decimal | None = Field(None, ge=0)
     if_required: bool | None = None
@@ -1510,6 +1524,7 @@ class LineUpdate(BaseModel):
     if_required: bool | None = None
     client_scope: bool | None = None
     sort_order: int | None = None
+    system_option_id: int | None = None  # another brand of the line's system: the rate again
 
 
 def _line(db, q: Quotation, line_id: int) -> tuple[QuotationItem, QuotationLine]:
@@ -1540,9 +1555,25 @@ def update_line(
     changed = {k for k in svc.MONEY_FIELDS if k in data and data[k] != getattr(ln, k)}
     if "rate" in data and data["rate"] is None:
         changed.add("rate")
+    new_option = "system_option_id" in data and data["system_option_id"] != ln.system_option_id
+    if new_option:
+        system = db.get(System, ln.system_id) if ln.system_id else None
+        if data["system_option_id"] and (
+            system is None or data["system_option_id"] not in {o.id for o in system.options}
+        ):
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "That brand option is not one of the line's system's",
+            )
+        changed.add("system_option_id")
     if changed:
         svc.check_price_edit(q)
-    before = {"rate": ln.rate, "qty": ln.qty, "uom": ln.uom}
+    before = {
+        "rate": ln.rate,
+        "qty": ln.qty,
+        "uom": ln.uom,
+        "system_option_id": ln.system_option_id,
+    }
     if "uom" in changed:  # the rate and qty go with the unit (converted, or cleared)
         svc.change_unit(
             svc.RateContext.make(db),
@@ -1560,7 +1591,7 @@ def update_line(
             ln.rate_source, ln.rate_note = "manual", "Typed in this quotation"
     for k, v in data.items():
         setattr(ln, k, v)
-    if "rate" in data and data["rate"] is None:
+    if ("rate" in data and data["rate"] is None) or (new_option and not ln.overridden):
         svc.fill_rate(
             svc.RateContext.make(db),
             ln,

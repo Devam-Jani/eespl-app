@@ -117,9 +117,22 @@ export type ComponentPublic = {
   coats: number | null;
   to_confirm: boolean;
   note: string | null;
+  option_id?: number | null; // the brand option it belongs to; blank: every option
+  source?: string | null; // "company_bom"
 };
 
-export type ComponentCost = ComponentPublic & { consumption_per_unit: string | null; wastage_percent: string };
+export type ComponentCost = ComponentPublic & {
+  consumption_per_unit: string | null;
+  wastage_percent: string;
+  wastage_included?: boolean; // the figure has its wastage (a sheet's overlap)
+  // as the company BOM gave it, before converting per sq ft / rft to per sqm / rmt
+  original_consumption?: string | null;
+  original_unit?: string | null;
+  original_ref?: string | null;
+};
+
+/** A brand option of a system (Bronco, Chryso): the same work item with one brand's products. */
+export type SystemOption = { id: number; brand: string; is_default: boolean; source: string; source_ref: string | null; rate: string | null; rate_error: string | null; product_ids: number[] };
 
 export type System = {
   id: number;
@@ -133,6 +146,8 @@ export type System = {
   rate: string | null;
   rate_error: string | null;
   components: ComponentPublic[];
+  options?: SystemOption[];
+  source?: string | null;
   cost: {
     surface_prep_per_unit: string;
     labour_rate: string;

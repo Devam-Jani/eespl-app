@@ -16,7 +16,7 @@ from app import audit
 from app.auth.deps import CurrentPrincipal, require_permission
 from app.db import DbSession
 from app.export import EXPORT_ROW_LIMIT, xlsx_response
-from app.masters.models import Product, System, SystemComponent, Unit
+from app.masters.models import Product, System, SystemComponent, SystemOption, Unit
 from app.masters.rate import AREA, MissingPriceError, labour_fits, system_rate
 from app.masters.routers.common import (
     Limit,
@@ -37,6 +37,7 @@ from app.masters.schemas import (
     RateBreakdownOut,
     SystemCost,
     SystemIn,
+    SystemOptionOut,
     SystemOut,
     SystemUpdate,
 )
@@ -61,14 +62,29 @@ def _public(c: SystemComponent) -> dict:
         "coats": c.coats,
         "to_confirm": c.to_confirm,
         "note": c.note,
+        "option_id": c.option_id,
+        "source": c.source,
     }
 
 
-def _out(db: Session, system: System, with_cost: bool) -> SystemOut:
+def _rate(db: Session, system: System, option_id: int | None = None):
     try:
-        rate, error = system_rate(db, system).rate, None
+        return system_rate(db, system, option_id=option_id).rate, None
     except MissingPriceError as exc:
-        rate, error = None, str(exc)
+        return None, str(exc)
+
+
+def _option_out(db: Session, system: System, o: SystemOption, with_rate: bool) -> SystemOptionOut:
+    rate, error = _rate(db, system, o.id) if with_rate else (None, None)
+    return SystemOptionOut(
+        id=o.id, brand=o.brand, is_default=o.is_default, source=o.source, source_ref=o.source_ref,
+        rate=rate, rate_error=error, product_ids=[c.product_id for c in system.recipe(o.id)],
+    )  # fmt: skip
+
+
+def _out(db: Session, system: System, with_cost: bool, option_rates: bool = True) -> SystemOut:
+    """option_rates: each brand option's rate too (the system's page; a list leaves it out)."""
+    rate, error = _rate(db, system)
     out = SystemOut(
         id=system.id,
         code=system.code,
@@ -76,11 +92,13 @@ def _out(db: Session, system: System, with_cost: bool) -> SystemOut:
         description=system.description,
         unit=system.unit,
         is_active=system.is_active,
-        to_confirm=system.to_confirm or any(c.to_confirm for c in system.components),
+        to_confirm=system.to_confirm or any(c.to_confirm for c in system.recipe()),
         note=system.note,
         rate=rate,
         rate_error=error,
-        components=[ComponentPublic(**_public(c)) for c in system.components],
+        components=[ComponentPublic(**_public(c)) for c in system.recipe()],
+        options=[_option_out(db, system, o, option_rates) for o in system.options],
+        source=system.source,
     )
     if with_cost:
         out.cost = SystemCost(
@@ -93,6 +111,10 @@ def _out(db: Session, system: System, with_cost: bool) -> SystemOut:
                     **_public(c),
                     consumption_per_unit=c.consumption_per_unit,
                     wastage_percent=c.wastage_percent,
+                    wastage_included=c.wastage_included,
+                    original_consumption=c.original_consumption,
+                    original_unit=c.original_unit,
+                    original_ref=c.original_ref,
                 )
                 for c in system.components
             ],
@@ -108,6 +130,30 @@ def _components(
     if ids - found:
         raise unprocessable(f"Unknown product ids: {sorted(ids - found)}")
     return [SystemComponent(**c.model_dump(), created_by=principal.user.id) for c in items]
+
+
+def _replace_option(
+    db: Session, system: System, items: list[ComponentIn], option_id: int | None, principal
+) -> None:
+    """A system with brand options: the components of one option (blank: the default) replaced,
+    the other options' kept. A product kept at the company BOM's figure keeps where it came from."""
+    option = (
+        next((o for o in system.options if o.id == option_id), None)
+        if option_id
+        else system.default_option()
+    )
+    if option is None:
+        raise unprocessable("Unknown brand option for this system")
+    old = {c.product_id: c for c in system.components if c.option_id == option.id}
+    for c in list(old.values()):
+        system.components.remove(c)
+    for c in _components(db, items, principal):
+        c.option_id = option.id
+        was = old.get(c.product_id)
+        if was is not None and was.source and was.consumption_per_unit == c.consumption_per_unit:
+            c.source, c.original_consumption = was.source, was.original_consumption
+            c.original_unit, c.original_ref = was.original_unit, was.original_ref
+        system.components.append(c)
 
 
 def _labour_check(unit: str, labour_unit: str, labour_rate) -> None:
@@ -157,7 +203,10 @@ def list_systems(
     rows, total = paginate(db, query.order_by(System.name, System.id), limit, offset)
     with_cost = "tender.margin" in principal.permissions
     return Page(
-        items=[_out(db, s, with_cost) for s in rows], total=total, limit=limit, offset=offset
+        items=[_out(db, s, with_cost, option_rates=False) for s in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
     )
 
 
@@ -177,7 +226,7 @@ def export_systems(
         columns += ["Surface prep / unit", "Labour rate", "Labour per", "Default margin %"]
     rows = []
     for s in db.scalars(query.order_by(System.name, System.id).limit(EXPORT_ROW_LIMIT)):
-        out = _out(db, s, with_cost)
+        out = _out(db, s, with_cost, option_rates=False)
         row = [out.code, out.name, out.unit, out.rate,
                ", ".join(c.product_name for c in out.components), out.is_active]  # fmt: skip
         if with_cost and out.cost:
@@ -200,10 +249,11 @@ def rate_breakdown(
     margin: Annotated[
         Decimal | None, Query(ge=0, lt=1000, description="Margin %; default: the system's")
     ] = None,
+    option_id: int | None = None,
 ) -> RateBreakdownOut:
     system = get_or_404(db, System, system_id, "System")
     try:
-        b = system_rate(db, system, margin)
+        b = system_rate(db, system, margin, option_id=option_id)
     except MissingPriceError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     return RateBreakdownOut(
@@ -263,16 +313,41 @@ def update_system(
         changes["labour_unit"] = "sqm"  # no labour, per the old unit: nothing to keep
     _labour_check(changes.get("unit", system.unit), changes.get("labour_unit", system.labour_unit),
                   changes.get("labour_rate", system.labour_rate))  # fmt: skip
+    changes.pop("option_id", None)
     before =audit.model_snapshot(system, "components")
     for field, value in changes.items():
         setattr(system, field, value)
-    if body.components is not None:
+    if body.components is not None and system.options:
+        _replace_option(db, system, body.components, body.option_id, principal)
+    elif body.components is not None:
         system.components = _components(db, body.components, principal)
     db.flush()
     after = audit.model_snapshot(system, "components")
     if after != before:
         audit.record(db, "system.update", "system", system.id, user_id=principal.user.id,
                      before=before, after=after, ip=audit.client_ip(request))  # fmt: skip
+    db.commit()
+    db.refresh(system)
+    return _out(db, system, True)
+
+
+@router.put("/{system_id}/options/{option_id}/default", dependencies=cost_edit)
+def set_default_option(
+    system_id: int, option_id: int, request: Request, db: DbSession, principal: CurrentPrincipal
+) -> SystemOut:
+    """The brand option a working, an offer line or an estimate takes when none is chosen."""
+    system = get_or_404(db, System, system_id, "System")
+    option = next((o for o in system.options if o.id == option_id), None)
+    if option is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Brand option not found")
+    before = next((o.brand for o in system.options if o.is_default), None)
+    for o in system.options:
+        o.is_default = False
+    db.flush()
+    option.is_default = True
+    audit.record(db, "system.default_option", "system", system.id, user_id=principal.user.id,
+                 before={"default": before}, after={"default": option.brand},
+                 ip=audit.client_ip(request))  # fmt: skip
     db.commit()
     db.refresh(system)
     return _out(db, system, True)

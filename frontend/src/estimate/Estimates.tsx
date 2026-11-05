@@ -43,6 +43,8 @@ type Line = {
   unit: string;
   system_id: number | null;
   system: string | null;
+  system_option_id?: number | null;
+  wastage_included?: boolean;
   mix_design_id: number | null;
   thickness_mm: string | null;
   part: string;
@@ -570,6 +572,7 @@ export function EstimatePage() {
           line={line === "new" ? undefined : line}
           onClose={() => setLine(null)}
           onSave={(json) => (line === "new" ? act("line", "/lines", json) : act("line", `/lines/${line.id}`, json, "PUT"))}
+          onSaveSystem={(json) => act("line", "/system-lines", json)}
         />
       )}
       {imported && <ImportResult out={imported} onClose={() => setImported(null)} />}
@@ -680,10 +683,29 @@ function ExcludeForm({ name, onClose, onSave }: { name: string; onClose: () => v
   );
 }
 
-function LineForm({ est, lib, mixes, line, onClose, onSave }: { est: Estimate; lib: Library; mixes: Mix[]; line?: Line; onClose: () => void; onSave: (json: unknown) => Promise<boolean> }) {
+function LineForm({
+  est,
+  lib,
+  mixes,
+  line,
+  onClose,
+  onSave,
+  onSaveSystem,
+}: {
+  est: Estimate;
+  lib: Library;
+  mixes: Mix[];
+  line?: Line;
+  onClose: () => void;
+  onSave: (json: unknown) => Promise<boolean>;
+  onSaveSystem: (json: unknown) => Promise<boolean>;
+}) {
   const [f, setF] = useState({
     product_id: line ? String(line.product_id) : "",
     system_id: line?.system_id ? String(line.system_id) : "",
+    system_option_id: line?.system_option_id ? String(line.system_option_id) : "",
+    // a new line: every product of the system's brand option at once
+    whole: false,
     mix_design_id: line?.mix_design_id ? String(line.mix_design_id) : "",
     thickness_mm: line?.thickness_mm ?? "",
     part: line?.part ?? "both",
@@ -695,18 +717,24 @@ function LineForm({ est, lib, mixes, line, onClose, onSave }: { est: Estimate; l
   // the mixes the product is a component of (the admixture included)
   const productMixes = mixes.filter((m) => m.parts.some((p) => String(p.product_id) === f.product_id));
   const product = lib.products.find((p) => String(p.id) === f.product_id);
+  const system = lib.systems.find((s) => String(s.id) === f.system_id);
+  const options = system?.options ?? [];
   const save = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    const ok = await onSave({
-      product_id: Number(f.product_id),
-      system_id: f.system_id ? Number(f.system_id) : null,
-      mix_design_id: f.mix_design_id ? Number(f.mix_design_id) : null,
-      thickness_mm: f.mix_design_id && f.thickness_mm ? f.thickness_mm : null,
-      part: f.part,
-      area_ids: chosen && chosen.length ? chosen : null,
-      note: f.note || null,
-    });
+    const option = f.system_option_id ? Number(f.system_option_id) : null;
+    const ok = f.whole
+      ? await onSaveSystem({ system_id: Number(f.system_id), system_option_id: option, part: f.part, area_ids: chosen && chosen.length ? chosen : null })
+      : await onSave({
+          product_id: Number(f.product_id),
+          system_id: f.system_id ? Number(f.system_id) : null,
+          system_option_id: f.system_id ? option : null,
+          mix_design_id: f.mix_design_id ? Number(f.mix_design_id) : null,
+          thickness_mm: f.mix_design_id && f.thickness_mm ? f.thickness_mm : null,
+          part: f.part,
+          area_ids: chosen && chosen.length ? chosen : null,
+          note: f.note || null,
+        });
     setBusy(false);
     if (ok) onClose();
   };
@@ -716,7 +744,7 @@ function LineForm({ est, lib, mixes, line, onClose, onSave }: { est: Estimate; l
       <form onSubmit={save}>
         <div className="grid-2">
           <Field label="Material" hint={product ? `${product.coverages.map((c) => `${c.system ?? "any system"}: ${c.label}`).join("; ")} · wastage ${num(product.wastage_percent ?? 0, 2)}%` : "From the library"}>
-            <select required value={f.product_id} onChange={(e) => setF({ ...f, product_id: e.target.value, mix_design_id: "" })}>
+            <select required={!f.whole} disabled={f.whole} value={f.product_id} onChange={(e) => setF({ ...f, product_id: e.target.value, mix_design_id: "" })}>
               <option value="">— material —</option>
               {lib.products.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -725,8 +753,8 @@ function LineForm({ est, lib, mixes, line, onClose, onSave }: { est: Estimate; l
               ))}
             </select>
           </Field>
-          <Field label="System" hint="The coverage for that system, else the product's any-system one">
-            <select value={f.system_id} onChange={(e) => setF({ ...f, system_id: e.target.value })}>
+          <Field label="System" hint="The company BOM's figure for that system, else its coverage, else the product's any-system one">
+            <select required={f.whole} value={f.system_id} onChange={(e) => setF({ ...f, system_id: e.target.value, system_option_id: "" })}>
               <option value="">Any system</option>
               {lib.systems.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -736,6 +764,24 @@ function LineForm({ est, lib, mixes, line, onClose, onSave }: { est: Estimate; l
               ))}
             </select>
           </Field>
+          {options.length > 0 && (
+            <Field label="Brand option" hint="The system's recipe for that brand (the company BOM)">
+              <select value={f.system_option_id} onChange={(e) => setF({ ...f, system_option_id: e.target.value })}>
+                <option value="">The default ({options.find((o) => o.is_default)?.brand ?? options[0].brand})</option>
+                {options.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.brand}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+          {!line && system && (
+            <label className="check">
+              <input type="checkbox" checked={f.whole} onChange={(e) => setF({ ...f, whole: e.target.checked, product_id: "" })} /> Every product of {system.name}
+              {options.length ? " (the brand option chosen)" : ""}: one line each
+            </label>
+          )}
           <Field label="Mix design" hint={productMixes.length ? "The quantity from the mix at the thickness, not the library's coverage" : "The material is in no mix design"}>
             <select value={f.mix_design_id} disabled={!productMixes.length} onChange={(e) => setF({ ...f, mix_design_id: e.target.value })}>
               <option value="">— none —</option>

@@ -7,7 +7,10 @@ another (a shaft, a cut-out in a terrace) is taken out of that one's floor and k
 with its own periphery (by default only its upturn counts): never lost, never counted twice.
 
 A line: area × coverage × (1 + wastage) = quantity → packs, per area and in total; the coverage is
-the library's for the product in the line's system, or a mix design's component at a thickness.
+the company BOM's for the product in the line's system and brand option (it ranks above the
+library's data sheet figures; a sheet's or mesh's has its overlap, so no wastage is added on it),
+else the library's for the product in the line's system, or a mix design's component at a
+thickness.
 Every measured area on the site's drawings is in the estimate or excluded with a reason; any
 other is a missed area, and the estimate says so (Dholera: 29.99 sqm measured, never estimated)."""
 
@@ -182,6 +185,25 @@ class Cov:
     shown: str  # "1.8 kg/sqm (1.8–2, TDS)", or the mix's working
     coverage_id: int | None = None
     mix: str | None = None
+    wastage_included: bool = False  # the company BOM's sheet or mesh figure has its overlap
+
+
+def bom_coverage(db: Session, ln: EstimateLine) -> Cov | None:
+    """The company BOM's figure for the line's product in its system (per sqm or sq ft) and brand
+    option (the default when none is picked)."""
+    s = db.get(System, ln.system_id) if ln.system_id else None
+    if s is None or s.unit not in ("sqm", "sqft"):
+        return None
+    c = next((c for c in s.recipe(ln.system_option_id) if c.product_id == ln.product_id and c.source == "company_bom" and c.consumption_per_unit is not None), None)
+    if c is None:
+        return None
+    from app.costing.working import (
+        bom_source,  # noqa: PLC0415  (costing imports the estimate's library)
+    )
+
+    per_sqm = D(c.consumption_per_unit) * (lib.SQFT_PER_SQM if s.unit == "sqft" else 1)
+    p = db.get(Product, ln.product_id)
+    return Cov(per_sqm, f"{lib.n(per_sqm, 4)} {p.unit}/sqm, {bom_source(db, c)}", None, None, bool(c.wastage_included))
 
 
 def coverage(db: Session, ln: EstimateLine) -> Cov | None:
@@ -192,6 +214,9 @@ def coverage(db: Session, ln: EstimateLine) -> Cov | None:
             return None
         shown = f"{lib.n(part.per_sqft, mx.round_sqft or 4)} {part.unit}/sqft" if part.unit == "kg" else f"{lib.n(part.per_sqm, 4)} {part.unit}/sqm"
         return Cov(part.per_sqm, f"{shown} ({mx.name} at {lib.n(ln.thickness_mm or mx.thickness_mm, 1)} mm: {part.how})", None, mx.name)
+    found = bom_coverage(db, ln)
+    if found is not None:
+        return found
     c = lib.coverage_for(db, ln.product_id, ln.system_id)
     if c is None:
         return None
@@ -242,8 +267,8 @@ def line_areas(db: Session, est: Estimate, ln: EstimateLine, areas: list[Estimat
 def work_line(db: Session, est: Estimate, ln: EstimateLine, areas: list[EstimateArea] | None = None) -> LineOut:
     p = db.get(Product, ln.product_id)
     cov = coverage(db, ln)
-    w = lib.wastage(p)
-    out = LineOut(ln, p, lib.system_name(db, ln.system_id), cov, w)
+    w = ZERO if cov is not None and cov.wastage_included else lib.wastage(p)
+    out = LineOut(ln, p, system_label(db, ln), cov, w)
     total = ZERO
     for a in line_areas(db, est, ln, areas):
         floor = D(a.floor_sqm) - D(a.deduction_sqm) if a.use_floor and ln.part in ("both", "floor") else ZERO
@@ -268,6 +293,32 @@ def work_line(db: Session, est: Estimate, ln: EstimateLine, areas: list[Estimate
         out.qty = total
         out.packs = lib.packs(total, p)
     return out
+
+
+def system_label(db: Session, ln: EstimateLine) -> str | None:
+    """"Crystalline coating (Bronco)": the system and, when it has brand options, the one used."""
+    s = db.get(System, ln.system_id) if ln.system_id else None
+    if s is None:
+        return None
+    o = s.option(ln.system_option_id)
+    return f"{s.name} ({o.brand})" if o else s.name
+
+
+def add_system(db: Session, est: Estimate, system: System, option_id: int | None, part: str = "both", area_ids: list[int] | None = None) -> list[EstimateLine]:
+    """A line for each product of the system's brand option (the default when none is picked)."""
+    if system.unit not in ("sqm", "sqft"):
+        raise Refused(f"{system.name} is per {system.unit}: the estimate's lines are per sqm of its areas")
+    option = system.option(option_id)
+    order = max((ln.sort_order for ln in lines_of(db, est)), default=0)
+    made = []
+    for c in system.recipe(option.id if option else None):
+        order += 1
+        ln = EstimateLine(estimate_id=est.id, sort_order=order, product_id=c.product_id, system_id=system.id,
+                          system_option_id=option.id if option else None, part=part, area_ids=area_ids)  # fmt: skip
+        db.add(ln)
+        made.append(ln)
+    db.flush()
+    return made
 
 
 def lines_of(db: Session, est: Estimate) -> list[EstimateLine]:

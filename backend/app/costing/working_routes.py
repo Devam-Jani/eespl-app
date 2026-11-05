@@ -91,6 +91,8 @@ def group_out(db, g: RateGroup, lines: dict[str, dict], with_cost: bool) -> dict
     result = working.work(db, g)
     system = db.get(System, g.system_id) if g.system_id else None
     my_lines = [lines[k] for k in (working._line_key(gl) for gl in g.lines) if k in lines]
+    base, smaller = working.LINE_UNITS[g.unit or "sqm"]
+    option = system.option(g.system_option_id) if system else None
     out = {
         "id": g.id,
         "name": g.name,
@@ -98,8 +100,14 @@ def group_out(db, g: RateGroup, lines: dict[str, dict], with_cost: bool) -> dict
         "system_id": g.system_id,
         "system": system.name if system else None,
         "system_to_confirm": bool(system and system.to_confirm),
+        # the brand option worked (Bronco, Chryso) and the others the system has
+        "system_option_id": option.id if option else None,
+        "system_option": option.brand if option else None,
+        "system_options": [{"id": o.id, "brand": o.brand, "is_default": o.is_default} for o in (system.options if system else [])],
+        "unit": g.unit or "sqm",
+        "small_unit": working.small_of(g)[0],
         "lines": my_lines,
-        "unit_note": sorted({(x["unit"] or "?") for x in my_lines} - {"sqm", "sqft", "sft"}),
+        "unit_note": sorted({(x["unit"] or "?") for x in my_lines} - base - smaller),
         "rate_sqm": result["rate_sqm"],
         "rate_sqft": result["rate_sqft"],
         "errors": result["errors"],
@@ -176,7 +184,7 @@ def _system_coats(db, system_id: int | None) -> list[dict]:
         return []
     return [
         {"product": c.product.name, "coats": c.coats, "to_confirm": c.to_confirm}
-        for c in system.components
+        for c in system.recipe()
     ]
 
 
@@ -198,6 +206,7 @@ def product_out(db, p: RateGroupProduct) -> dict:
         "freight_used": p.freight_used,
         "freight_actual": p.freight_actual,
         "wastage_percent": p.wastage_percent,  # its own (no application matched); blank: the item's
+        "wastage_included": p.wastage_included,  # the company BOM's figure has its overlap
     }
 
 
@@ -457,6 +466,7 @@ class ProductIn(BaseModel):
 class GroupIn(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
     system_id: int | None = None
+    system_option_id: int | None = None  # the system's brand option; blank: its default
     application: str | None = Field(None, max_length=40)
     coats: int | None = Field(None, ge=1, le=20)
     wastage_percent: Decimal | None = Field(None, ge=0, le=100)
@@ -486,23 +496,33 @@ def update_group(
     new_system = "system_id" in data and data["system_id"] != g.system_id
     if new_system and data["system_id"] and db.get(System, data["system_id"]) is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unknown system")
+    option_id = data.pop("system_option_id", g.system_option_id if not new_system else None)
+    system_id = data.get("system_id") if new_system else g.system_id
+    target = db.get(System, system_id) if system_id else None
+    if option_id and (target is None or option_id not in {o.id for o in target.options}):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "That brand option is not one of the system's")
+    # another brand option: the products start again from that option's recipe
+    new_option = not new_system and target is not None and option_id != g.system_option_id
     if "labour_rate_card_id" in data and data["labour_rate_card_id"]:
         if db.get(LabourRateCard, data["labour_rate_card_id"]) is None:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unknown labour rate card")
-    if new_system:  # the system's build-up first; what was typed with it wins
-        g.system_id = data.pop("system_id")
+    if new_system or new_option:  # the system's build-up first; what was typed with it wins
+        if new_system:
+            g.system_id = data.pop("system_id")
+        g.system_option_id = option_id
         try:
             working.init_from_system(db, g, " ".join(working.words(g.name)))
-        except working.WorkingUnitError as exc:  # a system per rmt or nos
+        except working.WorkingUnitError as exc:  # a system per nos
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from None
+        new_system = True  # the products were started again: the form's rows are not applied
     old_wastage, old_application = g.wastage_percent, g.application
     for k, v in data.items():
         setattr(g, k, v)
     if ("application" in data and data["application"] != old_application) or (
         "wastage_percent" in data and data["wastage_percent"] != old_wastage
     ):
-        for p in g.products:  # the main item's wastage now rules every product
-            p.wastage_percent = None
+        for p in g.products:  # the main item's wastage now rules every product (not a BOM sheet)
+            p.wastage_percent = Decimal(0) if p.wastage_included else None
     # the application picked: its wastage from Settings > Process rules (and where it came from)
     if "application" in data and "wastage_percent" not in data:
         found = working.wastage_from_settings(db, g.application)

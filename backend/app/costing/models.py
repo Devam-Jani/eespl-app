@@ -139,9 +139,11 @@ class RateWorking(Tracked, Base):
 
 
 class RateGroup(Tracked, Base):
-    """A main item: the client's lines it covers and how its rate is worked (per sqm)."""
+    """A main item: the client's lines it covers and how its rate is worked (per sqm, or per rmt
+    for a system per running metre: then the *_sqm and *_sqft columns are per rmt and per rft)."""
 
     __tablename__ = "rate_groups"
+    __table_args__ = (CheckConstraint("unit IN ('sqm', 'rmt')", name="unit_valid"),)
 
     id: Mapped[int] = mapped_column(Identity(), primary_key=True)
     working_id: Mapped[int] = mapped_column(
@@ -150,6 +152,12 @@ class RateGroup(Tracked, Base):
     sort_order: Mapped[int] = mapped_column(Integer, server_default="0")
     name: Mapped[str] = mapped_column(String(200))
     system_id: Mapped[int | None] = mapped_column(ForeignKey("systems.id", ondelete="SET NULL"))
+    # the system's brand option (Bronco, Chryso); blank: its default
+    system_option_id: Mapped[int | None] = mapped_column(
+        ForeignKey("system_options.id", ondelete="SET NULL")
+    )
+    # what the item is worked per: sqm (and sq ft from it), or rmt (and rft) for a joint, a coving
+    unit: Mapped[str] = mapped_column(String(6), server_default="sqm")
     application: Mapped[str | None] = mapped_column(String(40))  # raft, footing ... (wastage)
     # the main item's surface and what the client's spec asks: they pick the consumption
     surface: Mapped[str | None] = mapped_column(String(10))
@@ -246,6 +254,8 @@ class RateGroupProduct(Base):
     # the product's own wastage (the system's figure) when no application matched; blank: the
     # main item's wastage
     wastage_percent: Mapped[Decimal | None] = mapped_column(Pct)
+    # the company BOM's figure already has its wastage (a sheet's overlap): none is added
+    wastage_included: Mapped[bool] = mapped_column(Boolean, server_default="false")
 
     product = relationship("Product", lazy="joined")
 
