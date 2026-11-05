@@ -21,8 +21,10 @@ mark: New system
 **On the page: one system (/systems/:id)**
 - The header: the name, the description, **To confirm** when figures are still missing, and the **Selling rate** per unit at the default margin.
 - A yellow note under the header says why there is no rate, e.g. "No current price for: <products>" or "Consumption to confirm for: <products>".
-- **Products used** (list): the products, with their brand. This is all that roles without cost see.
-- **Build-up** (table): **Product**, **Consumption / unit**, **Coats**, **Wastage %**, **Site average** (the median actual consumption over completed areas on sites, with the number of areas when you point at it). An empty consumption shows "to confirm". {perm: tender.margin}
+- **Products used** (list): the products, with their brand. This is all that roles without cost see. A system with brand options lists its default option's products.
+- **Brand options** (card, a system from the company BOM): one button per brand (Bronco, Chryso) with its rate; click one to see and edit its build-up. **(default)** marks the one used when none is chosen.
+- **Make <brand> the default**: the rate working, the quotation and the estimate take it when none is chosen. {perm: library.edit}
+- **Build-up** (table): **Product**, **Consumption / unit**, **Coats**, **Wastage %**, **Site average** (the median actual consumption over completed areas on sites, with the number of areas when you point at it). An empty consumption shows "to confirm". A company BOM row says so, with its figure per sq ft or rft as the file gave it. **included** under the wastage: the figure already has its wastage (a sheet's or mesh's overlap), so none is added. {perm: tender.margin}
 - **Surface prep (₹ / unit)**, **Default margin %**, **Labour rate (₹)**, **Labour per**: the system's settings. Greyed for roles that cannot edit. {perm: tender.margin}
 - In the build-up, each row's **Product** list, **Consumption / unit**, **Coats** and **Wastage %** can be changed. Leave the consumption or the coats empty when not known: it is kept as "to confirm", never guessed. {perm: library.edit}
 - **×** (on a row): removes the product from the build-up. **+ Add product** adds an empty row; choose the product in "Choose a product…". A row left without a product is dropped on save. {perm: library.edit}

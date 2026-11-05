@@ -279,6 +279,7 @@ class ComponentIn(BaseModel):
     coats: int | None = Field(default=None, ge=1, le=20)
     to_confirm: bool = False
     note: str | None = None
+    wastage_included: bool = False  # the figure has its wastage (a sheet's overlap)
 
 
 class SystemFields(BaseModel):
@@ -303,7 +304,10 @@ class SystemUpdate(SystemFields):
     code: str | None = Field(default=None, min_length=1, max_length=50)
     name: Name | None = None
     unit: str | None = None
-    components: list[ComponentIn] | None = None  # when given, replaces all components
+    # when given, replaces the components: of the brand option `option_id` (blank: the default
+    # one) on a system with options, else all of them
+    components: list[ComponentIn] | None = None
+    option_id: int | None = None
 
 
 class ComponentPublic(BaseModel):
@@ -315,11 +319,31 @@ class ComponentPublic(BaseModel):
     coats: int | None = None
     to_confirm: bool = False
     note: str | None = None
+    option_id: int | None = None
+    source: str | None = None  # "company_bom"
 
 
 class ComponentCostOut(ComponentPublic):
     consumption_per_unit: Decimal | None
     wastage_percent: Decimal
+    wastage_included: bool = False  # the figure has its wastage (a sheet's overlap)
+    # as the company BOM gave it (0.093 per sqft) when it was converted to the system's unit
+    original_consumption: Decimal | None = None
+    original_unit: str | None = None
+    original_ref: str | None = None
+
+
+class SystemOptionOut(BaseModel):
+    """A brand option: its rate at today's prices and its products (the figures in `cost`)."""
+
+    id: int
+    brand: str
+    is_default: bool
+    source: str
+    source_ref: str | None = None
+    rate: Decimal | None = None
+    rate_error: str | None = None
+    product_ids: list[int] = []
 
 
 class SystemCost(BaseModel):
@@ -343,7 +367,10 @@ class SystemOut(BaseModel):
     note: str | None = None
     rate: Decimal | None  # final selling rate at the default margin, today's prices
     rate_error: str | None = None
+    # the default brand option's (with those of no option); every option's are in `cost`
     components: list[ComponentPublic]
+    options: list[SystemOptionOut] = []
+    source: str | None = None
     cost: SystemCost | None = None
 
 

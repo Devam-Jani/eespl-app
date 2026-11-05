@@ -42,6 +42,7 @@ from app.issues.fields import db_problem
 from app.knowledge import routes as knowledge
 from app.masters.routers import (
     admin_settings,
+    bom,
     channels,
     clients,
     library,
@@ -120,6 +121,7 @@ app.include_router(clients.router)
 app.include_router(channels.router)
 app.include_router(products.router)
 app.include_router(systems.router)
+app.include_router(bom.router)
 app.include_router(library.router)
 app.include_router(library.units_router)
 app.include_router(tc.router)

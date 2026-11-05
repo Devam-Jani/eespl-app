@@ -35,7 +35,7 @@ from app.estimate.models import (
     MixDesign,
 )
 from app.execution.common import pdf_response, record, save_upload, send_file
-from app.masters.models import Product, System
+from app.masters.models import Product, System, SystemComponent
 from app.material import service as msvc
 from app.models import AuditLog
 from app.sites.models import Site
@@ -105,9 +105,13 @@ def library(db: DbSession, principal: CurrentPrincipal, _: View) -> dict:
     by: dict[int, list[Coverage]] = {}
     for c in covs:
         by.setdefault(c.product_id, []).append(c)
-    products = [_product_out(db, p, by.get(p.id, [])) for p in db.scalars(select(Product).where(Product.id.in_(list(by) or [0])).order_by(Product.name))]
+    # a product with a coverage, or in a system's company BOM recipe (its figure is the BOM's)
+    in_bom = set(db.scalars(select(SystemComponent.product_id).where(SystemComponent.source == "company_bom")))
+    products = [_product_out(db, p, by.get(p.id, [])) for p in db.scalars(select(Product).where(Product.id.in_(list(set(by) | in_bom) or [0])).order_by(Product.name))]
+    systems = db.scalars(select(System).where(System.is_active.is_(True)).order_by(System.name))
     return _j({"products": products, "units": COVERAGE_UNITS, "sources": [{"key": k, "label": lib.SOURCE_LABELS[k]} for k in COVERAGE_SOURCES],
-                             "systems": [{"id": s.id, "name": s.name, "upturn_mm": s.upturn_mm} for s in db.scalars(select(System).where(System.is_active.is_(True)).order_by(System.name))],
+                             "systems": [{"id": s.id, "name": s.name, "unit": s.unit, "upturn_mm": s.upturn_mm,
+                                          "options": [{"id": o.id, "brand": o.brand, "is_default": o.is_default} for o in s.options]} for s in systems],
                              "can_edit": "coverage.edit" in principal.permissions})  # fmt: skip
 
 
@@ -321,6 +325,7 @@ def _area_out(a: EstimateArea) -> dict:
 def _line_out(lo: svc.LineOut) -> dict:
     ln = lo.line
     return {"id": ln.id, "product_id": lo.product.id, "product": lo.product.name, "unit": lo.product.unit, "system_id": ln.system_id, "system": lo.system,
+            "system_option_id": ln.system_option_id, "wastage_included": bool(lo.cov and lo.cov.wastage_included),
             "mix_design_id": ln.mix_design_id, "thickness_mm": ln.thickness_mm, "part": ln.part, "area_ids": ln.area_ids, "note": ln.note,
             "coverage": lo.cov.shown if lo.cov else None, "coverage_id": lo.cov.coverage_id if lo.cov else None, "per_sqm": lo.cov.per_sqm if lo.cov else None,
             "wastage_percent": lo.wastage, "qty": lo.qty, "packs": lo.packs.text if lo.packs else None, "pack_count": lo.packs.count if lo.packs else None,
@@ -451,6 +456,7 @@ def put_area(eid: int, aid: int, body: AreaIn, request: Request, db: DbSession, 
 class LineIn(BaseModel):
     product_id: int
     system_id: int | None = None
+    system_option_id: int | None = None  # the system's brand option; blank: its default
     mix_design_id: int | None = None
     thickness_mm: Decimal | None = Field(None, gt=0, le=1000)
     part: Literal["both", "floor", "upturn"] = "both"
@@ -469,7 +475,35 @@ def _line_fields(db, e: Estimate, body: LineIn) -> dict:
         ids = {a.id for a in svc.areas_of(db, e)}
         if not set(body.area_ids) <= ids:
             raise _422("An area is not in this estimate")
+    if body.system_option_id is not None:
+        s = db.get(System, body.system_id) if body.system_id else None
+        if s is None or body.system_option_id not in {o.id for o in s.options}:
+            raise _422("That brand option is not one of the line's system's")
     return body.model_dump()
+
+
+class SystemLinesIn(BaseModel):
+    system_id: int
+    system_option_id: int | None = None
+    part: Literal["both", "floor", "upturn"] = "both"
+    area_ids: list[int] | None = None
+
+
+@router.post("/estimates/{eid}/system-lines", status_code=status.HTTP_201_CREATED)
+def add_system_lines(eid: int, body: SystemLinesIn, request: Request, db: DbSession, principal: CurrentPrincipal, scope: Edit) -> dict:
+    """A line for each product of a system's brand option (the company BOM's figures)."""
+    e = _draft(db, eid, scope, principal)
+    s = db.get(System, body.system_id)
+    if s is None:
+        raise _422("System not found")
+    if body.system_option_id is not None and body.system_option_id not in {o.id for o in s.options}:
+        raise _422("That brand option is not one of the system's")
+    if body.area_ids and not set(body.area_ids) <= {a.id for a in svc.areas_of(db, e)}:
+        raise _422("An area is not in this estimate")
+    made = _said(svc.add_system, db, e, s, body.system_option_id, body.part, body.area_ids)
+    record(db, request, principal, "estimate.line", "estimate", e.id, after={"system": svc.system_label(db, made[0]) if made else s.name, "lines": len(made)})
+    db.commit()
+    return _j(_est_out(db, e, principal))
 
 
 @router.post("/estimates/{eid}/lines", status_code=status.HTTP_201_CREATED)

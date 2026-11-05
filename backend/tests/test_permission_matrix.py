@@ -24,7 +24,7 @@ ALL = [
     "vendors.view", "vendors.edit", "settings.company",
     "library.view", "library.edit",
     "tender.view", "tender.edit", "tender.margin",
-    "site.view", "site.edit", "site.update", "drawings.approve", "drawings.delete",
+    "site.view", "site.edit", "site.update", "drawings.approve", "drawings.delete", "bom.import",
     "indent.view", "indent.create", "indent.approve",
     "po.view", "po.edit", "po.approve", "grn.view", "grn.edit", "grn.approve",
     "store.view", "store.edit",
@@ -71,7 +71,7 @@ DIRECTOR_EXCLUDES = {"admin.users", "admin.roles", "admin.settings", "portal.vie
                      "portal.comment",
                      "portal.snag", "portal.approve",
                      "field.admin", "field.claims_approve",
-                     "drawings.delete"}  # fmt: skip
+                     "drawings.delete", "bom.import"}  # fmt: skip
 
 EXPECTED: dict[str, dict[str, str]] = {
     "super_admin": _all(*ALL),
@@ -212,6 +212,7 @@ EXPECTED: dict[str, dict[str, str]] = {
     "planning": TRACK | _all(
         "building.edit",
         "drawings.delete",
+        "bom.import",
         "wo.view",
         "wo.edit",
         "closeout.billing",

@@ -11,6 +11,7 @@ mark: Add product
 - **Category** (list): "All categories" or one material category.
 - **⤓ Export Excel**: downloads the list with the same search and category. Cost columns are left out for roles that do not see cost.
 - **Add product**: opens the **Add product** form. {perm: library.edit}
+- **Import BOM**: opens **Import the company BOM**. {perm: bom.import}
 - The table: **Code**, **Name**, **Brand**, **Category**, **Unit**, **Pack**, **GST %**. Inactive products are greyed.
 - **Purchase rate** and **Freight** columns: the current price ("no price" when none). Click the rate to open the product's price page. {perm: tender.margin}
 - **Prices** (on a row): opens the **Prices: <product>** window. {perm: tender.margin}
@@ -28,6 +29,14 @@ mark: Add product
 - **Save** saves; **Cancel** closes without saving. {perm: library.edit}
 - **Delete** (edit only): asks "Delete <name>?" and removes the product. A product used in a system cannot be deleted. {perm: library.edit}
 - On an edit, emptying **Pack (bag, can, drum)**, **HSN / SAC code** or **Reorder level** and saving clears it. {perm: library.edit}
+
+**The Import the company BOM window** {perm: bom.import}
+- **Choose the BOM file (.xlsx)**, then **Preview**: reads the company BOM (a work item whose name ends with its unit, _SQFT, _SQMT, _RFT or _RMT, with its products in [ ] below it) and writes nothing yet. {perm: bom.import}
+- **What it writes**: the counts of work items, product rows and products in the file, and the systems, brand options and components the import makes. Per sq ft and per rft figures are turned into per sqm and per rmt (× 10.7639, × 3.2808); the file's figure is kept beside them. {perm: bom.import}
+- **Checks**: warnings only, the import still goes ahead: a sq ft and a sqm figure more than 3 % apart, two brands more than 3× apart for the same role, a sheet or mesh above 0.2 per sq ft, a work item with no unit (read per nos), an epoxy or PU item with no resin, a product twice in one recipe, labour rows left out. {perm: bom.import}
+- **Not in the product master**: tick a name to create it (its name without the pack, the file's name as an alias, the last purchase price when the file gives one). A name not ticked leaves its lines out; the system is marked to confirm and its note names them. {perm: bom.import}
+- **Systems**: each work item with its brand options; **Products** shows each option's products and figures. {perm: bom.import}
+- **Default brand option**: the brand a system uses when none is chosen (else the first brand in the file); then **Import**. A system with the same name and unit is updated: its company BOM options are replaced and options made by hand are kept. {perm: bom.import}
 
 **The Prices window (Prices: <product>)** {perm: tender.margin}
 - The table: **Effective from**, **Purchase rate / unit**, **Freight / unit**, **Landed** (rate + freight), **Note**. **Current** marks the price in force; **Future** marks a price dated after today. {perm: tender.margin}

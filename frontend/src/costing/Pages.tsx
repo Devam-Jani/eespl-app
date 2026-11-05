@@ -29,14 +29,33 @@ type Product = {
   freight_used: string;
   freight_actual: string | null;
   wastage_percent?: string | null;
+  wastage_included?: boolean; // the company BOM's figure has its overlap: no wastage added
 };
-type Row = { item: string; consumption?: string; coverage: string | null; price?: string; freight?: string; cost_of_material: string | null; per_sqm: string; ref: string | null };
+type Row = {
+  item: string;
+  consumption?: string;
+  coverage: string | null;
+  price?: string;
+  freight?: string;
+  cost_of_material: string | null;
+  per_sqm: string;
+  ref: string | null;
+  consumption_source?: string | null;
+  wastage_note?: string;
+};
 type Group = {
   id: number;
   name: string;
   system_id: number | null;
   system: string | null;
   system_to_confirm: boolean;
+  // the system's brand option worked (company BOM: Bronco, Chryso) and the ones it has
+  system_option_id?: number | null;
+  system_option?: string | null;
+  system_options?: { id: number; brand: string; is_default: boolean }[];
+  // per sqm (and sq ft), or per rmt (and rft) for a joint or a coving: the *_sqm / *_sqft figures are per these
+  unit?: "sqm" | "rmt";
+  small_unit?: string;
   lines: Line[];
   unit_note: string[];
   rate_sqm: string | null;
@@ -238,9 +257,9 @@ function Grouping({ w, onChange, onError }: { w: Working; onChange: (w: Working)
       onError(errorText(e));
     }
   }
-  const columns: { id: number | null; name: string; rate: string | null; flagged: boolean; lines: Line[] }[] = [
-    ...w.groups.map((g) => ({ id: g.id, name: g.name, rate: g.rate_sqm, flagged: g.library_flagged, lines: g.lines })),
-    ...(w.ungrouped.length ? [{ id: null, name: "Not grouped", rate: null, flagged: false, lines: w.ungrouped }] : []),
+  const columns: { id: number | null; name: string; rate: string | null; unit: string; flagged: boolean; lines: Line[] }[] = [
+    ...w.groups.map((g) => ({ id: g.id, name: g.name, rate: g.rate_sqm, unit: g.unit ?? "sqm", flagged: g.library_flagged, lines: g.lines })),
+    ...(w.ungrouped.length ? [{ id: null, name: "Not grouped", rate: null, unit: "sqm", flagged: false, lines: w.ungrouped }] : []),
   ];
   if (columns.length === 0) return <p className="empty">No client lines in this BOQ.</p>;
   return (
@@ -252,7 +271,7 @@ function Grouping({ w, onChange, onError }: { w: Working; onChange: (w: Working)
           </h3>
           {c.rate && (
             <p className="small">
-              {inr(c.rate)} / sqm {c.flagged && <span className="badge badge-warn">off the rate library</span>}
+              {inr(c.rate)} / {c.unit} {c.flagged && <span className="badge badge-warn">off the rate library</span>}
             </p>
           )}
           <ul className="group-lines">
@@ -428,17 +447,19 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
         <p>
           {g.rate_sqm ? (
             <>
-              <b>{inr(g.rate_sqm)}</b> per sqm · <b>{inr(g.rate_sqft)}</b> per sq ft
+              <b>{inr(g.rate_sqm)}</b> per {g.unit ?? "sqm"} · <b>{inr(g.rate_sqft)}</b> per {g.small_unit ?? "sq ft"}
             </>
           ) : (
             <span className="muted">Not worked yet.</span>
           )}
-          {g.system && <span className="muted"> · {g.system}</span>}
+          {g.system && <span className="muted"> · {g.system}{g.system_option ? ` (${g.system_option})` : ""}</span>}
         </p>
         <LinesTable lines={g.lines} />
       </Card>
     );
   const s = shown;
+  const u = s.unit ?? "sqm";
+  const su = s.small_unit ?? "sq ft";
   return (
     <div className="working-sheet">
       <Card as="div">
@@ -462,6 +483,23 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
             </select>
             {s.system_to_confirm && <span className="small text-warn">This system's consumption or coats are still to confirm.</span>}
           </Field>
+          {(s.system_options ?? []).length > 0 && (
+            <Field label="Brand option">
+              <select
+                value={s.system_option_id ?? ""}
+                onChange={(e) => void save(false, { system_option_id: e.target.value ? Number(e.target.value) : null })}
+                disabled={!edit || (s.system_options ?? []).length < 2}
+              >
+                {(s.system_options ?? []).map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.brand}
+                    {o.is_default ? " (default)" : ""}
+                  </option>
+                ))}
+              </select>
+              <span className="small muted">Another brand starts the products again from its recipe.</span>
+            </Field>
+          )}
           <Field label="Application (its wastage comes from the settings)">
             <select
               value={f.application}
@@ -520,7 +558,7 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
               <span className="small muted">system: {(s.system_coats ?? []).map((c) => `${c.product} ${c.coats ? `${c.coats} coats` : "coats to confirm"}`).join("; ")}</span>
             )}
           </Field>
-          <Field label="Surface preparation (₹/sqm)">
+          <Field label={`Surface preparation (₹/${u})`}>
             <input className="input-num" value={f.surface_prep} onChange={set("surface_prep")} disabled={!edit} />
           </Field>
           <Field label="Labour rate card (what we pay)">
@@ -538,10 +576,10 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
               ))}
             </select>
           </Field>
-          <Field label="Labour in the rate (₹/sq ft)">
+          <Field label={`Labour in the rate (₹/${su})`}>
             <input className="input-num" value={f.labour_used_sqft} onChange={set("labour_used_sqft")} disabled={!edit} />
           </Field>
-          <Field label="Labour paid (₹/sq ft)">
+          <Field label={`Labour paid (₹/${su})`}>
             <input className="input-num" value={f.labour_paid_sqft} onChange={set("labour_paid_sqft")} disabled={!edit} />
           </Field>
           <Field label="Margin %">
@@ -550,7 +588,7 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
         </div>
       </Card>
       <Card as="div" className="top-gap">
-        <h3>Products (per sqm for this site)</h3>
+        <h3>Products (per {u} for this site)</h3>
         <div className="table-wrap">
           <table className="table compact">
             <thead>
@@ -571,7 +609,11 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
                     <td>
                       {p.product} <span className="muted small">/{p.unit}</span>
                       {(s.free_issue_ids ?? []).includes(p.product_id) && <div className="small text-warn">free issue: the client supplies it, not costed</div>}
-                      {s.products?.[i]?.wastage_percent != null && <div className="small muted">its own wastage {num(s.products[i].wastage_percent ?? "0")} %</div>}
+                      {s.products?.[i]?.wastage_included ? (
+                        <div className="small muted">wastage included in the company BOM figure (none added)</div>
+                      ) : (
+                        s.products?.[i]?.wastage_percent != null && <div className="small muted">its own wastage {num(s.products[i].wastage_percent ?? "0")} %</div>
+                      )}
                     </td>
                     <td className="num">
                       <Field label="Consumption" bare>
@@ -630,7 +672,7 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
       </Card>
       <div className="split top-gap">
         <Card as="div">
-          <h3>Build-up per sqm</h3>
+          <h3>Build-up per {u}</h3>
           {(s.warnings ?? []).length > 0 && <div className="alert alert-warn">Check: {(s.warnings ?? []).join("; ")}</div>}
           {s.errors.length > 0 ? (
             <div className="alert alert-warn">{s.errors.join("; ")}</div>
@@ -641,14 +683,17 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
                   <th>Item</th>
                   <th className="num">Coverage</th>
                   <th className="num">Cost of material</th>
-                  <th className="num">Per sqm</th>
+                  <th className="num">Per {u}</th>
                   <th>Ref</th>
                 </tr>
               </thead>
               <tbody>
                 {(s.rows ?? []).map((r, i) => (
                   <tr key={i}>
-                    <td>{r.item}</td>
+                    <td>
+                      {r.item}
+                      {r.wastage_note && <div className="small muted">wastage: {r.wastage_note}</div>}
+                    </td>
                     <td className="num">{r.coverage ? num(r.coverage) : "1"}</td>
                     <td className="num">{r.cost_of_material ? inr(r.cost_of_material) : "—"}</td>
                     <td className="num">{inr(r.per_sqm)}</td>
@@ -679,10 +724,10 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
                   <td />
                   <td />
                   <td className="num">
-                    <b>{inr(s.rate_sqm)}</b> / sqm
+                    <b>{inr(s.rate_sqm)}</b> / {u}
                   </td>
                   <td>
-                    <b>{inr(s.rate_sqft)}</b> / sq ft
+                    <b>{inr(s.rate_sqft)}</b> / {su}
                   </td>
                 </tr>
               </tbody>
@@ -703,13 +748,17 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
                       <td className="small">
                         used {inr(c.used)} · actual {inr(c.actual)}
                       </td>
-                      <td className="num">{inr(c.per_sqm)} / sqm</td>
+                      <td className="num">
+                        {inr(c.per_sqm)} / {u}
+                      </td>
                     </tr>
                   ))}
                   <tr className="row-total">
                     <td>Total</td>
                     <td />
-                    <td className="num">{inr(s.cushion_sqm)} / sqm</td>
+                    <td className="num">
+                      {inr(s.cushion_sqm)} / {u}
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -743,7 +792,7 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
             <h3>Against the rate library</h3>
             {s.library_median_sqm ? (
               <p>
-                Median {inr(s.library_median_sqm)} / sqm: this rate is {Number(s.library_diff_percent) > 0 ? "+" : ""}
+                Median {inr(s.library_median_sqm)} / {u}: this rate is {Number(s.library_diff_percent) > 0 ? "+" : ""}
                 {s.library_diff_percent} %{s.library_flagged && <b> (more than {num(s.library_limit_percent)} % off: check it)</b>}
               </p>
             ) : (
@@ -754,7 +803,11 @@ function MainItem({ w, g, onSaved, onError }: { w: Working; g: Group; onSaved: (
       </div>
       <Card as="div" className="top-gap">
         <h3>The client's lines in this main item ({s.lines.length})</h3>
-        {s.unit_note.length > 0 && <p className="small text-warn">Lines in {s.unit_note.join(", ")} are left for you (the working is per sqm and sq ft).</p>}
+        {s.unit_note.length > 0 && (
+          <p className="small text-warn">
+            Lines in {s.unit_note.join(", ")} are left for you (the working is per {u} and {su}).
+          </p>
+        )}
         <LinesTable lines={s.lines} />
       </Card>
     </div>

@@ -186,12 +186,16 @@ class RateContext:
         return pricing._unit_factor(self.rules, uom, other)
 
 
-def _system(rc: RateContext, line: QuotationLine, system_id: int) -> bool:
+def _system(
+    rc: RateContext, line: QuotationLine, system_id: int, option_id: int | None = None
+) -> bool:
+    """The rate from the system's build-up, with the brand option asked for (else its default)."""
     system = rc.db.get(System, system_id)
     if system is None:
         return False
+    option = system.option(option_id)
     try:
-        b = system_rate(rc.db, system)
+        b = system_rate(rc.db, system, option_id=option.id if option else None)
     except MissingPriceError as e:
         line.rate_note = f"System {system.code}: {e}"
         return False
@@ -204,7 +208,10 @@ def _system(rc: RateContext, line: QuotationLine, system_id: int) -> bool:
     line.margin_percent = b.margin_percent
     line.rate_source = "system"
     line.system_id = system.id
-    line.rate_note = f"System {system.code} “{system.name}”"
+    line.system_option_id = option.id if option else None
+    line.rate_note = f"System {system.code} “{system.name}”" + (
+        f", {option.brand}" if option else ""
+    )
     return True
 
 
@@ -266,7 +273,9 @@ def fill_rate(rc: RateContext, line: QuotationLine, src: OfferLine | None) -> No
         line.rate, line.rate_source, line.rate_note = None, None, "Client's scope"
         return
     source = src.rate_source if src else None
-    if source == "system" and src.system_id and _system(rc, line, src.system_id):
+    # the brand picked on this quotation's line, else the offer line's
+    option_id = line.system_option_id or src.system_option_id if src else None
+    if source == "system" and src.system_id and _system(rc, line, src.system_id, option_id):
         return
     if source == "library" and src.library_item_id and _library(rc, line, src.library_item_id):
         return
@@ -351,6 +360,7 @@ def line_copy(src: OfferLine, option: str | None, order: int) -> QuotationLine:
         description=src.description,
         uom=src.uom,
         system_id=src.system_id,
+        system_option_id=src.system_option_id,
         library_item_id=src.library_item_id,
         if_required=src.if_required,
         client_scope=src.client_scope,
@@ -525,8 +535,8 @@ def copy_quotation(db: Session, q: Quotation, user_id) -> Quotation:
                         c: getattr(ln, c)
                         for c in (
                             "offer_line_id library_version sort_order option description uom rate "
-                            "rate_source rate_note system_id library_item_id cost_rate "
-                            "margin_percent overridden qty if_required client_scope"
+                            "rate_source rate_note system_id system_option_id library_item_id "
+                            "cost_rate margin_percent overridden qty if_required client_scope"
                         ).split()
                     }
                 )

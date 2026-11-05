@@ -196,21 +196,27 @@ def current_prices(
 
 
 def system_rate(
-    db: Session, system: System, margin_percent: Decimal | None = None, on: date | None = None
+    db: Session,
+    system: System,
+    margin_percent: Decimal | None = None,
+    on: date | None = None,
+    option_id: int | None = None,
 ) -> RateBreakdown:
-    """Build up the rate for a stored system using today's prices. Raises MissingPriceError
-    (or MissingConsumptionError when a consumption is still to confirm)."""
-    blank = [c.product.name for c in system.components if c.consumption_per_unit is None]
+    """Build up the rate for a stored system using today's prices, from its brand option's
+    components (the default option when none is given). Raises MissingPriceError (or
+    MissingConsumptionError when a consumption is still to confirm)."""
+    recipe = system.recipe(option_id)
+    blank = [c.product.name for c in recipe if c.consumption_per_unit is None]
     if blank:
         raise MissingConsumptionError(blank)
-    prices = current_prices(db, [c.product_id for c in system.components], on)
-    missing = [c.product.name for c in system.components if c.product_id not in prices]
+    prices = current_prices(db, [c.product_id for c in recipe], on)
+    missing = [c.product.name for c in recipe if c.product_id not in prices]
     if missing:
         raise MissingPriceError(missing)
     from app.costing.prices import UnitNotConvertible, base_price  # noqa: PLC0415
 
     per_base, wrong_unit = {}, []
-    for c in system.components:
+    for c in recipe:
         try:  # a price kept per bag is per kg here (÷ the pack size or the unit conversion)
             per_base[c.product_id] = base_price(db, prices[c.product_id])
         except UnitNotConvertible as exc:
@@ -223,11 +229,12 @@ def system_rate(
             product_name=c.product.name,
             unit=c.product.unit,
             consumption_per_unit=c.consumption_per_unit,
-            wastage_percent=c.wastage_percent,
+            # the company BOM's figure for a sheet already has its overlap: none added again
+            wastage_percent=Decimal(0) if c.wastage_included else c.wastage_percent,
             purchase_rate=per_base[c.product_id][0],
             freight_per_unit=per_base[c.product_id][1],
         )
-        for c in system.components
+        for c in recipe
     ]
     return build_rate(
         unit=system.unit,

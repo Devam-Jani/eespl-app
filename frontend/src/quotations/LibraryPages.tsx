@@ -189,7 +189,7 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
     setError("");
     const body = { ...f };
     for (const k of ["id", "version", "updated_at", "kind", "area_type_name", "created_at", "checks", "area_type_missing", "item_names"]) delete body[k];
-    for (const k of ["default_rate", "area_value", "area_type_id", "system_id", "library_item_id", "tc_template_id", "letter_template_id"]) if (body[k] === "") body[k] = null;
+    for (const k of ["default_rate", "area_value", "area_type_id", "system_id", "system_option_id", "library_item_id", "tc_template_id", "letter_template_id"]) if (body[k] === "") body[k] = null;
     if (kind === "item") {
       body.specs = ((f.specs as { spec_block_id: number }[]) ?? []).map((s) => ({ spec_block_id: s.spec_block_id }));
       body.lines = ((f.lines as { offer_line_id: number; option: string | null }[]) ?? []).map((l) => ({ offer_line_id: l.offer_line_id, option: l.option || null }));
@@ -356,6 +356,7 @@ function Editor({ kind, row, lookups, edit, onSaved }: { kind: Kind; row: Row | 
               </Field>
               {input("default_rate", "Default rate (₹)")}
               {v("rate_source") === "system" && input("system_id", "System id")}
+              {v("rate_source") === "system" && <BrandPick systemId={v("system_id")} value={v("system_option_id")} onChange={(id) => set("system_option_id", id)} disabled={ro} />}
               {v("rate_source") === "library" && input("library_item_id", "Rate library item id")}
             </div>
             <label className="check inline">
@@ -804,5 +805,33 @@ function PresetEditor({ f, set, lookups, ro }: { f: Record<string, unknown>; set
         </Field>
       )}
     </>
+  );
+}
+
+/** The brand option of an offer line's system (the company BOM: Bronco, Chryso); blank: its default. */
+function BrandPick({ systemId, value, onChange, disabled }: { systemId: string; value: string; onChange: (id: number | null) => void; disabled: boolean }) {
+  const [options, setOptions] = useState<{ id: number; brand: string; is_default: boolean }[]>([]);
+  useEffect(() => {
+    if (!/^\d+$/.test(String(systemId ?? ""))) {
+      setOptions([]);
+      return;
+    }
+    api<{ options?: typeof options }>(`/api/systems/${systemId}`).then(
+      (s) => setOptions(s.options ?? []),
+      () => setOptions([]),
+    );
+  }, [systemId]);
+  if (options.length < 2) return null;
+  return (
+    <Field label="Brand option">
+      <select value={value ?? ""} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)} disabled={disabled}>
+        <option value="">The default ({options.find((o) => o.is_default)?.brand ?? options[0].brand})</option>
+        {options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.brand}
+          </option>
+        ))}
+      </select>
+    </Field>
   );
 }

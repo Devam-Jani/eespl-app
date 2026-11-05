@@ -28,6 +28,10 @@ export type QLine = {
   rate_source: string | null;
   rate_note: string | null;
   overridden: boolean;
+  // the line's system and its brand options (the company BOM: Bronco, Chryso)
+  system_id?: number | null;
+  system_option_id?: number | null;
+  system_options?: { id: number; brand: string; is_default: boolean }[];
   qty: string | null;
   amount: string | null;
   if_required: boolean;

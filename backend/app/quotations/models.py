@@ -225,6 +225,9 @@ class OfferLine(LibraryRow, Base):
     uom: Mapped[str] = mapped_column(String(10))
     rate_source: Mapped[str] = mapped_column(String(10), server_default="fixed")
     system_id: Mapped[int | None] = mapped_column(ForeignKey("systems.id", ondelete="SET NULL"))
+    system_option_id: Mapped[int | None] = mapped_column(
+        ForeignKey("system_options.id", ondelete="SET NULL")
+    )  # the brand; blank: default
     library_item_id: Mapped[int | None] = mapped_column(
         ForeignKey("library_items.id", ondelete="SET NULL")
     )
@@ -464,6 +467,9 @@ class QuotationLine(Base):
     rate_source: Mapped[str | None] = mapped_column(String(20))  # system, library, fixed, manual
     rate_note: Mapped[str | None] = mapped_column(Text)
     system_id: Mapped[int | None] = mapped_column(ForeignKey("systems.id", ondelete="SET NULL"))
+    system_option_id: Mapped[int | None] = mapped_column(
+        ForeignKey("system_options.id", ondelete="SET NULL")
+    )  # the brand; blank: default
     library_item_id: Mapped[int | None] = mapped_column(
         ForeignKey("library_items.id", ondelete="SET NULL")
     )

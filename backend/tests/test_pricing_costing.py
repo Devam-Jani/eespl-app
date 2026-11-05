@@ -99,14 +99,15 @@ def test_a_sqft_system_is_converted_to_per_sqm_in_the_working(db):
 
 
 def test_a_working_refuses_a_system_in_another_unit(db):
-    p = _product(db, "Invented coving compound", price="100")
+    # per rmt is worked per rmt and rft since Prompt 38e (test_bom_import); per nos has no working
+    p = _product(db, "Invented sleeve compound", price="100")
     s = System(
-        code="T38-RMT", name="Invented coving system", unit="rmt", labour_rate=0, labour_unit="sqm"
+        code="T38-NOS", name="Invented sleeve system", unit="nos", labour_rate=0, labour_unit="sqm"
     )
     s.components = [SystemComponent(product_id=p.id, consumption_per_unit=d("0.5"))]
     db.add(s)
     db.flush()
-    with pytest.raises(working.WorkingUnitError, match="per rmt"):
+    with pytest.raises(working.WorkingUnitError, match="per nos"):
         _group(db, s)
 
 

@@ -976,6 +976,22 @@ function LineEditor({ q, line, lookups, apply }: { q: Quotation; line: QLine; lo
               {line.amount && line.if_required ? <span className="muted small"> extra, if required</span> : null}
             </Field>
           </div>
+          {(line.system_options ?? []).length > 1 && (
+            <Field label="Brand option (the system's recipe)">
+              <select
+                value={line.system_option_id ?? ""}
+                disabled={roMoney}
+                onChange={(e) => void apply(url, { system_option_id: e.target.value ? Number(e.target.value) : null }, "PUT", "Rate worked again with that brand.")}
+              >
+                {(line.system_options ?? []).map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.brand}
+                    {o.is_default ? " (default)" : ""}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           <label className="check inline">
             <input type="checkbox" checked={f.if_required} onChange={(e) => setF({ ...f, if_required: e.target.checked })} disabled={roMoney} /> If required
           </label>

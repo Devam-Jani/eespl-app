@@ -19,6 +19,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     false,
     func,
     text,
@@ -216,13 +217,69 @@ class System(Tracked, Base):
     # products, consumption or coats our data does not give yet: left blank, never guessed
     to_confirm: Mapped[bool] = mapped_column(server_default=false())
     note: Mapped[str | None] = mapped_column(Text)
+    source: Mapped[str | None] = mapped_column(String(16))  # "company_bom": made by the BOM import
 
+    # every component, of every brand option; what a rate is built from is recipe()
     components: Mapped[list["SystemComponent"]] = relationship(
         lazy="selectin",
         cascade="all, delete-orphan",
         passive_deletes=True,
         order_by="SystemComponent.id",
     )
+    options: Mapped[list["SystemOption"]] = relationship(
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="(SystemOption.sort_order, SystemOption.id)",
+    )
+
+    def default_option(self) -> "SystemOption | None":
+        return next(
+            (o for o in self.options if o.is_default), self.options[0] if self.options else None
+        )
+
+    def option(self, option_id: int | None) -> "SystemOption | None":
+        """The brand option asked for (one of this system's), else the default one."""
+        return next((o for o in self.options if o.id == option_id), None) or self.default_option()
+
+    def recipe(self, option_id: int | None = None) -> list["SystemComponent"]:
+        """The components a rate is built from: those of no option, and the chosen brand
+        option's (the default one when none is chosen or it is not this system's)."""
+        chosen = self.option(option_id)
+        return [
+            c
+            for c in self.components
+            if c.option_id is None or (chosen and c.option_id == chosen.id)
+        ]
+
+
+OPTION_SOURCES = ("company_bom", "manual")
+
+
+class SystemOption(Tracked, Base):
+    """A brand option of a system: the same work item with one brand's products (Bronco,
+    Chryso). The rate working, the quotation's system pick and the estimate choose one; the
+    default is the first brand in the company BOM unless set otherwise."""
+
+    __tablename__ = "system_options"
+    __table_args__ = (
+        CheckConstraint(_in("source", OPTION_SOURCES), name="source_valid"),
+        UniqueConstraint("system_id", "brand"),
+        Index(
+            "ux_system_options_default",
+            "system_id",
+            unique=True,
+            postgresql_where=text("is_default"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    system_id: Mapped[int] = mapped_column(ForeignKey("systems.id", ondelete="CASCADE"), index=True)
+    brand: Mapped[str] = mapped_column(String(100))
+    is_default: Mapped[bool] = mapped_column(server_default=false())
+    sort_order: Mapped[int] = mapped_column(Integer, server_default="0")
+    source: Mapped[str] = mapped_column(String(16), server_default="manual")
+    source_ref: Mapped[str | None] = mapped_column(Text)  # the BOM's rows
 
 
 class SystemComponent(Tracked, Base):
@@ -241,6 +298,20 @@ class SystemComponent(Tracked, Base):
     coats: Mapped[int | None] = mapped_column(Integer)
     to_confirm: Mapped[bool] = mapped_column(server_default=false())
     note: Mapped[str | None] = mapped_column(Text)  # where the figures come from, or what is open
+    # the brand option it belongs to; blank: every option uses it
+    option_id: Mapped[int | None] = mapped_column(
+        ForeignKey("system_options.id", ondelete="CASCADE"), index=True
+    )
+    source: Mapped[str | None] = mapped_column(String(16))  # "company_bom"
+    # the figure already has its wastage (a sheet's or a mesh's overlap, 1.05 / 1.15 per sqm): no
+    # wastage is added on top; otherwise the application's wastage from Settings applies
+    wastage_included: Mapped[bool] = mapped_column(server_default=false())
+    # as the BOM gave it: 0.093 per sqft (consumption_per_unit is then per sqm, × 10.7639)
+    original_consumption: Mapped[Decimal | None] = mapped_column(Numeric(14, 6))
+    original_unit: Mapped[str | None] = mapped_column(String(10))
+    original_ref: Mapped[str | None] = mapped_column(
+        Text
+    )  # "[ ACME BONDCOAT - 20 KG ] 0.04 KGS, row 5"
 
     product: Mapped[Product] = relationship(lazy="joined")
 
