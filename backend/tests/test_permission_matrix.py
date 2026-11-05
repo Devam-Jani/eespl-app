@@ -24,7 +24,7 @@ ALL = [
     "vendors.view", "vendors.edit", "settings.company",
     "library.view", "library.edit",
     "tender.view", "tender.edit", "tender.margin",
-    "site.view", "site.edit", "site.update", "drawings.approve",
+    "site.view", "site.edit", "site.update", "drawings.approve", "drawings.delete",
     "indent.view", "indent.create", "indent.approve",
     "po.view", "po.edit", "po.approve", "grn.view", "grn.edit", "grn.approve",
     "store.view", "store.edit",
@@ -70,7 +70,8 @@ def _all(*codes):
 DIRECTOR_EXCLUDES = {"admin.users", "admin.roles", "admin.settings", "portal.view",
                      "portal.comment",
                      "portal.snag", "portal.approve",
-                     "field.admin", "field.claims_approve"}  # fmt: skip
+                     "field.admin", "field.claims_approve",
+                     "drawings.delete"}  # fmt: skip
 
 EXPECTED: dict[str, dict[str, str]] = {
     "super_admin": _all(*ALL),
@@ -210,6 +211,7 @@ EXPECTED: dict[str, dict[str, str]] = {
     # planning, new areas, escalations; costs only if the director allows the person
     "planning": TRACK | _all(
         "building.edit",
+        "drawings.delete",
         "wo.view",
         "wo.edit",
         "closeout.billing",

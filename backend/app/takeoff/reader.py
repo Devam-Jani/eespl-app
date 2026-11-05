@@ -25,6 +25,10 @@ GEOMETRY = {"LINE", "LWPOLYLINE", "POLYLINE", "ARC", "CIRCLE", "ELLIPSE", "SPLIN
 MAX_DEPTH = 3  # blocks inside blocks
 
 
+class EmptyDrawing(CadError):
+    """Nothing drawn in model space or in any layout (the pipeline words it for a DWG)."""
+
+
 @dataclass
 class Parsed:
     version: str | None
@@ -46,6 +50,8 @@ class Parsed:
     clusters: list[list] = field(default_factory=list)
     extents: list[float] | None = None
     geometry: dict = field(default_factory=dict)  # {layer: {"s": [x1, y1, x2, y2, ...]}}
+    space: str = "Model"  # where it was read: model space, or the layout used when that is empty
+    xrefs: list[str] = field(default_factory=list)  # external references (drawn in other files)
 
     def summary(self) -> dict:
         return {
@@ -54,7 +60,7 @@ class Parsed:
             "texts": len(self.texts), "dimensions": len(self.dimensions),
             "inserts": len(self.inserts), "blocks": sorted({i["block"] for i in self.inserts})[:300],
             "layouts": self.layouts, "extents": self.extents, "frames": self.frames, "clusters": self.clusters,
-            "dxf_repairs": self.repairs,
+            "dxf_repairs": self.repairs, "space": self.space, "xrefs": self.xrefs,
         }  # fmt: skip
 
 
@@ -162,9 +168,15 @@ def read(path: Path, version: str | None = None, hidden: set[str] | None = None)
     xs: list[float] = []
     ys: list[float] = []
     rects: list[list] = []
+    out.xrefs = sorted(b.name for b in doc.blocks if b.block is not None and (b.block.is_xref or b.block.is_xref_overlay))
+    xref_names = set(out.xrefs)
+    xref_inserts: Counter = Counter()
 
     def take(e, depth: int) -> None:
         t = e.dxftype()
+        if t == "INSERT" and e.dxf.name in xref_names:
+            xref_inserts[depth] += 1
+            return  # drawn in another file that did not come with this one
         layer = e.dxf.layer if e.dxf.hasattr("layer") else "0"
         counts[t] += 1
         if depth == 0:
@@ -225,8 +237,22 @@ def read(path: Path, version: str | None = None, hidden: set[str] | None = None)
 
     for e in doc.modelspace():
         take(e, 0)
-    if not counts:
+    if not counts and not xref_inserts:
+        # an empty model space: the layout (paper space) with the most drawn in it, if any
+        drawn = {lay.name: [e for e in lay if e.dxftype() != "VIEWPORT"] for lay in doc.layouts if lay.name != "Model"}
+        best = max(drawn, key=lambda n: len(drawn[n]), default=None)
+        if best is not None and drawn[best]:
+            out.space = best
+            for e in drawn[best]:
+                take(e, 0)
+    if not counts and out.xrefs:
+        names = ", ".join(out.xrefs[:8]) + (", ..." if len(out.xrefs) > 8 else "")
         raise CadError(
+            f"This drawing uses {len(out.xrefs)} external reference{'s' if len(out.xrefs) != 1 else ''} "
+            f"({names}); ask the architect for a bound drawing (eTransmit or Bind)."
+        )
+    if not counts:
+        raise EmptyDrawing(
             "The file has nothing drawn in it (or is not a real DXF); export it again from "
             "AutoCAD, or upload the .dwg."
         )
@@ -241,12 +267,18 @@ def read(path: Path, version: str | None = None, hidden: set[str] | None = None)
     out.layouts = [lay.name for lay in doc.layouts]
     if xs:
         # the bulk of the drawing (a stray far point would make the view useless)
+        # (the bulk is the 1-99 % box; anything more than twice its size beyond it is dropped: a
+        # converted block LibreDWG places millions of units away, never a sheet beside the plans)
         xs.sort()
         ys.sort()
-        lo, hi = int(len(xs) * 0.001), max(0, int(len(xs) * 0.999) - 1)
-        out.extents = [xs[lo], ys[lo], xs[hi], ys[hi]]
+        lo, hi = int(len(xs) * 0.01), max(0, int(len(xs) * 0.99) - 1)
+        pad = 2 * max(xs[hi] - xs[lo], ys[hi] - ys[lo])
+        kx = [x for x in xs if xs[lo] - pad <= x <= xs[hi] + pad]
+        ky = [y for y in ys if ys[lo] - pad <= y <= ys[hi] + pad]
+        out.extents = [kx[0], ky[0], kx[-1], ky[-1]]
     out.geometry = {layer: {"s": s} for layer, s in segs.items()}
-    out.frames = _frames(rects, out.extents) + _viewports(doc, out.extents)
+    # a layout read is in paper units: its viewports' model-space windows do not frame it
+    out.frames = _frames(rects, out.extents) + (_viewports(doc, out.extents) if out.space == "Model" else [])
     out.clusters = clusters(segs, out.extents)
     return out
 

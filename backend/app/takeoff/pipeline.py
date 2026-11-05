@@ -42,6 +42,7 @@ def process(db: Session, f: CadFile) -> CadFile:
             raise dwg.CadError("The drawing's file is missing on the server; upload it again.")
         dwg.check_size(src.stat().st_size)
         warnings: list[str] = []
+        v = None
         if suffix == ".dwg":
             with src.open("rb") as fh:
                 v = dwg.version(fh.read(6))
@@ -53,7 +54,13 @@ def process(db: Session, f: CadFile) -> CadFile:
         else:
             f.dwg_version = "DXF"
             f.dxf_path = rev.stored_path
-        parsed = reader.read(media(f.dxf_path), f.dwg_version, service.hidden_layers(db, f))
+        try:
+            parsed = reader.read(media(f.dxf_path), f.dwg_version, service.hidden_layers(db, f))
+        except reader.EmptyDrawing as exc:
+            if v is None:
+                raise
+            # converted, yet nothing drawn: the converter lost it (never "not a real DXF")
+            raise dwg.CadError(dwg.save_as_dxf(v, warnings[-1] if warnings else None)) from exc
         geo_rel = str(Path(rev.stored_path).with_suffix(".geometry.json.gz"))
         reader.write_geometry(parsed, media(geo_rel))
         f.geometry_path = geo_rel

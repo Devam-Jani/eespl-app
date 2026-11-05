@@ -28,6 +28,7 @@ from app.methodology.models import (
 )
 from app.sites.models import AreaScope, Site, SiteMember, SiteNode, StageTemplate, Task
 from app.tenders.models import BoqLine, BoqSection, Tender
+from tests.conftest import next_monday
 from tests.test_finance import boss  # noqa: F401  (fixtures)
 
 # --- invented offers -----------------------------------------------------------------------------
@@ -552,7 +553,7 @@ def test_a_won_boq_gives_the_site_stage_templates_blocking_hold_points_and_pond_
     ).json()
     assert c.patch(f"/api/tenders/{t.id}", json={"status": "won"}, headers=h).status_code == 200
     site = c.post(
-        "/api/sites/from-tender", json={"tender_id": t.id, "start_date": "2026-11-02"}, headers=h
+        "/api/sites/from-tender", json={"tender_id": t.id, "start_date": next_monday().isoformat()}, headers=h
     ).json()
     db.expire_all()
     item = db.get(Methodology, m["id"]).items[0]

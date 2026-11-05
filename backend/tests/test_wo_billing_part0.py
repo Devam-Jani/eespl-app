@@ -25,6 +25,7 @@ from app.methodology.models import (
 )
 from app.sites.models import StageTemplate
 from app.sites.work import weights_by_days
+from tests.conftest import next_monday
 from tests.test_finance import boss  # noqa: F401  (fixtures)
 from tests.test_methodology import _tender
 
@@ -99,7 +100,7 @@ def test_every_test_of_the_client_rule_reaches_the_site(boss, db):
     m = c.post("/api/methodology/methodologies", json={"tender_id": t.id}, headers=h).json()
     assert c.patch(f"/api/tenders/{t.id}", json={"status": "won"}, headers=h).status_code == 200
     site = c.post(
-        "/api/sites/from-tender", json={"tender_id": t.id, "start_date": "2026-11-02"}, headers=h
+        "/api/sites/from-tender", json={"tender_id": t.id, "start_date": next_monday().isoformat()}, headers=h
     ).json()
     db.expire_all()
     item = db.get(Methodology, m["id"]).items[0]

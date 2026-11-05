@@ -971,6 +971,7 @@ who sees the site can open it; only roles with the building right can change it.
 - **See it in 3D**: opens the site's **3D building** section.
 - **Save** (or **Save (version <n>)**): saves the model as a new version. Grey until something changed. {perm: building.edit}
 - **Start from a drawing** (before there is a model): the site's AutoCAD drawings. A drawing not read yet shows its state, with **Read the drawing** or **Read the drawing again** for roles that may read drawings, else "Ask billing or planning to read it."
+- **Remove** (next to **Read the drawing again**, on a drawing that could not be read): removes that revision and its file, and the drawing when it has no other revision, after you confirm. For a test upload or a wrong file. {perm: drawings.delete}
 - **Build from this drawing**: makes the first model from a read drawing: its plans become floor types, the floors come from the plan titles, the levels from the section. {perm: building.edit}
 - **Choose the IFC file** (under "The client's BIM file (IFC)"): keeps the client's BIM model with the site. It is shown as it is in **3D building**. {perm: building.edit}
 - "A newer revision is read: <drawing> rev <n>." with **Move the model onto it**: moves the model to the new revision. What still matches is kept, and **What the new drawing revision changed** lists the plans, columns and rooms kept, new, resized and gone. {perm: building.edit}
@@ -1008,6 +1009,9 @@ who sees the site can open it; only roles with the building right can change it.
 - "Upload the IFC file (.ifc)" or "This is not an IFC file (it does not start with ISO-10303-21)": pick the .ifc export. {perm: building.edit}
 - "The IFC file is over 600 MB: ask the client for a lighter export (one building, no furniture).": ask the client for a lighter export. {perm: building.edit}
 - "The drawing could not be shown: <reason>" with **Read the drawing again**: read it again.
+- "The DWG reader could not read what is drawn in this <AutoCAD version> drawing (...)": open it in AutoCAD, save it as DXF (Save As, AutoCAD 2013 DXF) and upload the .dxf. {perm: takeoff.edit}
+- "This drawing uses <n> external references (<names>)": the drawing is in other files. Ask the architect for a bound drawing (eTransmit or Bind). {perm: takeoff.edit}
+- "Model space is empty: read from the layout <name>": the drawing was read from that layout (paper space). Check the plan is the one you expect.
 
 ### Material plan (/sites/:id/material-plan)
 

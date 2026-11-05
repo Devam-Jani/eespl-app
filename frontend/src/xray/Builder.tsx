@@ -23,10 +23,11 @@ type Out = {
   site_id: number;
   can_edit: boolean;
   model: null | { version: number; cad_file_id: number | null; data: Data; note: string | null; changes: Changes | null; by: string | null; at: string; unit_m: number | null; floors: { level: number; name: string; elevation_m: number; height_m: number; type: string | null; level_source: "hand" | "section" | "default"; level_flag: string | null }[]; unmatched_levels: number[] };
-  drawings: { cad_file_id: number; title: string; rev_no: string; unit_m: number | null; newer: boolean }[];
+  drawings: { cad_file_id: number; title: string; rev_no: string; unit_m: number | null; newer: boolean; space: string; xrefs: string[] }[];
   revisions: DrawingRev[];
   model_drawing: DrawingRev | null;
   can_read: boolean;
+  can_remove: boolean;
   plans: { title: string; xy: Pt; floors: number[]; region: number[] }[];
   site_floors: { node_id: number; name: string; level: number | null }[];
 };
@@ -116,6 +117,11 @@ export default function BuildingBuilder() {
   async function readDrawing(revisionId: number) {
     await run(() => api(`/api/takeoff/revisions/${revisionId}/read`, { method: "POST", json: { architect: null } }), "Queued: the drawing is being read");
     load();
+  }
+  async function removeDrawing(rev: DrawingRev) {
+    if (!window.confirm(`Remove ${rev.title} (R${rev.rev_no}) and its file? This cannot be undone.`)) return;
+    const o = await run(() => api<Out>(`/api/sites/${siteId}/building/revisions/${rev.revision_id}`, { method: "DELETE" }), "The drawing was removed");
+    if (o) load();
   }
 
   const type = data?.floor_types.find((t) => t.key === sel) ?? null;
@@ -270,7 +276,7 @@ export default function BuildingBuilder() {
           {out.revisions
             .filter((r) => r.state !== "ready")
             .map((r) => (
-              <DrawingStateCard key={r.revision_id} rev={r} canRead={out.can_read} busy={busy} onRead={(id) => void readDrawing(id)} />
+              <DrawingStateCard key={r.revision_id} rev={r} canRead={out.can_read} canRemove={out.can_remove} busy={busy} onRead={(id) => void readDrawing(id)} onRemove={(x) => void removeDrawing(x)} />
             ))}
           {out.drawings.length === 0 ? (
             <p>
@@ -287,6 +293,13 @@ export default function BuildingBuilder() {
                   <Button variant="primary" size="small" disabled={busy} onClick={() => void start(d.cad_file_id)}>
                     Build from this drawing
                   </Button>
+                )}
+                {d.space !== "Model" && <span className="small muted"> Model space is empty: read from the layout “{d.space}”.</span>}
+                {d.xrefs.length > 0 && (
+                  <span className="small text-warn">
+                    {" "}
+                    It uses {d.xrefs.length} external reference{d.xrefs.length === 1 ? "" : "s"} ({d.xrefs.join(", ")}), not in this file: ask the architect for a bound drawing (eTransmit or Bind).
+                  </span>
                 )}
               </p>
             ))
@@ -556,7 +569,7 @@ export default function BuildingBuilder() {
           </Card>
           <Card as="div" className="builder-plan">
             {out.model_drawing && out.model_drawing.state !== "ready" ? (
-              <DrawingStateCard rev={out.model_drawing} canRead={out.can_read} busy={busy} onRead={(id) => void readDrawing(id)} />
+              <DrawingStateCard rev={out.model_drawing} canRead={out.can_read} canRemove={false} busy={busy} onRead={(id) => void readDrawing(id)} onRemove={(x) => void removeDrawing(x)} />
             ) : geoError ? (
               <div className="alert alert-error">
                 The drawing could not be shown: {geoError}
@@ -583,8 +596,14 @@ export default function BuildingBuilder() {
 }
 
 /** A drawing that is not ready: its state, its stage while it is read, the reason when it failed,
- *  and "Read the drawing" for those who may read drawings. */
-function DrawingStateCard({ rev, canRead, busy, onRead }: { rev: DrawingRev; canRead: boolean; busy: boolean; onRead: (revisionId: number) => void }) {
+ *  "Read the drawing" for those who may read drawings, and "Remove" for a failed one (super admin
+ *  and planning: a test upload or a wrong file). */
+function DrawingStateCard({ rev, canRead, canRemove, busy, onRead, onRemove }: { rev: DrawingRev; canRead: boolean; canRemove: boolean; busy: boolean; onRead: (revisionId: number) => void; onRemove: (rev: DrawingRev) => void }) {
+  const remove = canRemove && rev.state === "failed" && (
+    <Button variant="danger" size="small" disabled={busy} onClick={() => onRemove(rev)}>
+      Remove
+    </Button>
+  );
   if (rev.state === "queued" || rev.state === "reading") return <ReadProgress filename={rev.filename} progress={rev.progress} since={rev.progress_at} />;
   return (
     <div className={`alert ${rev.state === "failed" || rev.state === "missing" ? "alert-error" : "alert-warn"} drawing-state`}>
@@ -597,10 +616,13 @@ function DrawingStateCard({ rev, canRead, busy, onRead }: { rev: DrawingRev; can
         <div>
           <Button variant="primary" size="small" disabled={busy} onClick={() => onRead(rev.revision_id)}>
             {rev.state === "not read" ? "Read the drawing" : "Read the drawing again"}
-          </Button>
+          </Button>{" "}
+          {remove}
         </div>
       ) : (
-        <div className="small">Ask billing or planning to read it.</div>
+        <div className="small">
+          Ask billing or planning to read it. {remove}
+        </div>
       )}
     </div>
   );

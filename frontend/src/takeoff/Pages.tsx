@@ -50,6 +50,8 @@ type CadFile = {
   sheet_guessed?: number | null;
   warnings: number;
   dxf_repairs?: number;
+  space?: string;
+  xrefs?: string[];
   changes?: {
     previous: number | null;
     added: Brief[];
@@ -375,6 +377,8 @@ function Workspace({
         {file.architect && <> · layers of {file.architect}</>}
         {file.warnings > 0 && <span className="muted"> · {file.warnings} converter warnings</span>}
         {(file.dxf_repairs ?? 0) > 0 && <span className="muted"> · {file.dxf_repairs} broken text line(s) repaired in the DXF</span>}
+        {file.space && file.space !== "Model" && <span className="text-warn"> · model space is empty: read from the layout “{file.space}”</span>}
+        {(file.xrefs?.length ?? 0) > 0 && <span className="text-warn"> · {file.xrefs!.length} external reference(s) not in this file ({file.xrefs!.join(", ")}): ask the architect for a bound drawing (eTransmit or Bind)</span>}
       </div>
       <div className="takeoff-grid">
         <div className="takeoff-canvas-wrap">
