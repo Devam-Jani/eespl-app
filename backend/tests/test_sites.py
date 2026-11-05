@@ -13,8 +13,13 @@ from app.models import Role, RolePermission
 from app.sites import builder
 from app.sites.models import Site
 from app.sites.powerplay_projects import import_projects
+from app.timefmt import ist_today
 from tests.conftest import login
 from tests.test_tenders import boq, imported_tender, line
+
+# a won site starts next Monday: its tasks are never late on the day the tests run (a fixed date
+# made test_site_model's "is_late" fail once it had passed)
+START = ist_today() + timedelta(days=7 - ist_today().weekday())
 
 TOWER = builder.TowerPreset(
     name="T1",
@@ -126,7 +131,7 @@ def won_site(boss):
     client.patch(f"/api/tenders/{tid}", json={"status": "won"}, headers=headers)
     r = client.post(
         "/api/sites/from-tender",
-        json={"tender_id": tid, "start_date": "2026-11-02"},
+        json={"tender_id": tid, "start_date": START.isoformat()},
         headers=headers,
     )
     assert r.status_code == 201, r.text
@@ -225,7 +230,7 @@ def test_task_generation_is_chained_and_idempotent(won_site):
     steps = len(toilet["steps"])
     assert r.json()["added"] == 2 * steps and r.json()["tasks"] == 2 * steps
     assert r.json()["planned_end"] == str(
-        date(2026, 11, 2) + timedelta(days=toilet["total_days"] - 1)
+        START + timedelta(days=toilet["total_days"] - 1)
     )
     tasks = client.get(f"/api/sites/{sid}/tasks", headers=headers).json()
     first_scope = [t for t in tasks if t["area_scope_id"] == tasks[0]["area_scope_id"]]
