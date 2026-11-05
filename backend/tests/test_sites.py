@@ -13,13 +13,10 @@ from app.models import Role, RolePermission
 from app.sites import builder
 from app.sites.models import Site
 from app.sites.powerplay_projects import import_projects
-from app.timefmt import ist_today
-from tests.conftest import login
+from tests.conftest import login, next_monday
 from tests.test_tenders import boq, imported_tender, line
 
-# a won site starts next Monday: its tasks are never late on the day the tests run (a fixed date
-# made test_site_model's "is_late" fail once it had passed)
-START = ist_today() + timedelta(days=7 - ist_today().weekday())
+START = next_monday()  # a site's start: never a date the tests run past
 
 TOWER = builder.TowerPreset(
     name="T1",
@@ -49,7 +46,7 @@ def boss(login_as):
 def new_site(client, headers, **extra):
     r = client.post(
         "/api/sites",
-        json={"name": "Invented Towers", "start_date": "2026-11-02", **extra},
+        json={"name": "Invented Towers", "start_date": START.isoformat(), **extra},
         headers=headers,
     )
     assert r.status_code == 201, r.text

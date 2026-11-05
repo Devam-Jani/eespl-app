@@ -5,6 +5,7 @@ The database URL is switched before any app module that opens connections is imp
 
 import os
 from collections.abc import Callable, Iterator
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -32,6 +33,7 @@ from app.auth.security import hash_password  # noqa: E402
 from app.db import SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Role, User  # noqa: E402
+from app.timefmt import ist_today  # noqa: E402
 
 PER_TEST_TABLES = [
     "refresh_tokens", "audit_log", "user_roles", "password_links", "system_status", "help_texts",
@@ -320,6 +322,13 @@ def make_user(db: Session) -> Callable[..., User]:
         return user
 
     return _make
+
+
+def next_monday() -> date:
+    """A site's start date for tests: next Monday, so its first tasks are never late on the day
+    the tests run (a fixed "2026-11-02" made them late from 5 November 2026)."""
+    today = ist_today()
+    return today + timedelta(days=7 - today.weekday())
 
 
 def login(client: TestClient, email: str, password: str = PASSWORD) -> dict[str, str]:
