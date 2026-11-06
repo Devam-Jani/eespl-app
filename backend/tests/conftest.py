@@ -36,6 +36,7 @@ from app.models import Role, User  # noqa: E402
 from app.timefmt import ist_today  # noqa: E402
 
 PER_TEST_TABLES = [
+    "spec_picks", "spec_points", "consumption_changes", "tds_facts", "tds_docs", "tds_imports",
     "refresh_tokens", "audit_log", "user_roles", "password_links", "system_status", "help_texts",
     "building_models", "helper_answers", "issue_events", "issues",
     "material_requests", "estimate_lines", "estimate_areas", "estimates", "coverages",

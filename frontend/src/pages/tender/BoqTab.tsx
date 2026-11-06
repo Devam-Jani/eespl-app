@@ -6,6 +6,7 @@ import { errorText, inr, num } from "../../format";
 import { RATE_POLICIES } from "../../types";
 import type { Boq, BoqLine, LineDetail, RateHistory, SuggestResult, Tender } from "../../types";
 import ImportWizard from "./ImportWizard";
+import LineSpec from "../../spec/LineSpec";
 import { useLearned } from "../../sitecontrol/learned";
 import { Button, Card, Field } from "../../ui/components";
 
@@ -786,6 +787,7 @@ function LinePanel({
   run: (action: () => Promise<Boq | void>, message?: string) => Promise<void>;
 }) {
   const learned = useLearned(detail?.system_breakdown?.system_id ?? null);
+  const [spec, setSpec] = useState(false);
   if (!detail) {
     return (
       <Card as="aside" className="boq-panel">
@@ -808,6 +810,10 @@ function LinePanel({
         </Button>
       </div>
       <p className="pre-line small">{line.description}</p>
+      <Button size="small" onClick={() => setSpec(true)}>
+        Key points and options
+      </Button>
+      {spec && <LineSpec kind="boq" lineId={line.id} canEdit={canEdit} onClose={() => setSpec(false)} onPicked={() => void run(() => api<Boq>(`/api/tenders/${tenderId}/boq`))} />}
       <dl className="totals">
         <dt>Unit / qty</dt>
         <dd>

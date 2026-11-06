@@ -14,6 +14,7 @@ import { errorText, inr } from "../format";
 import { loadLookups, MarkupField, plain, SectionsEditor, STATUS_BADGE, useLookups } from "./common";
 import type { Lookups, QItem, QLine, Quotation, Ref, SpecCopy, Term } from "./common";
 import { Button, buttonClass, Card, Field } from "../ui/components";
+import LineSpec from "../spec/LineSpec";
 
 const Checks = lazy(() => import("../estimate/Checks").then((m) => ({ default: m.Checks })));
 const MarginCheck = lazy(() => import("../estimate/Checks").then((m) => ({ default: m.MarginCheck })));
@@ -933,6 +934,7 @@ function LineEditor({ q, line, lookups, apply }: { q: Quotation; line: QLine; lo
     client_scope: line.client_scope,
   });
   const [open, setOpen] = useState(false);
+  const [spec, setSpec] = useState(false);
   const url = `/api/quotations/${q.id}/lines/${line.id}`;
   const dirty =
     f.description !== line.description || f.uom !== line.uom || f.qty !== (line.qty ?? "") || f.if_required !== line.if_required || f.client_scope !== line.client_scope;
@@ -976,6 +978,10 @@ function LineEditor({ q, line, lookups, apply }: { q: Quotation; line: QLine; lo
               {line.amount && line.if_required ? <span className="muted small"> extra, if required</span> : null}
             </Field>
           </div>
+          <Button size="small" onClick={() => setSpec(true)}>
+            Key points and options
+          </Button>
+          {spec && <LineSpec kind="quotation" lineId={line.id} canEdit={!roMoney} onClose={() => setSpec(false)} />}
           {(line.system_options ?? []).length > 1 && (
             <Field label="Brand option (the system's recipe)">
               <select

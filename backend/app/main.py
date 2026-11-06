@@ -64,6 +64,7 @@ from app.routers import audit, permissions, roles, users
 from app.schedule import routes as schedule
 from app.sitecontrol import routers as sitecontrol
 from app.sites import routers as sites
+from app.spec import routes as spec_products
 from app.survey import routers as survey
 from app.takeoff import routes as takeoff
 from app.team import routers as team
@@ -168,6 +169,7 @@ for _r in (
     issues.router,
     field.router,
     knowledge.router,
+    spec_products.router,
     methodology.router,
     closeout.router,
     closeout_portal.router,

@@ -4675,3 +4675,67 @@ label.field-wrong textarea,
   margin: 8px 0 0;
   padding-left: 18px;
 }
+
+/* spec products (Prompt 39a): a line's key points and the options side by side */
+.spec-text mark {
+  background: color-mix(in srgb, var(--hold) 28%, transparent);
+  color: inherit;
+  border-radius: 2px;
+}
+.spec-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+.spec-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  font-size: 0.85rem;
+}
+.spec-chip.suggested {
+  border-style: dashed;
+}
+.spec-chip.typed {
+  border-color: var(--accent);
+}
+.spec-chip.editing input {
+  min-width: 0;
+}
+.spec-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+.spec-option {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  min-width: 0;
+}
+.spec-option.meets {
+  border-color: var(--done);
+}
+.spec-option.picked {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.spec-checks {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0;
+}
+.spec-checks .spec-no span:first-child {
+  color: var(--block);
+}
+.spec-checks .spec-yes span:first-child {
+  color: var(--done);
+}
+.spec-checks .spec-not_stated span:first-child,
+.spec-checks .spec-approval span:first-child {
+  color: var(--hold);
+}

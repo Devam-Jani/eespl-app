@@ -77,6 +77,7 @@ You open these less often, or only through a link from another page.
 @page /rate-contracts
 @page /products
 @page /systems
+@page /consumption-master
 @page /rate-library
 @page /tc-library
 @page /vendors

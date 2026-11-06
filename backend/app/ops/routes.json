@@ -146,6 +146,18 @@
    ]
   },
   {
+   "path": "/products/technical-data",
+   "perms": [
+    "library.view"
+   ]
+  },
+  {
+   "path": "/consumption-master/:id",
+   "perms": [
+    "library.view"
+   ]
+  },
+  {
    "path": "/tenders/:id",
    "perms": [
     "tender.view"

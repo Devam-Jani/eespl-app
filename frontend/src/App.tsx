@@ -23,6 +23,9 @@ const Roles = lazyPage(() => import("./pages/Roles"));
 const SiteDetail = lazyPage(() => import("./pages/SiteDetail"));
 const Sites = lazyPage(() => import("./pages/Sites"));
 const SystemDetail = lazyPage(() => import("./pages/SystemDetail"));
+const TechnicalData = lazyPage(() => import("./pages/TechnicalData"));
+const ConsumptionMaster = lazyPage(() => import("./pages/ConsumptionMaster"));
+const ConsumptionItem = lazyPage(() => import("./pages/ConsumptionItem"));
 const Systems = lazyPage(() => import("./pages/Systems"));
 const TcLibrary = lazyPage(() => import("./pages/TcLibrary"));
 const TenderDetail = lazyPage(() => import("./pages/TenderDetail"));
@@ -281,6 +284,7 @@ const PAGES: Record<string, JSX.Element> = {
   "/settings/categories": <Categories />,
   "/settings/tags": <Tags />,
   "/settings/units": <UnitsConversions />,
+  "/consumption-master": <ConsumptionMaster />,
   "/billing": <Billing />,
   "/payables": <Payables />,
   "/petty-cash": <PettyCash />,
@@ -443,6 +447,8 @@ export default function App() {
                   ["/field/days/:id", routePerms("/field/days/:id"), <DayMap />],
                   ["/knowledge/templates/:id", routePerms("/knowledge/templates/:id"), <TemplatePage />],
                   ["/methodology/systems/:id", routePerms("/methodology/systems/:id"), <MethodSystemPage />],
+                  ["/products/technical-data", routePerms("/products/technical-data"), <TechnicalData />],
+                  ["/consumption-master/:id", routePerms("/consumption-master/:id"), <ConsumptionItem />],
                   ["/methodology/standards/:id", routePerms("/methodology/standards/:id"), <StandardPage />],
                   ["/methodology/m/:id", routePerms("/methodology/m/:id"), <MethodologyPage />],
                   ["/sites/:id/methodology", routePerms("/sites/:id/methodology"), <SiteMethodology />],

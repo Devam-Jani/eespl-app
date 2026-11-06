@@ -517,16 +517,16 @@ def pick_consumption(
     sheets), unless it is below the client's minimum; then the consumption table: the surface
     itself before "any", the requirement met exactly before a near one, then the most used; a row
     below the client's minimum is never picked. None fits: the system's own figure (the client's
-    minimum itself when the BOM's is below it). (value, where from, row id)"""
+    minimum itself when that figure is below it, for the main product only). (value, where from, row id)"""
     from app.costing.models import SURFACE_LABEL, ProductConsumption  # noqa: PLC0415
 
     bom = component is not None and component.source == "company_bom" and fallback is not None
     minimum = None
+    # the client's minimum kg per sqm: the system's main product (not its primer or mesh) on a
+    # main item per sqm
+    if component is not None and g.req_min_kg_sqm and (g.unit or "sqm") == "sqm" and _is_main(db, g, product_id):
+        minimum = Decimal(g.req_min_kg_sqm)
     if bom:
-        product = db.get(Product, product_id)
-        # the client's minimum kg per sqm: a kg product on a main item per sqm
-        if g.req_min_kg_sqm and (g.unit or "sqm") == "sqm" and product.unit == "kg":
-            minimum = Decimal(g.req_min_kg_sqm)
         if minimum is None or Decimal(fallback) >= minimum:
             return Decimal(fallback), bom_source(db, component), None
     surface = g.surface or "any"
@@ -564,8 +564,10 @@ def pick_consumption(
         where += f" (used {best.used_count}×)" if best.used_count else ""
         where += f" · {best.source_ref}" if best.source_ref else ""
         return Decimal(best.consumption), where[:300], best.id
-    if minimum is not None:  # the BOM's figure is below the client's minimum: the minimum wins
-        return minimum, f"the client's minimum {minimum.normalize():f} kg/sqm (company BOM {Decimal(fallback).normalize():f} is below it)"[:300], None
+    if minimum is not None and (fallback is None or Decimal(fallback) < minimum):
+        # the system's (or the BOM's) figure is below the client's minimum: the minimum wins
+        was = f"{'company BOM' if bom else 'the system'} {Decimal(fallback).normalize():f} is below it" if fallback is not None else "none given"
+        return minimum, f"the client's minimum {minimum.normalize():f} kg/sqm ({was})"[:300], None
     if fallback is None:
         return (
             None,
@@ -579,6 +581,25 @@ def pick_consumption(
         ],
         None,
     )
+
+
+def _is_main(db: Session, g: RateGroup, product_id: int) -> bool:
+    """The product a client's kg per sqm is about: the recipe's largest kg (or litre) figure that
+    is not a primer, a mesh or a tape."""
+    from app.spec.vocab import LAYER_TYPES, first_type  # noqa: PLC0415
+
+    system = db.get(System, g.system_id) if g.system_id else None
+    if system is None:
+        return False
+    best, best_v = None, None
+    for c in system.recipe(g.system_option_id):
+        if c.product.unit not in ("kg", "ltr") or c.consumption_per_unit is None:
+            continue
+        if first_type(c.product.name) in LAYER_TYPES:
+            continue
+        if best_v is None or Decimal(c.consumption_per_unit) > best_v:
+            best, best_v = c.product_id, Decimal(c.consumption_per_unit)
+    return best == product_id
 
 
 def repick(db: Session, g: RateGroup) -> None:

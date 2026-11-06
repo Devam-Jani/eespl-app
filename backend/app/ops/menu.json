@@ -947,6 +947,17 @@
   ]
  },
  {
+  "to": "/consumption-master",
+  "label": "Consumption master",
+  "section": "Settings",
+  "perms": [
+   "consumption.edit"
+  ],
+  "view": [
+   "library.view"
+  ]
+ },
+ {
   "to": "/settings/kylas",
   "label": "Integrations: Kylas",
   "section": "Settings",
