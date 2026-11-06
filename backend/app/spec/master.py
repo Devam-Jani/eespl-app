@@ -5,6 +5,7 @@ material cost, labour and selling rate at the default margin. Every change is ke
 old and new value, why); an issued estimate and a sent quotation keep the figures they used (the
 estimate's snapshot, the working locked on submit)."""
 
+import re
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -369,3 +370,56 @@ def attach_mix(
             )
             c.consumption_per_unit, c.note = vocab.q(per, 4), note
     db.flush()
+
+
+# brand option names that are no brand (a BOM's "Standard", "Standard (2)", "SC"): listed to rename
+GENERIC_BRANDS = {
+    "standard",
+    "sc",
+    "generic",
+    "other",
+    "others",
+    "na",
+    "n/a",
+    "local",
+    "any",
+    "approved",
+    "brand",
+}
+
+
+def generic(brand: str | None) -> bool:
+    name = re.sub(r"\s*\(\d+\)\s*$", "", (brand or "").strip()).lower()
+    return not name or name in GENERIC_BRANDS
+
+
+def generic_options(db: Session) -> list[dict]:
+    rows = db.execute(
+        select(SystemOption, System.name)
+        .join(System, System.id == SystemOption.system_id)
+        .order_by(System.name, SystemOption.brand)
+    ).all()
+    return [
+        {"system_id": o.system_id, "system": name, "option_id": o.id, "brand": o.brand}
+        for o, name in rows
+        if generic(o.brand)
+    ]
+
+
+def rename_option(
+    db: Session, s: System, option_id: int, brand: str, reason: str | None, user_id
+) -> SystemOption:
+    o = _option(s, option_id)
+    brand = " ".join((brand or "").split())
+    if not brand:
+        raise MasterError("Name the brand")
+    if generic(brand):
+        raise MasterError(f"{brand} is not a brand: give the maker's name")
+    if any(x.id != o.id and x.brand.lower() == brand.lower() for x in s.options):
+        raise MasterError(
+            f"{brand} is already an option of {s.name}: copy its products there instead"
+        )
+    change(db, s, o.brand, "brand", o.brand, brand, reason, user_id, option_id=o.id)
+    o.brand = brand
+    db.flush()
+    return o

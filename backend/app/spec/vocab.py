@@ -61,6 +61,14 @@ TYPES: list[tuple[str, str, str]] = [
         r"cementitious|cement\s*based|polymer\s*modified|polymer\s*cement|flexible\s*cement|\b2\s*k\b.*cement|two\s*component\s*cement",
     ),
     ("sealant", "sealant", r"sealant|joint\s*seal"),
+    # a liquid membrane named by its system or brand ("COELASTIC EVO of KEMPER", "polyester resin
+    # base flexible membrane"): last, so a sheet naming PU and a liquid membrane is PU
+    (
+        "liquid_membrane",
+        "liquid membrane",
+        r"kemper\w*|coelastic|triflex|polyester\s*resin"
+        r"|liquid\s*applied\s*(?:[a-z]+\s+){0,2}membrane|liquid\s*(?:waterproofing\s*)?membrane",
+    ),
 ]
 TYPE_LABEL = {k: label for k, label, _p in TYPES}
 # the layer types: they are steps of a system, never the system itself
@@ -87,7 +95,7 @@ USES: list[tuple[str, str]] = [
         "basement",
         r"basement|raft|retaining\s*wall|foundation|below\s*ground|substructure|sub\s*-?\s*structure",
     ),
-    ("terrace", r"terrace|\broofs?\b|roof\s*slab|\broofing|chajja|canopy|balcon"),
+    ("terrace", r"terrace|\broofs?\b|roof\s*slab|\broofing|deck\s*slab|chajja|canopy|balcon"),
     ("external_wall", r"external\s*wall|facade|fa[cç]ade|exterior\s*wall|elevation"),
 ]
 USE_LABEL = {
@@ -169,10 +177,17 @@ def uses_in(text: str) -> list[str]:
     return [k for k, pat in USES if re.search(pat, low)]
 
 
+# a line asking a "liquid membrane" takes any of these
+FAMILY = {"liquid_membrane": {"pu", "polyurea", "acrylic", "bituminous", "liquid_membrane"}}
+
+
 def same_family(a: str | None, b: str | None) -> bool:
-    """A bituminous SBS membrane is bituminous; PU is PU."""
+    """A bituminous SBS membrane is bituminous; PU is PU; a liquid membrane is PU, polyurea,
+    acrylic or bituminous."""
     if not a or not b:
         return False
+    if b in FAMILY.get(a, ()) or a in FAMILY.get(b, ()):
+        return True
     return a == b or a.startswith(b) or b.startswith(a)
 
 

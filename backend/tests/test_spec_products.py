@@ -15,7 +15,7 @@ from app.costing.models import RateGroup
 from app.estimate import service as est
 from app.estimate.models import Estimate, EstimateArea
 from app.masters.models import Product, ProductPrice, System, SystemComponent, SystemOption
-from app.spec import ai, keypoints, suggest, tds
+from app.spec import ai, keypoints, suggest, tds, vocab
 from app.spec.models import ConsumptionChange, SpecPick, TdsDoc, TdsFact
 from app.tenders.models import BoqLine, Tender
 from app.timefmt import ist_today
@@ -615,10 +615,10 @@ def test_the_consumption_master_keeps_every_change_and_an_issued_estimate_keeps_
         "site trial at 2 kg",
     ) and ch.changed_by is not None
     item = c.get(f"/api/spec/master/{s.id}", headers=h).json()
-    assert (
-        item["history"][0]["reason"] == "site trial at 2 kg" and item["can_cost"] is False
-    )  # planning sees no prices
-    assert "cost" not in item["options"][0] or item["options"][0]["cost"] is None
+    # planning sees prices, cost and the selling rate here (consumption.cost), not tender.margin
+    assert item["history"][0]["reason"] == "site trial at 2 kg" and item["can_cost"] is True
+    zo = next(o for o in item["options"] if o["brand"] == "Zentrafix")
+    assert zo["cost"]["rate"] is not None and zo["rows"][0]["price_per_unit"] is not None
     db.expire_all()
     e = db.get(Estimate, e.id)
     assert {ln.product.name: ln.qty for ln in est.worked(db, e)}["Zentrafix Flexi PU"] == D(
@@ -658,8 +658,15 @@ def test_the_master_copies_an_option_to_another_brand_and_swaps_products(login_a
         c.post(
             f"/api/spec/master/products/{duramix.id}/price", json={"rate": "290"}, headers=h
         ).status_code
+        == 201
+    )  # planning updates rates here
+    c2, h2 = login_as("site_engineer")
+    assert (
+        c2.post(
+            f"/api/spec/master/products/{duramix.id}/price", json={"rate": "290"}, headers=h2
+        ).status_code
         == 403
-    )  # prices: cost roles
+    )
 
 
 def test_the_master_warns_when_the_bom_is_outside_the_tds_range(db):
@@ -777,3 +784,314 @@ def test_waterproofing_is_not_a_roof():
         "Acrylic membrane on the terrace with crack bridging of 2 mm", "sqm", None, []
     )
     assert _by(chips, "area")[0]["value"]["area"] == "terrace"
+
+
+# --- 39b: the area from the section heading ----------------------------------------------------------
+
+
+def _area(text, unit="sqm", context=None):
+    chips = keypoints.parse(text, unit, None, ["Arvox"], context)
+    a = _by(chips, "area")
+    return (a[0]["value"]["area"], a[0]["value"]["from"]) if a else (None, None)
+
+
+def _type(text, unit="sqm", context=None):
+    return _by(keypoints.parse(text, unit, None, ["Arvox"], context), "system")[0]["value"]["type"]
+
+
+@pytest.mark.parametrize(
+    ("text", "unit", "context", "area", "said"),
+    [
+        # no area in the line: the section heading's
+        (
+            "Provide and apply two component PU based root resistant membrane @ 1.9 kg/m2",
+            "sqm",
+            ["8 PODIUM WATERPROOFING WITH TWO COMPONENT PU :"],
+            "podium",
+            "heading",
+        ),
+        # a weak word in the line ("on the floor") does not beat the section
+        (
+            "Two component acrylic polymer cementitious coating on the floor and walls up to 300 mm",
+            "sqm",
+            ["Toilets / kitchen / balcony waterproofing"],
+            "toilet",
+            "heading",
+        ),
+        # an area named in passing ("terrace drain") keeps the section's
+        (
+            "Sealing around the terrace drain pipes passing through the slab",
+            "sqm",
+            ["Toilet waterproofing"],
+            "toilet",
+            "heading",
+        ),
+        # a joint line per rmt under a joint heading is that joint, whatever tank it mentions
+        (
+            "Supply and fix a swellable water stop 20 x 15 mm, safe with potable water tanks",
+            "rmt",
+            ["TREATMENT OF CONSTRUCTION JOINTS ON RAFT & RETAINING WALL"],
+            "construction_joint",
+            "heading",
+        ),
+        # in a basement, the heading says raft or retaining wall
+        (
+            "Fully bonded HDPE sheet on the RCC wall / retaining wall before the raft is cast",
+            "sqm",
+            ["7 RETAINING WALL (CONFINED) WATERPROOFING :"],
+            "retaining_wall",
+            "heading",
+        ),
+        # no heading: raft when the line names it among basement parts
+        (
+            "Crystalline slurry to the diaphragm walls of the basement, swell bar at the junction of raft and wall",
+            "sqm",
+            [],
+            "raft",
+            "line",
+        ),
+        # a deck slab is a roof
+        (
+            "Flexible acrylic membrane with > 200% elongation and crack bridging of 2 mm",
+            "sqm",
+            ["WATER PROOFING TREATMENT ON DECK SLAB"],
+            "terrace",
+            "heading",
+        ),
+        # the line's own area in its head wins over the section's
+        (
+            "Terrace: PU membrane two coats over the existing tiles",
+            "sqm",
+            ["Toilet waterproofing"],
+            "terrace",
+            "line",
+        ),
+        # nothing says it: the area the system usually is
+        (
+            "Providing and laying 4 mm thick APP modified bituminous membrane by gas torching",
+            "sqm",
+            ["DETAIL DESCRIPTION"],
+            "terrace",
+            "system",
+        ),
+        # an outlet line per nos keeps its own area in a toilet section
+        (
+            "PIPE INLET / OUTLET TREATMENT (at all locations): sealing the pipe inserts with a 1.5 mm thick tape",
+            "nos",
+            ["Toilets / kitchen waterproofing"],
+            "pipe_outlet",
+            "line",
+        ),
+        # a joint line per rmt: the joint heading, though a tank heading comes first
+        (
+            "Swellable water bar 20 x 10 mm fixed with adhesive",
+            "rmt",
+            ["UG TANK / SUMP / STP TANKS", "TREATMENT OF CONSTRUCTION JOINTS ON RAFT"],
+            "construction_joint",
+            "heading",
+        ),
+        # an expansion joint written short
+        (
+            "Expansion Jt. treatment with a polyester resin base flexible membrane in two layers",
+            "rmt",
+            [],
+            "expansion_joint",
+            "line",
+        ),
+    ],
+)
+def test_the_area_comes_from_the_line_then_its_heading(text, unit, context, area, said):
+    assert _area(text, unit, context) == (area, said)
+
+
+def test_a_liquid_membrane_named_by_its_system_is_not_a_repair_mortar():
+    assert (
+        _type(
+            "Expansion Jt. treatment with a polyester resin base flexible membrane in two layers",
+            "rmt",
+        )
+        == "liquid_membrane"
+    )
+    chips = keypoints.parse("P/A liquid applied flexible membrane in two layers", "rmt", None, [])
+    assert _by(chips, "system")[0]["label"] == "liquid membrane"
+    text = "Toilet area: single component liquid applied membrane by roller, pipe holes filled with non-shrink grout, grout at the corners"
+    assert _type(text) == "liquid_membrane"
+    # a liquid membrane line takes a PU work item
+    assert vocab.same_family("liquid_membrane", "pu") and not vocab.same_family(
+        "liquid_membrane", "crystalline"
+    )
+    # a PU sheet that also says "liquid applied membrane" stays PU
+    assert vocab.main_type("Arvox PU: a polyurethane liquid applied membrane") == "pu"
+
+
+def test_a_tender_line_takes_its_section_heading(login_as, db):
+    from app.tenders.models import BoqSection  # noqa: PLC0415
+
+    t = Tender(code="T-2026-39B01", name="Invented headings", status="draft")
+    db.add(t)
+    db.flush()
+    sec = BoqSection(tender_id=t.id, title="PODIUM WATERPROOFING", sort_order=1)
+    db.add(sec)
+    db.flush()
+    db.add(BoqLine(tender_id=t.id, section_id=sec.id, description="Planter boxes", sort_order=1))
+    line = BoqLine(
+        tender_id=t.id,
+        section_id=sec.id,
+        description="Two component PU membrane, 2 coats",
+        unit="sqm",
+        qty=D(50),
+        sort_order=2,
+    )
+    db.add(line)
+    db.commit()
+    c, h = login_as("estimator")
+    chips = c.get(f"/api/spec/lines/boq/{line.id}/points", headers=h).json()["chips"]
+    area = _by(chips, "area")[0]
+    assert (
+        area["value"] == {"area": "podium", "use": "podium", "from": "heading"}
+        and area["words"] == "PODIUM WATERPROOFING"
+    )
+
+
+# --- 39b: matching before creating, near-duplicates as a group ----------------------------------------
+
+
+def test_names_match_without_pack_new_grade_or_punctuation():
+    from app.spec import tds_import  # noqa: PLC0415
+
+    k = tds_import.norm_key
+    assert k("Zentrafix", "Zentrafix Fast-Flex Ultra 20 kg (new)") == "fastflexultra"
+    assert k("Zentrafix", "ZENTRAFIXV Fast Flex Grade 2") == "fastflex"
+    assert k("Arvox", "Arvox Seal 60") == "seal60"  # a number that is not a pack stays
+
+
+def test_near_duplicates_are_one_group_with_a_pick_and_only_unmatched_sheets_are_new(login_as, db):
+    db.add(Product(code="T39B-SEAL", name="Arvox Roofseal 20 Kg", brand="Arvox", unit="kg"))
+    db.commit()
+    c, h = login_as("planning")
+    imp = c.post("/api/spec/tds/imports", headers=h).json()["id"]
+    names = [
+        "Zentrafix Fast Flex.pdf",
+        "Zentrafix Fastflex Ultra.pdf",
+        "ZENTRAFIXV Fast Flex.pdf",
+        "Arvox Roofseal (new).pdf",
+        "Arvox Primer 7.pdf",
+    ]
+    texts = [
+        [f"{n} sheet {i}", "Coverage 1.5 kg per sq. m in two coats"] for i, n in enumerate(names)
+    ]
+    files = [("files", (n, _pdf(t), "application/pdf")) for n, t in zip(names, texts, strict=True)]
+    paths = [f"TDS/{'Zentrafix' if n.startswith('Z') else 'Arvox'}/{n}" for n in names]
+    r = c.post(
+        f"/api/spec/tds/imports/{imp}/files",
+        files=files,
+        data={"paths": __import__("json").dumps(paths)},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+    view = c.get(f"/api/spec/tds/imports/{imp}", headers=h).json()
+    by = {d["file_name"]: d for d in view["docs"]}
+    assert by["Arvox Roofseal (new).pdf"]["match"] == "matched"  # pack and "new" left out
+    group = {by[n]["group"] for n in names[:3]}
+    assert len(group) == 1 and None not in group and by["Arvox Primer 7.pdf"]["group"] is None
+    n = view["counts"]
+    assert (n["matched"], n["grouped"], n["in_groups"], n["new"]) == (
+        1,
+        1,
+        3,
+        2,
+    )  # the group counts once
+    keep = by["Zentrafix Fastflex Ultra.pdf"]["id"]
+    out = c.post(
+        f"/api/spec/tds/imports/{imp}/save", json={"keep": {str(group.pop()): keep}}, headers=h
+    ).json()
+    assert out["merged"] == 2 and out["products_created"] == 0  # nothing ticked: no product made
+    db.expire_all()
+    assert db.get(TdsDoc, by["Zentrafix Fast Flex.pdf"]["id"]).duplicate_of_id == keep
+
+
+# --- 39b: a pick puts the rate on the line -------------------------------------------------------------
+
+
+def test_a_pick_prices_a_line_with_no_rate_and_asks_before_changing_one(login_as, db):
+    w = _pu_world(db)
+    t = Tender(code="T-2026-39B02", name="Invented rates", status="draft")
+    db.add(t)
+    db.flush()
+    free = BoqLine(
+        tender_id=t.id,
+        description="PU liquid membrane on terrace",
+        unit="sqm",
+        qty=D(10),
+        sort_order=1,
+    )
+    priced = BoqLine(
+        tender_id=t.id,
+        description="PU liquid membrane on podium",
+        unit="sqm",
+        qty=D(10),
+        sort_order=2,
+        rate=D(500),
+    )
+    db.add_all([free, priced])
+    db.commit()
+    c, h = login_as("estimator")
+    r = c.post(
+        f"/api/spec/lines/boq/{free.id}/pick",
+        json={"system_id": w["system"].id, "option_id": w["Zentrafix"].id},
+        headers=h,
+    ).json()
+    assert r["rate"]["applied"] is True and r["rate"]["old"] is None
+    db.expire_all()
+    assert (
+        db.get(BoqLine, free.id).rate == D(r["rate"]["new"])
+        and db.get(BoqLine, free.id).status == "priced"
+    )
+    r = c.post(
+        f"/api/spec/lines/boq/{priced.id}/pick",
+        json={"system_id": w["system"].id, "option_id": w["Zentrafix"].id},
+        headers=h,
+    ).json()
+    assert (
+        r["rate"]["ask"] is True and r["rate"]["applied"] is False and D(r["rate"]["old"]) == D(500)
+    )
+    db.expire_all()
+    assert db.get(BoqLine, priced.id).rate == D(500)  # not changed without asking
+    r = c.post(f"/api/spec/lines/boq/{priced.id}/apply-rate", headers=h)
+    assert r.status_code == 200 and D(r.json()["rate"]) != D(500)
+
+
+# --- 39b: brand options with no brand's name ------------------------------------------------------------
+
+
+def test_generic_brand_options_are_listed_and_renamed_with_a_reason(login_as, db):
+    w = _pu_world(db)
+    s = w["system"]
+    o = SystemOption(system_id=s.id, brand="Standard (2)", sort_order=9)
+    db.add(o)
+    db.commit()
+    c, h = login_as("planning")
+    listed = c.get("/api/spec/master", headers=h).json()["generic_brands"]
+    assert [x["brand"] for x in listed] == ["Standard (2)"]
+    assert (
+        c.patch(
+            f"/api/spec/master/{s.id}/options/{o.id}", json={"brand": "SC"}, headers=h
+        ).status_code
+        == 422
+    )
+    assert (
+        c.patch(
+            f"/api/spec/master/{s.id}/options/{o.id}", json={"brand": "Arvox"}, headers=h
+        ).status_code
+        == 422
+    )  # already one
+    r = c.patch(
+        f"/api/spec/master/{s.id}/options/{o.id}",
+        json={"brand": "Duramix", "reason": "the BOM's maker"},
+        headers=h,
+    )
+    assert (
+        r.status_code == 200 and c.get("/api/spec/master", headers=h).json()["generic_brands"] == []
+    )
+    ch = db.scalar(select(ConsumptionChange).where(ConsumptionChange.field == "brand"))
+    assert (ch.old, ch.new, ch.reason) == ("Standard (2)", "Duramix", "the BOM's maker")

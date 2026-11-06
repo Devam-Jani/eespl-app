@@ -126,6 +126,74 @@ EXTRA_AREAS = [
 ]
 
 
+AREA_FROM = {"heading": "from the heading", "system": "usual for the system"}
+BASEMENT = {"raft", "retaining_wall", "basement"}
+JOINTS = {"expansion_joint", "construction_joint"}
+# an area word that names a thing inside another area: "terrace drain", "toilet outlet"
+IN_PASSING = re.compile(
+    r"\s*(?:drain|outlet|pipe|spout|rain\s*water|door|level|edge|slope|side|parapet\s*wall)", re.I
+)
+LISTED = re.compile(r"(?:like|such\s*as|or\s*any\s*other|any\s*other\s*area|etc)", re.I)
+# the area a system usually is when nothing says it (an APP torch membrane is a terrace's)
+TYPE_AREA = {"bituminous_app": "terrace", "bituminous_sbs": "terrace", "pvc_tpo": "terrace", "hdpe": "raft", "crystalline": "basement",
+             "swellable": "construction_joint"}  # fmt: skip
+
+
+def _own(text: str, area: str, span: tuple[int, int]) -> bool:
+    """The line names the area as its own (in its head, not as a thing in another area, not in a
+    list of examples)."""
+    if span[0] > 100:
+        return False
+    if area not in JOINTS and IN_PASSING.match(text, span[1]):
+        return False
+    return not LISTED.search(text[max(0, span[0] - 30) : span[0]])
+
+
+def area_of(
+    text: str, unit: str, context: list[str | None], t: str | None
+) -> tuple[str | None, tuple[int, int] | None, str]:
+    """The line's area: from the line itself, then its section heading, then the nearest heading
+    above. A line that names an area only in passing ("terrace drain" in a toilet section) keeps the
+    section's; inside a basement, the heading says raft or retaining wall; a joint line per rmt
+    under a joint heading is that joint. Nothing at all: the area the system usually is."""
+    line, span = pick_area(text, unit)
+    run = unit in ("rmt", "rft", "m")
+    heading = None
+    for h in context:
+        if h:
+            heading, _s = pick_area(h, unit)
+            if heading:
+                break
+    if run:  # a line per rmt under any heading naming a joint is that joint
+        joint = next(
+            (a for a in (pick_area(h, unit)[0] for h in context if h) if a in JOINTS), None
+        )
+        heading = joint or heading
+    if line and not heading:
+        return line, span, "line"
+    if heading and not line:
+        return heading, None, "heading"
+    if line and heading:
+        if line == heading:
+            return line, span, "line"
+        if line in BASEMENT and heading in BASEMENT:
+            return heading, None, "heading"
+        if heading in JOINTS and run:
+            return heading, None, "heading"
+        # an outlet line per nos, a joint line per rmt: the line's own word is not weak then
+        weak = (
+            line in WEAK_AREAS
+            and not (line == "pipe_outlet" and unit in ("nos", "no", "each"))
+            and not (line in JOINTS and run)
+        )
+        if weak or not _own(text, line, span):
+            return heading, None, "heading"
+        return line, span, "line"
+    if t in TYPE_AREA:
+        return TYPE_AREA[t], None, "system"
+    return None, None, "line"
+
+
 def pick_area(text: str, unit: str) -> tuple[str | None, tuple[int, int] | None]:
     """The line's area: a line per nos about pipes and outlets is that; a line per rmt about a
     joint is that joint; else the area named first (the knowledge library's areas and the data
@@ -138,6 +206,15 @@ def pick_area(text: str, unit: str) -> tuple[str | None, tuple[int, int] | None]
         m = re.search(pat, text, re.I)
         if m and (key not in found or m.start() < found[key][0]):
             found[key] = m.span()
+    # the knowledge library reads a construction joint as an expansion joint: the words decide
+    ej = found.get("expansion_joint")
+    if (
+        ej
+        and "expan" not in text[ej[0] : ej[1]].lower()
+        and not re.search(r"\bEJ\b", text[ej[0] : ej[1]])
+    ):
+        found.pop("expansion_joint")
+        found.setdefault("construction_joint", ej)
     if unit in ("nos", "no", "each") and "pipe_outlet" in found:
         return "pipe_outlet", found["pipe_outlet"]
     if unit in ("rmt", "rft", "m"):
@@ -146,6 +223,8 @@ def pick_area(text: str, unit: str) -> tuple[str | None, tuple[int, int] | None]
             k = min(joints, key=lambda j: found[j][0])
             return k, found[k]
     strong = {k: s for k, s in found.items() if k not in WEAK_AREAS}
+    if "raft" in strong and set(strong) <= BASEMENT:
+        return "raft", strong["raft"]
     pool = strong or {k: s for k, s in found.items() if k != "floor"} or found
     if not pool:
         return None, None
@@ -162,7 +241,9 @@ def system_label(t: str, text: str) -> tuple[str, list[str]]:
     low = text.lower()
     if "flashing" in low:
         variant.append("flashing")
-    elif re.search(r"liquid", low) and re.search(r"membrane|coating", low):
+    elif (
+        t != "liquid_membrane" and re.search(r"liquid", low) and re.search(r"membrane|coating", low)
+    ):
         variant.append("liquid membrane")
     elif re.search(r"membrane", low) and "membrane" not in vocab.TYPE_LABEL[t]:
         variant.append("membrane")
@@ -172,25 +253,36 @@ def system_label(t: str, text: str) -> tuple[str, list[str]]:
 
 
 def parse(
-    text: str, unit: str | None = None, qty: Decimal | None = None, brands: list[str] | None = None
+    text: str,
+    unit: str | None = None,
+    qty: Decimal | None = None,
+    brands: list[str] | None = None,
+    context: list[str | None] | None = None,
 ) -> list[dict]:
-    """The key points of one line's description (and its unit and qty)."""
+    """The key points of one line's description (and its unit and qty). `context`: the line's
+    section heading, then the nearest heading above it, where the area often is when the line
+    itself does not say it."""
     text = text or ""
     low = text.lower()
     chips: list[dict] = []
     u = (unit or "").lower()
 
-    area, aspan = pick_area(text, u)
-    if area:
-        use = vocab.AREA_TO_USE.get(area, area) or area
-        chips.append(
-            _chip(
-                "area", vocab.USE_LABEL.get(area, area), {"area": area, "use": use}, [aspan], text
-            )
-        )
-
     # system type: the type the line names first and most (its head weighs more), never a layer
     t = vocab.main_type(text, head=HEAD)
+    area, aspan, said = area_of(text, u, context or [], t)
+    if area:
+        use = vocab.AREA_TO_USE.get(area, area) or area
+        label = vocab.USE_LABEL.get(area, area)
+        c = _chip(
+            "area",
+            label + ("" if said == "line" else f" ({AREA_FROM[said]})"),
+            {"area": area, "use": use, "from": said},
+            [aspan] if aspan else [],
+            text,
+        )
+        if said == "heading":
+            c["words"] = next((h for h in context or [] if h), "")[:200]
+        chips.append(c)
     tspan = None
     if t:
         m = re.search(dict((k, p) for k, _l, p in vocab.TYPES)[t], text, re.I)

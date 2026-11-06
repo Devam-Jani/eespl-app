@@ -39,6 +39,12 @@ def _cost(principal) -> bool:
     return principal.permissions.get("tender.margin") is not None
 
 
+def _master_cost(principal) -> bool:
+    """The consumption master's prices, cost and selling rate, and "update rate": those who see
+    margins, and planning (consumption.cost) without tender.margin as a whole."""
+    return _cost(principal) or principal.permissions.get("consumption.cost") is not None
+
+
 def _404(what: str) -> HTTPException:
     return HTTPException(status.HTTP_404_NOT_FOUND, f"{what} not found")
 
@@ -134,13 +140,11 @@ def get_import(iid: int, db: DbSession, principal: CurrentPrincipal, _: TdsImpor
             .order_by(TdsDoc.brand, TdsDoc.product_name)
         )
     )
+    gs = tds_import.groups(docs)
+    group_of = {i: g[0] for g in gs for i in g}
+    out = [_doc_out(db, d) | {"group": group_of.get(d.id)} for d in docs]
     return _j(
-        {
-            "id": imp.id,
-            "status": imp.status,
-            "counts": tds_import.counts(db, imp),
-            "docs": [_doc_out(db, d) for d in docs],
-        }
+        {"id": imp.id, "status": imp.status, "counts": tds_import.counts(db, imp), "docs": out}
     )
 
 
@@ -148,6 +152,8 @@ class SaveIn(BaseModel):
     create: list[int] = Field(default_factory=list)  # docs to make a new product for
     create_all: bool = False
     replace: list[int] = Field(default_factory=list)  # docs confirmed to replace the saved sheet
+    # a group of near-duplicates (by its first sheet's id) -> the sheet to keep
+    keep: dict[int, int] = Field(default_factory=dict)
 
 
 @router.post("/tds/imports/{iid}/save")
@@ -171,7 +177,7 @@ def save_import(
                 )
             )
         )
-    result = tds_import.save(db, imp, create, set(body.replace), principal.user.id)
+    result = tds_import.save(db, imp, create, set(body.replace), principal.user.id, body.keep)
     record(db, request, principal, "tds.import", "tds_import", imp.id, after=result)
     db.commit()
     return _j(result | {"counts": tds_import.counts(db, imp)})
@@ -436,7 +442,7 @@ def master_list(
     db: DbSession, principal: CurrentPrincipal, _: View, q: str = "", area: str | None = None
 ) -> dict:
     return _j({"items": master.items(db, q, area, with_cost=False), "can_edit": principal.permissions.get("consumption.edit") is not None,
-               "can_cost": _cost(principal)})  # fmt: skip
+               "can_cost": _master_cost(principal), "generic_brands": master.generic_options(db)})  # fmt: skip
 
 
 def _system(db, sid: int) -> System:
@@ -449,7 +455,7 @@ def _system(db, sid: int) -> System:
 @router.get("/master/{sid}")
 def master_item(sid: int, db: DbSession, principal: CurrentPrincipal, _: View) -> dict:
     _system(db, sid)
-    item = master.items(db, system_id=sid, with_cost=_cost(principal))[0]
+    item = master.items(db, system_id=sid, with_cost=_master_cost(principal))[0]
     hist = [{"id": h.id, "what": h.what, "field": h.field, "old": h.old, "new": h.new, "reason": h.reason, "at": h.changed_at, "by": _who(db, h.changed_by)}
             for h in master.history(db, sid)]  # fmt: skip
     from app.estimate.models import MixDesign  # noqa: PLC0415
@@ -464,7 +470,7 @@ def master_item(sid: int, db: DbSession, principal: CurrentPrincipal, _: View) -
             "history": hist,
             "mix_designs": mixes,
             "can_edit": principal.permissions.get("consumption.edit") is not None,
-            "can_cost": _cost(principal),
+            "can_cost": _master_cost(principal),
         }
     )
 
@@ -558,6 +564,37 @@ def master_option(
     record(db, request, principal, "consumption.option", "system", s.id, after={"brand": o.brand})
     db.commit()
     return {"id": o.id}
+
+
+class RenameIn(BaseModel):
+    brand: str = Field(min_length=1, max_length=100)
+    reason: str | None = None
+
+
+@router.patch("/master/{sid}/options/{oid}")
+def master_rename(
+    sid: int,
+    oid: int,
+    body: RenameIn,
+    request: Request,
+    db: DbSession,
+    principal: CurrentPrincipal,
+    _: MasterEdit,
+) -> dict:
+    """Rename a brand option ("Standard (2)" is no brand): kept in the history."""
+    s = _system(db, sid)
+    o = _guard(master.rename_option, db, s, oid, body.brand, body.reason, principal.user.id)
+    record(
+        db,
+        request,
+        principal,
+        "consumption.rename",
+        "system_option",
+        o.id,
+        after={"brand": o.brand},
+    )
+    db.commit()
+    return {"id": o.id, "brand": o.brand}
 
 
 class CopyIn(BaseModel):
@@ -740,7 +777,7 @@ def master_price(
     _: MasterEdit,
 ) -> dict:
     """ "Update rate": a price row in the master price list (Prompt 38 rules)."""
-    if not _cost(principal):
+    if not _master_cost(principal):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Prices are for those who see costs")
     if db.get(Product, pid) is None:
         raise _404("Product")
@@ -937,11 +974,51 @@ def pick(
         line.id,
         after={"system_id": body.system_id, "option_id": body.option_id, "rank": body.rank},
     )
+    # the line gets the selling rate at once when it has none; one it has already is only
+    # changed once the person agrees (apply-rate)
+    change = suggest.rate_change(db, kind, line) if body.rank == 1 else None
+    applied = False
+    if change and change["old"] is None:
+        try:
+            applied = suggest.apply_rate(db, kind, line)
+        except HTTPException:  # a sent quotation keeps its prices
+            applied = False
+    if change:
+        differs = change["old"] is not None and Decimal(change["old"]) != Decimal(change["new"])
+        change = change | {"applied": applied, "ask": differs}
     db.commit()
+    out = _points_out(db, kind, line)
     return _j(
-        _points_out(db, kind, line)
-        | {"pick_id": p.id, "sub_lines": suggest.sub_lines(db, kind, line)}
+        out | {"pick_id": p.id, "sub_lines": suggest.sub_lines(db, kind, line), "rate": change}
     )
+
+
+@router.post("/lines/{kind}/{line_id}/apply-rate")
+def apply_rate(
+    kind: str, line_id: int, request: Request, db: DbSession, principal: CurrentPrincipal
+) -> dict:
+    """The picked option's selling rate onto the line, once the person agreed to change the rate it had."""
+    line = _line(db, kind, line_id, principal, edit=True)
+    if not _cost(principal):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "The rate working is for the estimator and the director"
+        )
+    before = line.rate
+    if not suggest.apply_rate(db, kind, line):
+        raise _422(
+            "The picked option gives no rate for this line (a price missing, or another unit)"
+        )
+    record(
+        db,
+        request,
+        principal,
+        "spec.apply_rate",
+        f"{kind}_line",
+        line.id,
+        after={"old": str(before) if before is not None else None, "new": str(line.rate)},
+    )
+    db.commit()
+    return _j({"rate": line.rate})
 
 
 @router.delete("/lines/{kind}/{line_id}/pick/{rank}")
