@@ -122,6 +122,7 @@ export const MENU: MenuItem[] = [
   { to: "/settings/categories", label: "Categories", perms: ["library.edit"], all: ["settings.company"], section: "Settings" },
   { to: "/settings/tags", label: "Tags", perms: ["library.edit"], all: ["settings.company"], section: "Settings" },
   { to: "/settings/units", label: "Units & conversions", perms: ["library.edit"], all: ["settings.company"], section: "Settings" },
+  { to: "/consumption-master", label: "Consumption master", perms: ["consumption.edit"], view: ["library.view"], section: "Settings" },
   { to: "/settings/kylas", label: "Integrations: Kylas", perms: ["admin.settings"], section: "Settings" },
   { to: "/settings/purchase", label: "Purchase", perms: ["process.rules"], view: ["settings.company", "po.edit"], section: "Settings" },
   { to: "/settings/stage-templates", label: "Stage templates", perms: ["planning.edit", "process.rules"], view: ["site.view"], section: "Settings" },

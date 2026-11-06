@@ -520,6 +520,9 @@ def main(argv: list[str] | None = None) -> None:
     mr = sub.add_parser("margin-recheck", help="Rates that change: margin on the selling price")
     mr.add_argument("--apply", action="store_true", help="make them suggested")
     sub.add_parser("price-units", help="Price rows in another unit than the product's (read-only)")
+    ti = sub.add_parser("tds-import", help="Read a folder of data sheets (TDS) into a preview")
+    ti.add_argument("--dir", required=True, help="the folder: <brand>/.../<sheet>.pdf")
+    ti.add_argument("--save", action="store_true", help="save it (new products made)")
     xr = sub.add_parser("demo-xray", help="DEMO: the X-ray 3D building from the sample drawing")
     xr.add_argument(
         "--bill-only", action="store_true", help="only fill RA bill 01 (the site there, no drawing)"
@@ -712,6 +715,12 @@ def main(argv: list[str] | None = None) -> None:
             if args.apply:
                 print(mrc.apply(db, changes))
                 db.commit()
+    elif args.command == "tds-import":
+        import app.main  # noqa: F401, PLC0415  (every model registered)
+        from app.cli import tds_folder  # noqa: PLC0415
+
+        with SessionLocal() as db:
+            print(tds_folder.run(db, Path(args.dir), args.save))
     elif args.command == "price-units":
         import app.main  # noqa: F401, PLC0415  (every model registered)
         from app.cli import price_units  # noqa: PLC0415

@@ -8,7 +8,7 @@ import { errorText, inr, num } from "../format";
 import ExportButton from "../components/ExportButton";
 import type { Category, Page, Price, Product, Unit } from "../types";
 import { Pager } from "./Clients";
-import { Button, Card, Field } from "../ui/components";
+import { Button, Card, Field, buttonClass } from "../ui/components";
 import BomImport from "./BomImport";
 
 /** Categories of one kind (work or material), active first. */
@@ -91,6 +91,9 @@ export default function Products() {
             </select>
           </Field>
           <ExportButton path={`/api/products/export${queryString(filters)}`} />
+          <Link to="/products/technical-data" className={buttonClass({})}>
+            Technical data
+          </Link>
           {can("bom.import") && <Button onClick={() => setImporting(true)}>Import BOM</Button>}
           {canEdit && (
             <Button variant="primary" onClick={() => setEditing("new")}>

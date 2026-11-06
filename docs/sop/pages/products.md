@@ -1,7 +1,7 @@
 ---
 page: /products
 title: Products
-routes: /products, /prices/:id
+routes: /products, /prices/:id, /products/technical-data
 mark: Add product
 ---
 **Products** is the master list of the materials we buy and use: code, name, brand, category, unit, pack, GST and HSN code. Roles that see cost also see each product's current purchase rate and freight, and keep the price history. Prices are never edited: a new price is a new row with its own date.
@@ -11,6 +11,7 @@ mark: Add product
 - **Category** (list): "All categories" or one material category.
 - **⤓ Export Excel**: downloads the list with the same search and category. Cost columns are left out for roles that do not see cost.
 - **Add product**: opens the **Add product** form. {perm: library.edit}
+- **Technical data**: opens **Technical data (TDS)**, the products' data sheets.
 - **Import BOM**: opens **Import the company BOM**. {perm: bom.import}
 - The table: **Code**, **Name**, **Brand**, **Category**, **Unit**, **Pack**, **GST %**. Inactive products are greyed.
 - **Purchase rate** and **Freight** columns: the current price ("no price" when none). Click the rate to open the product's price page. {perm: tender.margin}
@@ -67,3 +68,11 @@ mark: Add product
 - "This product is used in a system; remove it there or deactivate it": untick **Active** instead of deleting.
 - "Product not found": the product was deleted. Go back to the list.
 - "No prices yet.": the product has never been priced. Add the first price.
+
+**Technical data (TDS)**
+- Every data sheet kept: **Brand**, **Product (as in the sheet)**, **Product master** (the product it belongs to, or none), **Facts**, **Imported**. Search by product, file or brand; **Brand** filters one brand; **Needs reading** shows the scanned sheets (no text to read).
+- Click a sheet to open it: **Download the PDF**, and its facts: chemistry, uses, consumption (per sqm or per rmt, from the sheet's own words: "23 to 25 sft/kg" is 0.43–0.47 kg/sqm), coats, DFT or thickness, pack, density, solids, primer required, UV / exposed, potable, and property values (elongation, tensile, adhesion, Shore A, crack bridging, vapour permeability) with their standard. Each fact shows the page and the sentence it came from, and whether it was read, typed or read by the AI and confirmed.
+- **✎** on a fact edits it: the fact then shows "checked by" who and when, and the value as first read. **×** removes it. Under the facts, **Add the fact** types one (a scanned sheet is read this way). {perm: tds.import}
+- On a scanned sheet, **Read with AI** (only when the AI helper is on) lists what the AI reads on its pages; tick the facts to keep and **Save the ticked facts**. Nothing is kept without that click. {perm: tds.import}
+- **Import TDS folder** (**Import (one waiting to save)** when a preview is open): **Choose the folder** of data sheets (one folder per brand). Each PDF is read and listed first, nothing is kept yet: the counts (sheets read, with facts, scanned "needs reading", unreadable, duplicates merged, safety sheets left out, matched to the product master, not in it, replacing a saved sheet) and one row per sheet. {perm: tds.import}
+- In the list: a sheet not in the product master has **create the product** (ticked by default); a newer sheet of a product that already has one has **replace the saved sheet** (not ticked: the saved one stays unless you tick it). The same PDF twice, or the same product of the same brand twice, is merged into one. **Save** keeps them; **Drop this import** throws the preview away. {perm: tds.import}

@@ -218,6 +218,10 @@ class System(Tracked, Base):
     to_confirm: Mapped[bool] = mapped_column(server_default=false())
     note: Mapped[str | None] = mapped_column(Text)
     source: Mapped[str | None] = mapped_column(String(16))  # "company_bom": made by the BOM import
+    # the consumption master: the use areas it fits (spec.vocab USES keys) and its system type
+    # (spec.vocab TYPES); blank: read from its name and its products' data sheets
+    area_keys: Mapped[list[str]] = mapped_column(ARRAY(String(30)), server_default="{}")
+    spec_type: Mapped[str | None] = mapped_column(String(30))
 
     # every component, of every brand option; what a rate is built from is recipe()
     components: Mapped[list["SystemComponent"]] = relationship(
@@ -280,6 +284,12 @@ class SystemOption(Tracked, Base):
     sort_order: Mapped[int] = mapped_column(Integer, server_default="0")
     source: Mapped[str] = mapped_column(String(16), server_default="manual")
     source_ref: Mapped[str | None] = mapped_column(Text)  # the BOM's rows
+    # a formulation (a waterproof screed: cement, sand, admixture): its components' consumption
+    # is worked out from the mix design at this thickness (estimate.mix)
+    mix_design_id: Mapped[int | None] = mapped_column(
+        ForeignKey("mix_designs.id", ondelete="SET NULL")
+    )
+    mix_thickness_mm: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
 
 
 class SystemComponent(Tracked, Base):

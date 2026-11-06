@@ -28,6 +28,7 @@ The pages in the order of a working day. Each section lists every button and fie
 @page /subcontractors
 @page /products
 @page /systems
+@page /consumption-master
 @page /rate-library
 @page /settings/company
 @page /settings/process

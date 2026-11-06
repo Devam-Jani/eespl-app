@@ -24,6 +24,7 @@ The pages in the order of a working day. Each section lists every button and fie
 @page /rate-library
 @page /products
 @page /systems
+@page /consumption-master
 @page /knowledge
 @page /methodology
 @page /tc-library

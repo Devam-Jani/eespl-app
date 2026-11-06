@@ -31,6 +31,8 @@ export const DETAIL_ROUTES: PageRoute[] = [
   { path: "/quotations/:id", perms: ["quotation.view"] },
   { path: "/quotations/:id/working", perms: ["quotation.view"] },
   { path: "/systems/:id", perms: ["library.view"] },
+  { path: "/products/technical-data", perms: ["library.view"] },
+  { path: "/consumption-master/:id", perms: ["library.view"] },
   { path: "/tenders/:id", perms: ["tender.view"] },
   { path: "/leads/:id", perms: ["leads.view"] },
   { path: "/rfqs/:id", perms: ["po.view"] },
