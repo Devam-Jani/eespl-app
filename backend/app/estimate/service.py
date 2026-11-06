@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.estimate import library as lib
 from app.estimate import mix as mixes
+from app.estimate import rules
 from app.estimate.models import Estimate, EstimateArea, EstimateLine, MaterialRequest, MixDesign
 from app.masters.models import Product, System
 from app.measure import geom
@@ -271,10 +272,10 @@ def work_line(db: Session, est: Estimate, ln: EstimateLine, areas: list[Estimate
     out = LineOut(ln, p, system_label(db, ln), cov, w)
     total = ZERO
     for a in line_areas(db, est, ln, areas):
-        floor = D(a.floor_sqm) - D(a.deduction_sqm) if a.use_floor and ln.part in ("both", "floor") else ZERO
         up_h = upturn_m(db, est, a, ln)
-        up = D(a.periphery_m) * up_h if a.use_upturn and ln.part in ("both", "upturn") else ZERO
-        base = floor + up
+        aq = rules.area_quantity(a.floor_sqm, a.periphery_m, cutout_sqm=a.deduction_sqm, upturn_m=up_h,
+                                 use_floor=a.use_floor and ln.part in ("both", "floor"), use_upturn=a.use_upturn and ln.part in ("both", "upturn"))  # fmt: skip
+        floor, up, base = aq.net_floor_sqm, aq.upturn_sqm, aq.total_sqm
         if not base:
             continue
         bits = []

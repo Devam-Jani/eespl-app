@@ -24,6 +24,7 @@ from app.costing import prices as price_list
 from app.costing import working_routes as rate_working
 from app.crm import routers as crm
 from app.db import get_engine
+from app.drawquote import routes as drawquote
 from app.estimate import routes as estimate
 from app.execution import assets as ex_assets
 from app.execution import budget as ex_budget
@@ -170,6 +171,7 @@ for _r in (
     field.router,
     knowledge.router,
     spec_products.router,
+    drawquote.router,
     methodology.router,
     closeout.router,
     closeout_portal.router,

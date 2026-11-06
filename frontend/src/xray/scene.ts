@@ -384,6 +384,23 @@ export class XrayScene {
       const bb = new THREE.Box3().setFromObject(group);
       if (!bb.isEmpty()) all = all ? all.union(bb) : bb;
     });
+    // a site plan: each building a block at its place (its storeys × the floor height), the podium
+    // and roads flat
+    for (const blk of b.blocks ?? []) {
+      if (blk.outline.length < 3) continue;
+      const shape = new THREE.Shape(blk.outline.map(([x, y]) => new THREE.Vector2(x, y)));
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: blk.height_m, bevelEnabled: false });
+      geo.rotateX(-Math.PI / 2); // x stays X, plan y goes to -Z, the height up Y
+      const mesh = new THREE.Mesh(geo, blk.kind === "block" ? this.mats.slab : this.mats.face);
+      mesh.userData.role = blk.kind === "block" ? "slab" : "column";
+      mesh.userData.block = blk.name;
+      this.scene.add(mesh);
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), this.mats.line);
+      edges.userData.role = "line";
+      this.scene.add(edges);
+      const bb = new THREE.Box3().setFromObject(mesh);
+      if (!bb.isEmpty()) all = all ? all.union(bb) : bb;
+    }
     if (merge) {
       for (const k of ["line", "slab", "glass", "face"] as const) {
         hookFloors(this.mats[k], this.floorU);

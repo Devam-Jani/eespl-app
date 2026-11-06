@@ -45,6 +45,7 @@ You open these less often, or only through a link from another page.
 @page /material-library
 @page /estimates
 @page /sites
+@page /sites/:id/drawing-quote
 @page /snags
 @page /field/team
 @page /rate-contracts

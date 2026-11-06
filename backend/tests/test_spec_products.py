@@ -1095,3 +1095,32 @@ def test_generic_brand_options_are_listed_and_renamed_with_a_reason(login_as, db
     )
     ch = db.scalar(select(ConsumptionChange).where(ConsumptionChange.field == "brand"))
     assert (ch.old, ch.new, ch.reason) == ("Standard (2)", "Duramix", "the BOM's maker")
+
+
+# --- 39: a TDS import that fails partway leaves no file behind ----------------------------------------
+
+
+def test_a_tds_folder_import_that_fails_on_the_third_sheet_leaves_no_files(
+    db, tmp_path, monkeypatch, media_in_tmp
+):
+    from app.cli import tds_folder  # noqa: PLC0415
+
+    folder = tmp_path / "TDS" / "Zentrafix"
+    folder.mkdir(parents=True)
+    for i in range(3):
+        (folder / f"Zentrafix Coat {i}.pdf").write_bytes(_pdf([f"ZENTRAFIX COAT {i}", *SHEET[1:]]))
+    real = tds.facts
+    calls = {"n": 0}
+
+    def third_fails(sheet, name):
+        calls["n"] += 1
+        if calls["n"] == 3:
+            raise RuntimeError("an unreadable third sheet")
+        return real(sheet, name)
+
+    monkeypatch.setattr(tds, "facts", third_fails)
+    with pytest.raises(RuntimeError):
+        tds_folder.run(db, tmp_path / "TDS")
+    assert calls["n"] == 3  # two sheets were read and their files written before the third failed
+    assert list(media_in_tmp.rglob("*.pdf")) == []
+    assert db.scalar(select(TdsDoc.id)) is None

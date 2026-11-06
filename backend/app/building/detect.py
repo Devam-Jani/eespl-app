@@ -13,7 +13,7 @@ FOOT_M, INCH_M = 0.3048, 0.0254
 
 # +3.000, + 3.000 FFL, SSL +6.000, LVL +58'9", LVL+19'9", -1.500, ±0.000, +0'0"
 LEVEL = re.compile(
-    r"(?:(?:LVL|LEVEL|FFL|SSL|TOS|TOC|EL)\.?\s*)?(?P<sign>[+\-±])\s*(?:(?P<ft>\d{1,3})\s*'\s*(?P<in>\d{1,2}(?:\.\d+)?)?\s*(?:\"|'')?|(?P<m>\d{1,3}\.\d{2,3})\b)",
+    r"(?:(?:LVL|LEVEL|FFL|SSL|TOS|TOC|EL)\.?\s*)?(?P<sign>[+\-±])\s*(?:(?P<ft>\d{1,3})\s*'\s*(?P<in>\d{1,2}(?:\.\d+)?)?\s*(?:\"|'')?|(?P<m>\d{1,4}\.\d{2,3})\b)",
     re.IGNORECASE,
 )
 LEVEL_WORD = re.compile(r"\b(LVL|LEVEL|FFL|SSL|TOS|TOC|EL)\b", re.IGNORECASE)
@@ -30,7 +30,10 @@ def level_m(text: str) -> float | None:
         return None
     sign = -1 if m.group("sign") == "-" else 1
     if m.group("m"):
-        return sign * float(m.group("m"))
+        value = float(m.group("m"))
+        if re.match(r"\s*MM\b", t[m.end():], re.IGNORECASE):  # "FFL +800.00 MM": millimetres
+            value /= 1000
+        return sign * value
     return sign * (int(m.group("ft")) * FOOT_M + float(m.group("in") or 0) * INCH_M)
 
 

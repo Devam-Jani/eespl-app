@@ -23,6 +23,7 @@ UNITS = {
 }  # fmt: skip
 GEOMETRY = {"LINE", "LWPOLYLINE", "POLYLINE", "ARC", "CIRCLE", "ELLIPSE", "SPLINE"}
 MAX_DEPTH = 3  # blocks inside blocks
+MAX_CLOSED, MAX_CLOSED_POINTS = 4000, 400  # closed polylines kept for outlines and cut-outs
 
 
 class EmptyDrawing(CadError):
@@ -52,6 +53,8 @@ class Parsed:
     geometry: dict = field(default_factory=dict)  # {layer: {"s": [x1, y1, x2, y2, ...]}}
     space: str = "Model"  # where it was read: model space, or the layout used when that is empty
     xrefs: list[str] = field(default_factory=list)  # external references (drawn in other files)
+    # closed polylines drawn as such: [layer, [[x, y], ...]] (a room, a shaft, a building's outline)
+    closed: list[list] = field(default_factory=list)
 
     def summary(self) -> dict:
         return {
@@ -60,7 +63,7 @@ class Parsed:
             "texts": len(self.texts), "dimensions": len(self.dimensions),
             "inserts": len(self.inserts), "blocks": sorted({i["block"] for i in self.inserts})[:300],
             "layouts": self.layouts, "extents": self.extents, "frames": self.frames, "clusters": self.clusters,
-            "dxf_repairs": self.repairs, "space": self.space, "xrefs": self.xrefs,
+            "dxf_repairs": self.repairs, "space": self.space, "xrefs": self.xrefs, "closed": self.closed,
         }  # fmt: skip
 
 
@@ -228,6 +231,11 @@ def read(path: Path, version: str | None = None, hidden: set[str] | None = None)
             r = _rectangle(_flatten(e))
             if r:
                 rects.append([*r, f"rectangle on {layer}"])
+            closed_pl = e.closed if t == "LWPOLYLINE" else e.is_closed
+            if closed_pl and layer not in hidden and len(out.closed) < MAX_CLOSED:
+                pts = _flatten(e)[:-1]
+                if 3 <= len(pts) <= MAX_CLOSED_POINTS and _shoelace(pts) > 0:
+                    out.closed.append([layer, [[round(x, 3), round(y, 3)] for x, y in pts]])
         if t in GEOMETRY and layer not in hidden:
             pts = _flatten(e)
             for (x1, y1), (x2, y2) in zip(pts, pts[1:], strict=False):
@@ -325,6 +333,10 @@ def clusters(
                     round(x0 + (max(xs) + 1) * size, 2), round(y0 + (max(ys) + 1) * size, 2), len(cells_)])  # fmt: skip
     out.sort(key=lambda c: -c[4])
     return out[:400]
+
+
+def _shoelace(pts: list[tuple[float, float]]) -> float:
+    return abs(sum(x1 * y2 - x2 * y1 for (x1, y1), (x2, y2) in zip(pts, pts[1:] + pts[:1], strict=False))) / 2
 
 
 def _rectangle(pts: list[tuple[float, float]]) -> tuple[float, float, float, float] | None:

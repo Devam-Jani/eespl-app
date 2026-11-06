@@ -58,6 +58,7 @@ You open these less often, or only through a link from another page.
 @page /estimates
 @page /material-requests
 @page /sites
+@page /sites/:id/drawing-quote
 @page /surveys
 @page /daily-reports
 @page /attendance

@@ -20,14 +20,18 @@ def run(db: Session, folder: Path, save: bool = False) -> str:
     db.add(imp)
     db.flush()
     products = list(db.scalars(select(Product).where(Product.is_active.is_(True))))
-    for i, f in enumerate(files, start=1):
-        data = f.read_bytes()
-        if len(data) > tds_import.MAX_BYTES:
-            continue
-        tds_import.stage(db, imp, f.relative_to(folder).as_posix(), data, None, products)
-        if i % 50 == 0:
-            db.commit()
-    db.commit()
+    try:
+        for i, f in enumerate(files, start=1):
+            data = f.read_bytes()
+            if len(data) > tds_import.MAX_BYTES:
+                continue
+            tds_import.stage(db, imp, f.relative_to(folder).as_posix(), data, None, products)
+            if i % 50 == 0:
+                db.commit()
+        db.commit()
+    except Exception:
+        db.rollback()  # the sheets of the batch that failed: no rows, and their files removed
+        raise
     out = {"import_id": imp.id, "pdfs": len(files), **tds_import.counts(db, imp)}
     if save:
         create = set(

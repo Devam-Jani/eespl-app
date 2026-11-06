@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import type { FormEvent } from "react";
 import { api, downloadFile } from "../../api";
 import { useAuth } from "../../auth";
@@ -60,6 +61,11 @@ export default function DrawingsTab({ site }: { site: Site }) {
     <Card as="div">
       <div className="toolbar">
         <h2 className="section-title">Drawings ({drawings.length})</h2>
+        {can("drawquote.make") && (
+          <Link className={buttonClass({})} to={`/sites/${site.id}/drawing-quote`}>
+            Make quotation from drawing
+          </Link>
+        )}
         {canUpload && (
           <Button variant="primary" onClick={() => setAdding(true)}>
             Upload drawing

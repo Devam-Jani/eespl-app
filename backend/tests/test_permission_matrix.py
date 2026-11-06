@@ -25,7 +25,7 @@ ALL = [
     "library.view", "library.edit",
     "tender.view", "tender.edit", "tender.margin",
     "site.view", "site.edit", "site.update", "drawings.approve", "drawings.delete", "bom.import",
-    "tds.import", "consumption.edit", "consumption.cost",
+    "tds.import", "consumption.edit", "consumption.cost", "drawquote.make",
     "indent.view", "indent.create", "indent.approve",
     "po.view", "po.edit", "po.approve", "grn.view", "grn.edit", "grn.approve",
     "store.view", "store.edit",
@@ -73,7 +73,7 @@ DIRECTOR_EXCLUDES = {"admin.users", "admin.roles", "admin.settings", "portal.vie
                      "portal.snag", "portal.approve",
                      "field.admin", "field.claims_approve",
                      "drawings.delete", "bom.import", "tds.import", "consumption.edit",
-                     "consumption.cost"}  # fmt: skip
+                     "consumption.cost", "drawquote.make"}  # fmt: skip
 
 EXPECTED: dict[str, dict[str, str]] = {
     "super_admin": _all(*ALL),
@@ -185,6 +185,7 @@ EXPECTED: dict[str, dict[str, str]] = {
         "sitearea.approve",
     ),  # fmt: skip
     "estimator": TRACK | _all(
+        "drawquote.make",
         "methodology.view",
         "methodology.edit",
         "methodology.compliance",
@@ -212,6 +213,7 @@ EXPECTED: dict[str, dict[str, str]] = {
     # Sr Engineer Billing & Planning: enquiries, the status board, material
     # planning, new areas, escalations; costs only if the director allows the person
     "planning": TRACK | _all(
+        "drawquote.make",
         "building.edit",
         "drawings.delete",
         "bom.import",

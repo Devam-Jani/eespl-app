@@ -46,8 +46,9 @@ def _label(db: Session, w: RateWorking) -> str:
 
 
 def add_working_sheet(
-    wb: Workbook, db: Session, w: RateWorking, title: str = "WORKING"
+    wb: Workbook, db: Session, w: RateWorking, title: str = "WORKING", only: list | None = None
 ) -> Worksheet:
+    """The working's main items (`only`: just these, a sheet per system)."""
     ws = wb.create_sheet(title)
     lines = {x["key"]: x for x in working.client_lines(db, w)}
     basis = working.margin_basis(db, w)
@@ -57,7 +58,7 @@ def add_working_sheet(
     ws.append(HEADERS + ["USED / ACTUAL (cushion)"])
     for c in ws[3]:
         c.font, c.fill = BOLD, HEAD_FILL
-    for n, g in enumerate(w.groups, start=1):
+    for n, g in enumerate(only if only is not None else w.groups, start=1):
         result = working.work(db, g)
         # per sqm and sq ft (× 10.7639), or per rmt and rft (× 3.2808) for a main item per rmt
         small, factor = working.small_of(g)
@@ -154,10 +155,51 @@ def add_working_sheet(
     return ws
 
 
+def add_quantities_sheet(wb: Workbook, db: Session, w: RateWorking) -> Worksheet | None:
+    """A quotation made from a drawing: every area behind each line, with its numbers."""
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from app.drawquote.models import QuoteLineArea  # noqa: PLC0415
+    from app.quotations.models import QuotationItem, QuotationLine  # noqa: PLC0415
+
+    if not w.quotation_id:
+        return None
+    rows = db.execute(
+        select(QuoteLineArea, QuotationLine, QuotationItem)
+        .join(QuotationLine, QuotationLine.id == QuoteLineArea.quotation_line_id)
+        .join(QuotationItem, QuotationItem.id == QuotationLine.item_id)
+        .where(QuotationItem.quotation_id == w.quotation_id)
+        .order_by(QuotationItem.sort_order, QuotationLine.sort_order, QuoteLineArea.id)
+    ).all()
+    if not rows:
+        return None
+    ws = wb.create_sheet("Quantities")
+    ws.append(["AREA", "FLOOR", "ITEM", "OPTION", "FLOOR (SQM)", "CUT-OUTS (SQM)", "PERIPHERY (RMT)", "UPTURN (M)", "SUNK (M)",
+               "WALL (M x M)", "TOTAL (SQM)", "TOTAL (SQFT)", "HOW"])  # fmt: skip
+    for c in ws[1]:
+        c.font, c.fill = BOLD, HEAD_FILL
+    for a, ln, item in rows:
+        r = ws.max_row + 1
+        wall = f"{a.wall_length_m.normalize():f} x {a.wall_height_m.normalize():f}" if a.wall_length_m else None
+        ws.append([a.area_name, a.floor, item.name, ln.option, float(a.floor_sqm), float(a.cutout_sqm), float(a.periphery_m), float(a.upturn_m),
+                   float(a.sunk_m), wall, f"=E{r}-F{r}+G{r}*H{r}+G{r}*I{r}+{float(a.wall_length_m * a.wall_height_m)}", f"=K{r}*{F}", a.formula])  # fmt: skip
+    for col, width in zip("ABCDEFGHIJKLM", (22, 18, 20, 8, 12, 12, 14, 11, 9, 12, 12, 12, 70), strict=True):
+        ws.column_dimensions[col].width = width
+    return ws
+
+
 def working_xlsx(db: Session, w: RateWorking) -> tuple[bytes, str]:
     wb = Workbook()
     wb.remove(wb.active)
     add_working_sheet(wb, db, w)
+    if add_quantities_sheet(wb, db, w) is not None:  # made from a drawing: a sheet per system too
+        seen: set[str] = set()
+        for g in w.groups:
+            title = "".join(ch for ch in g.name if ch not in "[]:*?/\\")[:28] or f"Item {g.id}"
+            while title in seen:
+                title = f"{title[:25]}-{len(seen)}"
+            seen.add(title)
+            add_working_sheet(wb, db, w, title, only=[g])
     buf = BytesIO()
     wb.save(buf)
     stem = _label(db, w).split(" ")[0].replace("/", "-")

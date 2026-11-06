@@ -32,12 +32,23 @@ ROOM_WORDS = (
     "POOL", "RAFT", "PODIUM", "UTILITY",
 )  # fmt: skip
 # a note, never a room name: what to do to an area (and how deep), not what the area is
-NOTE_WORDS = re.compile(r"WATER\s*-?\s*PROOF|CHEMICAL|SUNK|RAISE|\bDEPTH\b|\bDEEP\b", re.I)
+NOTE_WORDS = re.compile(
+    r"WATER\s*-?\s*PROOF|CHEMICAL|SUNK|RAISE|\bDEPTH\b|\bDEEP\b|UP\s*-?\s*TURN", re.I
+)
+# a closed shape inside an area that is not floor: a shaft, a duct, a void, a stair or lift opening
+CUT_WORDS = re.compile(
+    r"SHAFT|DUCT|CUT\s*-?\s*OUT|VOID|OPENING|\bOTS\b|SKY\s*LIGHT|CUT\s*OUT", re.I
+)
+UPTURN = re.compile(
+    r"(\d{2,4})\s*MM\s*(?:HIGH\s*|HT\.?\s*)?UP\s*-?\s*TURN|UP\s*-?\s*TURN\s*(?:OF\s*|UPTO\s*|UP\s*TO\s*)?(\d{2,4})\s*MM",
+    re.I,
+)
 TITLE_WORDS = re.compile(
     r"PLAN|SCHEDULE|DETAIL|SECTION|ELEVATION|LEGEND|NOTE[S]?\b|LEVEL\b|SCALE|DRAWING", re.I
 )
 PLAN_TITLE = re.compile(
-    r"(GROUND|BASEMENT|STILT|TERRACE|PODIUM|\d+\s*(ST|ND|RD|TH)|TYPICAL|O\.?H\.?W\.?T|ROOF).*(FLOOR|PLAN|LEVEL)",
+    r"(GROUND|BASEMENT|STILT|TERRACE|PODIUM|\d+\s*(ST|ND|RD|TH)|FIRST|SECOND|THIRD|FOURTH|FIFTH|SIXTH|SEVENTH|EIGHTH|NINTH|TENTH"
+    r"|TYPICAL|O\.?H\.?W\.?T|ROOF).*(FLOOR|PLAN|LEVEL)",
     re.I,
 )
 # area type (by name in the area types master) from the words of a room name
@@ -311,6 +322,28 @@ def build_areas(db: Session, f: CadFile) -> list[CadArea]:
         made.append(a)
     db.flush()
     carry_over(db, f, made)
+    for a in made:
+        a.upturn_mm = upturn_of(a)
+        if not a.outline and f.unit_m:
+            poly = closed_around(
+                f,
+                a.x,
+                a.y,
+                a.label_area_sqm,
+                [(o.x, o.y) for o in made if o is not a and o.x is not None],
+            )
+            if poly:  # the drawing's own closed polyline round the label: the area's outline
+                trace(db, f, a, poly)
+                a.outline_source = "drawing"
+                if (
+                    a.change is None
+                    and a.previous_area_sqm is not None
+                    and abs(Decimal(a.traced_area_sqm) - Decimal(a.previous_area_sqm))
+                    > Decimal("0.01")
+                ):
+                    a.change = "resized"
+        elif a.outline:
+            cut_outs(f, a)
     summary["loose_notes"] = loose[:200]
     summary["candidates"] = len(made)
     summary["size_labels"] = sum(1 for c in cands if c["size"])
@@ -406,7 +439,8 @@ def carry_over(db: Session, f: CadFile, made: list[CadArea]) -> None:
             and abs(Decimal(a.label_area_sqm) - Decimal(o.label_area_sqm)) > Decimal("0.01")
         ):
             a.change = "resized"
-        elif o.outline and not a.outline and not o.label_area_sqm:
+        elif o.outline and not a.outline and not o.label_area_sqm and o.outline_source != "drawing":
+            # traced by hand: carried; one from the drawing's own polyline is read again from this revision
             a.outline, a.traced_area_sqm, a.traced_perimeter_m = (
                 o.outline,
                 o.traced_area_sqm,
@@ -454,9 +488,97 @@ def area_brief(a: CadArea) -> dict:
 # --- tracing -------------------------------------------------------------------------------------
 
 
+def upturn_of(a: CadArea) -> Decimal | None:
+    """The area's own upturn height from its label or notes ("300 MM UPTURN")."""
+    for text in [a.label_text or "", *(n.get("text", "") for n in a.notes or [])]:
+        m = UPTURN.search(text)
+        if m:
+            return Decimal(m.group(1) or m.group(2))
+    return None
+
+
+def _shapes(f: CadFile) -> list[list[list[float]]]:
+    """The drawing's closed polylines that can be an area or a cut-out (not a sheet frame: one
+    that holds a plan's title)."""
+    titles = plan_titles(f.texts or [])
+    out = []
+    for _layer, pts in (f.summary or {}).get("closed") or []:
+        if any(geometry.inside((tx, ty), pts) for tx, ty, _t in titles):
+            continue
+        out.append(pts)
+    return out
+
+
+OUTLINE_LABEL_GAP = 0.25  # a drawn outline more than 25 % off the label's size is not the room's
+
+
+def closed_around(
+    f: CadFile,
+    x: float | None,
+    y: float | None,
+    label_sqm=None,
+    others: list[tuple[float, float]] | None = None,
+) -> list[list[float]] | None:
+    """The smallest closed polyline holding the point (an area's label), if it is the room's own:
+    not one that holds another area's label (a flat, a building round the room), nor one far from
+    the label's size."""
+    if x is None or y is None:
+        return None
+    hits = [p for p in _shapes(f) if geometry.inside((x, y), p)]
+    if not hits:
+        return None
+    poly = min(hits, key=lambda p: geometry.area([tuple(q) for q in p]))
+    if any(geometry.inside(o, poly) for o in others or []):
+        return None
+    if label_sqm and f.unit_m:
+        sqm = geometry.area([tuple(q) for q in poly]) * float(f.unit_m) ** 2
+        if abs(sqm - float(label_sqm)) > float(label_sqm) * OUTLINE_LABEL_GAP:
+            return None
+    return poly
+
+
+def cut_outs(f: CadFile, a: CadArea) -> None:
+    """The closed shapes inside the area's outline that are not floor: a shaft, a duct, a void
+    (named so, or with no name in them). Their area comes off the floor, their edge adds to the
+    upturn (the membrane turns up round a shaft as round the outer edge)."""
+    if not a.outline or not f.unit_m:
+        a.holes, a.holes_sqm, a.holes_perimeter_m = [], None, None
+        return
+    outer = [tuple(p) for p in a.outline]
+    outer_area = geometry.area(outer)
+    texts = [(t[0], t[1], str(t[4])) for t in f.texts or [] if not (len(t) > 5 and t[5])]
+    holes = []
+    for pts in _shapes(f):
+        poly = [tuple(p) for p in pts]
+        ar = geometry.area(poly)
+        if ar >= outer_area * 0.98 or not all(geometry.inside(p, outer) for p in poly):
+            continue
+        named = [t for x, y, t in texts if geometry.inside((x, y), poly)]
+        if named and not any(CUT_WORDS.search(t) for t in named):
+            continue  # a room inside the area (a toilet in a flat): not a cut-out
+        holes.append(pts)
+    # a hole inside another hole is counted once (the outer one)
+    holes = [
+        h
+        for h in holes
+        if not any(
+            h is not o and all(geometry.inside(tuple(p), [tuple(q) for q in o]) for p in h)
+            for o in holes
+        )
+    ]
+    u = float(f.unit_m)
+    a.holes = holes
+    a.holes_sqm = (
+        dec(sum(geometry.area([tuple(p) for p in h]) for h in holes) * u * u) if holes else None
+    )
+    a.holes_perimeter_m = (
+        dec(sum(geometry.perimeter([tuple(p) for p in h]) for h in holes) * u) if holes else None
+    )
+
+
 def trace(db: Session, f: CadFile, a: CadArea, points: list[list[float]]) -> None:
     """The outline the user traced (drawing units): area, perimeter, and the side walls of a
-    sunken area (perimeter × depth) kept apart from the floor."""
+    sunken area (perimeter × depth) kept apart from the floor; the cut-outs inside it."""
     if not f.unit_m:
         raise ValueError("Set the drawing's unit first: it says unitless")
     pts = [(float(p[0]), float(p[1])) for p in points]
@@ -466,7 +588,9 @@ def trace(db: Session, f: CadFile, a: CadArea, points: list[list[float]]) -> Non
     a.outline = [[round(x, 3), round(y, 3)] for x, y in pts]
     a.traced_area_sqm = dec(geometry.area(pts) * u * u)
     a.traced_perimeter_m = dec(geometry.perimeter(pts) * u)
+    a.outline_source = "traced"
     side(a)
+    cut_outs(f, a)
 
 
 def side(a: CadArea) -> None:

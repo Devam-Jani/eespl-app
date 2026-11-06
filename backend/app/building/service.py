@@ -34,6 +34,13 @@ OPENING_LAYERS = re.compile(r"WIN|DOOR|GLASS|RCC|^COL|COLUMN|CURTAIN", re.I)
 COLUMN_LAYERS = re.compile(r"^COL(UMN)?\b|^COL[_ -]|COLUMN", re.I)
 NOT_DRAWN = re.compile(r"FUR|HATCH|ELE|ELEC|LIGHT|PHE|PLUMB|FFTG|FIRE|HVAC|DIM|TEXT|TITLE", re.I)
 WET = ("toilet", "kitchen", "balcony", "terrace", "oh_tank", "ug_tank", "lift_pit", "raft", "swimming_pool", "stp")
+# a site development plan: several buildings on one plot (their footprints, not their rooms)
+SITE_TITLE = re.compile(r"SITE\s*(DEVELOPMENT\s*)?PLAN|LAYOUT\s*PLAN|MASTER\s*PLAN|SITE\s*LAYOUT|PLOT\s*PLAN", re.I)
+BLOCK_WORDS = re.compile(r"\b(BLOCK|TOWER|BUILDING|BLDG|WING|BUNGALOW|VILLA|CLUB\s*HOUSE)\b\.?\s*[-:]?\s*([A-Z0-9]{0,3})", re.I)
+FLAT_WORDS = re.compile(r"PODIUM|ROAD|DRIVE\s*WAY|PARKING|GARDEN|LAWN|PAVING", re.I)
+STOREYS = re.compile(r"\b(?:[BS]\s*\+\s*)?G\s*\+\s*(\d{1,2})\b|\b(\d{1,2})\s*(?:STOREY|STORIED|STOREYED|FLOORS)\b", re.I)
+SITE_PLAN_NOTE = ("A site plan gives the buildings' footprints, not their rooms: each building is a block at its place, the podium "
+                  "and roads lie flat. The floor plans are needed for toilets, terraces and the other areas to quote.")  # fmt: skip
 
 
 # --- the current model ---------------------------------------------------------------------------
@@ -179,10 +186,55 @@ def draft(db: Session, site: Site, cad: CadFile) -> dict:
         if not p["floors"] and not re.search(r"TYPICAL|TERRACE|ROOF|O\.?H\.?W\.?T|BASEMENT", p["title"], re.I):
             continue
         types.append({"key": _slug(p["title"]), "name": p["title"].title(), "plan": p["title"], "title_xy": p["xy"], "region": p["region"],
-                      "floors": p["floors"], "outline": [], "columns": [], "columns_confirmed": False, "beams": [], "cores": [], "shift": [0, 0]})  # fmt: skip
+                      "floors": p["floors"], "outline": [], "columns": [], "columns_confirmed": False, "beams": [], "cores": [], "shift": [0, 0],
+                      "level_m": plan_level(cad.texts or [], p["region"])})  # fmt: skip
     floors = [{"level": level_of(f), "node_id": f.id, "name": f.name, "type": None, "height_m": None} for f in site_floors(db, site.id)]
     _assign_types(floors, types)
-    return {"settings": settings, "levels": levels, "floor_types": types, "floors": floors, "ifc_links": {}}
+    blocks = site_blocks(cad)
+    out = {"settings": settings, "levels": levels, "floor_types": types, "floors": floors, "ifc_links": {}}
+    if blocks:
+        out["blocks"], out["site_plan_note"] = blocks, SITE_PLAN_NOTE
+    return out
+
+
+def plan_level(texts: list[list], region: list[float] | None) -> float | None:
+    """The plan's own level: a level text inside its region ("FFL +3.000", "LVL 6.00", "+12.150")."""
+    if not region:
+        return None
+    x1, y1, x2, y2 = region
+    found = []
+    for t in texts:
+        if len(t) > 5 and t[5]:
+            continue
+        if x1 <= t[0] <= x2 and y1 <= t[1] <= y2 and detect.LEVEL_WORD.search(str(t[4])):
+            v = detect.level_m(str(t[4]))
+            if v is not None:
+                found.append(v)
+    return min(found) if found else None  # the floor's own level (a sill or a beam level is above it)
+
+
+def site_blocks(cad: CadFile) -> list[dict]:
+    """On a site plan: each closed outline with a building's name in it (BLOCK A, TOWER 2, G+7)
+    as a block with its storeys (G+7: 8; else unknown), and the podium and roads as flat shapes."""
+    from app.takeoff import geometry  # noqa: PLC0415
+
+    texts = [(t[0], t[1], str(t[4])) for t in cad.texts or [] if not (len(t) > 5 and t[5])]
+    if not any(SITE_TITLE.search(t) for _x, _y, t in texts):
+        return []
+    out = []
+    for _layer, pts in (cad.summary or {}).get("closed") or []:
+        inside = [t for x, y, t in texts if geometry.inside((x, y), pts)]
+        if any(SITE_TITLE.search(t) for t in inside):
+            continue  # the sheet's frame
+        name = next((t for t in inside if BLOCK_WORDS.search(t)), None)
+        if name:
+            m = next((STOREYS.search(t) for t in inside if STOREYS.search(t)), None)
+            floors = (int(m.group(1)) + 1 if m.group(1) else int(m.group(2))) if m else None
+            out.append({"kind": "block", "name": " ".join(name.split())[:60], "floors": floors, "outline": pts})
+        elif any(FLAT_WORDS.search(t) for t in inside):
+            out.append({"kind": "flat", "name": next(t for t in inside if FLAT_WORDS.search(t))[:60], "floors": 0, "outline": pts})
+    # a block inside a bigger block (a wing drawn in its tower) is kept as its own
+    return out
 
 
 def _assign_types(floors: list[dict], types: list[dict]) -> None:
@@ -249,7 +301,8 @@ def elevations(data: dict) -> list[dict]:
     """Each floor's finished level and its height (metres), and where the level came from:
       hand      typed on the building page (wins)
       section   the section's level for that storey: from the ground level up (the basements down)
-      default   no level for it: the plinth, then the floor height of the setting
+      drawing   the level text on the floor's own plan ("FFL +3.000")
+      default   no level for it: the plinth (0.0 when the plans give levels), then the floor height
     A section level that is far from where the floors before it put this floor is flagged."""
     s = {**DEFAULTS, **(data.get("settings") or {})}
     floors = sorted((f for f in data.get("floors", []) if f.get("level") is not None), key=lambda f: f["level"])
@@ -257,11 +310,18 @@ def elevations(data: dict) -> list[dict]:
     values, g = storey_levels(lv.get("values_m") or []) if lv.get("source") == "section" else ([], None)
     fh = float(s["floor_height_m"])
     known: dict[int, tuple[float, str]] = {}
+    # a plan's own level text: the lowest floor its title names is at that level
+    plan_levels: dict[int, float] = {}
+    for t in data.get("floor_types", []):
+        if t.get("level_m") is not None and t.get("floors"):
+            plan_levels.setdefault(min(t["floors"]), float(t["level_m"]))
     for f in floors:
         if f.get("elevation_m") is not None and f.get("level_by_hand"):
             known[f["level"]] = (float(f["elevation_m"]), "hand")
         elif g is not None and 0 <= g + f["level"] < len(values):
             known[f["level"]] = (values[g + f["level"]], "section")
+        elif f["level"] in plan_levels:
+            known[f["level"]] = (plan_levels[f["level"]], "drawing")
     out = []
     prev: dict | None = None
     for f in floors:
@@ -272,7 +332,9 @@ def elevations(data: dict) -> list[dict]:
             bottom, src = prev["elevation_m"] + prev["height_m"], "default"
         else:  # the lowest floor without a level: the plinth, the floors below ground under it
             below = sum(1 for x in floors if x["level"] < 0 and x["level"] >= lvl) if lvl < 0 else 0
-            bottom, src = float(s["plinth_m"]) - below * fh, "default"
+            # the plans give levels from ±0 (FFL): the ground floor is at 0, not on the plinth
+            plinth = 0.0 if plan_levels and not values else float(s["plinth_m"])
+            bottom, src = plinth - below * fh, "default"
         nxt = next((x for x in floors if x["level"] > lvl), None)
         if f.get("height_m"):
             h = float(f["height_m"])
@@ -285,6 +347,8 @@ def elevations(data: dict) -> list[dict]:
             flag = "the section's level does not follow the floor below: check it"
         if src == "default" and values:
             flag = "no level on the section for this floor: the default height is used"
+        elif src == "default" and not f.get("height_m"):
+            flag = f"no level on the drawing for this floor: {h:.2f} m is used, type its height if it differs"
         if h < 2.0 or h > 8.0:
             flag = f"a storey of {h:.2f} m: check the levels"
         row = {**f, "elevation_m": round(bottom, 3), "height_m": round(h, 3), "level_source": src, "level_flag": flag}
@@ -311,7 +375,7 @@ def _to_m(poly: list[list[float]], shift: list[float], unit_m: float, origin: tu
     return [[round((x + shift[0] - origin[0]) * unit_m, 3), round((y + shift[1] - origin[1]) * unit_m, 3)] for x, y in poly]
 
 
-BUILT_VERSION = 1  # raise it when what build() makes changes: older models are built again
+BUILT_VERSION = 2  # raise it when what build() makes changes: older models are built again (2: site plan blocks)
 
 
 def build(db: Session, m: BuildingModel, cad: CadFile | None) -> dict:
@@ -323,6 +387,10 @@ def build(db: Session, m: BuildingModel, cad: CadFile | None) -> dict:
     s = {**DEFAULTS, **(data.get("settings") or {})}
     types = [t for t in data.get("floor_types", []) if t.get("outline")]
     if not types:
+        blocks = data.get("blocks") or []
+        if blocks:  # a site plan only: the blocks from their common corner
+            origin = _corner([p for b in blocks for p in b["outline"]])
+            return {"version": BUILT_VERSION, "types": {}, "origin": list(origin), "ref": None, "blocks": _blocks_m(blocks, unit, origin, s)}
         return {"version": BUILT_VERSION, "types": {}, "origin": [0, 0], "ref": None}
     ref = max(types, key=lambda t: len(t.get("floors") or []))
     ox, oy = _corner([[x + ref["shift"][0], y + ref["shift"][1]] for x, y in ref["outline"]])
@@ -346,7 +414,15 @@ def build(db: Session, m: BuildingModel, cad: CadFile | None) -> dict:
             beams = beams_on_column_lines(cols)
         out_types[t["key"]] = {"name": t["name"], "outline": outline_m, "area_sqm": round(detect.area(outline_m), 2), "walls": walls[:6000], "columns": cols, "beams": beams,
                                "cores": [{"kind": c.get("kind", "stair"), "outline": _to_m(c.get("outline") or [], sh, unit, origin), "risers": c.get("risers")} for c in t.get("cores") or []]}  # fmt: skip
-    return {"version": BUILT_VERSION, "types": out_types, "origin": list(origin), "ref": ref["key"]}
+    return {"version": BUILT_VERSION, "types": out_types, "origin": list(origin), "ref": ref["key"], "blocks": _blocks_m(data.get("blocks") or [], unit, origin, s)}
+
+
+def _blocks_m(blocks: list[dict], unit: float, origin: tuple[float, float], s: dict) -> list[dict]:
+    """The site plan's blocks in metres: each block's height its storeys × the floor height (one
+    storey when the plan does not say), a flat shape 0.15 m thick."""
+    fh = float(s.get("floor_height_m") or DEFAULTS["floor_height_m"])
+    return [{"kind": b["kind"], "name": b["name"], "floors": b.get("floors"), "outline": _to_m(b["outline"], [0, 0], unit, origin),
+             "height_m": round((b.get("floors") or 1) * fh, 2) if b["kind"] == "block" else 0.15} for b in blocks]  # fmt: skip
 
 
 def payload(db: Session, site_id: int, client: bool = False) -> dict | None:
@@ -369,6 +445,11 @@ def payload(db: Session, site_id: int, client: bool = False) -> dict | None:
         ifc = {"url": f"/api/sites/{site_id}/building/ifc", "filename": f.get("filename"), "rev_no": f.get("rev_no"), "size_mb": f.get("size_mb"), "max_mb": s["ifc_max_mb"]}
         if client:
             ifc["url"] = f"/api/portal/sites/{site_id}/building/ifc"
+    if not types and (data.get("blocks") or []):  # a site plan only: its blocks, said plainly
+        built = m.built if m.built and m.built.get("version") == BUILT_VERSION and m.built.get("blocks") else build(db, m, cad)
+        return {"version": m.version, "schematic": False, "settings": {k: s[k] for k in ("floor_height_m", "slab_m", "plinth_m", "riser_m", "bloom", "ifc")},
+                "levels": {"source": "default", "note": None}, "floors": [], "types": {}, "rooms": [], "ifc_links": {}, "ifc": ifc,
+                "blocks": built.get("blocks") or [], "site_plan_note": data.get("site_plan_note")}  # fmt: skip
     if not types:
         if ifc is None:
             return None
@@ -391,7 +472,8 @@ def payload(db: Session, site_id: int, client: bool = False) -> dict | None:
     out = {"version": m.version, "schematic": False, "settings": {k: s[k] for k in ("floor_height_m", "slab_m", "plinth_m", "riser_m", "bloom", "ifc")},
            "levels": {"source": (data.get("levels") or {}).get("source", "default"), "note": None if client else (data.get("levels") or {}).get("note")},  # the section line is for staff
            "floors": [{k: f.get(k) for k in ("level", "node_id", "name", "type", "elevation_m", "height_m")} for f in floors],
-           "types": out_types, "rooms": rooms, "ifc_links": data.get("ifc_links") or {}, "ifc": ifc}  # fmt: skip
+           "types": out_types, "rooms": rooms, "ifc_links": data.get("ifc_links") or {}, "ifc": ifc,
+           "blocks": built.get("blocks") or [], "site_plan_note": data.get("site_plan_note")}  # fmt: skip
     if not client:
         out["source"] = {"cad_file_id": m.cad_file_id, "note": m.note, "changes": m.changes, "by": m.created_by_name, "at": m.created_at.isoformat() if m.created_at else None}
     return out
@@ -427,6 +509,7 @@ def _rooms(db: Session, site_id: int, cad: CadFile, data: dict, unit: float, ori
         return (hit.get("shift") if hit else None) or shift_by_plan.get(a.plan) or [0, 0]
 
     types_by_id = {t.id: t for t in db.scalars(select(AreaType))}
+    s_floor_height = float({**DEFAULTS, **(data.get("settings") or {})}["floor_height_m"])
     out = []
     for a in db.scalars(select(CadArea).where(CadArea.cad_file_id == cad.id, CadArea.node_id.is_not(None), CadArea.status.in_(("mapped", "accepted")))):
         if not a.outline:
@@ -436,7 +519,7 @@ def _rooms(db: Session, site_id: int, cad: CadFile, data: dict, unit: float, ori
         if node is None:
             continue
         if level is None or level not in by_level:
-            if node.kind not in ("terrace", "oh_tank", "ug_tank", "lift_pit", "raft"):
+            if node.kind not in ("terrace", "oh_tank", "ug_tank", "lift_pit", "raft", "podium", "sump", "retaining_wall", "basement"):
                 continue
             level = max(by_level) if node.kind in ("terrace", "oh_tank") and by_level else min(by_level, default=0)
         sh = shift_for(a)
@@ -450,6 +533,9 @@ def _rooms(db: Session, site_id: int, cad: CadFile, data: dict, unit: float, ori
             band = float(types_by_id[a.area_type_id].default_upturn_mm) / 1000
         elif node.kind in ("toilet", "kitchen", "balcony", "terrace"):
             band = 0.3
+        at = types_by_id.get(a.area_type_id) if a.area_type_id else None
+        if re.search(r"RETAINING|BASEMENT\s*WALL", f"{at.name if at else ''} {a.name}", re.I):
+            band = float((by_level.get(level) or {}).get("height_m") or s_floor_height)  # the wall, full height
         name = node.name if node else a.name
         out.append({"node_id": a.node_id, "key": a.key, "level": level, "kind": node.kind, "name": name, "label": a.name,
                     "outline": _to_m(a.outline, sh, unit, origin), "area_sqm": float(a.traced_area_sqm or a.label_area_sqm or 0) or None,
