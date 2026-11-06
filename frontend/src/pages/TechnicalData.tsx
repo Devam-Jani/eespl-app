@@ -45,6 +45,7 @@ type Doc = {
   duplicate_of_id: number | null;
   replaces_id: number | null;
   imported_at: string;
+  group?: number | null;
   fact_count: number;
   kinds: string[];
   facts?: Fact[];
@@ -271,18 +272,33 @@ function DocWindow({ id, canEdit, onClose }: { id: number; canEdit: boolean; onC
   );
 }
 
+/** A group's sheets one under the other (where its first sheet is), the rest as listed. */
+function ordered(docs: Doc[]): Doc[] {
+  const out: Doc[] = [];
+  const done = new Set<number>();
+  for (const d of docs) {
+    if (done.has(d.id)) continue;
+    const members = d.group ? docs.filter((x) => x.group === d.group) : [d];
+    members.forEach((m) => done.add(m.id));
+    out.push(...members);
+  }
+  return out;
+}
+
 function ImportWindow({ resume, onClose, onDone }: { resume: number | null; onClose: () => void; onDone: () => void }) {
   const [view, setView] = useState<ImportView | null>(null);
   const [progress, setProgress] = useState<{ done: number; all: number } | null>(null);
   const [create, setCreate] = useState<Set<number>>(new Set());
   const [replace, setReplace] = useState<Set<number>>(new Set());
+  // a group of near-duplicates (by its first sheet) -> the sheet to keep; none picked: each kept
+  const [keep, setKeep] = useState<Record<number, number>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Record<string, number> | null>(null);
   const load = useCallback(async (id: number) => {
     const v = await api<ImportView>(`/api/spec/tds/imports/${id}`);
     setView(v);
-    setCreate(new Set(v.docs.filter((d) => d.status === "preview" && d.match === "create").map((d) => d.id)));
+    setCreate(new Set()); // a new product only where ticked: the boxes start unticked
   }, []);
   useEffect(() => {
     if (resume) void load(resume).catch((e) => setError(errorText(e)));
@@ -314,7 +330,7 @@ function ImportWindow({ resume, onClose, onDone }: { resume: number | null; onCl
     if (!view) return;
     setBusy(true);
     try {
-      setResult(await api<Record<string, number>>(`/api/spec/tds/imports/${view.id}/save`, { method: "POST", json: { create: [...create], replace: [...replace] } }));
+      setResult(await api<Record<string, number>>(`/api/spec/tds/imports/${view.id}/save`, { method: "POST", json: { create: [...create], replace: [...replace], keep } }));
       onDone();
     } catch (e) {
       setError(errorText(e));
@@ -345,7 +361,8 @@ function ImportWindow({ resume, onClose, onDone }: { resume: number | null; onCl
       {error && <div className="alert alert-error">{error}</div>}
       {result ? (
         <div className="alert alert-ok">
-          Saved {result.saved} sheets, {result.products_created} new products, {result.replaced} replaced{result.kept_older ? `, ${result.kept_older} older sheets kept` : ""}.
+          Saved {result.saved} sheets, {result.products_created} new products, {result.replaced} replaced{result.merged ? `, ${result.merged} near-duplicates merged` : ""}
+          {result.kept_older ? `, ${result.kept_older} older sheets kept` : ""}.
         </div>
       ) : (
         <div className="form-actions" style={{ justifyContent: "flex-start" }}>
@@ -374,8 +391,9 @@ function ImportWindow({ resume, onClose, onDone }: { resume: number | null; onCl
         <>
           <p>
             {String(n.files)} files: <b>{String(n.products_read)}</b> sheets read ({String(n.with_facts)} with facts, {String(n.needs_reading)} scanned "needs reading",{" "}
-            {String(n.read_errors)} unreadable), {String(n.duplicates)} duplicates merged, {String(n.skipped)} safety sheets left out. {String(n.matched)} matched to the product
-            master, {String(n.to_create)} not in it, {String(n.replaces_saved)} replace a saved sheet. Facts: {Object.entries(facts).map(([k, v]) => `${k} ${v}`).join(", ") || "none"}.
+            {String(n.read_errors)} unreadable), {String(n.duplicates)} duplicates merged, {String(n.skipped)} safety sheets left out. <b>{String(n.matched)}</b> matched to the product
+            master, <b>{String(n.grouped)}</b> groups of near-duplicates ({String(n.in_groups)} sheets: pick the one to keep), <b>{String(n.new)}</b> new (tick those to create),{" "}
+            {String(n.replaces_saved)} replace a saved sheet. Facts: {Object.entries(facts).map(([k, v]) => `${k} ${v}`).join(", ") || "none"}.
           </p>
           <div className="table-wrap" style={{ maxHeight: 360, overflow: "auto" }}>
             <table className="table small">
@@ -389,16 +407,33 @@ function ImportWindow({ resume, onClose, onDone }: { resume: number | null; onCl
                 </tr>
               </thead>
               <tbody>
-                {view.docs.map((d) => (
-                  <tr key={d.id} className={d.status !== "preview" ? "muted" : ""}>
+                {ordered(view.docs).map((d) => (
+                  <tr key={d.id} className={`${d.status !== "preview" ? "muted" : ""}${d.group ? " tds-group" : ""}`}>
                     <td>{d.brand ?? "—"}</td>
-                    <td title={d.rel_path ?? d.file_name}>{d.product_name}</td>
+                    <td title={d.rel_path ?? d.file_name}>
+                      {d.product_name}
+                      {d.group && d.status === "preview" && !result && (
+                        <div className="small">
+                          <label>
+                            <input
+                              type="radio"
+                              name={`keep-${d.group}`}
+                              checked={keep[d.group] === d.id}
+                              onChange={() => setKeep({ ...keep, [d.group as number]: d.id })}
+                            />{" "}
+                            keep this one (the group's others merged into it)
+                          </label>
+                        </div>
+                      )}
+                    </td>
                     <td>{d.fact_count ? `${d.fact_count} (${d.kinds.join(", ")})` : "—"}</td>
                     <td>
                       {d.status !== "preview" ? (
                         "—"
                       ) : d.match === "matched" ? (
                         d.product
+                      ) : d.group && keep[d.group] !== undefined && keep[d.group] !== d.id ? (
+                        <span className="muted">merged</span>
                       ) : (
                         <label>
                           <input type="checkbox" checked={create.has(d.id)} disabled={!!result} onChange={(e) => setCreate(toggle(create, d.id, e.target.checked))} /> create the product
@@ -421,6 +456,11 @@ function ImportWindow({ resume, onClose, onDone }: { resume: number | null; onCl
           </div>
           {!result && view.status === "preview" && (
             <div className="form-actions">
+              {Object.keys(keep).length > 0 && (
+                <Button variant="ghost" disabled={busy} onClick={() => setKeep({})}>
+                  Keep each sheet of every group
+                </Button>
+              )}
               <Button variant="ghost" disabled={busy} onClick={() => void drop()}>
                 Drop this import
               </Button>

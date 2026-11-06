@@ -9,7 +9,7 @@ import { api } from "../api";
 import { errorText, inr, num } from "../format";
 import { Modal } from "../ui/Overlay";
 import { Button, Card, Field, buttonClass } from "../ui/components";
-import { useVocab } from "./ConsumptionMaster";
+import { RenameBrand, useVocab } from "./ConsumptionMaster";
 
 type Row = {
   component_id: number;
@@ -196,6 +196,7 @@ export default function ConsumptionItem() {
   const [addTo, setAddTo] = useState<number | null>(null);
   const [mix, setMix] = useState<Record<number, { id: string; t: string }>>({});
   const [areasReason, setAreasReason] = useState("");
+  const [renaming, setRenaming] = useState<Option | null>(null);
   const load = useCallback(() => {
     api<Item>(`/api/spec/master/${id}`).then(setItem, (e) => setError(errorText(e)));
   }, [id]);
@@ -376,6 +377,9 @@ export default function ConsumptionItem() {
               <Button size="small" onClick={() => setCopy({ from: o, brand: "", swaps: {} })}>
                 Copy to another brand
               </Button>
+              <Button size="small" onClick={() => setRenaming(o)}>
+                Rename brand
+              </Button>
               <Field label="Formulation (mix design)">
                 <select value={mix[o.id]?.id ?? (o.mix_design_id ? String(o.mix_design_id) : "")} onChange={(e) => setMix({ ...mix, [o.id as number]: { id: e.target.value, t: mix[o.id as number]?.t ?? o.mix_thickness_mm ?? "" } })}>
                   <option value="">None</option>
@@ -463,6 +467,18 @@ export default function ConsumptionItem() {
       </Card>
 
       {editRow && <EditRow item={item} row={editRow} onClose={() => setEditRow(null)} onSaved={() => { setEditRow(null); load(); }} />}
+      {renaming && renaming.id !== null && (
+        <RenameBrand
+          systemId={item.id}
+          optionId={renaming.id}
+          brand={renaming.brand ?? ""}
+          onClose={() => setRenaming(null)}
+          onDone={() => {
+            setRenaming(null);
+            load();
+          }}
+        />
+      )}
       {priceRow && <PriceWindow row={priceRow} onClose={() => setPriceRow(null)} onSaved={() => { setPriceRow(null); load(); }} />}
       {copy && (
         <Modal title={`Copy ${copy.from.brand ?? "the recipe"} to another brand`} onClose={() => setCopy(null)}>

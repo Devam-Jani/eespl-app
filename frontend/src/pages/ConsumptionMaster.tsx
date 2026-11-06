@@ -31,6 +31,42 @@ export function useVocab(): Vocab | null {
 
 export const UNITS = ["sqm", "sqft", "rmt", "rft", "nos"];
 
+type Generic = { system_id: number; system: string; option_id: number; brand: string };
+
+/** Rename a brand option ("Standard (2)" is no brand); the reason is kept in the history. */
+export function RenameBrand({ systemId, optionId, brand, onClose, onDone }: { systemId: number; optionId: number; brand: string; onClose: () => void; onDone: () => void }) {
+  const [name, setName] = useState("");
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const save = async () => {
+    try {
+      await api(`/api/spec/master/${systemId}/options/${optionId}`, { method: "PATCH", json: { brand: name, reason: reason || null } });
+      onDone();
+    } catch (e) {
+      setError(errorText(e));
+    }
+  };
+  return (
+    <Modal title={`Rename the brand option ${brand}`} onClose={onClose}>
+      {error && <div className="alert alert-error">{error}</div>}
+      <Field label="The brand (the maker's name)">
+        <input value={name} onChange={(e) => setName(e.target.value)} />
+      </Field>
+      <Field label="Why (kept with the change)">
+        <input value={reason} onChange={(e) => setReason(e.target.value)} />
+      </Field>
+      <div className="form-actions">
+        <Button variant="ghost" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button variant="primary" disabled={!name.trim()} onClick={() => void save()}>
+          Rename
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
 function AddItem({ vocab, onClose }: { vocab: Vocab | null; onClose: () => void }) {
   const nav = useNavigate();
   const [form, setForm] = useState({ name: "", unit: "sqm", spec_type: "", areas: [] as string[] });
@@ -95,6 +131,8 @@ export default function ConsumptionMaster() {
   const vocab = useVocab();
   const [items, setItems] = useState<Item[] | null>(null);
   const [canEdit, setCanEdit] = useState(false);
+  const [generic, setGeneric] = useState<Generic[]>([]);
+  const [renaming, setRenaming] = useState<Generic | null>(null);
   const [q, setQ] = useState("");
   const [filters, setFilters] = useState({ q: "", area: "" });
   const [adding, setAdding] = useState(false);
@@ -103,10 +141,11 @@ export default function ConsumptionMaster() {
     const p = new URLSearchParams();
     if (filters.q) p.set("q", filters.q);
     if (filters.area) p.set("area", filters.area);
-    api<{ items: Item[]; can_edit: boolean }>(`/api/spec/master?${p.toString()}`).then(
+    api<{ items: Item[]; can_edit: boolean; generic_brands: Generic[] }>(`/api/spec/master?${p.toString()}`).then(
       (r) => {
         setItems(r.items);
         setCanEdit(r.can_edit);
+        setGeneric(r.generic_brands ?? []);
       },
       (e) => setError(errorText(e)),
     );
@@ -148,6 +187,32 @@ export default function ConsumptionMaster() {
         </div>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
+      {generic.length > 0 && (
+        <Card title={`Brand options with no brand's name (${generic.length})`}>
+          <p className="small muted">The company BOM named these options "Standard" or "SC": give each the maker's name.</p>
+          <div className="table-wrap">
+            <table className="table small">
+              <tbody>
+                {generic.map((g) => (
+                  <tr key={g.option_id}>
+                    <td>
+                      <Link to={`/consumption-master/${g.system_id}`}>{g.system}</Link>
+                    </td>
+                    <td>{g.brand}</td>
+                    <td>
+                      {canEdit && (
+                        <Button size="small" onClick={() => setRenaming(g)}>
+                          Rename brand
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
       <Card>
         <div className="table-wrap">
           <table className="table">
@@ -191,6 +256,18 @@ export default function ConsumptionMaster() {
         </div>
       </Card>
       {adding && <AddItem vocab={vocab} onClose={() => setAdding(false)} />}
+      {renaming && (
+        <RenameBrand
+          systemId={renaming.system_id}
+          optionId={renaming.option_id}
+          brand={renaming.brand}
+          onClose={() => setRenaming(null)}
+          onDone={() => {
+            setRenaming(null);
+            load();
+          }}
+        />
+      )}
     </>
   );
 }

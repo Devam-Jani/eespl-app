@@ -40,6 +40,7 @@ type Option = {
 };
 type Options = { options: Option[]; gaps: string[]; considered: number; can_pick: boolean };
 type SubRow = { id: number; product: string; unit: string; step: string; consumption: string | null; default_consumption: string | null; source: string | null; wastage_percent: string; qty: string | null; changed: boolean };
+type RateChange = { old: string | null; new: string; unit: string; applied: boolean; ask: boolean };
 type Subs = { group_id: number; unit: string; line_qty: string | null; qty_in_unit: string | null; rows: SubRow[]; rate?: string | null; note: string | null } | null;
 
 const MARK: Record<Check["state"], string> = { yes: "✓", no: "✗", not_stated: "?", approval: "!", equivalent: "≈" };
@@ -104,6 +105,7 @@ export default function LineSpec({ kind, lineId, canEdit, onClose, onPicked }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [typed, setTyped] = useState<Record<number, string>>({});
+  const [note, setNote] = useState<string | null>(null);
 
   const loadOptions = useCallback(() => {
     api<Options>(`${base}/options`).then(setOpts, (e) => setError(errorText(e)));
@@ -132,11 +134,21 @@ export default function LineSpec({ kind, lineId, canEdit, onClose, onPicked }: {
       setAdding(false);
       loadOptions();
     });
+  // a line with no rate gets the picked option's selling rate at once; one with a rate is asked
+  // first, old against new ("Rates to the lines" on the rate working stays as it is)
   const pick = (o: Option, rank: number) =>
     run(async () => {
-      const r = await api<Points & { sub_lines: Subs }>(`${base}/pick`, { method: "POST", json: { system_id: o.system_id, option_id: o.option_id, rank } });
+      const r = await api<Points & { sub_lines: Subs; rate: RateChange | null }>(`${base}/pick`, { method: "POST", json: { system_id: o.system_id, option_id: o.option_id, rank } });
       setPoints(r);
       if (rank === 1) setSubs(r.sub_lines);
+      if (r.rate?.applied) setNote(`The line's rate is now ${inr(r.rate.new)} per ${r.rate.unit}.`);
+      else if (r.rate?.ask) {
+        const yes = window.confirm(`The line's rate is ${inr(r.rate.old)} per ${r.rate.unit}; the picked option gives ${inr(r.rate.new)}. Change the line's rate to ${inr(r.rate.new)}?`);
+        if (yes) {
+          await api(`${base}/apply-rate`, { method: "POST" });
+          setNote(`The line's rate changed from ${inr(r.rate.old)} to ${inr(r.rate.new)} per ${r.rate.unit}.`);
+        } else setNote(`The line keeps its rate of ${inr(r.rate.old)}; the rate working has the picked option.`);
+      } else setNote(null);
       onPicked?.();
     });
   const setSub = (id: number, consumption: string | null) =>
@@ -305,6 +317,7 @@ export default function LineSpec({ kind, lineId, canEdit, onClose, onPicked }: {
         </div>
       )}
 
+      {note && <div className="alert alert-ok small top-gap">{note}</div>}
       {subs && (
         <>
           <h3 className="section-title top-gap">The picked option's steps</h3>

@@ -55,20 +55,60 @@ def product_key(brand: str | None, name: str) -> str:
     return f"{(brand or '').strip().lower()}|{' '.join(sorted(_words(name, brand)))}"
 
 
+PACK = re.compile(r"\b\d+(?:\.\d+)?\s*(?:kgs?|ltrs?|lit(?:re)?s?|l|gms?|ml)\b", re.I)
+GRADE = re.compile(r"\bgr(?:ade)?\.?\s*[a-z0-9]{1,3}\b", re.I)
+VERSION = re.compile(
+    r"\b(?:new|latest|revised|updated|final|copy|edited|tds|pds|msds|rev\.?\s*\d*|r\d+|v\d+|india)\b",
+    re.I,
+)
+
+
+def norm_key(brand: str | None, name: str) -> str:
+    """A sheet's or product's name for matching: the brand's words (and words starting with them:
+    "Fixitv"), pack sizes ("20 kg"), "new", versions and grade suffixes, punctuation and spaces
+    left out. "Dr. Fixit Fast-Flex Ultra 20 kg (new)" -> "fastflexultra"."""
+    t = PACK.sub(" ", name or "")
+    t = GRADE.sub(" ", t)
+    t = VERSION.sub(" ", t)
+    words = re.sub(r"[^a-z0-9 ]", " ", t.lower()).split()
+    brand_words = {
+        w for w in re.sub(r"[^a-z0-9 ]", " ", (brand or "").lower()).split() if len(w) > 1
+    }
+    kept = [
+        w
+        for w in words
+        if not any(w == b or (len(b) >= 4 and w.startswith(b)) for b in brand_words)
+    ]
+    return "".join(kept)
+
+
+def _brand_key(brand: str | None) -> str:
+    return (re.sub(r"[^a-z0-9 ]", " ", (brand or "").lower()).split() or [""])[0]
+
+
 def match_product(
     db: Session, brand: str | None, name: str, products: list[Product] | None = None
 ) -> tuple[Product | None, float]:
-    """The product master's product this sheet is for: the same words (the brand's own left
-    out), or most of them with the same brand. (product, score)"""
+    """The product master's product this sheet is for: the same brand and normalised name (pack,
+    "new", grade and punctuation left out) first; else most of the same words with the same
+    brand. (product, score)"""
+    pool = (
+        list(products)
+        if products is not None
+        else list(db.scalars(select(Product).where(Product.is_active.is_(True))))
+    )
+    key = norm_key(brand, name)
+    if key:
+        for p in pool:
+            if brand and p.brand and _brand_key(p.brand) != _brand_key(brand):
+                continue
+            if any(norm_key(p.brand or brand, n) == key for n in [p.name, *(p.aliases or [])]):
+                return p, 1.0
     want = _words(name, brand)
     if not want:
         return None, 0.0
     best, score = None, 0.0
-    for p in (
-        products
-        if products is not None
-        else db.scalars(select(Product).where(Product.is_active.is_(True)))
-    ):
+    for p in pool:
         names = [p.name, *(p.aliases or [])]
         same_brand = bool(
             brand
@@ -182,10 +222,72 @@ def stage(
     return doc
 
 
-def save(db: Session, imp: TdsImport, create: set[int], replace: set[int], user_id=None) -> dict:
+GROUP_MIN = 6  # a name this short inside another is no sign of the same product
+
+
+def groups(docs: list[TdsDoc]) -> list[list[int]]:
+    """Near-duplicates among an import's sheets: the same brand and a normalised name equal to, or
+    inside, another's ("Fast Flex", "Fastflex Ultra", "Fixitv Fast Flex"). Each group (two sheets or
+    more) is shown as one, with the sheet to keep for the person to pick."""
+    items = [
+        (d.id, _brand_key(d.brand), norm_key(d.brand, d.product_name))
+        for d in docs
+        if d.status == "preview"
+    ]
+    parent = {i: i for i, _b, _k in items}
+
+    def root(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for n, (a, ba, ka) in enumerate(items):
+        for b, bb, kb in items[n + 1 :]:
+            if ba != bb or not ka or not kb:
+                continue
+            short, long_ = sorted((ka, kb), key=len)
+            if short == long_ or (len(short) >= GROUP_MIN and short in long_):
+                parent[root(b)] = root(a)
+    out: dict[int, list[int]] = {}
+    for i, _b, _k in items:
+        out.setdefault(root(i), []).append(i)
+    return [sorted(g) for g in out.values() if len(g) > 1]
+
+
+def save(
+    db: Session,
+    imp: TdsImport,
+    create: set[int],
+    replace: set[int],
+    user_id=None,
+    keep: dict[int, int] | None = None,
+) -> dict:
     """Keep the preview: each sheet becomes its product's (the product master's, or a new one
-    where asked); one that would replace a saved sheet only where confirmed."""
-    made = kept = replaced = held = 0
+    where asked); one that would replace a saved sheet only where confirmed. `keep`: for a group of
+    near-duplicates (by its first sheet), the sheet the person picked; the others are merged into it.
+    A group with no pick keeps each sheet."""
+    made = kept = replaced = held = merged = 0
+    docs = {
+        d.id: d
+        for d in db.scalars(
+            select(TdsDoc).where(TdsDoc.import_id == imp.id, TdsDoc.status == "preview")
+        )
+    }
+    for g in groups(list(docs.values())):
+        chosen = (keep or {}).get(g[0])
+        if chosen not in g:
+            continue
+        for i in g:
+            if i != chosen:
+                docs[i].status, docs[i].duplicate_of_id = "duplicate", chosen
+                merged += 1
+        if (
+            docs[chosen].product_id is None
+        ):  # a sheet of the group matched: the kept one is that product's
+            docs[chosen].product_id = next(
+                (docs[i].product_id for i in g if docs[i].product_id), None
+            )
     for doc in db.scalars(
         select(TdsDoc)
         .where(TdsDoc.import_id == imp.id, TdsDoc.status == "preview")
@@ -215,7 +317,13 @@ def save(db: Session, imp: TdsImport, create: set[int], replace: set[int], user_
             f.product_id = doc.product_id
     imp.status, imp.saved_at = "saved", datetime.now(UTC)
     db.flush()
-    return {"saved": kept, "products_created": made, "replaced": replaced, "kept_older": held}
+    return {
+        "saved": kept,
+        "products_created": made,
+        "replaced": replaced,
+        "kept_older": held,
+        "merged": merged,
+    }
 
 
 def new_product(db: Session, doc: TdsDoc, user_id=None) -> Product:
@@ -282,7 +390,21 @@ def counts(db: Session, imp: TdsImport) -> dict:
         "skipped": len([d for d in docs if d.status == "skipped"]),
         "matched": len([d for d in read if d.match == "matched"]),
         "to_create": len([d for d in read if d.match == "create"]),
+        **_grouped(read),
         "replaces_saved": len([d for d in read if d.replaces_id]),
         "brands": len({d.brand for d in read if d.brand}),
         "facts": by_kind,
     }
+
+
+def _grouped(read: list[TdsDoc]) -> dict:
+    """Groups of near-duplicates, and the products that would be new: a single sheet or a whole
+    group with no product match counts once."""
+    gs = groups(read)
+    in_group = {i for g in gs for i in g}
+    by_id = {d.id: d for d in read}
+    singles = [
+        d for d in read if d.status == "preview" and d.id not in in_group and d.product_id is None
+    ]
+    new_groups = [g for g in gs if not any(by_id[i].product_id for i in g)]
+    return {"grouped": len(gs), "in_groups": len(in_group), "new": len(singles) + len(new_groups)}

@@ -60,7 +60,37 @@ def points(
         unit,
         line.qty,
         brands if brands is not None else keypoints.known_brands(db),
+        context_of(db, kind, line),
     ), False
+
+
+def context_of(db: Session, kind: str, line) -> list[str | None]:
+    """Where the line's area may be when the line does not say it: its section heading (a
+    quotation line: its item's name), then the nearest heading above it (a line of the section
+    with no unit and no qty)."""
+    if kind == "boq":
+        from app.tenders.models import BoqLine, BoqSection  # noqa: PLC0415
+
+        section = db.get(BoqSection, line.section_id) if line.section_id else None
+        above = db.scalar(
+            select(BoqLine.description)
+            .where(
+                BoqLine.tender_id == line.tender_id,
+                BoqLine.section_id.is_(line.section_id)
+                if line.section_id is None
+                else BoqLine.section_id == line.section_id,
+                BoqLine.sort_order < line.sort_order,
+                BoqLine.unit.is_(None),
+                BoqLine.qty.is_(None),
+            )
+            .order_by(BoqLine.sort_order.desc())
+            .limit(1)
+        )
+        return [section.title if section else None, above]
+    from app.quotations.models import QuotationItem  # noqa: PLC0415
+
+    item = db.get(QuotationItem, line.item_id)
+    return [item.name if item else None, item.budget_title if item else None]
 
 
 def stored(db: Session, kind: str, line_id: int) -> SpecPoints | None:
@@ -630,6 +660,56 @@ def pick(
         line.system_id, line.system_option_id = s.id, option.id if option else None
     db.flush()
     return p
+
+
+def rate_change(db: Session, kind: str, line) -> dict | None:
+    """What the picked option gives the line: {old, new, unit}; None when no rate comes of it (a
+    main item per nos, a line in another unit, a price missing)."""
+    first = next((p for p in picks_of(db, kind, line.id) if p.rank == 1), None)
+    g = db.get(RateGroup, first.group_id) if first and first.group_id else None
+    if g is None or g.rate_sqm is None:
+        return None
+    gl = next(
+        (
+            x
+            for x in g.lines
+            if (x.boq_line_id if kind == "boq" else x.quotation_line_id) == line.id
+        ),
+        None,
+    )
+    if gl is None:
+        return None
+    w = db.get(RateWorking, g.working_id)
+    _ln, unit, rate, _cost = working.line_rate(db, g, gl, working.step_shares(db, w, g))
+    if rate is None:
+        return None
+    return {"old": line.rate, "new": rate, "unit": unit, "group_id": g.id}
+
+
+def apply_rate(db: Session, kind: str, line) -> bool:
+    """The picked option's selling rate onto the line (a sent quotation keeps its prices: refused
+    as by "Rates to the lines")."""
+    ch = rate_change(db, kind, line)
+    if ch is None:
+        return False
+    g = db.get(RateGroup, ch["group_id"])
+    w = db.get(RateWorking, g.working_id)
+    if kind == "quotation":
+        from app.quotations import service as qsvc  # noqa: PLC0415
+        from app.quotations.models import Quotation  # noqa: PLC0415
+
+        qsvc.check_price_edit(db.get(Quotation, w.quotation_id))
+    gl = next(
+        x for x in g.lines if (x.boq_line_id if kind == "boq" else x.quotation_line_id) == line.id
+    )
+    done = working.apply_line(db, g, gl, working.step_shares(db, w, g))
+    if done and kind == "boq":
+        from app.tenders.models import Tender  # noqa: PLC0415
+        from app.tenders.pricing import refresh_tender_total  # noqa: PLC0415
+
+        refresh_tender_total(db, db.get(Tender, line.tender_id))
+    db.flush()
+    return done
 
 
 def sub_lines(db: Session, kind: str, line) -> dict | None:

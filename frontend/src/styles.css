@@ -4739,3 +4739,6 @@ label.field-wrong textarea,
 .spec-checks .spec-approval span:first-child {
   color: var(--hold);
 }
+.tds-group td:first-child {
+  border-left: 3px solid var(--hold);
+}

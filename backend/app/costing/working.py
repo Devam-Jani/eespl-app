@@ -916,6 +916,39 @@ def step_shares(db: Session, w: RateWorking, g: RateGroup) -> dict[str, Decimal]
     return {key: step_rate[kind or "coating"] for key, kind in kinds.items()}
 
 
+def line_rate(db: Session, g: RateGroup, gl, shares: dict | None) -> tuple:
+    """The client line, its unit, and the rate and cost it gets from the main item: a step line
+    its own part of the build-up at the margin (rate None: a unit the main item is not in)."""
+    ln, unit, rate, cost = _line_rate(db, g, gl)
+    if rate is None:
+        return ln, unit, None, None
+    share = shares.get(_line_key(gl)) if shares else None
+    if share is not None:  # a step line: its own part of the build-up, at the margin
+        per_sqm = Decimal(share)
+        cost = per_sqm * Decimal(g.cost_sqm) / Decimal(g.rate_sqm) if g.rate_sqm else cost
+        in_base = unit in LINE_UNITS[g.unit or "sqm"][0]
+        rate = per_sqm if in_base else money(per_sqm / small_of(g)[1])
+        cost = cost if in_base else cost / small_of(g)[1]
+    return ln, unit, rate, cost
+
+
+def apply_line(db: Session, g: RateGroup, gl, shares: dict | None) -> bool:
+    """The main item's rate onto one client line (as "Rates to the lines" does); False when the
+    line is in a unit the main item is not in."""
+    ln, _unit, rate, cost = line_rate(db, g, gl, shares)
+    if rate is None:
+        return False
+    ln.rate, ln.cost_rate, ln.margin_percent = rate, cost.quantize(Decimal("0.0001")), g.margin_percent
+    if gl.boq_line_id:
+        ln.source, ln.status = "working", "priced"
+        from app.tenders.pricing import refresh_amount  # noqa: PLC0415
+
+        refresh_amount(ln)
+    else:
+        ln.rate_source, ln.overridden = "working", True
+    return True
+
+
 def apply_rates(db: Session, w: RateWorking) -> dict:
     """Every client line in a worked group gets the group's rate (sqm or sq ft); a line in another
     unit is left for a person (reported). A quotation once sent keeps its prices (409: make a new
@@ -932,30 +965,13 @@ def apply_rates(db: Session, w: RateWorking) -> dict:
             continue
         shares = step_shares(db, w, g)
         for gl in g.lines:
-            ln, unit, rate, cost = _line_rate(db, g, gl)
+            ln, unit, rate, _cost = line_rate(db, g, gl, shares)
             if rate is None:
                 skipped.append({"line": gl.boq_line_id or gl.quotation_line_id, "unit": unit})
                 continue
-            share = shares.get(_line_key(gl)) if shares else None
-            if share is not None:  # a step line: its own part of the build-up, at the margin
-                per_sqm = Decimal(share)
-                cost = per_sqm * Decimal(g.cost_sqm) / Decimal(g.rate_sqm) if g.rate_sqm else cost
-                in_base = unit in LINE_UNITS[g.unit or "sqm"][0]
-                rate = per_sqm if in_base else money(per_sqm / small_of(g)[1])
-                cost = cost if in_base else cost / small_of(g)[1]
-            ln.rate, ln.cost_rate, ln.margin_percent = (
-                rate,
-                cost.quantize(Decimal("0.0001")),
-                g.margin_percent,
-            )
+            apply_line(db, g, gl, shares)
             if gl.boq_line_id:
-                ln.source, ln.status = "working", "priced"
                 tender_lines.append(ln)
-                from app.tenders.pricing import refresh_amount  # noqa: PLC0415
-
-                refresh_amount(ln)
-            else:
-                ln.rate_source, ln.overridden = "working", True
             applied += 1
     if tender_lines and w.tender_id:
         from app.tenders.models import Tender  # noqa: PLC0415
