@@ -24,6 +24,7 @@ const SiteDetail = lazyPage(() => import("./pages/SiteDetail"));
 const Sites = lazyPage(() => import("./pages/Sites"));
 const SystemDetail = lazyPage(() => import("./pages/SystemDetail"));
 const TechnicalData = lazyPage(() => import("./pages/TechnicalData"));
+const DrawQuote = lazyPage(() => import("./pages/site/DrawQuote"));
 const ConsumptionMaster = lazyPage(() => import("./pages/ConsumptionMaster"));
 const ConsumptionItem = lazyPage(() => import("./pages/ConsumptionItem"));
 const Systems = lazyPage(() => import("./pages/Systems"));
@@ -448,6 +449,7 @@ export default function App() {
                   ["/knowledge/templates/:id", routePerms("/knowledge/templates/:id"), <TemplatePage />],
                   ["/methodology/systems/:id", routePerms("/methodology/systems/:id"), <MethodSystemPage />],
                   ["/products/technical-data", routePerms("/products/technical-data"), <TechnicalData />],
+                  ["/sites/:id/drawing-quote", routePerms("/sites/:id/drawing-quote"), <DrawQuote />],
                   ["/consumption-master/:id", routePerms("/consumption-master/:id"), <ConsumptionItem />],
                   ["/methodology/standards/:id", routePerms("/methodology/standards/:id"), <StandardPage />],
                   ["/methodology/m/:id", routePerms("/methodology/m/:id"), <MethodologyPage />],

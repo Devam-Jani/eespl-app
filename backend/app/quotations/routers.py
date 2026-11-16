@@ -1075,13 +1075,10 @@ def _references_for(db, state: str | None) -> tuple[list[dict], str]:
     return rows, title
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
-def create_quotation(
-    body: QuotationIn, request: Request, db: DbSession, principal: CurrentPrincipal, _: View
-) -> dict:
-    scope = principal.permissions.get("quotation.edit")
-    if scope is None:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot make quotations")
+def quotation_shell(db, body: QuotationIn, principal, scope: str = "all") -> tuple[Quotation, OfferPreset | None]:
+    """A new draft quotation without its items: the client and its contact, the letterhead, the
+    letter, the T&C and the references (a preset's when one is given). Also used by "Make
+    quotation from drawing"."""
     s = svc.settings(db)
     lead = db.get(Lead, body.lead_id) if body.lead_id else None
     if body.lead_id and (lead is None or (scope != "all" and lead.owner_id != principal.user.id)):
@@ -1168,6 +1165,17 @@ def create_quotation(
         created_by=principal.user.id,
     )
     db.add(q)
+    return q, preset
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+def create_quotation(
+    body: QuotationIn, request: Request, db: DbSession, principal: CurrentPrincipal, _: View
+) -> dict:
+    scope = principal.permissions.get("quotation.edit")
+    if scope is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot make quotations")
+    q, preset = quotation_shell(db, body, principal, scope)
     rc = svc.RateContext.make(db)
     picks = body.items or ([ItemPick.model_validate(x) for x in preset.items] if preset else [])
     for pick in picks:

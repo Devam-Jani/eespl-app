@@ -119,6 +119,15 @@ class CadArea(Tracked, Base):
     traced_area_sqm: Mapped[Decimal | None] = mapped_column(M)
     traced_perimeter_m: Mapped[Decimal | None] = mapped_column(M)
     side_wall_sqm: Mapped[Decimal | None] = mapped_column(M)  # perimeter × sunk depth
+    # where the outline came from: the drawing's closed polyline round the label, or traced
+    outline_source: Mapped[str | None] = mapped_column(String(8))
+    # cut-outs inside the outline (a shaft, a duct, a void): their area off the floor, their edge
+    # on the upturn
+    holes: Mapped[list[Any]] = mapped_column(JSONB, server_default="[]")
+    holes_sqm: Mapped[Decimal | None] = mapped_column(M)
+    holes_perimeter_m: Mapped[Decimal | None] = mapped_column(M)
+    # the area's own upturn (its label or notes: "300 MM UPTURN"); blank: its type's, the system's
+    upturn_mm: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
     node_id: Mapped[int | None] = mapped_column(ForeignKey("site_nodes.id", ondelete="SET NULL"))
     area_type_id: Mapped[int | None] = mapped_column(
         ForeignKey("area_types.id", ondelete="SET NULL")

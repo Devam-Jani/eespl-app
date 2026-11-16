@@ -124,7 +124,11 @@ async def add_files(iid: int, db: DbSession, principal: CurrentPrincipal, _: Tds
                 }
             )
             continue
-        d = tds_import.stage(db, imp, rel, data, principal.user.id, products)
+        try:
+            d = tds_import.stage(db, imp, rel, data, principal.user.id, products)
+        except Exception:
+            db.rollback()  # the batch's files go with its rows
+            raise
         out.append(_doc_out(db, d))
     db.commit()
     return _j({"docs": out})

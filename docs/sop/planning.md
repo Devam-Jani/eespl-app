@@ -21,6 +21,7 @@ The pages in the order of a working day. Each section lists every button and fie
 @page /planning/board
 @page /enquiries
 @page /sites
+@page /sites/:id/drawing-quote
 @page /new-areas
 @page /estimates
 @page /material-library

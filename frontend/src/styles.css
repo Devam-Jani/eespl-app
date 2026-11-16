@@ -4742,3 +4742,30 @@ label.field-wrong textarea,
 .tds-group td:first-child {
   border-left: 3px solid var(--hold);
 }
+
+/* make quotation from drawing (Prompt 39): the plan with a line's areas lit, the grid's cells */
+.dq-plan {
+  width: 100%;
+  max-height: 420px;
+}
+.dq-plan path {
+  fill: color-mix(in srgb, var(--accent) 12%, transparent);
+  stroke: var(--muted);
+  stroke-width: 0.15%;
+  vector-effect: non-scaling-stroke;
+}
+.dq-plan path.hole {
+  fill: var(--bg);
+}
+.dq-plan .lit path:not(.hole) {
+  fill: color-mix(in srgb, var(--hold) 45%, transparent);
+  stroke: var(--hold);
+}
+.dq-views {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+}
+.dq-cell.changed input {
+  border-color: var(--hold);
+}

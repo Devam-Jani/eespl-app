@@ -18,6 +18,7 @@ export const DETAIL_ROUTES: PageRoute[] = [
   { path: "/sites/:id/new-area", perms: ["site.update", "site.edit"] },
   { path: "/sites/:id/fronts", perms: ["site.view"] },
   { path: "/sites/:id/takeoff", perms: ["takeoff.view"] },
+  { path: "/sites/:id/drawing-quote", perms: ["drawquote.make"] },
   { path: "/sites/:id/measure", perms: ["billing.view"] },
   { path: "/sites/:id/building", perms: ["building.edit", "site.view"] },
   { path: "/sites/:id/methodology", perms: ["methodology.site"] },

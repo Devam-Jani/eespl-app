@@ -64,6 +64,12 @@
    ]
   },
   {
+   "path": "/sites/:id/drawing-quote",
+   "perms": [
+    "drawquote.make"
+   ]
+  },
+  {
    "path": "/sites/:id/measure",
    "perms": [
     "billing.view"

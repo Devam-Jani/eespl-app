@@ -34,6 +34,7 @@ quotations they made, are salesperson on, or that belong to their leads.
 - **Margin check** / **Hide the margin check**: opens the margin check card (see below). {perm: tender.margin}
 - **⤓ Word**, **⤓ PDF**: download the quotation as it is now.
 - **⤓ PDF for letterhead paper**: the PDF with the header and footer blank, for printing on letterhead stationery.
+- A quotation made from a drawing carries an annexure **Quantities from drawing**: per item, each area with its floor, floor area, upturn and walls, total and unit (no cost, no rate). Its rate working's Excel adds a **Quantities** sheet and a sheet per system.
 - **Issue files** (**Re-issue files** once issued): saves the Word and PDF with this revision and attaches them to the lead's timeline. Re-issuing marks the older files "replaced". {perm: quotation.send}
 - **Mark sent**: on the latest revision, in draft or negotiation. See **Sending** below. {perm: quotation.send}
 - **Negotiation**: a sent quotation goes into negotiation (the client is bargaining). {perm: quotation.edit}

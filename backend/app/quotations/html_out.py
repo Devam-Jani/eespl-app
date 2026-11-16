@@ -291,6 +291,16 @@ def html(doc: Doc, for_pdf: bool = True) -> str:
                 f'<td>{escape(r.get("application") or "")}</td><td class="num">{escape(r["area_text"])}</td></tr>'
             )
         parts.append("</tbody></table>")
+    # the annexure: the areas behind each item's quantity (a quotation made from a drawing)
+    if doc.annexure:
+        parts.append('<div class="page-break"></div><h2 class="item">ANNEXURE: QUANTITIES FROM DRAWING</h2>')
+        for a in doc.annexure:
+            parts.append(f'<h2 class="item">{escape(a.heading)}</h2><table><thead><tr><th>Area</th><th>Floor</th><th class="num">Floor area</th>'
+                         '<th class="num">Upturn / walls</th><th class="num">Total</th><th>Unit</th></tr></thead><tbody>')
+            for r in a.rows:
+                parts.append(f'<tr><td>{escape(r.area)}</td><td>{escape(r.floor)}</td><td class="num">{escape(r.floor_area)}</td>'
+                             f'<td class="num">{escape(r.upturn)}</td><td class="num">{escape(r.total)}</td><td>{escape(r.unit)}</td></tr>')
+            parts.append(f'<tr class="subtotal"><td colspan="4">Total</td><td class="num">{escape(a.total)}</td><td>sqm</td></tr></tbody></table>')
     if not for_pdf:
         parts.append(f'<div class="footer-note">{escape(doc.footer)}</div>')
         if image_letterhead(doc) and doc.footer_image and not doc.preprinted:

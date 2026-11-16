@@ -100,6 +100,23 @@ class BudgetOut:
 
 
 @dataclass
+class AnnexRow:
+    area: str
+    floor: str
+    floor_area: str  # the floor less its cut-outs
+    upturn: str  # the upturn, the sunk side walls, a wall's area
+    total: str
+    unit: str = "sqm"
+
+
+@dataclass
+class AnnexItem:
+    heading: str
+    rows: list[AnnexRow]
+    total: str
+
+
+@dataclass
 class TermGroup:
     heading: str | None
     clauses: list[tuple[int, str]]  # (number, markup with "- " sub-points)
@@ -136,6 +153,10 @@ class Doc:
     terms: list[TermGroup] = field(default_factory=list)
     references_title: str = ""
     references: list[dict] = field(default_factory=list)
+    # "Quantities from drawing": per item, the areas behind its quantity (a quotation made from a
+    # drawing); no cost, no rate
+    annexure: list[AnnexItem] = field(default_factory=list)
+
 
 
 def _media(rel: str | None) -> Path | None:
@@ -273,6 +294,30 @@ def fill_lines(text: str, values: dict[str, str]) -> list[str]:
     return out
 
 
+def annexure(db: Session, q: Quotation) -> list[AnnexItem]:
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from app.drawquote.models import QuoteLineArea  # noqa: PLC0415
+
+    out = []
+    for n, item in enumerate(q.items, 1):
+        rows = []
+        for ln in item.lines:  # two options of one item share their areas: the first line's
+            rows = list(db.scalars(select(QuoteLineArea).where(QuoteLineArea.quotation_line_id == ln.id).order_by(QuoteLineArea.id)))
+            if rows:
+                break
+        if not rows:
+            continue
+        total = sum((Decimal(r.total_sqm) for r in rows), Decimal(0))
+        out.append(AnnexItem(
+            heading=f"{n}. {item.name}",
+            rows=[AnnexRow(area=r.area_name, floor=r.floor or "", floor_area=fmt_money(Decimal(r.floor_sqm) - Decimal(r.cutout_sqm)),
+                           upturn=fmt_money(Decimal(r.total_sqm) - (Decimal(r.floor_sqm) - Decimal(r.cutout_sqm))), total=fmt_money(Decimal(r.total_sqm))) for r in rows],
+            total=fmt_money(total),
+        ))  # fmt: skip
+    return out
+
+
 def build(db: Session, q: Quotation, preprinted: bool | None = None) -> Doc:
     head = db.get(Letterhead, q.letterhead_id) if q.letterhead_id else None
     profile = db.get(CompanyProfile, 1)
@@ -328,6 +373,7 @@ def build(db: Session, q: Quotation, preprinted: bool | None = None) -> Doc:
             f"total with GST Rs {fmt_money(t['total_with_gst'])}"
         )
         doc.gst_words = in_words(t["total_with_gst"])
+    doc.annexure = annexure(db, q)
     doc.terms = term_groups(q.terms or [], applicator.upper())
     doc.references_title = q.references_title or "Our Esteemed Clients for Waterproofing Projects"
     doc.references = [

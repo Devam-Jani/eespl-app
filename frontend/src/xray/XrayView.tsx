@@ -425,6 +425,7 @@ export default function XrayView({ site, building, nodes, portal, cover, compact
           )}
         </div>
       )}
+      {building.site_plan_note && !compact && <p className="xray-note small">{building.site_plan_note}</p>}
       {showsSectionLine(portal, compact) && !bare && (
         <p className="xray-note muted small">
           {building.levels.source === "section" ? building.levels.note : `Heights: the defaults (${building.settings.floor_height_m} m floor to floor) — ${building.levels.note ?? "no levels on the drawing"}`}

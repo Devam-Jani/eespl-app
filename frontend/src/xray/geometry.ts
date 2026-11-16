@@ -21,17 +21,21 @@ export type XRoom = {
   raise_m: number;
   wp_height_m: number | null;
 };
+/** A site plan's building footprint (a block raised by its storeys) or a flat shape (podium, road). */
+export type XBlock = { kind: "block" | "flat"; name: string; floors: number | null; outline: P[]; height_m: number };
 export type Building = {
   version: number;
   schematic: false;
   settings: { floor_height_m: number; slab_m: number; plinth_m: number; riser_m: number; bloom: "auto" | "on" | "off"; ifc: boolean };
-  levels: { source: "section" | "default"; note: string | null };
+  levels: { source: "section" | "drawing" | "default"; note: string | null };
   floors: XFloor[];
   types: Record<string, XType>;
   rooms: XRoom[];
   ifc_links: Record<string, number>;
   ifc?: { url: string; filename: string | null; rev_no: number | null; size_mb: number | null; max_mb: number } | null;
   source?: { cad_file_id: number | null; note: string | null; changes: unknown; by: string | null; at: string | null };
+  blocks?: XBlock[];
+  site_plan_note?: string | null;
 };
 /** [name, planned_start, planned_end, actual_start, actual_end, status, hold_point, certified_on] */
 export type TimelineRow = [string, string | null, string | null, string | null, string | null, string, boolean, string | null];

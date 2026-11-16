@@ -22,7 +22,7 @@ type Data = { settings: Settings; levels: { source: string; note: string; floor_
 type Out = {
   site_id: number;
   can_edit: boolean;
-  model: null | { version: number; cad_file_id: number | null; data: Data; note: string | null; changes: Changes | null; by: string | null; at: string; unit_m: number | null; floors: { level: number; name: string; elevation_m: number; height_m: number; type: string | null; level_source: "hand" | "section" | "default"; level_flag: string | null }[]; unmatched_levels: number[] };
+  model: null | { version: number; cad_file_id: number | null; data: Data; note: string | null; changes: Changes | null; by: string | null; at: string; unit_m: number | null; floors: { level: number; name: string; elevation_m: number; height_m: number; type: string | null; level_source: "hand" | "section" | "drawing" | "default"; level_flag: string | null }[]; unmatched_levels: number[] };
   drawings: { cad_file_id: number; title: string; rev_no: string; unit_m: number | null; newer: boolean; space: string; xrefs: string[] }[];
   revisions: DrawingRev[];
   model_drawing: DrawingRev | null;
@@ -540,7 +540,7 @@ export default function BuildingBuilder() {
                               aria-label={`Level of ${f.name}`}
                             />
                           </Field>
-                          <div className="small muted">{src === "section" ? "from the section" : src === "hand" ? "typed" : "default"}</div>
+                          <div className="small muted">{src === "section" ? "from the section" : src === "drawing" ? "from the plan's level (drawing)" : src === "hand" ? "typed" : "default"}</div>
                         </td>
                         <td className="num">
                           <Field label={`Height of ${f.name}`} bare>

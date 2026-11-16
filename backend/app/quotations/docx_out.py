@@ -456,6 +456,43 @@ def docx(doc: Doc, template: str | None = None) -> bytes:
                     s["Offer Table Text"],
                     align=WD_ALIGN_PARAGRAPH.RIGHT if j == 4 else None,
                 )
+    # the annexure: the areas behind each item's quantity (a quotation made from a drawing)
+    if doc.annexure:
+        h = _para(
+            d, "ANNEXURE: QUANTITIES FROM DRAWING", s["Offer Item Heading"], bold=True, keep=True
+        )
+        h.paragraph_format.page_break_before = True
+        heads = ["Area", "Floor", "Floor area", "Upturn / walls", "Total", "Unit"]
+        for a in doc.annexure:
+            _para(d, a.heading, s["Offer Item Heading"], bold=True, keep=True)
+            t = d.add_table(rows=1, cols=len(heads))
+            _borders(t)
+            for i, text in enumerate(heads):
+                _cell(
+                    t.rows[0].cells[i],
+                    text,
+                    s["Offer Table Text"],
+                    bold=True,
+                    align=WD_ALIGN_PARAGRAPH.RIGHT if 2 <= i <= 4 else None,
+                )
+                _shade(t.rows[0].cells[i])
+            for r in [*a.rows, None]:
+                row = t.add_row()
+                _row_rules(row)
+                vals = (
+                    [r.area, r.floor, r.floor_area, r.upturn, r.total, r.unit]
+                    if r
+                    else ["Total", "", "", "", a.total, "sqm"]
+                )
+                for i, text in enumerate(vals):
+                    _cell(
+                        row.cells[i],
+                        text,
+                        s["Offer Table Text"],
+                        bold=r is None,
+                        align=WD_ALIGN_PARAGRAPH.RIGHT if 2 <= i <= 4 else None,
+                    )
+            _para(d, "", s["Offer Body"])
     buf = io.BytesIO()
     d.save(buf)
     return buf.getvalue()

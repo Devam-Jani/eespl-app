@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -43,6 +43,32 @@ NOISE_WORDS = {
 
 def media(rel: str) -> Path:
     return Path(settings.media_dir) / rel
+
+
+def _forget(session) -> None:
+    session.info.pop(WRITTEN, None)
+
+
+def _remove(session, *_args) -> None:
+    """The transaction rolled back: the files it wrote have no row, so they go too."""
+    for rel in session.info.pop(WRITTEN, []):
+        media(rel).unlink(missing_ok=True)
+
+
+WRITTEN = "tds_files_written"
+
+
+def write_file(db: Session, rel: str, data: bytes) -> None:
+    """A sheet's PDF under media/, kept only if the transaction that writes its row commits (a
+    run that fails partway leaves no file behind)."""
+    if WRITTEN not in db.info:
+        db.info[WRITTEN] = []
+        if not event.contains(db, "after_commit", _forget):
+            event.listen(db, "after_commit", _forget)
+            event.listen(db, "after_soft_rollback", _remove)
+    media(rel).parent.mkdir(parents=True, exist_ok=True)
+    media(rel).write_bytes(data)
+    db.info[WRITTEN].append(rel)
 
 
 def _words(name: str, brand: str | None) -> set[str]:
@@ -189,8 +215,7 @@ def stage(
     doc.read_error = sheet.error
     doc.needs_reading = sheet.scanned
     rel = f"tds/{imp.id}/{uuid.uuid4().hex}__{re.sub(r'[^A-Za-z0-9._ -]', '_', file_name)[-150:]}"
-    media(rel).parent.mkdir(parents=True, exist_ok=True)
-    media(rel).write_bytes(data)
+    write_file(db, rel, data)
     doc.stored_path = rel
     p, _score = match_product(db, doc.brand, doc.product_name, products)
     doc.product_id, doc.match = (p.id, "matched") if p else (None, "create")

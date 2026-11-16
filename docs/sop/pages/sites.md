@@ -382,6 +382,7 @@ approved or rejected. The AutoCAD takeoff and the building model read the .dwg d
 **On the page**
 - **Drawings (<n>)**: each drawing with its title, discipline and place, then **Approved: R<n>** or **No approved revision**, and **Latest: R<n> (<status>)** when a newer revision is not approved yet.
 - **Upload drawing**: opens **Upload a drawing**. {perm: site.update, site.edit}
+- **Make quotation from drawing**: opens **Make quotation from drawing** for this site's drawings. {perm: drawquote.make}
 - **Title \***, **Discipline** (**architectural**, **structural**, **waterproofing** or **other**) and **Place (optional)** (**Whole site** or one place). {perm: site.update, site.edit}
 - **Choose the drawing**: PDF, PNG, JPG, DWG or DXF, up to 50 MB. It is saved as R0. **Upload** saves it. {perm: site.update, site.edit}
 - **New revision** (on a drawing): pick the new file. It is saved as the next revision, as a draft. Older revisions stay as they were. {perm: site.update, site.edit}

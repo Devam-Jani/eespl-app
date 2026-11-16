@@ -25,6 +25,21 @@ def area(points: list[Point]) -> float:
     return abs(s) / 2
 
 
+def inside(p: Point, poly) -> bool:
+    """The point in the polygon (ray casting; on an edge counts as in)."""
+    x, y = p
+    n, hit = len(poly), False
+    for i in range(n):
+        x1, y1 = poly[i][0], poly[i][1]
+        x2, y2 = poly[(i + 1) % n][0], poly[(i + 1) % n][1]
+        on_line = (x2 - x1) * (y - y1) == (y2 - y1) * (x - x1)
+        if on_line and min(y1, y2) <= y <= max(y1, y2) and min(x1, x2) <= x <= max(x1, x2):
+            return True  # on the edge
+        if (y1 > y) != (y2 > y) and x < (x2 - x1) * (y - y1) / (y2 - y1) + x1:
+            hit = not hit
+    return hit
+
+
 def perimeter(points: list[Point]) -> float:
     n = len(points)
     if n < 2:
