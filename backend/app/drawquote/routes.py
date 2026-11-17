@@ -156,7 +156,7 @@ def _run_out(db, run: DrawQuote, principal) -> dict:
         )
         rows = svc.item_rows(db, run, item, system)
         chips = svc.chips_for(db, item, rows)
-        ranked = suggest.suggest(db, chips, with_cost=cost)
+        ranked = suggest.suggest(db, chips, with_cost=cost, area_type_id=item.area_type_id)
         for o in ranked["options"]:
             o["picked"] = any(
                 p.system_id == o["system_id"] and p.option_id == o["option_id"] for p in item.picks

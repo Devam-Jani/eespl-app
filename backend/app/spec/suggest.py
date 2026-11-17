@@ -166,6 +166,7 @@ class Opt:
     main: list[int] = field(default_factory=list)  # the products that are the system (not a layer)
     checks: list[dict] = field(default_factory=list)
     past: int = 0
+    past_area: int = 0  # on our quotations for the same area type
     cost: dict | None = None
     key: tuple = ()
 
@@ -252,6 +253,24 @@ def outside(per: Decimal | None, rng: dict | None) -> bool:
         return False
     # 5 % either side: a sheet's round figures against the BOM's exact ones
     return per < rng["lo"] * D("0.95") or per > rng["hi"] * D("1.05")
+
+
+def past_use_for_area(db: Session, area_type_id: int | None) -> dict[tuple[int, int | None], int]:
+    """How often each work item and brand option was quoted for this area type (our quotations'
+    items of that area type, sent, in negotiation or won)."""
+    if not area_type_id:
+        return {}
+    from app.quotations.models import Quotation, QuotationItem, QuotationLine  # noqa: PLC0415
+
+    q = (
+        select(QuotationLine.system_id, QuotationLine.system_option_id, func.count())
+        .join(QuotationItem, QuotationItem.id == QuotationLine.item_id)
+        .join(Quotation, Quotation.id == QuotationItem.quotation_id)
+        .where(QuotationItem.area_type_id == area_type_id, QuotationLine.system_id.is_not(None),
+               Quotation.status.in_(("sent", "negotiation", "won")))
+        .group_by(QuotationLine.system_id, QuotationLine.system_option_id)
+    )  # fmt: skip
+    return {(s, o): n for s, o, n in db.execute(q)}
 
 
 def past_use(db: Session) -> dict[tuple[int, int | None], int]:
@@ -409,6 +428,7 @@ def rank_key(o: Opt, a: dict) -> tuple:
         -usage.count(NO),
         -usage.count(NOT_STATED),
         1 if o.kind == "option" else 0,
+        o.past_area,  # the same area type first, then overall
         o.past,
         -price,
     )
@@ -424,7 +444,7 @@ def _cost(db: Session, s: System, option_id: int | None) -> dict:
             "margin_percent": rb.margin_percent, "rate": rb.rate, "rate_small": (rb.rate / small) if small else None, "unit": s.unit}  # fmt: skip
 
 
-def suggest(db: Session, chips: list[dict], with_cost: bool) -> dict:
+def suggest(db: Session, chips: list[dict], with_cost: bool, area_type_id: int | None = None) -> dict:
     a = keypoints.asks(chips)
     systems = list(db.scalars(select(System).where(System.is_active.is_(True))))
     pids = {c.product_id for s in systems for c in s.components}
@@ -442,6 +462,7 @@ def suggest(db: Session, chips: list[dict], with_cost: bool) -> dict:
     )
     facts = facts_by_product(db, pids | {p.id for p in tds_products})
     used = past_use(db)
+    used_here = past_use_for_area(db, area_type_id)
     opts: list[Opt] = []
     for s in systems:
         areas = system_areas(db, s)
@@ -459,7 +480,8 @@ def suggest(db: Session, chips: list[dict], with_cost: bool) -> dict:
                 o.brand if o else next((c.product.brand for c in recipe if c.product.brand), None)
             )
             opts.append(Opt("option", system=s, option=o, brand=brand, type=t, areas=areas, rows=rows, main=main,
-                            past=used.get((s.id, o.id if o else None), 0) + (used.get((s.id, None), 0) if o and o.is_default else 0)))  # fmt: skip
+                            past=used.get((s.id, o.id if o else None), 0) + (used.get((s.id, None), 0) if o and o.is_default else 0),
+                            past_area=used_here.get((s.id, o.id if o else None), 0) + (used_here.get((s.id, None), 0) if o and o.is_default else 0)))  # fmt: skip
     in_bom = {r["product_id"] for o in opts for r in o.rows}
     for p in tds_products:
         fs = facts.get(p.id, [])
@@ -549,6 +571,7 @@ def opt_out(o: Opt, with_cost: bool) -> dict:
         "checks": o.checks,
         "meets_all": all(c["state"] in (YES, "equivalent") for c in o.checks),
         "past_use": o.past,
+        "past_use_area": o.past_area,
         "cost": o.cost if with_cost else None,
         "steps": [
             {"step": STEP_LABEL.get(r["step"], r["step"]), "product": r["product"]} for r in o.rows

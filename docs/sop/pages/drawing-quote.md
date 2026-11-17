@@ -17,5 +17,6 @@ From the architect's drawing (read in the takeoff, its areas mapped to the site'
 - **Areas not mapped**: map them in the takeoff, or **Leave out** with a reason (**take back** puts one back). While an area is not mapped, or an area type has nothing ticked, the reasons show above and **Make the quotation** waits.
 - **Make the quotation**: a draft quotation (its items the area types, its lines the ticked options with the drawing's quantities) and its rate working (consumption, wastage, prices with freight, labour, margin on the selling price); the working's rates go onto the lines. On a newer revision of the drawing it makes the next revision of that quotation and lists **What the new drawing revision changed** per line (old and new quantity, the areas added, removed or resized). **Open the draft quotation** opens it.
 - **Review**: every cell (quantity, consumption, wastage) can be changed; a changed cell says "changed by user" with who and when, and **back to calculated** sets it back. The rate follows. **Price**, **freight**, **labour** and **margin** are shown and changed only by roles that see costs. {perm: tender.margin, consumption.cost}
-- Click a row of the review to light its areas **On the drawing** and **In 3D**.
+- Click a row of the review to light every one of its areas **On the drawing** and **In 3D**.
+- The options are ranked by how often each was quoted for the same area type first, then overall.
 - **3D picture for the cover**: downloads a picture of the building for the quotation's cover.

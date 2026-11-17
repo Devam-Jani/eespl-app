@@ -35,6 +35,13 @@ ROOM_WORDS = (
 NOTE_WORDS = re.compile(
     r"WATER\s*-?\s*PROOF|CHEMICAL|SUNK|RAISE|\bDEPTH\b|\bDEEP\b|UP\s*-?\s*TURN", re.I
 )
+# a structural tag, not an area: a beam, a column, a footing ("GB1", "B12", "C3", "F2", "COLUMN
+# FLUSHED WITH COMPOUND WALL", "PLINTH BEAM")
+STRUCTURAL = re.compile(
+    r"^\s*(?:G\.?B|P\.?B|T\.?B|R\.?B|S\.?B|C\.?B|L\.?B|BM|COL|B|C|F)\s*-?\s*\d{1,3}[A-Z]?\b|\bCOLUMNS?\b|PLINTH\s*BEAM|GROUND\s*BEAM|TIE\s*BEAM|FOOTING|LINTEL",
+    re.I,
+)
+NOT_A_PLAN_TITLE = re.compile(r"ELEVATION|SECTION|ENLARGED|DETAIL", re.I)
 # a closed shape inside an area that is not floor: a shaft, a duct, a void, a stair or lift opening
 CUT_WORDS = re.compile(
     r"SHAFT|DUCT|CUT\s*-?\s*OUT|VOID|OPENING|\bOTS\b|SKY\s*LIGHT|CUT\s*OUT", re.I
@@ -322,6 +329,7 @@ def build_areas(db: Session, f: CadFile) -> list[CadArea]:
         made.append(a)
     db.flush()
     carry_over(db, f, made)
+    leave_out(f, made)
     for a in made:
         a.upturn_mm = upturn_of(a)
         if not a.outline and f.unit_m:
@@ -486,6 +494,61 @@ def area_brief(a: CadArea) -> dict:
 
 
 # --- tracing -------------------------------------------------------------------------------------
+
+
+def leave_out(f: CadFile, made: list[CadArea]) -> None:
+    """What the takeoff leaves out on its own (listed with its reason, and brought back with one
+    click): structural tags, and the second copy of a plan drawn twice on the sheet. An area a
+    person mapped on the last revision is kept."""
+    for a in made:
+        if not a.node_id and STRUCTURAL.search(a.name or ""):
+            a.status, a.left_out = "ignored", "structural"
+    live = [a for a in made if a.left_out is None and a.x is not None]
+    for a in duplicate_copies(live, float(f.unit_m or 0.001)):
+        if not a.node_id:
+            a.status, a.left_out = "ignored", "duplicate"
+
+
+def duplicate_copies(areas: list[CadArea], unit_m: float, tol_m: float = 0.5) -> list[CadArea]:
+    """A plan drawn twice on the sheet: two groups of labels with the same names at the same
+    spacing (one is the other moved by one vector). The copy kept is the one whose plan title says
+    PLAN (not an elevation, a section or an enlarged plan), else the first drawn; the other copy is
+    returned. Two plans with different titles (floor 1, floor 2) are no copies of each other."""
+    tol = tol_m / unit_m
+    out: list[CadArea] = []
+    pool = list(areas)
+    for _round in range(3):  # a sheet may hold a plan three times
+        votes: dict[tuple[int, int], list[tuple[CadArea, CadArea]]] = {}
+        by_name: dict[str, list[CadArea]] = {}
+        for a in pool:
+            by_name.setdefault((a.name or "").upper(), []).append(a)
+        for same in by_name.values():
+            for i, a in enumerate(same):
+                for b in same[i + 1 :]:
+                    v = (round((b.x - a.x) / tol), round((b.y - a.y) / tol))
+                    votes.setdefault(v, []).append((a, b))
+        if not votes:
+            break
+        pairs = max(votes.values(), key=len)
+        first, second = [p[0] for p in pairs], [p[1] for p in pairs]
+        if len(pairs) < 4 or len({(a.name or "").upper() for a in first}) < 3:
+            break
+        plans_a, plans_b = {a.plan for a in first if a.plan}, {b.plan for b in second if b.plan}
+        if plans_a and plans_b and plans_a.isdisjoint(plans_b):
+            break  # two titled plans of their own (floors drawn alike): not a copy
+
+        def titled(side: list[CadArea]) -> bool:
+            return any(
+                a.plan and re.search(r"PLAN", a.plan, re.I) and not NOT_A_PLAN_TITLE.search(a.plan)
+                for a in side
+            )
+
+        if titled(second) and not titled(first):
+            first, second = second, first
+        out.extend(second)
+        gone = {id(a) for a in second} | {id(a) for a in first}
+        pool = [a for a in pool if id(a) not in gone]
+    return out
 
 
 def upturn_of(a: CadArea) -> Decimal | None:

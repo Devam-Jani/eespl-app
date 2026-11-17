@@ -313,7 +313,7 @@ def area_out(db, a: CadArea, f: CadFile) -> dict:
         "area_sqm": service.area_sqm(a), "node_id": a.node_id, "place": " / ".join(n.name for n in path) or None,
         "area_type_id": a.area_type_id, "area_type": at.name if at else None,
         "system_id": a.system_id, "system": db.get(System, a.system_id).name if a.system_id else (db.get(System, at.default_system_id).name if at and at.default_system_id else None),
-        "status": a.status, "copied_from_id": a.copied_from_id, "floor_label": a.floor_label,
+        "status": a.status, "left_out": a.left_out, "copied_from_id": a.copied_from_id, "floor_label": a.floor_label,
         "change": a.change, "previous_area_sqm": a.previous_area_sqm,
         "survey_area_id": a.survey_area_id, "measurement_id": a.measurement_id, "side_measurement_id": a.side_measurement_id,
         "accepted_by": who.get(a.accepted_by), "accepted_at": a.accepted_at,
@@ -361,6 +361,9 @@ def areas(
         .where(CadArea.cad_file_id == f.id)
         .order_by(CadArea.plan, CadArea.y.desc(), CadArea.x)
     ).all()
+    # left out by the takeoff on its own: listed apart, by reason, each to bring back
+    left_out = [{"id": a.id, "name": a.name, "plan": a.plan, "reason": a.left_out} for a in rows if a.left_out]
+    rows = [a for a in rows if not a.left_out]
     if show == "waterproofing":  # the same test as area_out's "waterproofing", before the costly rows
         rows = [a for a in rows if a.area_type_id or a.notes or a.sunk_m or a.status != "candidate"]
     # what area_out looks up per row (area types, systems, the site's places), loaded once and held
@@ -377,6 +380,7 @@ def areas(
         {
             "file": file_out(db, f),
             "areas": out,
+            "left_out": left_out,
             "settings": {"label_trace_diff_percent": service.settings(db).label_trace_diff_percent},
         }
     )
@@ -570,6 +574,8 @@ def update_area(
         service.side(a)
     for k, v in data.items():
         setattr(a, k, v)
+    if data.get("status") == "candidate":
+        a.left_out = None  # brought back by a person: no longer left out on its own
     if a.status in ("candidate", "mapped"):
         a.status = "mapped" if a.node_id else "candidate"
     record(

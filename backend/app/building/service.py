@@ -32,6 +32,8 @@ DEFAULTS = {"floor_height_m": 3.0, "slab_m": 0.15, "plinth_m": 0.45, "column_min
             "beams_on_walls": False, "riser_m": 0.15, "bloom": "auto", "tower_id": None, "ifc": False, "ifc_max_mb": 150}  # fmt: skip
 OPENING_LAYERS = re.compile(r"WIN|DOOR|GLASS|RCC|^COL|COLUMN|CURTAIN", re.I)
 COLUMN_LAYERS = re.compile(r"^COL(UMN)?\b|^COL[_ -]|COLUMN", re.I)
+# beams, columns, footings, slabs and grids: long lines that are not walls
+STRUCTURAL_LAYERS = re.compile(r"BEAM|^COL|COLUMN|FOOT|SLAB|LINTEL|GRID|DIM|TEXT|ANNO|HATCH|FURN|CENTER|CENTRE", re.I)
 NOT_DRAWN = re.compile(r"FUR|HATCH|ELE|ELEC|LIGHT|PHE|PLUMB|FFTG|FIRE|HVAC|DIM|TEXT|TITLE", re.I)
 WET = ("toilet", "kitchen", "balcony", "terrace", "oh_tank", "ug_tank", "lift_pit", "raft", "swimming_pool", "stp")
 # a site development plan: several buildings on one plot (their footprints, not their rooms)
@@ -94,6 +96,32 @@ def layer_segments(db: Session, cad: CadFile, kind: str) -> list[float]:
     return out
 
 
+def likely_wall_layers(db: Session, cad: CadFile, top: int = 3) -> list[dict]:
+    """No wall layer mapped (and none named WALL): the layers with the most lines over a metre
+    long, the likely walls, for the user to map with one click."""
+    from app.takeoff import service as takeoff  # noqa: PLC0415
+
+    geo = _geometry(cad).get("geometry", {})
+    unit = float(cad.unit_m or 0.001)
+    hidden = takeoff.hidden_layers(db, cad)
+    counts = []
+    for name, g in geo.items():
+        if name in hidden or NOT_DRAWN.search(name) or STRUCTURAL_LAYERS.search(name):
+            continue
+        seg = g.get("s", [])
+        n = sum(1 for i in range(0, len(seg) - 3, 4) if math.hypot(seg[i + 2] - seg[i], seg[i + 3] - seg[i + 1]) * unit >= 1.0)
+        if n:
+            counts.append({"layer": name, "long_lines": n})
+    return sorted(counts, key=lambda c: -c["long_lines"])[:top]
+
+
+def walls_unmapped(db: Session, cad: CadFile) -> bool:
+    from app.takeoff import service as takeoff  # noqa: PLC0415
+
+    geo = _geometry(cad).get("geometry", {})
+    return not takeoff.wall_layers(db, cad) and not any(re.search(r"\bWALL", name, re.I) for name in geo)
+
+
 def plans(cad: CadFile) -> list[dict]:
     """The plans on the drawing: title, where it is, the floors its title names, and the region
     it is drawn in (above its title, up to the next title or the sheet's edge)."""
@@ -110,9 +138,15 @@ def plans(cad: CadFile) -> list[dict]:
         column = (frame[2] - frame[0]) * 0.3
         above = [ty for tx, ty, _t in titles if abs(tx - x) < column and ty > y + 1 and frame[0] <= tx <= frame[2] and frame[1] <= ty <= frame[3]]
         top = min(above) if above else frame[3]
-        if (top - y) * (cad.unit_m or 0.001) < 3:
+        region = [frame[0], y, frame[2], top]
+        # a title above its plan (the space above it is a small part of the frame): the plan is
+        # drawn below it, down to the next title or the frame's foot
+        if (top - y) < 0.25 * (frame[3] - frame[1]) and (y - frame[1]) > (top - y):
+            below = [ty for tx, ty, _t in titles if abs(tx - x) < column and ty < y - 1 and frame[0] <= tx <= frame[2] and frame[1] <= ty <= frame[3]]
+            region = [frame[0], max(below) if below else frame[1], frame[2], y]
+        if (region[3] - region[1]) * (cad.unit_m or 0.001) < 3:
             continue  # a title in the title block (the sheet's name), not under a plan
-        out.append({"title": title, "xy": [x, y], "floors": detect.floors_in_title(title), "region": [frame[0], y, frame[2], top]})
+        out.append({"title": title, "xy": [x, y], "floors": detect.floors_in_title(title), "region": region})
     # the same title twice (a sheet title and the plan's own): keep the one with the tighter region
     best: dict[str, dict] = {}
     for p in out:
@@ -248,7 +282,8 @@ def propose_outline(db: Session, cad: CadFile, ftype: dict) -> list[list[float]]
     region = ftype.get("region")
     if not region:
         return []
-    return detect.outline_from_walls(layer_segments(db, cad, "outline"), region, cad.unit_m or 0.001)
+    out = detect.outline_from_walls(layer_segments(db, cad, "outline"), region, cad.unit_m or 0.001)
+    return out if len(out) >= 3 else []  # two points (a door's swing) are no outline
 
 
 def detect_columns(db: Session, cad: CadFile, ftype: dict, settings: dict) -> list[list[float]]:

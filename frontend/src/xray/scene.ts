@@ -246,7 +246,7 @@ export class XrayScene {
   private bloomPass: UnrealBloomPass | null = null;
   private floors: FloorParts[] = [];
   private selectMat: LineMaterial;
-  private selection: LineSegments2 | null = null;
+  private selections: LineSegments2[] = [];
   private mats: Record<string, THREE.Material> = {};
   private shellMat: LineMaterial;
   private sun: THREE.DirectionalLight;
@@ -479,29 +479,33 @@ export class XrayScene {
   }
 
   /** The selected room: a white outline at its floor and storey (follows explode and the cutaway). */
-  setSelected(nodeId: number | null): void {
-    if (this.selection) {
-      this.selection.parent?.remove(this.selection);
-      this.selection.geometry.dispose();
-      this.selection = null;
+  /** The rooms picked (one, or every area of a quotation line): each outlined in white. */
+  setSelected(nodeIds: number | number[] | null): void {
+    for (const sel of this.selections) {
+      sel.parent?.remove(sel);
+      sel.geometry.dispose();
     }
-    if (nodeId == null) return;
-    for (const fp of this.floors) {
-      const span = fp.spans.find((s) => s.room.node_id === nodeId);
-      if (!span) continue;
-      const pts = span.room.outline;
-      if (pts.length < 3) return;
-      const top = Math.max(0.6, Math.min(fp.floor.height_m - this.building.settings.slab_m, 2.4));
-      const pos: number[] = [];
-      pts.forEach(([x, y], i) => {
-        const [x2, y2] = pts[(i + 1) % pts.length];
-        for (const h of [0.08, top]) pos.push(x, h, -y, x2, h, -y2);
-        pos.push(x, 0.08, -y, x, top, -y);
-      });
-      this.selection = new LineSegments2(new LineSegmentsGeometry().setPositions(pos), this.selectMat);
-      this.selection.renderOrder = 10;
-      fp.group.add(this.selection);
-      return;
+    this.selections = [];
+    const ids = nodeIds == null ? [] : Array.isArray(nodeIds) ? nodeIds : [nodeIds];
+    for (const nodeId of ids) {
+      for (const fp of this.floors) {
+        const span = fp.spans.find((s) => s.room.node_id === nodeId);
+        if (!span) continue;
+        const pts = span.room.outline;
+        if (pts.length < 3) break;
+        const top = Math.max(0.6, Math.min(fp.floor.height_m - this.building.settings.slab_m, 2.4));
+        const pos: number[] = [];
+        pts.forEach(([x, y], i) => {
+          const [x2, y2] = pts[(i + 1) % pts.length];
+          for (const h of [0.08, top]) pos.push(x, h, -y, x2, h, -y2);
+          pos.push(x, 0.08, -y, x, top, -y);
+        });
+        const sel = new LineSegments2(new LineSegmentsGeometry().setPositions(pos), this.selectMat);
+        sel.renderOrder = 10;
+        fp.group.add(sel);
+        this.selections.push(sel);
+        break;
+      }
     }
   }
 

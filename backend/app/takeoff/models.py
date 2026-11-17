@@ -93,7 +93,12 @@ class CadArea(Tracked, Base):
     area type, and once accepted, its survey area and measurement-book lines."""
 
     __tablename__ = "cad_areas"
-    __table_args__ = (CheckConstraint(_in("status", AREA_STATUSES), name="status_valid"),)
+    __table_args__ = (
+        CheckConstraint(_in("status", AREA_STATUSES), name="status_valid"),
+        CheckConstraint(
+            "left_out IS NULL OR left_out IN ('structural', 'duplicate')", name="left_out_valid"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     cad_file_id: Mapped[int] = mapped_column(
@@ -128,6 +133,9 @@ class CadArea(Tracked, Base):
     holes_perimeter_m: Mapped[Decimal | None] = mapped_column(M)
     # the area's own upturn (its label or notes: "300 MM UPTURN"); blank: its type's, the system's
     upturn_mm: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
+    # left out by the takeoff on its own (status ignored): a beam, column or footing tag, or the
+    # second copy of a plan drawn twice on the sheet; "bring back" makes it a candidate again
+    left_out: Mapped[str | None] = mapped_column(String(12))
     node_id: Mapped[int | None] = mapped_column(ForeignKey("site_nodes.id", ondelete="SET NULL"))
     area_type_id: Mapped[int | None] = mapped_column(
         ForeignKey("area_types.id", ondelete="SET NULL")

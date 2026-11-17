@@ -151,11 +151,7 @@ def _q_out(db, q: Quotation, principal) -> dict:
     ).all()
     t = svc.totals(q)
     checks = quotation_checks(q)
-    can_edit = (
-        "quotation.edit" in perms
-        and db.scalar(svc.visible_q(perms["quotation.edit"], principal).where(Quotation.id == q.id))
-        is not None
-    )
+    can_edit = svc.can_edit(db, q, principal)
     can_send = (
         "quotation.send" in perms
         and db.scalar(svc.visible_q(perms["quotation.send"], principal).where(Quotation.id == q.id))

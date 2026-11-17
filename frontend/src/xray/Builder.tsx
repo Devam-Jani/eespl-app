@@ -82,6 +82,8 @@ export default function BuildingBuilder() {
   const [beamFrom, setBeamFrom] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  // no wall layer mapped: the likely ones (most lines over a metre long), one click to map
+  const [wallHint, setWallHint] = useState<{ message: string; layers: { layer: string; long_lines: number }[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
 
@@ -187,11 +189,26 @@ export default function BuildingBuilder() {
 
   async function propose() {
     if (!type) return;
-    const r = await run(() => api<{ outline: Pt[] }>(`/api/sites/${siteId}/building/propose-outline`, { method: "POST", json: { key: type.key } }));
+    const r = await run(() =>
+      api<{ outline: Pt[]; wall_hint?: { message: string; layers: { layer: string; long_lines: number }[] } }>(`/api/sites/${siteId}/building/propose-outline`, {
+        method: "POST",
+        json: { key: type.key },
+      }),
+    );
+    setWallHint(r?.wall_hint ?? null);
+    if (r?.wall_hint) return;
     if (r?.outline.length) {
       updType((t) => (t.outline = r.outline));
       setMsg(`Outline proposed from the walls: ${r.outline.length} corners, ${(area(r.outline) * unit * unit).toFixed(0)} sqm. Check it against the plan and trace again where it is off.`);
     } else if (r) setError("No closed outline in the walls of this plan: trace it.");
+  }
+  async function mapWalls(layer: string) {
+    const r = await run(() => api<{ walls: string[] }>(`/api/sites/${siteId}/building/wall-layer`, { method: "POST", json: { layer } }));
+    if (r) {
+      setWallHint(null);
+      setMsg(`${layer} is mapped as walls (kept for this architect's next drawings).`);
+      await propose();
+    }
   }
   async function findColumns() {
     if (!type) return;
@@ -270,6 +287,17 @@ export default function BuildingBuilder() {
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {msg && <div className="alert alert-ok">{msg}</div>}
+      {wallHint && (
+        <div className="alert alert-warn">
+          {wallHint.message}{" "}
+          {wallHint.layers.map((l) => (
+            <Button key={l.layer} size="small" onClick={() => void mapWalls(l.layer)}>
+              {l.layer} ({l.long_lines} lines): these are the walls
+            </Button>
+          ))}
+          {wallHint.layers.length === 0 && " none found: map the layers in the takeoff."}
+        </div>
+      )}
       {!out.model && (
         <Card as="div">
           <h2>Start from a drawing</h2>

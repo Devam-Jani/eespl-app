@@ -240,7 +240,44 @@ def propose_outline(site_id: int, body: TypeIn, db: DbSession, principal: Curren
     m = service.current(db, site.id)
     if m is None or not m.cad_file_id:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Start the model from a drawing first")
-    return {"outline": service.propose_outline(db, db.get(CadFile, m.cad_file_id), _type(m, body.key))}
+    cad = db.get(CadFile, m.cad_file_id)
+    outline = service.propose_outline(db, cad, _type(m, body.key))
+    out: dict = {"outline": outline}
+    if not outline and service.walls_unmapped(db, cad):
+        out["wall_hint"] = {
+            "message": "No outline can be proposed: the drawing's wall layers are not mapped. The likely wall layers (the most lines over a metre long):",
+            "layers": service.likely_wall_layers(db, cad),
+        }
+    return out
+
+
+class WallLayerIn(BaseModel):
+    layer: str = Field(min_length=1, max_length=255)
+
+
+@router.post("/{site_id}/building/wall-layer")
+def map_wall_layer(site_id: int, body: WallLayerIn, request: Request, db: DbSession, principal: CurrentPrincipal, view: View) -> dict:
+    """One click: the layer is the drawing's walls (in its architect's layer mapping, kept for
+    their next drawings), then the outline is proposed again."""
+    from app.takeoff.models import CadLayerMap  # noqa: PLC0415
+
+    site = _editable(db, site_id, view, principal)
+    m = service.current(db, site.id)
+    if m is None or not m.cad_file_id:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Start the model from a drawing first")
+    cad = db.get(CadFile, m.cad_file_id)
+    architect = cad.architect or f"Drawing {cad.id}"
+    lm = db.scalar(select(CadLayerMap).where(CadLayerMap.architect == architect))
+    if lm is None:
+        lm = CadLayerMap(architect=architect, roles={}, created_by=principal.user.id)
+        db.add(lm)
+    lm.roles = {**(lm.roles or {}), body.layer: "walls"}
+    lm.updated_by = principal.user.id
+    cad.architect = architect
+    db.flush()
+    audit.record(db, user_id=principal.user.id, action="building.wall_layer", entity="site", entity_id=site.id, after={"layer": body.layer, "cad_file_id": cad.id}, ip=audit.client_ip(request))
+    db.commit()
+    return {"walls": sorted(k for k, v in lm.roles.items() if v == "walls")}
 
 
 @router.post("/{site_id}/building/detect-columns")

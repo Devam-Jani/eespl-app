@@ -32,7 +32,7 @@ type Props = {
   ifcHeaders?: Record<string, string>; // the portal's
   bare?: boolean; // the dashboard card: the building, its legend and progress, no tools
   roomsFirst?: boolean; // set from outside (the dashboard card's own button)
-  selected?: number | null; // the room picked in the list beside it: outlined in white
+  selected?: number | number[] | null; // the room(s) picked: outlined in white (a quotation line: all its areas)
   floor?: number | null; // the floor open (cutaway), set from outside
   onFloor?: (level: number | null) => void;
   next?: string | null; // "Next: hold point, floor 5"
