@@ -38,6 +38,7 @@ quotations they made, are salesperson on, or that belong to their leads.
 - **Issue files** (**Re-issue files** once issued): saves the Word and PDF with this revision and attaches them to the lead's timeline. Re-issuing marks the older files "replaced". {perm: quotation.send}
 - **Mark sent**: on the latest revision, in draft or negotiation. See **Sending** below. {perm: quotation.send}
 - **Negotiation**: a sent quotation goes into negotiation (the client is bargaining). {perm: quotation.edit}
+- A quotation you made (from a drawing, for example) can be changed while it is a draft that has never been sent; once sent, ask the estimator or make a new revision. {perm: quotation.edit_own_draft}
 - **Won** / **Lost**: on the latest revision in draft, sent or negotiation. They open the **won** and **lost** dialogs. {perm: quotation.send}
 - **New revision**: copies this revision into the next one (R1, R2 ...) and opens it. A sent quotation moves to negotiation. Not shown on a won quotation, nor to roles that may not edit this quotation.
 - **Rate working**: opens /quotations/:id/working (see below).

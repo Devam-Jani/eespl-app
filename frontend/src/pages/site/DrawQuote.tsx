@@ -316,7 +316,8 @@ export default function DrawQuote() {
     }
   };
   const litKeys = useMemo(() => new Set((lit?.areas ?? []).map((a) => a.key)), [lit]);
-  const litNode = lit?.areas.find((a) => a.node_id)?.node_id ?? null;
+  // every area of the line, lit in 3D as on the plan
+  const litNodes = useMemo(() => (lit?.areas ?? []).map((a) => a.node_id).filter((n): n is number => n != null), [lit]);
 
   const picture = async () => {
     if (!model?.building) return;
@@ -603,7 +604,7 @@ export default function DrawQuote() {
             {model?.building && (
               <Card title="In 3D">
                 <Suspense fallback={<div className="skeleton" style={{ height: 360 }} />}>
-                  <XrayView site={{ id: siteId, name: site?.site.name ?? "", code: "", progress: 0 }} building={model.building} nodes={model.nodes} compact selected={litNode} />
+                  <XrayView site={{ id: siteId, name: site?.site.name ?? "", code: "", progress: 0 }} building={model.building} nodes={model.nodes} compact selected={litNodes} />
                 </Suspense>
               </Card>
             )}

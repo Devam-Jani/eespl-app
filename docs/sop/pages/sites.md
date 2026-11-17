@@ -930,6 +930,7 @@ these drawings are loose lines, so no outline is drawn on its own.
 - **To the survey**: accepts the area into the site's survey "AutoCAD takeoff: <drawing title>" (a draft survey, method cad). Grey until the area has a place and a size. {perm: takeoff.edit}
 - **Survey + measurement book**: also puts it in the measurement book. {perm: measurement.edit}
 - **Leave out** (or **Leave out all <n>** for a label found several times): drops the area from the list. **Bring back** undoes it. {perm: takeoff.edit}
+- Under the areas, **Left out: structural tags** (beam, column and footing tags such as GB1, B12, C3, F2, "COLUMN ...", "PLINTH BEAM") and **Duplicate copy, left out** (the second copy of a plan drawn twice on the sheet: the copy titled PLAN is kept, else the first drawn) list what the takeoff left out on its own; **Bring back** makes one an area again. {perm: takeoff.edit}
 - **Same as a floor for other floors…**: copies the mapped areas of one floor (**Same as**) to the ticked floors, onto the places with the same names there. **Copy the mapped areas** does it. {perm: takeoff.edit}
 - "<n> waterproofing notes not near any area": notes the app could not tie to an area. Check them on the drawing.
 - **Layers**: which layers are walls, rooms, dimensions, text, and which to hide. **Show** ticks hide or show a layer on screen. **Architect** and **Save the mapping** save the roles for this architect's later drawings; the areas are found again. {perm: takeoff.edit}
@@ -983,6 +984,7 @@ who sees the site can open it; only roles with the building right can change it.
 - **Walls (off for a roof or a terrace)** (tick) and **Remove this floor type** (its floors fall back to the reference plan). {perm: building.edit}
 - **Floors this plan is for**: for example "3-12, or 2,3,5"; G or 0 is the ground floor. {perm: building.edit}
 - **1. Outline**: **Propose from the walls**, or **Trace** it by clicking the corners. {perm: building.edit}
+- When no outline can be proposed because the drawing's wall layers are not mapped, the page says so and offers the layers with the most lines over a metre long; **<layer> (n lines): these are the walls** maps it (kept for the architect's next drawings) and proposes the outline again. {perm: building.edit}
 - **2. Columns**: **Find columns**, then **Add / remove** by clicking the plan, then **Confirm**. The column size range is set by **Smallest column side (m)** and **Largest column side (m)**: save, then find again. {perm: building.edit}
 - **3. Cores**: **Trace a stair** or **Trace a lift**. A stair can take its **Risers** (empty: worked out). **Remove** drops a core. {perm: building.edit}
 - **4. Beams**: **Pick two columns** for each beam. **Clear** removes them all. {perm: building.edit}

@@ -247,6 +247,7 @@ function Workspace({
   const [file, setFile] = useState<CadFile | null>(null);
   const [geo, setGeo] = useState<Geo | null>(null);
   const [areas, setAreas] = useState<Area[]>([]);
+  const [leftOut, setLeftOut] = useState<LeftOut[]>([]);
   const [show, setShow] = useState("waterproofing");
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -260,8 +261,11 @@ function Workspace({
   const loadFile = useCallback(() => api<CadFile>(`/api/takeoff/files/${fileId}`).then(setFile, (e) => onError(errorText(e))), [fileId, onError]);
   const loadAreas = useCallback(
     () =>
-      api<{ areas: Area[] }>(`/api/takeoff/files/${fileId}/areas?show=${show}`).then(
-        (r) => setAreas(r.areas),
+      api<{ areas: Area[]; left_out?: LeftOut[] }>(`/api/takeoff/files/${fileId}/areas?show=${show}`).then(
+        (r) => {
+          setAreas(r.areas);
+          setLeftOut(r.left_out ?? []);
+        },
         (e) => onError(errorText(e)),
       ),
     [fileId, show, onError],
@@ -482,6 +486,13 @@ function Workspace({
               onAccept={accept}
               onReload={loadAreas}
               onError={onError}
+            />
+          )}
+          {tab === "areas" && leftOut.length > 0 && (
+            <LeftOutList
+              items={leftOut}
+              canEdit={canEdit}
+              onBack={(id) => void api(`/api/takeoff/areas/${id}`, { method: "PUT", json: { status: "candidate" } }).then(loadAreas, (e) => onError(errorText(e)))}
             />
           )}
           {tab === "layers" && geo && (
@@ -1230,6 +1241,44 @@ function QuantitiesPanel({ siteId }: { siteId: number }) {
       {block("Per floor", q.by_floor)}
       {block("Per system", q.by_system)}
       {block("Per area type", q.by_area_type)}
+    </div>
+  );
+}
+
+type LeftOut = { id: number; name: string; plan: string | null; reason: "structural" | "duplicate" };
+
+/** What the takeoff left out on its own: structural tags (beams, columns, footings) and the second
+ *  copy of a plan drawn twice on the sheet; each comes back with one click. */
+function LeftOutList({ items, canEdit, onBack }: { items: LeftOut[]; canEdit: boolean; onBack: (id: number) => void }) {
+  const groups: [LeftOut["reason"], string][] = [
+    ["structural", "Left out: structural tags"],
+    ["duplicate", "Duplicate copy, left out"],
+  ];
+  return (
+    <div className="top-gap">
+      {groups.map(([reason, title]) => {
+        const rows = items.filter((x) => x.reason === reason);
+        if (!rows.length) return null;
+        return (
+          <details key={reason}>
+            <summary className="small">
+              {title} ({rows.length})
+            </summary>
+            <ul className="small">
+              {rows.map((x) => (
+                <li key={x.id}>
+                  {x.name} <span className="muted">{x.plan ?? ""}</span>{" "}
+                  {canEdit && (
+                    <Button size="small" variant="ghost" onClick={() => onBack(x.id)}>
+                      Bring back
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </details>
+        );
+      })}
     </div>
   );
 }

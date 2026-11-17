@@ -84,9 +84,23 @@ def get_visible(db: Session, qid: int, scope: str, principal: Principal) -> Quot
     return q
 
 
-def check_edit(db: Session, q: Quotation, principal: Principal) -> None:
+def can_edit(db: Session, q: Quotation, principal: Principal) -> bool:
+    """quotation.edit on a quotation the caller sees with that scope; or quotation.edit_own_draft
+    (planning): one the caller made, still a draft that has never been sent."""
     scope = principal.permissions.get("quotation.edit")
-    if scope is None or db.scalar(visible_q(scope, principal).where(Quotation.id == q.id)) is None:
+    if scope is not None:
+        if db.scalar(visible_q(scope, principal).where(Quotation.id == q.id)) is not None:
+            return True
+    return (
+        principal.permissions.get("quotation.edit_own_draft") is not None
+        and q.created_by == principal.user.id
+        and q.status == "draft"
+        and q.sent_at is None
+    )
+
+
+def check_edit(db: Session, q: Quotation, principal: Principal) -> None:
+    if not can_edit(db, q, principal):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You cannot change this quotation")
     if not q.is_latest:
         raise HTTPException(
