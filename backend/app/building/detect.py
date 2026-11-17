@@ -13,7 +13,7 @@ FOOT_M, INCH_M = 0.3048, 0.0254
 
 # +3.000, + 3.000 FFL, SSL +6.000, LVL +58'9", LVL+19'9", -1.500, ±0.000, +0'0"
 LEVEL = re.compile(
-    r"(?:(?:LVL|LEVEL|FFL|SSL|TOS|TOC|EL)\.?\s*)?(?P<sign>[+\-±])\s*(?:(?P<ft>\d{1,3})\s*'\s*(?P<in>\d{1,2}(?:\.\d+)?)?\s*(?:\"|'')?|(?P<m>\d{1,4}\.\d{2,3})\b)",
+    r"(?:(?:LVL|LEVEL|FFL|SSL|TOS|TOC|EL)\.?\s*)?(?P<sign>[+\-±])\s*(?:(?P<ft>\d{1,3})\s*'\s*(?P<in>\d{1,2}(?:\.\d+)?)?\s*(?:\"|'')?|(?P<m>\d{1,4}\.\d{2,3}|\d{1,5}(?![.\d]))\b)",
     re.IGNORECASE,
 )
 LEVEL_WORD = re.compile(r"\b(LVL|LEVEL|FFL|SSL|TOS|TOC|EL)\b", re.IGNORECASE)
@@ -21,9 +21,10 @@ ORDINAL = {"GROUND": 0, "G": 0, "STILT": 0, "PODIUM": 0, "PLINTH": 0}
 WORD_NUM = {"FIRST": 1, "SECOND": 2, "THIRD": 3, "FOURTH": 4, "FIFTH": 5, "SIXTH": 6, "SEVENTH": 7, "EIGHTH": 8, "NINTH": 9, "TENTH": 10}
 
 
-def level_m(text: str) -> float | None:
-    """A level text in metres: '+3.000' 3.0, 'LVL +58'9"' 17.907, '-1.500' -1.5; a metric value
-    needs a sign or a level word (a plain 3.000 is a size, not a level)."""
+def level_read(text: str) -> tuple[float, str, str] | None:
+    """A level text as written: (value, how, number) where how is "mm" (marked MM, already in
+    metres), "ft" (feet and inches, in metres) or "bare" (a plain number: metres or millimetres,
+    the set of levels decides, see levels_unit); number is the figure as typed."""
     t = (text or "").replace("\n", " ")
     m = LEVEL.search(t)
     if not m:
@@ -32,37 +33,76 @@ def level_m(text: str) -> float | None:
     if m.group("m"):
         value = float(m.group("m"))
         if re.match(r"\s*MM\b", t[m.end():], re.IGNORECASE):  # "FFL +800.00 MM": millimetres
-            value /= 1000
-        return sign * value
-    return sign * (int(m.group("ft")) * FOOT_M + float(m.group("in") or 0) * INCH_M)
+            return sign * value / 1000, "mm", m.group("m")
+        return sign * value, "bare", m.group("m")
+    return sign * (int(m.group("ft")) * FOOT_M + float(m.group("in") or 0) * INCH_M), "ft", m.group(0)
 
 
-def levels(texts: list[list], unit_m: float) -> dict:
+def level_m(text: str) -> float | None:
+    """A level text in metres: '+3.000' 3.0, 'LVL +58'9"' 17.907, '-1.500' -1.5, 'FFL +800.00 MM'
+    0.8; a plain number above 100 is millimetres ('+3600' 3.6: no floor is 100 m up). A metric
+    value needs a sign or a level word (a plain 3.000 is a size, not a level)."""
+    r = level_read(text)
+    if r is None:
+        return None
+    v, how, _n = r
+    return v / 1000 if how == "bare" and abs(v) > 100 else v
+
+
+def levels_unit(bare: list[tuple[float, str]], insunits_mm: bool = False) -> str:
+    """The unit of a section's plain level numbers, given as (value, figure as typed): mm when any
+    level or any gap between two levels is above 100 (+600, +3600: no building has 100 m storeys),
+    or when the drawing's units ($INSUNITS) are mm and the levels are whole numbers (+0, +600);
+    otherwise m (+3.000 stays metres on a mm drawing: the usual way to write a level)."""
+    vals = sorted(v for v, _n in bare)
+    if any(abs(v) > 100 for v in vals) or any(b - a > 100 for a, b in zip(vals, vals[1:], strict=False)):
+        return "mm"
+    if insunits_mm and bare and all("." not in n for _v, n in bare):
+        return "mm"
+    return "m"
+
+
+FLOOR_HEIGHT_OK = (2.4, 6.0)  # a floor-to-floor height outside this is never filled in silently
+
+
+def levels(texts: list[list], unit_m: float, insunits_mm: bool = False) -> dict:
     """The storey levels from a section: the level texts that stand in one column (the same x
     within 2 m), the column with the most distinct levels wins. With a ±0 level in it, each level
-    is a floor; otherwise the usual step between levels is the floor-to-floor height.
-    Returns {source: section|default, values_m, floor_height_m, note}."""
+    is a floor; otherwise the usual step between levels is the floor-to-floor height. Plain level
+    numbers are metres or millimetres as the whole set says (levels_unit), and the note says when
+    they were read in mm. A floor-to-floor height outside 2.4-6.0 m is never used: the default
+    stays and the note asks to check the levels.
+    Returns {source: section|default, values_m, floor_height_m, unit, note}."""
     found = []
     for t in texts:
         if len(t) > 5 and t[5]:  # inside a block: a symbol, not a level
             continue
-        v = level_m(str(t[4]))
-        if v is not None and (LEVEL_WORD.search(str(t[4])) or re.match(r"\s*[+\-±]", str(t[4]))):
-            found.append((float(t[0]), v))
+        r = level_read(str(t[4]))
+        if r is not None and (LEVEL_WORD.search(str(t[4])) or re.match(r"\s*[+\-±]", str(t[4]))):
+            found.append((float(t[0]), r))
     tol = 2.0 / unit_m if unit_m else 80.0
-    columns: dict[int, set[float]] = defaultdict(set)
-    for x, v in found:
-        columns[round(x / tol)].add(round(v, 3))
-    best = max(columns.values(), key=len, default=set())
+    columns: dict[int, dict[float, tuple[str, str]]] = defaultdict(dict)
+    for x, (v, how, n) in found:
+        columns[round(x / tol)].setdefault(round(v, 3), (how, n))
+    best = max(columns.values(), key=len, default={})
     if len(best) < 3:
         return {"source": "default", "values_m": [], "floor_height_m": None, "note": "No section with level texts (+3.000, FFL, SSL, LVL): the defaults are used."}
-    values = sorted(best)
+    bare = [(v, n) for v, (how, n) in best.items() if how == "bare"]
+    unit = levels_unit(bare, insunits_mm) if bare else "m"
+    values = sorted({round(v / 1000, 3) if unit == "mm" and how == "bare" else v for v, (how, _n) in best.items()})
     steps = [round(b - a, 3) for a, b in zip(values, values[1:], strict=False) if b - a > 2.0]  # storeys, not slab/finish pairs
     height = round(median(steps), 3) if steps else None
     ground = any(abs(v) < 0.01 for v in values)
     note = f"Read from the section: {len(values)} levels from {values[0]:+.3f} to {values[-1]:+.3f} m"
+    note += " (levels read in mm)" if unit == "mm" else ""
+    out = {"source": "section", "values_m": values, "floor_height_m": height, "from_ground": ground, "unit": unit}
+    lo, hi = FLOOR_HEIGHT_OK
+    if height is not None and not lo <= height <= hi:
+        # never filled in silently: the defaults are used and the levels are not taken as floors
+        note += f"; the levels read look wrong ({height:g} m floor to floor); check them. The default height is used."
+        return {**out, "source": "default", "floor_height_m": None, "suspect": True, "note": note}
     note += f", floor to floor {height:.3f} m" if height else ""
-    return {"source": "section", "values_m": values, "floor_height_m": height, "from_ground": ground, "note": note + "."}
+    return {**out, "note": note + "."}
 
 
 def floors_in_title(title: str) -> list[int]:

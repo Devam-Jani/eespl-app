@@ -212,7 +212,7 @@ def draft(db: Session, site: Site, cad: CadFile) -> dict:
     (outlines and columns still to trace and confirm), the levels of the section, the floors of
     the site structure. Nothing is guessed silently: what came from the defaults says so."""
     settings = dict(DEFAULTS)
-    levels = detect.levels(cad.texts or [], cad.unit_m or 0.001)
+    levels = detect.levels(cad.texts or [], cad.unit_m or 0.001, cad.units_code == 4)
     if levels.get("floor_height_m"):
         settings["floor_height_m"] = levels["floor_height_m"]
     types = []
@@ -588,7 +588,7 @@ def rebuild(db: Session, site: Site, model: BuildingModel, cad: CadFile) -> tupl
     carried over by the takeoff). Returns (data, changes)."""
     old = model.data or {}
     new_plans = {p["title"]: p for p in plans(cad)}
-    data = {**old, "floor_types": [], "levels": detect.levels(cad.texts or [], cad.unit_m or 0.001) if (old.get("levels") or {}).get("source") == "section" else old.get("levels")}
+    data = {**old, "floor_types": [], "levels": detect.levels(cad.texts or [], cad.unit_m or 0.001, cad.units_code == 4) if (old.get("levels") or {}).get("source") == "section" else old.get("levels")}
     changes: dict[str, Any] = {"plans_kept": [], "plans_missing": [], "columns": {}, "rooms": {}}
     settings = {**DEFAULTS, **(old.get("settings") or {})}
     for t in old.get("floor_types", []):
